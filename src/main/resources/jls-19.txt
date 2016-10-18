@@ -179,8 +179,7 @@ ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
 NormalClassDeclaration:
-     {ClassModifier} "class" Identifier [TypeParameters] [Superclass]
-     [Superinterfaces] ClassBody
+     {ClassModifier} "class" Identifier [TypeParameters] [Superclass] [Superinterfaces] ClassBody
 ClassModifier:
      Annotation
      "public"
@@ -326,7 +325,6 @@ ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      ExpressionName "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
 EnumDeclaration:
      {ClassModifier} "enum" Identifier [Superinterfaces] EnumBody
@@ -335,8 +333,7 @@ EnumBody:
 EnumConstantList:
      EnumConstant {"," EnumConstant}
 EnumConstant:
-     {EnumConstantModifier} Identifier ["(" [ArgumentList] ")"]
-     [ClassBody]
+     {EnumConstantModifier} Identifier ["(" [ArgumentList] ")"] [ClassBody]
 EnumConstantModifier:
      Annotation
 EnumBodyDeclarations:
@@ -348,8 +345,7 @@ InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
 NormalInterfaceDeclaration:
-     {InterfaceModifier} "interface" Identifier [TypeParameters]
-     [ExtendsInterfaces] InterfaceBody
+     {InterfaceModifier} "interface" Identifier [TypeParameters] [ExtendsInterfaces] InterfaceBody
 InterfaceModifier:
      Annotation
      "public"
@@ -395,8 +391,7 @@ AnnotationTypeMemberDeclaration:
      InterfaceDeclaration
      ";"
 AnnotationTypeElementDeclaration:
-     {AnnotationTypeElementModifier} UnannType Identifier "(" ")" [Dims]
-     [DefaultValue] ";"
+     {AnnotationTypeElementModifier} UnannType Identifier "(" ")" [Dims] [DefaultValue] ";"
 AnnotationTypeElementModifier:
      Annotation
      "public"
@@ -527,8 +522,7 @@ ForStatementNoShortIf:
 BasicForStatement:
      "for" "(" [ForInit] ";" [Expression] ";" [ForUpdate] ")" Statement
 BasicForStatementNoShortIf:
-     "for" "(" [ForInit] ";" [Expression] ";" [ForUpdate] ")"
-     StatementNoShortIf
+     "for" "(" [ForInit] ";" [Expression] ";" [ForUpdate] ")" StatementNoShortIf
 ForInit:
      StatementExpressionList
      LocalVariableDeclaration
@@ -537,11 +531,9 @@ ForUpdate:
 StatementExpressionList:
      StatementExpression {"," StatementExpression}
 EnhancedForStatement:
-     "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":
-     " Expression ")" Statement
+     "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":" Expression ")" Statement
 EnhancedForStatementNoShortIf:
-     "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":
-     " Expression ")" StatementNoShortIf
+     "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":" Expression ")" StatementNoShortIf
 BreakStatement:
      "break" [Identifier] ";"
 ContinueStatement:
@@ -601,11 +593,9 @@ ClassInstanceCreationExpression:
      ExpressionName "." UnqualifiedClassInstanceCreationExpression
      Primary "." UnqualifiedClassInstanceCreationExpression
 UnqualifiedClassInstanceCreationExpression:
-     "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "("
-     [ArgumentList] ")" [ClassBody]
+     "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
-     {Annotation} Identifier {"." {Annotation} Identifier}
-     [TypeArgumentsOrDiamond]
+     {Annotation} Identifier {"." {Annotation} Identifier} [TypeArgumentsOrDiamond]
 TypeArgumentsOrDiamond:
      TypeArguments
      "<>"
@@ -622,8 +612,7 @@ MethodInvocation:
      ExpressionName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      Primary "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     TypeName "." "super" "." [TypeArguments] Identifier "("
-     [ArgumentList] ")"
+     TypeName "." "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
 ArgumentList:
      Expression {"," Expression}
 MethodReference:
@@ -680,9 +669,9 @@ AssignmentOperator:
      "^="
      "|="
 ConditionalExpression:
-     ConditionalOrExpression
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
      ConditionalOrExpression "?" Expression ":" LambdaExpression
+     ConditionalOrExpression
 ConditionalOrExpression:
      ConditionalAndExpression
      ConditionalOrExpression "||" ConditionalAndExpression
