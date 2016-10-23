@@ -171,7 +171,8 @@ Code that uses a translator must provide tables mapping
      ...
    } finally {
      if (exceptionUnrollingCurrentThread instanceof ExceptionType) { ... }
-   }`.
+   }
+   ```
 2. Static methods signatures used to function names.
 3. Classes constructed to factory function names.
 4. TODO
