@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 
 import org.junit.Test;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharSource;
 
 import junit.framework.TestCase;
@@ -21,7 +23,8 @@ public final class ParseStateTest extends TestCase {
 
     ParseState ps1 = new ParseState(
         new Input("test", CharSource.wrap("xyz" + content)));
-    assertEquals(content, idxAfter + 3, ps1.advance(3).indexAfterIgnorables());
+    assertEquals(
+        content, idxAfter + 3, ps1.advance(3, false).indexAfterIgnorables());
   }
 
   @Test
@@ -52,8 +55,8 @@ public final class ParseStateTest extends TestCase {
     assertFalse(ps.startsWith("F"));
     assertTrue(ps.startsWith("fo"));
     assertFalse(ps.startsWith("food"));
-    assertTrue(ps.advance(1).startsWith("oo"));
-    assertFalse(ps.advance(1).startsWith("f"));
+    assertTrue(ps.advance(1, false).startsWith("oo"));
+    assertFalse(ps.advance(1, false).startsWith("f"));
   }
 
   @Test
@@ -71,6 +74,80 @@ public final class ParseStateTest extends TestCase {
 
     Pattern pZ = Pattern.compile("^\\Z");
     assertFalse(ps.matcherAtStart(pZ).find());
-    assertTrue(ps.advance(3).matcherAtStart(pZ).find());
+    assertTrue(ps.advance(3, false).matcherAtStart(pZ).find());
+  }
+
+
+  @Test
+  public static void testTokenBreaks() throws IOException {
+    String code = Joiner.on('\n').join(
+        "",
+        "package foo.bar.baz;",
+        "",
+        "  ",
+        "// Foo Bar Baz",
+        "",
+        "/** A jdoc comment */class Foo",
+        "extends/**/Bar{",
+        "  java.lang .",
+        "String s;",
+        "}");
+
+    ImmutableList<String> want = ImmutableList.of(
+        "#\n",
+        "!package",
+        "# ",
+        "!foo.bar.baz;",
+        "#\n\n  \n// Foo Bar Baz\n\n/** A jdoc comment */",
+        "!class",
+        "# ",
+        "!Foo",
+        "#\n",
+        "!extends",
+        "#/**/",
+        "!Bar{",
+        "#\n  ",
+        "!java.lang",
+        "# ",
+        "!.",
+        "#\n",
+        "!String",
+        "# ",
+        "!s;",
+        "#\n",
+        "!}");
+
+    ImmutableList.Builder<String> gotBuilder = ImmutableList.builder();
+
+    ParseState state = new ParseState(
+        new Input("test", CharSource.wrap(code)));
+    StringBuilder token = new StringBuilder();
+    while (!state.isEmpty()) {
+      int idx = state.indexAfterIgnorables();
+      int end;
+      if (idx != state.index) {
+        if (token.length() != 0) {
+          gotBuilder.add("!" + token);
+          token.setLength(0);
+        }
+        gotBuilder.add("#" + state.input.content.substring(state.index, idx));
+        end = idx;
+      } else {
+        token.append(state.input.content.charAt(idx));
+        end = idx + 1;
+      }
+      state = state.withIndex(end);
+    }
+    if (token.length() != 0) {
+      gotBuilder.add("!" + token);
+      token.setLength(0);
+    }
+
+    ImmutableList<String> got = gotBuilder.build();
+    if (!want.equals(got)) {
+      Joiner j = Joiner.on("\n======\n");
+      assertEquals(j.join(want), j.join(got));
+      assertEquals(want, got);
+    }
   }
 }

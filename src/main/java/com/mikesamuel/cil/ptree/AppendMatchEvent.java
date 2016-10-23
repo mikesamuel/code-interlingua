@@ -1,9 +1,7 @@
 package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.MatchEvent;
-import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
@@ -12,17 +10,16 @@ import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
 
-final class AppendSuffixMarkers extends ParSer {
-  final ImmutableList<NodeVariant> lrCallChain;
+final class AppendMatchEvent extends ParSer {
+  final MatchEvent e;
 
-  AppendSuffixMarkers(ImmutableList<NodeVariant> lrCallChain) {
-    this.lrCallChain = lrCallChain;
+  AppendMatchEvent(MatchEvent e) {
+    this.e = e;
   }
 
   @Override
   public Optional<ParseState> parse(ParseState state, ParseErrorReceiver err) {
-    return Optional.of(
-        state.appendOutput(MatchEvent.leftRecursionSuffix(lrCallChain)));
+    return Optional.of(state.appendOutput(e));
   }
 
   @Override
@@ -40,11 +37,6 @@ final class AppendSuffixMarkers extends ParSer {
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("(suffix:");
-    for (NodeVariant v : lrCallChain) {
-      sb.append(' ').append(v.getNodeType()).append('.').append(v);
-    }
-    return sb.append(')').toString();
+    return "(append " + e + ")";
   }
 }

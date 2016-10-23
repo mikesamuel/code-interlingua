@@ -43,8 +43,8 @@ public abstract class MatchEvent {
    * What follows is the "seed" as defined in Alessandro Warth's
    * "grow the seed" algorithm.
    */
-  public static LRStart leftRecursionStart(NodeVariant variant) {
-    return new LRStart(variant);
+  public static LRStart leftRecursionStart(NodeType nodeType) {
+    return new LRStart(nodeType);
   }
 
   /**
@@ -68,7 +68,7 @@ public abstract class MatchEvent {
    * True iff non-ignorable tokens were consumed to produce this event, thus
    * limiting LR search.
    */
-  public abstract boolean wasTextConsumed();
+  public abstract int nCharsConsumed();
 
 
   /**
@@ -86,8 +86,8 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return false;
+    public int nCharsConsumed() {
+      return 0;
     }
   }
 
@@ -103,8 +103,8 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return false;
+    public int nCharsConsumed() {
+      return 0;
     }
 
     @Override
@@ -139,7 +139,7 @@ public abstract class MatchEvent {
 
     @Override
     public String toString() {
-      return "(push " + variant.getNodeType().name() + "." + variant + ")";
+      return "(push " + variant + ")";
     }
   }
 
@@ -155,8 +155,8 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return !content.isEmpty();
+    public int nCharsConsumed() {
+      return content.length();
     }
 
     @Override
@@ -207,8 +207,8 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return !content.isEmpty();
+    public int nCharsConsumed() {
+      return content.length();
     }
 
     @Override
@@ -253,20 +253,20 @@ public abstract class MatchEvent {
    */
   public static final class LRStart extends MatchEvent {
     /** The variant at which the left-recursive cycle started. */
-    public final NodeVariant variant;
+    public final NodeType nodeType;
 
-    LRStart(NodeVariant variant) {
-      this.variant = variant;
+    LRStart(NodeType nodeType) {
+      this.nodeType = nodeType;
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return false;
+    public int nCharsConsumed() {
+      return 0;
     }
 
     @Override
     public int hashCode() {
-      return variant.hashCode();
+      return nodeType.hashCode();
     }
 
     @Override
@@ -281,12 +281,12 @@ public abstract class MatchEvent {
         return false;
       }
       LRStart other = (LRStart) obj;
-      return variant == other.variant;
+      return nodeType == other.nodeType;
     }
 
     @Override
     public String toString() {
-      return "(LRStart " + variant + ")";
+      return "(LRStart " + nodeType + ")";
     }
   }
 
@@ -309,8 +309,8 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return false;
+    public int nCharsConsumed() {
+      return 0;
     }
 
     @Override
@@ -344,11 +344,11 @@ public abstract class MatchEvent {
    * Indicates that the corresponding preceding {@link LRStart} is finished.
    */
   public static final class LREnd extends MatchEvent {
-    private LREnd() {
-      // Singleton
-    }
-
     static final LREnd INSTANCE = new LREnd();
+
+    private LREnd() {
+      // singleton
+    }
 
     @Override
     public String toString() {
@@ -356,8 +356,8 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public boolean wasTextConsumed() {
-      return false;
+    public int nCharsConsumed() {
+      return 0;
     }
   }
 }

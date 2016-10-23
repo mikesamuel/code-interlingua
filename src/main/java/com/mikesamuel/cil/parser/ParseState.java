@@ -39,27 +39,42 @@ public final class ParseState {
     return indexAfterIgnorables() == input.content.length();
   }
 
-  /** A state whose parse point is n chars forward of {@link #index} */
-  public ParseState advance(int n) {
+  /**
+   * A state whose parse point is n chars forward of the specified parse
+   * position.
+   * @param afterIgnorable true if characters should be counted from
+   *   {@link #indexAfterIgnorables()} instead of {@link #index}.
+   */
+  public ParseState advance(int n, boolean afterIgnorable) {
     Preconditions.checkArgument(n >= 0);
-    if (n == 0) { return this; }
-    int newIndex = index + n;
+    int newIndex =
+        (afterIgnorable ? this.indexAfterIgnorables() : index) + n;
+    if (newIndex == index) {
+      return this;
+    }
     Preconditions.checkState(newIndex <= input.content.length());
-    return new ParseState(input, newIndex, output);
+    return withIndex(newIndex);
   }
 
   /** A state like this but with the given event appended. */
   public ParseState appendOutput(MatchEvent e) {
-    ParseState ps = new ParseState(input, index, Chain.append(output, e));
-    ps.indexAfterIgnorable = this.indexAfterIgnorable;
-    return ps;
+    return withOutput(Chain.append(output, e));
   }
 
   /**
    * A state like this but with the given output.
    */
   public ParseState withOutput(Chain<? extends MatchEvent> newOutput) {
-    return new ParseState(input, index, newOutput);
+    ParseState ps = new ParseState(input, index, newOutput);
+    ps.indexAfterIgnorable = this.indexAfterIgnorable;
+    return ps;
+  }
+
+  /**
+   * A state like this but with the given input index.
+   */
+  public ParseState withIndex(int newIndex) {
+    return new ParseState(input, newIndex, output);
   }
 
   /**
@@ -85,7 +100,7 @@ public final class ParseState {
 
   private static final long SPACE_BITS =
       (1L << ' ') | (1L << '\t') | (1L << '\f') | (1L << '\r') | (1L << '\n');
-  /** The index after any igorable tokens like spaces and comments. */
+  /** The index after any ignorable tokens like spaces and comments. */
   public int indexAfterIgnorables() {
     if (this.indexAfterIgnorable < 0) {
       int idx;

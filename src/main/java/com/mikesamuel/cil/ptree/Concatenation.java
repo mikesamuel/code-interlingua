@@ -2,6 +2,9 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeRangeSet;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
@@ -113,5 +116,54 @@ final class Concatenation extends PTParSer {
       }
     }
     return sb.toString();
+  }
+
+  @Override
+  RangeSet<Integer> computeLookahead1() {
+    if (ps.isEmpty()) { return null; }
+    RangeSet<Integer> la = TreeRangeSet.create();
+    boolean lookThrough = true;
+    for (int i = 0, n = ps.size(); i < n; ++i) {
+      ParSer child = ps.get(i).getParSer();
+      if (child instanceof AppendMatchEvent) {  // Consumes no chars.
+        continue;
+      }
+      if (!(child instanceof PTParSer)) {
+        return null;
+      }
+      PTParSer contentChild = (PTParSer) child;
+      lookThrough = false;
+      if (child instanceof Alternation) {
+        Optional<ParSerable> cb = Alternation.getOptionBody(
+            (Alternation) child);
+        if (cb.isPresent()) {
+          ParSerable cc = cb.get().getParSer();
+          if (cc instanceof PTParSer) {
+            contentChild = (PTParSer) cc;
+            lookThrough = true;
+          }
+        }
+      } else if (child instanceof Repetition) {
+        ParSer rb = ((Repetition) child).p.getParSer();
+        if (rb instanceof PTParSer) {
+          contentChild = (PTParSer) rb;
+          lookThrough = true;
+        }
+      }
+
+      RangeSet<Integer> ccla = contentChild.getLookahead1();
+      if (ccla == null) {
+        return null;
+      }
+      la.addAll(ccla);
+
+      if (!lookThrough) {
+        break;
+      }
+    }
+    if (lookThrough) {
+      return null;
+    }
+    return ImmutableRangeSet.copyOf(la);
   }
 }

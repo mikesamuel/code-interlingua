@@ -2,6 +2,7 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.RangeSet;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
@@ -40,6 +41,11 @@ final class Repetition extends PTParSer {
   @Override
   public Optional<ParseState> parse(
       ParseState start, ParseErrorReceiver err) {
+    return Optional.of(parseRepeatedly(this.p, start, err));
+  }
+
+  static ParseState parseRepeatedly(
+      ParSerable p, ParseState start, ParseErrorReceiver err) {
     boolean matchedOne = false;
     ParseState state = start;
     ParSer parser = p.getParSer();
@@ -49,15 +55,16 @@ final class Repetition extends PTParSer {
         ParseState nextState = next.get();
         // Guarantee termination
         if (nextState.index == state.index) {
-          return Optional.of(state);
+          return state;
         }
         Preconditions.checkState(nextState.index > state.index);
         state = nextState;
+        matchedOne = true;
       } else if (matchedOne) {
-        return Optional.of(state);
+        return state;
       } else {
         // This is Kleene-star, so zero matches are ok.
-        return Optional.of(start);
+        return start;
       }
     }
   }
@@ -113,5 +120,10 @@ final class Repetition extends PTParSer {
   @Override
   Kind getKind() {
     return Kind.REP;
+  }
+
+  @Override
+  RangeSet<Integer> computeLookahead1() {
+    return null;  // Worst case for when no content is matched.
   }
 }

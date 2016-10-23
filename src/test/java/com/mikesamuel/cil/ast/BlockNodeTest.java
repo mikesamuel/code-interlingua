@@ -3,6 +3,9 @@ package com.mikesamuel.cil.ast;
 import org.junit.Test;
 
 import com.mikesamuel.cil.ptree.PTree;
+import static com.mikesamuel.cil.ast.MatchEvent.pop;
+import static com.mikesamuel.cil.ast.MatchEvent.push;
+import static com.mikesamuel.cil.ast.MatchEvent.token;
 
 @SuppressWarnings("javadoc")
 public final class BlockNodeTest extends AbstractParSerTestCase {
@@ -13,10 +16,10 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         PTree.complete(NodeType.Block),
         "{}",
 
-        MatchEvent.push(BlockNode.Variant.LcBlockStatementsRc),
-        MatchEvent.token("{"),
-        MatchEvent.token("}"),
-        MatchEvent.pop()
+        push(BlockNode.Variant.LcBlockStatementsRc),
+        token("{"),
+        token("}"),
+        pop()
         );
   }
 
@@ -26,24 +29,24 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         PTree.complete(NodeType.Block),
         "{;}",
 
-        MatchEvent.push(BlockNode.Variant.LcBlockStatementsRc),
-        MatchEvent.token("{"),
-        MatchEvent.push(
+        push(BlockNode.Variant.LcBlockStatementsRc),
+        token("{"),
+        push(
             BlockStatementsNode.Variant.BlockStatementBlockStatement),
-        MatchEvent.push(BlockStatementNode.Variant.Statement),
-        MatchEvent.push(
+        push(BlockStatementNode.Variant.Statement),
+        push(
             StatementNode.Variant.StatementWithoutTrailingSubstatement),
-        MatchEvent.push(
+        push(
             StatementWithoutTrailingSubstatementNode.Variant.EmptyStatement),
-        MatchEvent.push(EmptyStatementNode.Variant.Sem),
-        MatchEvent.token(";"),
-        MatchEvent.pop(),
-        MatchEvent.pop(),
-        MatchEvent.pop(),
-        MatchEvent.pop(),
-        MatchEvent.pop(),
-        MatchEvent.token("}"),
-        MatchEvent.pop()
+        push(EmptyStatementNode.Variant.Sem),
+        token(";"),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
+        token("}"),
+        pop()
         );
   }
 
@@ -53,11 +56,22 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         PTree.complete(NodeType.Block),
         "{ { } } // block block",
 
-        MatchEvent.push(BlockNode.Variant.LcBlockStatementsRc),
-        MatchEvent.token("{"),
-        MatchEvent.token("}"),
-        MatchEvent.pop()
+        push(BlockNode.Variant.LcBlockStatementsRc),
+        token("{"),
+        push(BlockStatementsNode.Variant.BlockStatementBlockStatement),
+        push(BlockStatementNode.Variant.Statement),
+        push(StatementNode.Variant.StatementWithoutTrailingSubstatement),
+        push(StatementWithoutTrailingSubstatementNode.Variant.Block),
+        push(BlockNode.Variant.LcBlockStatementsRc),
+        token("{"),
+        token("}"),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
+        token("}"),
+        pop()
         );
   }
-
 }

@@ -130,22 +130,22 @@ WildcardBounds:
 // Names
 (chapter=Name)
 TypeName:
-     Identifier
      PackageOrTypeName "." Identifier
+     Identifier
 PackageOrTypeName:
-     Identifier
      PackageOrTypeName "." Identifier
-ExpressionName:
      Identifier
+ExpressionName:
      AmbiguousName "." Identifier
+     Identifier
 MethodName:
      Identifier
 PackageName:
-     Identifier
      PackageName "." Identifier
-AmbiguousName:
      Identifier
+AmbiguousName:
      AmbiguousName "." Identifier
+     Identifier
 
 // Packages
 (chapter=Package)
@@ -478,10 +478,8 @@ ExpressionStatement:
      StatementExpression ";"
 StatementExpression:
      Assignment
-     PreIncrementExpression
-     PreDecrementExpression
-     PostIncrementExpression
-     PostDecrementExpression
+     PreExpression
+     PostExpression
      MethodInvocation
      ClassInstanceCreationExpression
 IfThenStatement:
@@ -491,8 +489,7 @@ IfThenElseStatement:
 IfThenElseStatementNoShortIf:
      "if" "(" Expression ")" StatementNoShortIf "else" StatementNoShortIf
 AssertStatement:
-     "assert" Expression ";"
-     "assert" Expression ":" Expression ";"
+     "assert" Expression [":" Expression] ";"
 SwitchStatement:
      "switch" "(" Expression ")" SwitchBlock
 SwitchBlock:
@@ -633,19 +630,19 @@ DimExprs:
 DimExpr:
      {Annotation} "[" Expression "]"
 Expression:
-     LambdaExpression
+//     LambdaExpression
      AssignmentExpression
-LambdaExpression:
-     LambdaParameters "->" LambdaBody
-LambdaParameters:
-     Identifier
-     "(" [FormalParameterList] ")"
-     "(" InferredFormalParameterList ")"
+//LambdaExpression:
+//     LambdaParameters "->" LambdaBody
+//LambdaParameters:
+//     Identifier
+//     "(" [FormalParameterList] ")"
+//     "(" InferredFormalParameterList ")"
 InferredFormalParameterList:
      Identifier {"," Identifier}
-LambdaBody:
-     Expression
-     Block
+//LambdaBody:
+//     Expression
+//     Block
 AssignmentExpression:
      ConditionalExpression
      Assignment
@@ -670,75 +667,84 @@ AssignmentOperator:
      "|="
 ConditionalExpression:
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
-     ConditionalOrExpression "?" Expression ":" LambdaExpression
+//     ConditionalOrExpression "?" Expression ":" LambdaExpression
      ConditionalOrExpression
 ConditionalOrExpression:
-     ConditionalAndExpression
      ConditionalOrExpression "||" ConditionalAndExpression
+     ConditionalAndExpression
 ConditionalAndExpression:
-     InclusiveOrExpression
      ConditionalAndExpression "&&" InclusiveOrExpression
+     InclusiveOrExpression
 InclusiveOrExpression:
-     ExclusiveOrExpression
      InclusiveOrExpression "|" ExclusiveOrExpression
+     ExclusiveOrExpression
 ExclusiveOrExpression:
-     AndExpression
      ExclusiveOrExpression "^" AndExpression
+     AndExpression
 AndExpression:
-     EqualityExpression
      AndExpression "&" EqualityExpression
+     EqualityExpression
 EqualityExpression:
+     EqualityExpression EqualityOperator RelationalExpression
      RelationalExpression
-     EqualityExpression "==" RelationalExpression
-     EqualityExpression "!=" RelationalExpression
+EqualityOperator:
+     "=="
+     "!="
 RelationalExpression:
-     ShiftExpression
-     RelationalExpression "<" ShiftExpression
-     RelationalExpression ">" ShiftExpression
-     RelationalExpression "<=" ShiftExpression
-     RelationalExpression ">=" ShiftExpression
+     RelationalExpression RelationalOperator ShiftExpression
      RelationalExpression "instanceof" ReferenceType
+     ShiftExpression
+RelationalOperator:
+     "<="
+     ">="
+     "<"
+     ">"
 ShiftExpression:
+     ShiftExpression ShiftOperator AdditiveExpression
      AdditiveExpression
-     ShiftExpression "<<" AdditiveExpression
-     ShiftExpression ">>" AdditiveExpression
-     ShiftExpression ">>>" AdditiveExpression
+ShiftOperator:
+     ">>>"
+     "<<"
+     ">>"
 AdditiveExpression:
+     AdditiveExpression AdditiveOperator MultiplicativeExpression
      MultiplicativeExpression
-     AdditiveExpression "+" MultiplicativeExpression
-     AdditiveExpression "-" MultiplicativeExpression
+AdditiveOperator:
+     "+"
+     "-"
 MultiplicativeExpression:
+     MultiplicativeExpression MultiplicativeOperator UnaryExpression
      UnaryExpression
-     MultiplicativeExpression "*" UnaryExpression
-     MultiplicativeExpression "/" UnaryExpression
-     MultiplicativeExpression "%" UnaryExpression
+MultiplicativeOperator:
+     "*"
+     "/"
+     "%"
 UnaryExpression:
-     PreIncrementExpression
-     PreDecrementExpression
+     UnaryExpressionNotPlusMinus
+     PreExpression
      "+" UnaryExpression
      "-" UnaryExpression
-     UnaryExpressionNotPlusMinus
-PreIncrementExpression:
-     "++" UnaryExpression
-PreDecrementExpression:
-     "--" UnaryExpression
+PreExpression:
+     IncrDecrOperator UnaryExpression
+IncrDecrOperator:
+     "++"
+     "--"
 UnaryExpressionNotPlusMinus:
      PostfixExpression
      "~" UnaryExpression
      "!" UnaryExpression
      CastExpression
 PostfixExpression:
+     PostExpression
      Primary
      ExpressionName
-     PostIncrementExpression
-     PostDecrementExpression
-PostIncrementExpression:
-     PostfixExpression "++"
-PostDecrementExpression:
-     PostfixExpression "--"
+PostExpression:
+     Primary IncrDecrOperator
+     ExpressionName IncrDecrOperator
+     PostfixExpression IncrDecrOperator
 CastExpression:
      "(" PrimitiveType ")" UnaryExpression
      "(" ReferenceType {AdditionalBound} ")" UnaryExpressionNotPlusMinus
-     "(" ReferenceType {AdditionalBound} ")" LambdaExpression
+//     "(" ReferenceType {AdditionalBound} ")" LambdaExpression
 ConstantExpression:
      Expression

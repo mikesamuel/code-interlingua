@@ -6,12 +6,12 @@ import java.util.Arrays;
  * Indices of line starts in an input file from which we can infer the
  * line number and column given a character index into the source.
  */
-final class LineStarts {
+public final class LineStarts {
   /**
    * File path, URI, or other diagnostic string describing the source of the
    * content.
    */
-  final String source;
+  public final String source;
   /** Strictly monotonic. */
   private final int[] startsOfLines;
 
@@ -41,11 +41,17 @@ final class LineStarts {
     System.arraycopy(starts, 0, this.startsOfLines, 0, nLines);
   }
 
+  /**
+   * The line number in which the character at the given index occurs.
+   */
   public int getLineNumber(int charInFile) {
     int ip = Arrays.binarySearch(startsOfLines, charInFile);
     return ip < 0 ? ~ip - 1 : ip;
   }
 
+  /**
+   * The column on which the character at the given index occurs.
+   */
   public int charInLine(int charInFile) {
     int ln = getLineNumber(charInFile);
     return charInFile - startsOfLines[ln];

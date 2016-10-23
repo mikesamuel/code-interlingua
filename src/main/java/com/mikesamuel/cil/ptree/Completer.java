@@ -23,11 +23,7 @@ final class Completer extends ParSer {
     Optional<ParseState> next = p.getParSer().parse(state, err);
     if (next.isPresent()) {
       // Test empty except for ignorable tokens.
-      ParseState nextState = next.get();
-      int indexAfterIgnorables = nextState.indexAfterIgnorables();
-      if (indexAfterIgnorables != nextState.index) {
-        nextState = nextState.advance(indexAfterIgnorables - nextState.index);
-      }
+      ParseState nextState = next.get().advance(0, true);
       if (nextState.isEmpty()) {
         return Optional.of(nextState);
       }
@@ -53,5 +49,10 @@ final class Completer extends ParSer {
       r.error(state, "Unmatched input");
     }
     return Optional.absent();
+  }
+
+  @Override
+  public String toString() {
+    return "(complete " + this.p + ")";
   }
 }

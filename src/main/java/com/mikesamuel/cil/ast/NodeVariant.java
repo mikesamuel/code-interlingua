@@ -16,4 +16,12 @@ public interface NodeVariant extends ParSerable {
    * </code>
    */
   NodeType getNodeType();
+
+  /**
+   * True if the variant might be left-recursive.
+   */
+  boolean isLeftRecursive();
+
+  /** @see {Enum#name()}. */
+  String name();
 }

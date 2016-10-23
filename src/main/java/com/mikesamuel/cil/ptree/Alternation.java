@@ -2,6 +2,9 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeRangeSet;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
@@ -24,8 +27,19 @@ final class Alternation extends PTParSer {
   @Override
   public Optional<ParseState> parse(
       ParseState state, ParseErrorReceiver err) {
+    int idx = state.indexAfterIgnorables();
+    int firstChar = idx < state.input.content.length()
+        ? state.input.content.charAt(idx) : -1;
+
     for (ParSerable p : ps) {
       ParSer parser = p.getParSer();
+      if (firstChar >= 0 && parser instanceof PTParSer) {
+        RangeSet<Integer> la1 = ((PTParSer) parser).getLookahead1();
+        if (la1 != null && !la1.contains(firstChar)) {
+          continue;
+        }
+      }
+
       Optional<ParseState> next = parser.parse(state, err);
       if (next.isPresent()) { return next; }
     }
@@ -102,5 +116,34 @@ final class Alternation extends PTParSer {
       }
     }
     return sb.toString();
+  }
+
+  /**
+   * The body of the option if this is an option -- if the last element is the
+   * empty string.
+   */
+  static Optional<ParSerable> getOptionBody(Alternation alt) {
+    int n = alt.ps.size();
+    if (n != 0 && Concatenation.EMPTY == alt.ps.get(n - 1)) {
+      return Optional.of(Alternation.of(alt.ps.subList(0, n - 1)));
+    }
+    return Optional.absent();
+  }
+
+  @Override
+  RangeSet<Integer> computeLookahead1() {
+    RangeSet<Integer> la = TreeRangeSet.create();
+    for (ParSerable c : ps) {
+      ParSer p = c.getParSer();
+      if (!(p instanceof PTParSer)) {
+        return null;
+      }
+      RangeSet<Integer> cla = ((PTParSer) p).getLookahead1();
+      if (cla == null) {
+        return null;
+      }
+      la.addAll(cla);
+    }
+    return ImmutableRangeSet.copyOf(la);
   }
 }

@@ -1,19 +1,15 @@
 package com.mikesamuel.cil.ptree;
 
-import java.util.Arrays;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.LeftRecursivePaths;
+import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 
@@ -32,6 +28,9 @@ public final class GrowTheSeed {
    *
    */
   public final ParSerable suffix;
+
+  private static final AppendMatchEvent APPEND_POP =
+      new AppendMatchEvent(MatchEvent.pop());
 
   private GrowTheSeed(ParSerable seed, ParSerable suffix) {
     this.seed = seed;
@@ -63,20 +62,22 @@ public final class GrowTheSeed {
   }
 
   private static GrowTheSeed split(NodeType nt) {
-    System.err.println("GrowTheSeed " + nt);
+//    System.err.println("GrowTheSeed " + nt);
     ImmutableList.Builder<ParSerable> seeds = ImmutableList.builder();
     ImmutableList.Builder<ParSerable> suffixes = ImmutableList.builder();
 
     for (Enum<?> ev : nt.getVariantType().getEnumConstants()) {
       NodeVariant nv = (NodeVariant) ev;
-      ParSer body = ((VariantWrapper) nv.getParSer()).child.getParSer();
+      ParSer body = nv.getParSer();
 
       Decomposition d = decompose(nv, body, true);
-      System.err.println(
-          "split " + nv + " : " + body
-          + "\n\tseed: " + d.seed + "\n\tsuff: " + d.suffix
-          + "\n\thasLeftCall: " + d.hasLeftCall);
-      seeds.add(d.seed);
+//      System.err.println(
+//          "split " + nv + " : " + body
+//          + "\n\tseed: " + d.seed + "\n\tsuff: " + d.suffix
+//          + "\n\thasLeftCall: " + d.hasLeftCall);
+      seeds.add(Concatenation.of(ImmutableList.of(
+          new AppendMatchEvent(MatchEvent.push(nv)),
+          d.seed, APPEND_POP)));
       if (d.hasLeftCall) {
         suffixes.add(d.suffix);
       }
@@ -85,8 +86,8 @@ public final class GrowTheSeed {
     ParSerable seed = Alternation.of(seeds.build());
     ParSerable suffix = Alternation.of(suffixes.build());
 
-    System.err.println("\nseed\n" + seed);
-    System.err.println("\nsuffix\n" + suffix);
+//    System.err.println("\nseed\n" + seed);
+//    System.err.println("\nsuffix\n" + suffix);
 //    if (true) throw new Error();
 
     return new GrowTheSeed(seed, suffix);
@@ -181,34 +182,22 @@ public final class GrowTheSeed {
   }
 
   private static Decomposition decompose(
-      NodeVariant nv, VariantWrapper p, boolean leftCallPossible) {
-    return decompose(nv, p.child.getParSer(), leftCallPossible);
-  }
-
-  private static Decomposition decompose(
       NodeVariant nv, Reference p, boolean leftCallPossible) {
-    Optional<ImmutableList<NodeVariant>> leftCallChain;
+    ImmutableList<NodeVariant> leftCallChain;
     if (leftCallPossible) {
-      leftCallChain = findShortestLeftCallChainBetween(p.nodeType, nv);
+      leftCallChain = LeftRecursivePaths.LR_CYCLES.get(nv, p.nodeType);
     } else {
-      leftCallChain = Optional.absent();
+      leftCallChain = null;
     }
-    System.err.println(
-        "leftCallChain from " + p.name + "." + p.name
-        + " to " + nv.getNodeType() + "." + nv + " = " + leftCallChain);
 
     boolean leftCallStillPossible =
         leftCallPossible
         && LeftRecursivePaths.EPSILON_MATCHERS.contains(p.nodeType);
 
-    if (leftCallChain.isPresent()) {
+    if (leftCallChain != null) {
       return new Decomposition(
           Alternation.NULL_LANGUAGE,
-          new AppendSuffixMarkers(
-              ImmutableList.<NodeVariant>builder()
-              .add(nv)
-              .addAll(leftCallChain.get())
-              .build()),
+          new AppendMatchEvent(MatchEvent.leftRecursionSuffix(leftCallChain)),
           leftCallStillPossible,
           true);
 
@@ -231,7 +220,6 @@ public final class GrowTheSeed {
       case REF:   return decompose(nv, (Reference)      pts, leftCallPossible);
       case REP:   return decompose(nv, (Repetition)     pts, leftCallPossible);
       case REX:   return decompose(nv, (PatternMatch)   pts, leftCallPossible);
-      case VNT:   return decompose(nv, (VariantWrapper) pts, leftCallPossible);
     }
     throw new AssertionError(k);
   }
@@ -261,105 +249,5 @@ public final class GrowTheSeed {
       this.leftCallsPossible = leftCallsPossible;
       this.hasLeftCall = hasLeftCall;
     }
-  }
-
-  private static
-  Optional<ImmutableList<NodeVariant>> findShortestLeftCallChainBetween(
-      NodeType src, NodeVariant dest) {
-    Set<NodeType> visited = Sets.newLinkedHashSet();
-    visited.add(src);
-    SearchResult result = shortestLeftCallChain(
-        ((Reference) src.getParSer()).body, dest, visited);
-    if (result instanceof Solution) {
-      ImmutableList<NodeVariant> chainAsList = ImmutableList.copyOf(
-          ((Solution) result).v.reverse());
-      int n = chainAsList.size();
-      return Optional.of(chainAsList.subList(0, n - 1));
-    }
-    return Optional.absent();
-  }
-
-  private static abstract class SearchResult {
-    // Result of searching for a cycle between.
-  }
-  private static final class Solution extends SearchResult {
-    final Chain<NodeVariant> v;
-    @SuppressWarnings("synthetic-access")
-    Solution(Chain<NodeVariant> v) {
-      this.v = v;
-    }
-  }
-  @SuppressWarnings("synthetic-access")
-  private static final SearchResult DISALLOW_LEFT_CALLS = new SearchResult() {
-    @Override public String toString() { return "disallow_left_calls"; }
-  };
-  @SuppressWarnings("synthetic-access")
-  private static final SearchResult CONTINUE = new SearchResult() {
-    @Override public String toString() { return "continue"; }
-  };
-
-  // TODO: memoize this as it's likely to be used several times within the same
-  // production.
-  private static
-  SearchResult shortestLeftCallChain(
-      ParSer p, NodeVariant dest, Set<NodeType> visited) {
-    //System.err.println("Looking for shortest in " + p);
-    PTParSer.Kind k = ((PTParSer) p).getKind();
-    switch (k) {
-      case VNT: {
-        VariantWrapper vw = (VariantWrapper) p;
-        if (vw.v == dest) {
-          return new Solution(Chain.append(null, dest));
-        }
-        SearchResult r = shortestLeftCallChain(
-            vw.child.getParSer(), dest, visited);
-        if (r instanceof Solution) {
-          return new Solution(Chain.append(((Solution) r).v, vw.v));
-        } else {
-          return r;
-        }
-      }
-      case ALT:
-        Alternation alt = (Alternation) p;
-        boolean continueAny = false;
-        for (ParSerable c : alt.ps) {
-          SearchResult r = shortestLeftCallChain(c.getParSer(), dest, visited);
-          if (r instanceof Solution) {
-            return r;
-          } else if (r == CONTINUE) {
-            continueAny = true;
-          }
-        }
-        return continueAny ? CONTINUE : DISALLOW_LEFT_CALLS;
-      case CAT:
-        Concatenation cat = (Concatenation) p;
-        for (ParSerable c : cat.ps) {
-          SearchResult r = shortestLeftCallChain(c.getParSer(), dest, visited);
-          if (r != CONTINUE) {
-            return r;
-          }
-        }
-        break;
-      case REX:
-      case LIT:
-        return DISALLOW_LEFT_CALLS;
-      case REP:
-        return shortestLeftCallChain(
-            ((Repetition) p).p.getParSer(), dest, visited);
-      case REF:
-        Reference ref = (Reference) p;
-        if (visited.add(ref.nodeType)) {
-          SearchResult sr = shortestLeftCallChain(
-              ref.body.getParSer(), dest, visited);
-          visited.remove(ref.nodeType);
-          return sr;
-        }
-        if (LeftRecursivePaths.EPSILON_MATCHERS.contains(ref.nodeType)) {
-          return CONTINUE;
-        } else {
-          return DISALLOW_LEFT_CALLS;
-        }
-    }
-    throw new AssertionError(k);
   }
 }

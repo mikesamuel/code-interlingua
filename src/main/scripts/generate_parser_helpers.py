@@ -1,4 +1,4 @@
-#!python2.7
+#!/usr/bin/python2.7
 
 import json
 import re
@@ -644,8 +644,15 @@ public enum NodeType implements ParSerable {
     left_recursion = {}
     for_each_prod(
         lambda c, p: assignforlambda(left_recursion, p['name'], {}))
+    left_calls_per_variant = {}
 
-    def left_call_names_of(v):
+    def left_call_names_of(p, v):
+        pn = p['name']
+        vn = v['name']
+        key = (pn, vn)
+        left_calls = left_calls_per_variant.get(key)
+        if left_calls is not None:
+            return left_calls
         left_calls = []
         def add_left_calls(pts):
             for pt in pts:
@@ -663,6 +670,7 @@ public enum NodeType implements ParSerable {
         add_left_calls(v['ptree'])
         if verbose and len(left_calls) >= 2:
             print 'MULTIPLE LEFT CALLS IN %s: %r' % (v['name'], left_calls)
+        left_calls_per_variant[key] = tuple(left_calls)
         return left_calls
 
     def find_left_recursion(chapter, start_prod, start_variant):
@@ -678,7 +686,7 @@ public enum NodeType implements ParSerable {
             vn = v['name']
             variant_chain.append((pn, vn))
             try:
-                for left_call_name in left_call_names_of(v):
+                for left_call_name in left_call_names_of(p, v):
                     if left_call_name == start_prod_name:
                         if verbose:
                             print 'LR %s::%s via\n\t%s' % (
@@ -699,6 +707,122 @@ public enum NodeType implements ParSerable {
             return False
         find_left_calls(start_prod, start_variant)
     for_each_variant(find_left_recursion)
+
+    if verbose:
+        print '\nLEFT_CALLS_PER_VARIANT'
+        for ((pn, vn), lcs) in left_calls_per_variant.iteritems():
+            if vn in left_recursion[pn]:
+                print '\t%s.%s -> %r' % (pn, vn, lcs)
+        print
+
+    # To handle left recursion, we need to know the shortest depth-first
+    # cycle from a left call in a variant back to that variant.
+    # See GrowTheSeed.java for the use.
+    # This can be compute-intensive, so we precompute that here.
+    def compute_shortest_left_call_loop_map():
+
+        # We walk the grammar and either
+        # 1. Build a solution recursively.  The return type for this is a
+        #    tuple of the form ((prod_name, variant_name), rest_of_chain)
+        # 2. The symbolic value CONTINUE which means keep looking.
+        # 3. The symbolic value NO_MORE_LEFT_CALLS which means that no more
+        #    left calls will be found on the current branch.
+        NO_MORE_LEFT_CALLS = 0
+        CONTINUE = 1
+
+        # TODO: memoize this as it's likely to be used several times within
+        # the same production.
+        def shortest_left_call_chain(ptree, dest, visited):
+            (dest_pn, dest_vn) = dest
+            nm = ptree['name']
+            if nm == '()':
+                for cpt in ptree['ptree']:
+                    r = shortest_left_call_chain(cpt, dest, visited)
+                    if r != CONTINUE:
+                        return r
+                return CONTINUE
+            elif nm in ('[]', '{}'):
+                for cpt in ptree['ptree']:
+                    r = shortest_left_call_chain(cpt, dest, visited)
+                    if r == NO_MORE_LEFT_CALLS:
+                        break
+                    elif r != CONTINUE:
+                        return r
+                return CONTINUE
+            elif nm == 'lit':
+                assert ptree['pleaf'][0]
+                return NO_MORE_LEFT_CALLS
+            elif nm == 'ref':
+                callee_name = ptree['pleaf'][0]
+                print '\trecurse to %s' % callee_name
+                if callee_name == 'builtin':
+                    return NO_MORE_LEFT_CALLS
+                callee = prods_by_name[callee_name]
+                for callee_variant in callee['variants']:
+                    key = (callee_name, callee_variant['name'])
+                    print '\t\tfound key %r vs %r' % (key, dest)
+                    if key == dest:
+                        print '\t\tMATCH'
+                        return (dest, None)
+                    if callee_name not in visited:
+                        visited.add(callee_name)
+                        print '\t\tRECURSING to %r' % (key,)
+                        r = shortest_left_call_chain(
+                            { 'name': '()', 'ptree': callee_variant['ptree'] },
+                            dest,
+                            visited)
+                        visited.remove(callee_name)
+                        if r not in (CONTINUE, NO_MORE_LEFT_CALLS):
+                            return (key, r)
+                if callee_name in empty_matching:
+                    return CONTINUE
+                else:
+                    return NO_MORE_LEFT_CALLS
+            else:
+                raise AssertionError(nm)
+        DEBUGGED=[False]
+        def find_shortest_left_call_chain_btw(src_pn, dest):
+            visited = set()
+            r = shortest_left_call_chain(
+                { 'name': 'ref', 'pleaf': (src_pn, None) },
+                dest, visited)
+            if r in (CONTINUE, NO_MORE_LEFT_CALLS):
+                return None
+            left_call_chain = []
+            while r is not None:
+                left_call_chain.append(r[0])
+                r = r[1]
+            if not DEBUGGED[0] and len(left_call_chain) >= 3:
+                DEBUGGED[0]=True
+                print 'DEBUG LCC:\n\tleft_call_chain=%r\n\tsrc_pn=%r\n\tdest=%r\n\tr=%r' % (left_call_chain, src_pn, dest, r)
+            assert left_call_chain[-1] == dest
+            del left_call_chain[-1]
+            return tuple(left_call_chain)
+
+        results = {}
+        for (dest, left_calls) in left_calls_per_variant.iteritems():
+            dest_pn, dest_vn = dest
+            if dest_vn not in left_recursion[dest_pn]:
+                continue
+            for callee in left_calls:
+                key = (dest, callee)
+                if key not in results:
+                    if verbose:
+                        print 'computing short left call chain %s -> %r' % (
+                            callee, dest)
+                    chain = find_shortest_left_call_chain_btw(callee, dest)
+                    if chain is not None:
+                        full_chain = [dest]
+                        full_chain.extend(chain)
+                        results[key] = full_chain
+                        if verbose:
+                            print '\t%r' % (full_chain,)
+                    else:
+                        raise Error('Failed to find LR markers for %r' % dest)
+        return results
+
+    shortest_left_call_loop_map = compute_shortest_left_call_loop_map()
+
 
     def ptree_to_java_builder(prod, pt, prefix):
         name = pt['name']
@@ -825,9 +949,11 @@ public final class %(node_class_name)s extends %(base_node_class)s {
     ;
 
     private final ParSerable parSerable;
+    private final boolean isLeftRecursive;
 
     Variant(ParSerable parSerable, boolean isLR) {
-      this.parSerable = PTree.variantWrapper(this, parSerable, isLR);
+      this.parSerable = parSerable;
+      this.isLeftRecursive = isLR;
     }
 
     @Override
@@ -835,6 +961,14 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
     @Override
     public NodeType getNodeType() { return NodeType.%(name)s; }
+
+    @Override
+    public boolean isLeftRecursive() { return isLeftRecursive; }
+
+    @Override
+    public String toString() {
+      return getNodeType().name() + "." + name();
+    }
   }
 }
 ''' % {
@@ -859,13 +993,14 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
         def java_variant(pn, vn):
             return '%sNode.Variant.%s' % (pn, vn)
-        for pn, m in left_recursion.iteritems():
-            for vn, chain in m.iteritems():
-                lr_table_puts.append(
-                    '.put(%s, ImmutableList.of(%s))' % (
-                        java_variant(pn, vn),
-                        ', '.join([java_variant(cpn, cvn)
-                                   for (cpn, cvn) in chain])))
+        for (((pn, vn), callee_name), chain) in (
+                shortest_left_call_loop_map.iteritems()):
+            lr_table_puts.append(
+                '.put(%s, NodeType.%s, ImmutableList.of(%s))' % (
+                    java_variant(pn, vn),
+                    callee_name,
+                    ', '.join([java_variant(cpn, cvn)
+                               for (cpn, cvn) in chain])))
 
         empty_matcher_args = ', '.join(
             ['NodeType.%s' % pn for pn in empty_matching])
@@ -876,7 +1011,7 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 package %(package)s;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.ImmutableSet;
 
 /**
@@ -890,10 +1025,12 @@ public final class LeftRecursivePaths {
    * Maps variants to the shortest left-recursive cycles starting at that
    * variant.
    */
-  public static final ImmutableMap<NodeVariant, ImmutableList<NodeVariant>> LR_CYCLES;
+  public static final
+  ImmutableTable<NodeVariant, NodeType, ImmutableList<NodeVariant>> LR_CYCLES;
 
   static {
-    LR_CYCLES = ImmutableMap.<NodeVariant, ImmutableList<NodeVariant>>builder()
+    LR_CYCLES =
+    ImmutableTable.<NodeVariant, NodeType, ImmutableList<NodeVariant>>builder()
 %(indent)s%(lr_table_puts)s
         .build();
   }

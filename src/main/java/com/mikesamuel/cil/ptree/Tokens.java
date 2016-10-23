@@ -1,6 +1,7 @@
 package com.mikesamuel.cil.ptree;
 
-import com.mikesamuel.cil.parser.ParSer;
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.Range;
 
 /**
  * Defines lexical structures.
@@ -19,16 +20,19 @@ public final class Tokens {
 
 
   /** Matches a {@code '.'} style character literal. Section 3.10.4. */
-  public static final ParSer CHARACTER_LITERAL = new PatternMatch(
-      "'(?:\"|" + CHAR_NO_QUOTES + ")'", "'.'");
+  public static final PatternMatch CHARACTER_LITERAL = new PatternMatch(
+      "'(?:\"|" + CHAR_NO_QUOTES + ")'",
+      ImmutableRangeSet.of(Range.singleton((int) '\'')),
+      "'.'");
 
   /** 3.10.2 */
-  public static final ParSer FLOATING_POINT_LITERAL;
+  public static final PatternMatch FLOATING_POINT_LITERAL;
   /** 3.10.1 */
-  public static final ParSer INTEGER_LITERAL;
+  public static final PatternMatch INTEGER_LITERAL;
 
   static {
     String underscores = "_+";
+    String underscoresOpt = "_*";
 
     // Digit: one of
     //    0 1 2 3 4 5 6 7 8 9
@@ -38,7 +42,7 @@ public final class Tokens {
     // DigitOrUnderscore:
     //    Digit
     //    _
-    String digitOrUnderscore = "[0-9A-Fa-f_]";
+    String digitOrUnderscore = "[0-9_]";
 
     // DigitsAndUnderscores:
     //    DigitOrUnderscore
@@ -53,8 +57,8 @@ public final class Tokens {
     // Digits:
     //    Digit
     //    Digit DigitsAndUnderscoresopt Digit
-    String digits = digit
-        + "(?:" + digitsAndUnderscoresOpt + digit + ")?";
+    String digits =
+        "(?:" + digit + "(?:" + digitsAndUnderscoresOpt + digit + ")?)";
     String digitsOpt = digits + "?";
 
     // DecimalNumeral:
@@ -87,8 +91,8 @@ public final class Tokens {
     // BinaryDigits:
     //    BinaryDigit
     //    BinaryDigit BinaryDigitsAndUnderscoresopt BinaryDigit
-    String binaryDigits = binaryDigit
-        + "(?:" + binaryDigitsAndUnderscoresOpt + binaryDigit + ")?";
+    String binaryDigits = "(?:" + binaryDigit
+        + "(?:" + binaryDigitsAndUnderscoresOpt + binaryDigit + ")?)";
 
     // BinaryNumeral:
     //     0 b BinaryDigits
@@ -117,8 +121,8 @@ public final class Tokens {
     // HexDigits:
     //    HexDigit
     //    HexDigit HexDigitsAndUnderscoresopt HexDigit
-    String hexDigits = hexDigit
-        + "(?:" + hexDigitsAndUnderscoresOpt + hexDigit + ")?";
+    String hexDigits = "(?:" + hexDigit
+        + "(?:" + hexDigitsAndUnderscoresOpt + hexDigit + ")?)";
     String hexDigitsOpt = hexDigits + "?";
 
     // HexNumeral:
@@ -148,13 +152,13 @@ public final class Tokens {
     // OctalDigits:
     //    OctalDigit
     //    OctalDigit OctalDigitsAndUnderscoresopt OctalDigit
-    String octalDigits = octalDigit
-        + "(?:" + octalDigitsAndUnderscoresOpt + octalDigit + ")?";
+    String octalDigits = "(?:" + octalDigit
+        + "(?:" + octalDigitsAndUnderscoresOpt + octalDigit + ")?)";
 
     // OctalNumeral:
     //     0 OctalDigits
     //     0 Underscores OctalDigits
-    String octalNumeral = "0" + underscores + "?" + octalDigits;
+    String octalNumeral = "0" + underscoresOpt + octalDigits;
 
     // ExponentIndicator: one of
     //     e E
@@ -220,7 +224,15 @@ public final class Tokens {
     String floatingPointLiteral = "(?:" + decimalFloatingPointLiteral + "|"
         + hexadecimalFloatingPointLiteral + ")";
 
-    FLOATING_POINT_LITERAL = new PatternMatch(floatingPointLiteral, "0.123");
+    FLOATING_POINT_LITERAL = new PatternMatch(
+        floatingPointLiteral,
+        ImmutableRangeSet.<Integer>builder()
+            // Signs are prefix operators
+            .add(Range.singleton((int) '.'))
+            .add(Range.closed((int) '0', (int) '9'))
+            .build(),
+        "0.123"
+        );
 
     // IntegerTypeSuffix: one of
     //     l L
@@ -255,7 +267,13 @@ public final class Tokens {
       + "|" + binaryIntegerLiteral
       + ")";
 
-    INTEGER_LITERAL = new PatternMatch(integerLiteral, "123");
+    INTEGER_LITERAL = new PatternMatch(
+        integerLiteral,
+        ImmutableRangeSet.<Integer>builder()
+            // Signs are prefix operators
+            .add(Range.closed((int) '0', (int) '9'))
+            .build(),
+        "123");
   }
 
   private static final String JAVA_IDENTIFIER_PART =
@@ -278,21 +296,46 @@ public final class Tokens {
       + "|class|long|strictfp|volatile"
       + "|const|float|native|super|while";
 
+  private static final ImmutableRangeSet<Integer> JAVA_START_CHARS;
+  static {
+    int rangeStart = -1;
+    int limit = 0x10000;
+    ImmutableRangeSet.Builder<Integer> b = ImmutableRangeSet.builder();
+    for (int i = 0; i < limit; ++i) {
+      char c = (char) i;
+      if (Character.isJavaIdentifierStart(c)) {
+        if (rangeStart < 0) {
+          rangeStart = i;
+        }
+      } else if (rangeStart >= 0) {
+        b.add(Range.closed(rangeStart, i - 1));
+        rangeStart = -1;
+      }
+    }
+    if (rangeStart >= 0) {
+      b.add(Range.closed(rangeStart, limit - 1));
+    }
+    JAVA_START_CHARS = b.build();
+  }
+
   /** Section 3.8 */
-  public static final ParSer IDENTIFIER = new PatternMatch(
+  public static final PatternMatch IDENTIFIER = new PatternMatch(
       // Identifier:
       //     IdentifierChars but not a Keyword or BooleanLiteral or NullLiteral
       "(?!=" + KEYWORD_OR_BOOLEAN_OR_NULL + "(?!" + JAVA_IDENTIFIER_PART + "))"
       + IDENTIFIER_CHARS_RE,
+      JAVA_START_CHARS,
       "ident");
 
   /** Section 3.8 */
-  public static final ParSer IDENTIFIER_CHARS = new PatternMatch(
+  public static final PatternMatch IDENTIFIER_CHARS = new PatternMatch(
       IDENTIFIER_CHARS_RE,
+      JAVA_START_CHARS,
       "ident");
 
   /** 3.10.5 */
-  public static final ParSer STRING_LITERAL = new PatternMatch(
-      "\"(?:" + "" + ")*\"",
+  public static final PatternMatch STRING_LITERAL = new PatternMatch(
+      "\"(?:\"|" + CHAR_NO_QUOTES + ")*\"",
+      ImmutableRangeSet.of(Range.singleton((int) '"')),
       "\"...\"");
 }

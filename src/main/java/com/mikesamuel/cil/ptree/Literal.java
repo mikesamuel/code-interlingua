@@ -1,6 +1,9 @@
 package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -31,7 +34,8 @@ final class Literal extends PTParSer {
   public Optional<ParseState> parse(
       ParseState state, ParseErrorReceiver err) {
     if (state.startsWith(text)) {
-      return Optional.of(state.advance(text.length()).appendOutput(event));
+      return Optional.of(state.advance(text.length(), true)
+          .appendOutput(event));
     }
     err.error(state, "Expected `" + text + "`");
     return Optional.absent();
@@ -57,5 +61,13 @@ final class Literal extends PTParSer {
   @Override
   public String toString() {
     return "\"" + this.text + "\"";  // TODO escape
+  }
+
+  @Override
+  RangeSet<Integer> computeLookahead1() {
+    return text.isEmpty()
+        ? null
+        : ImmutableRangeSet.of(
+            Range.<Integer>singleton((int) text.charAt(0)));
   }
 }

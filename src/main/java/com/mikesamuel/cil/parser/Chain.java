@@ -18,12 +18,12 @@ public final class Chain<T> {
   }
 
   /** Iterates in reverse order. */
-  public Iterable<T> reverse() {
+  public static <T> Iterable<T> reverse(final Chain<? extends T> c) {
     return new Iterable<T>() {
       @Override
       public Iterator<T> iterator() {
         return new Iterator<T>() {
-          Chain<? extends T> ch = Chain.this;
+          Chain<? extends T> ch = c;
 
           @Override
           public boolean hasNext() {
@@ -43,9 +43,9 @@ public final class Chain<T> {
   }
 
   /** Iterates from farthest back to the current. */
-  public Iterable<T> forward() {
+  public static <T> Iterable<T> forward(final Chain<? extends T> c) {
     ImmutableList.Builder<T> b = ImmutableList.builder();
-    for (Chain<? extends T> ch = this; ch != null; ch = ch.prev) {
+    for (Chain<? extends T> ch = c; ch != null; ch = ch.prev) {
       b.add(ch.x);
     }
     return b.build().reverse();

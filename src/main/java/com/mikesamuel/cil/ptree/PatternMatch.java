@@ -5,6 +5,8 @@ import java.util.regex.Pattern;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.RangeSet;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -16,10 +18,12 @@ import com.mikesamuel.cil.parser.SerialState;
 final class PatternMatch extends PTParSer {
   final Pattern p;
   final String diagnostic;
+  final ImmutableRangeSet<Integer> la1;
 
-  PatternMatch(String regex, String diagnostic) {
+  PatternMatch(String regex, ImmutableRangeSet<Integer> la1, String diagnostic) {
     this.p = Pattern.compile("^(?:" + regex + ")");
     this.diagnostic = diagnostic;
+    this.la1 = la1;
   }
 
   @Override
@@ -28,7 +32,7 @@ final class PatternMatch extends PTParSer {
     Matcher m = state.matcherAtStart(p);
     if (m.find()) {
       Preconditions.checkState(m.start() == state.indexAfterIgnorables());
-      ParseState stateAfter = state.advance(m.end() - m.start())
+      ParseState stateAfter = state.advance(m.end() - m.start(), true)
           .appendOutput(MatchEvent.content(m.group()));
       return Optional.of(stateAfter);
     } else {
@@ -38,7 +42,7 @@ final class PatternMatch extends PTParSer {
       } else {
         int snippetIndex = state.indexAfterIgnorables();
         int snippetEnd = snippetIndex + 10;
-        String content = state.input.getContent();
+        String content = state.input.content;
         int contentEnd = content.length();
         boolean needsEllipsis = contentEnd > snippetEnd;
         if (!needsEllipsis) {
@@ -111,5 +115,10 @@ final class PatternMatch extends PTParSer {
   @Override
   public String toString() {
     return "(/" + this.p.pattern() + "/)";
+  }
+
+  @Override
+  RangeSet<Integer> computeLookahead1() {
+    return la1;
   }
 }
