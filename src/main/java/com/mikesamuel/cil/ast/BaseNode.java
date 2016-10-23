@@ -1,9 +1,10 @@
 package com.mikesamuel.cil.ast;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.sun.istack.internal.Nullable;
 
 /**
  * A node in a Java AST.
