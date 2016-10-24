@@ -105,7 +105,7 @@ This sequence of events is the flattened form of a parse tree:
 The parser can also run with a flag that allows extra nodes to be inserted.
 The following syntax shows Java code interspersed with meta-instructions.
 
-```
+```java
 <% template HelloWorld : Statement %>
 <% let id = autoname %>
 for (int <% id %> = 0; i < limit; ++i) {
