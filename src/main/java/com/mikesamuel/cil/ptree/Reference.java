@@ -61,7 +61,7 @@ final class Reference extends PTParSer {
   }
 
   // HACK DEBUG: Not thread safe
-  private static final boolean DEBUG = true;
+  private static final boolean DEBUG = false;
   private static int depth = 0;
   private static String indent() {
     StringBuilder sb = new StringBuilder();
@@ -165,6 +165,9 @@ final class Reference extends PTParSer {
           // which is resolved by processing them in that order, but
           // the `new` operator production is left-recursive via Primary.
           if (this.parseSeed(state, err).isPresent()) {
+            if (DEBUG) {
+              System.err.println(indent() + "Throwing " + transferBackToStart);
+            }
             throw transferBackToStart;
           } else {
             if (DEBUG) {
@@ -197,14 +200,25 @@ final class Reference extends PTParSer {
           }
           throw d;
         }
+        if (DEBUG) {
+          System.err.println(indent() + "Control returned to " + nodeType);
+        }
         result = handleAsLeftRecursive(state, err).orNull();
+        if (DEBUG) {
+          System.err.println(
+              indent() + "handleAsLeftRecursive produced " + result);
+        }
+      }
+      if (DEBUG) {
+        System.err.println(
+            indent() + "Result for " + variant
+               + (result != null ? " @ " + result.index : " is <null>"));
       }
       if (result != null) {
         state.input.ratPack.cache(
             state.index, result.index, RatPack.Kind.WHOLE, result.output);
-        if (DEBUG) {
-          System.err.println(
-              indent() + "Pass " + nodeType + " at " + result.index);
+        if (nodeType == NodeType.AmbiguousName) {
+          Thread.dumpStack();
         }
         return Optional.of(result);
       }
@@ -222,8 +236,16 @@ final class Reference extends PTParSer {
         nodeType, beforeRecursing.index, RatPack.Kind.SEED);
     if (e.wasTried()) {
       if (e.passed()) {
-        return Optional.of(e.apply(beforeRecursing));
+        ParseState afterSeed = e.apply(beforeRecursing);
+        if (DEBUG) {
+          System.err.println(
+              indent() + "Using cached seed @ " + afterSeed.index);
+        }
+        return Optional.of(afterSeed);
       } else {
+        if (DEBUG) {
+          System.err.println(indent() + "Seed failure cached");
+        }
         return Optional.absent();
       }
     }
@@ -398,6 +420,11 @@ final class Reference extends PTParSer {
     LeftRecursionDone(NodeType nt) {
       this.setStackTrace(new StackTraceElement[0]);
       this.leftRecursiveNodeType = nt;
+    }
+
+    @Override
+    public String toString() {
+      return getClass().getSimpleName() + "(" + leftRecursiveNodeType + ")";
     }
   }
 }
