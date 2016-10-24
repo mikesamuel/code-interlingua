@@ -169,6 +169,7 @@ def process_grammar(
         grammar_text,
         source_file_exists,
         emit_java_file,
+        dot_out=None,
         verbose=True):
     """
     grammar_text : string -- See ../resources/jsl-19.txt
@@ -715,6 +716,38 @@ public enum NodeType implements ParSerable {
                 print '\t%s.%s -> %r' % (pn, vn, lcs)
         print
 
+    if dot_out is not None:
+        def write_dot():
+            prod_name_to_referents = {}
+            def is_left(src, dest_name):
+                src_name = src['name']
+                for variant in src['variants']:
+                    if dest_name in left_calls_per_variant[(src_name, variant['name'])]:
+                        return True
+                return False
+            def walk_variant(c, p, v):
+                pn = p['name']
+                if pn not in prod_name_to_referents:
+                    prod_name_to_referents[pn] = {}
+                def walk(pt):
+                    if 'ptree' in pt:
+                        for spt in pt['ptree']:
+                            walk(spt)
+                    elif 'ref' == pt['name']:
+                        callee_name = pt['pleaf'][0]
+                        prod_name_to_referents[pn][callee_name] = (
+                            prod_name_to_referents[pn].get(callee_name, False)
+                            or is_left(p, callee_name))
+                walk({ 'name': '()', 'ptree': v['ptree'] })
+            for_each_variant(walk_variant)
+            with open(dot_out, 'w') as dot_out_file:
+                print >>dot_out_file, 'digraph nonterminals {'
+                for pn, referent_to_is_left in prod_name_to_referents.iteritems():
+                    print >>dot_out_file, '  %s;' % pn
+                    for rn, is_left in referent_to_is_left.iteritems():
+                        print >>dot_out_file, '  %s -> %s [color=%s];' % (pn, rn, is_left and 'blue' or 'black')
+                print >>dot_out_file, '}'
+        write_dot()
     # To handle left recursion, we need to know the shortest depth-first
     # cycle from a left call in a variant back to that variant.
     # See GrowTheSeed.java for the use.
@@ -1069,6 +1102,10 @@ if __name__ == '__main__':
             ' e.g. basedir/target/generated-sources/parsehelpers'
         ))
     argparser.add_argument(
+        '--dotout',
+        help=('Path to graphviz .dot file that receives the non-terminal graph'
+        ))
+    argparser.add_argument(
         '-v',
         help='verbose',
         action='store_true')
@@ -1096,4 +1133,5 @@ if __name__ == '__main__':
         grammar_text=open(args.grammar_file, 'r').read(),
         source_file_exists=source_file_exists,
         emit_java_file=emit_java_file,
+        dot_out=args.dotout,
         verbose=args.v)
