@@ -123,6 +123,8 @@ final class Reference extends PTParSer {
       }
     }
 
+    Profile.count(nodeType);
+
     if (DEBUG) {
       System.err.println(indent() + "Entered " + nodeType);
       String din = dumpInput(state.input.content.substring(state.index));
@@ -140,6 +142,7 @@ final class Reference extends PTParSer {
         ? state.input.content.charAt(idx) : -1;
 
     boolean lookedForStartOfLeftRecursion = false;
+    boolean leftRecursionFailed = false;
     for (NodeVariant variant : variants) {
       ParSer variantParSer = variant.getParSer();
       if (firstChar >= 0 && variantParSer instanceof PTParSer) {
@@ -149,12 +152,16 @@ final class Reference extends PTParSer {
         }
       }
 
-      if (variant.isLeftRecursive() && !lookedForStartOfLeftRecursion) {
-        lookedForStartOfLeftRecursion = true;
-        if (hasLeftRecursion(state)) {
-          if (transferBackToStart == null) {
-            transferBackToStart = new LeftRecursionDone(nodeType);
-          }
+      if (variant.isLeftRecursive()) {
+        if (leftRecursionFailed) {
+          continue;
+        }
+        boolean hasLeftRecursion = false;
+        if (!lookedForStartOfLeftRecursion) {
+          lookedForStartOfLeftRecursion = true;
+          hasLeftRecursion = hasLeftRecursion(state);
+        }
+        if (hasLeftRecursion) {
           // We pre-parse the seed to make sure that the left-recursion
           // succeeds.  Otherwise we just fail.
           // This allows us to fail-over to later non-LR options.
@@ -168,12 +175,27 @@ final class Reference extends PTParSer {
             if (DEBUG) {
               System.err.println(indent() + "Throwing " + transferBackToStart);
             }
+            if (transferBackToStart == null) {
+              transferBackToStart = new LeftRecursionDone(nodeType);
+            }
             throw transferBackToStart;
           } else {
             if (DEBUG) {
               System.err.println(indent() + variant + " had failing seed");
             }
+            leftRecursionFailed = true;
             continue;
+          }
+        }
+      } else if (!lookedForStartOfLeftRecursion) {
+        boolean foundAnLR = false;
+        for (NodeVariant v : variants) {
+          if (v.isLeftRecursive()) { foundAnLR = true; break; }
+        }
+        if (!foundAnLR) {
+          lookedForStartOfLeftRecursion = true;
+          if (hasLeftRecursion(state)) {
+            throw new AssertionError(nodeType.name());
           }
         }
       }
@@ -226,6 +248,7 @@ final class Reference extends PTParSer {
     if (DEBUG) {
       System.err.println(indent() + "Fail " + nodeType);
     }
+    state.input.ratPack.cacheFailure(state.index, nodeType, RatPack.Kind.WHOLE);
     return Optional.absent();
   }
 
@@ -309,8 +332,8 @@ final class Reference extends PTParSer {
 
   private boolean hasLeftRecursion(ParseState state) {
     int nUnpushedPops = 0;
-    for (Chain<? extends MatchEvent> o = state.output;
-        o != null; o = o.prev) {
+    boolean sawLookaheadMarker = false;
+    for (Chain<? extends MatchEvent> o = state.output; o != null; o = o.prev) {
       if (o.x.nCharsConsumed() > 0) {
         break;
       } else if (o.x instanceof MatchEvent.PopMatchEvent) {
@@ -319,11 +342,19 @@ final class Reference extends PTParSer {
         if (nUnpushedPops == 0) {
           MatchEvent.PushMatchEvent push = (PushMatchEvent) o.x;
           if (push.variant.getNodeType() == nodeType) {
+            if (sawLookaheadMarker) {
+              // Lookaheads should not be on a left-call-cycle.
+              throw new IllegalStateException(
+                  "Left-recursion of " + nodeType
+                  + " ends up crossing lookahead boundary to " + push.variant);
+            }
             return true;
           }
         } else {
           --nUnpushedPops;
         }
+      } else if (o.x == Lookahead.LOOKAHEAD_START) {
+        sawLookaheadMarker = true;
       }
     }
     return false;
