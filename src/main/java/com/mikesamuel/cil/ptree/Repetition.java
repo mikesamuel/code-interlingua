@@ -22,11 +22,13 @@ final class Repetition extends PTParSer {
   static ParSerable of(ParSerable ps) {
     if (ps == Concatenation.EMPTY
         // Kleene* passes with no effect when there are zero passes of the body.
-        || ps == Alternation.NULL_LANGUAGE) {
+        || ps == Alternation.NULL_LANGUAGE
+        || ps instanceof Lookahead) {
       return Concatenation.EMPTY;
     } else if (ps instanceof Repetition) {
       return ps;
     }
+
     if (ps instanceof Alternation) {
       Alternation alt = (Alternation) ps;
       int n = alt.ps.size();

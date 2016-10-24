@@ -182,6 +182,12 @@ public final class GrowTheSeed {
   }
 
   private static Decomposition decompose(
+      @SuppressWarnings("unused") NodeVariant nv,
+      Lookahead la, boolean leftCallPossible) {
+    return new Decomposition(la, la, leftCallPossible, false);
+  }
+
+  private static Decomposition decompose(
       NodeVariant nv, Reference p, boolean leftCallPossible) {
     ImmutableList<NodeVariant> leftCallChain;
     if (leftCallPossible) {
@@ -220,6 +226,7 @@ public final class GrowTheSeed {
       case REF:   return decompose(nv, (Reference)      pts, leftCallPossible);
       case REP:   return decompose(nv, (Repetition)     pts, leftCallPossible);
       case REX:   return decompose(nv, (PatternMatch)   pts, leftCallPossible);
+      case LA:    return decompose(nv, (Lookahead)      pts, leftCallPossible);
     }
     throw new AssertionError(k);
   }

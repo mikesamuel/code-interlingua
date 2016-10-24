@@ -14,6 +14,7 @@ abstract class PTParSer extends ParSer {
     ALT,
     CAT,
     REP,
+    LA,
     LIT,
     REX,
     REF,

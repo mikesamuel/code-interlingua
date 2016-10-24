@@ -28,7 +28,7 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.ExpressionName),
         "one.two",
-        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifier),
+        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifierNotLp),
         push(ExpressionNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
         content("one"),

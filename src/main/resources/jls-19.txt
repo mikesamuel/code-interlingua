@@ -200,7 +200,7 @@ ExpressionName:
      // In the original grammar, this production
      // was AmbiguousName | AmbiguousName [.] Identifier
      // which is necessary because FieldAccess does not
-     // left-recurse to ExpressionName
+     // left-recurse to ExpressionName.
      // This is not PEG compatible, so we
      // deal with it here.
      ExpressionName "." Identifier !"("
@@ -672,11 +672,11 @@ ArrayAccess:
      PrimaryNoNewArray "[" Expression "]"
 MethodInvocation:
      MethodName "(" [ArgumentList] ")"
-     TypeName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      ExpressionName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     Primary "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
+     TypeName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      TypeName "." "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
+     "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
+     Primary "." [TypeArguments] Identifier "(" [ArgumentList] ")"
 ArgumentList:
      Expression {"," Expression}
 MethodReference:

@@ -37,6 +37,7 @@ _PTREE_NAME_TO_KIND = {
     '[]': 'PTree.Kind.OPTIONAL',
     'lit': 'PTree.Kind.LITERAL',
     'ref': 'PTree.Kind.REFERENCE',
+    'nla': 'PTree.Kind.NEGATIVE_LOOKAHEAD',
     }
 
 def _is_ident_start(c):
@@ -162,7 +163,18 @@ def _jsdoc_of(s, prefix = ' * '):
          .replace('\n', '\n%s' % prefix))
 
 def _tokens_to_text(toks):
-    return ' '.join([t[0] for t in toks])
+    if len(toks) == 0:
+        return ""
+    parts = []
+    last_line_no = toks[0][1][0]
+    for (text, (ln, co, ch)) in toks:
+        if ln != last_line_no:
+            parts.append('\n')
+            last_line_no = ln
+        elif len(parts) != 0:
+            parts.append(' ')
+        parts.append(text)
+    return ''.join(parts)
 
 
 def process_grammar(
@@ -180,6 +192,7 @@ def process_grammar(
         writes to a .java file in the generated source directory.
     """
 
+    generator = _java_str_lit(os.path.relpath(__file__))
     line_number, column_number, char_count = 0, 0, 0
 
     # Split into (token_text, position)
@@ -293,6 +306,11 @@ def process_grammar(
                 return ({ 'name': 'lit', 'pleaf': tok }, i + 1)
             if classification == _TOK_IDENT:
                 return ({ 'name': 'ref', 'pleaf': tok }, i + 1)
+            if tok[0] == '!':
+                if i + 1 == len(toks):
+                    raise SyntaxError('Expected content after "!"')
+                sub_node, j = make_node(toks, i + 1)
+                return ({ 'name': 'nla', 'ptree': [sub_node] }), j
             if tok[0] in ('(', '[', '{'):
                 end_bracket = _BRACKET_OTHERS[tok[0]]
                 j, n = i + 1, len(toks)
@@ -339,6 +357,8 @@ def process_grammar(
                         else:
                             alnum_part, str_index = alnum
                             base_name_parts.append(alnum_part)
+                elif has_text(tok, '!'):
+                    base_name_parts.append('not')
                 else:
                     base_name_parts.append(_NON_IDENT_CHAR.sub('', tok[0]))
             base_name_parts = [x for x in base_name_parts if x]
@@ -430,12 +450,14 @@ def process_grammar(
             for prod in chapter['prods']:
                 enum_members.append(
                     '''
-  /** <code>%(jsdoc)s</code> */
+  /**
+   * <pre>%(jsdoc)s</pre>
+   */
   %(name)s(
       %(base_type)s, %(name)sNode.Variant.class,
       PTree.nodeWrapper(%(name_str)s, %(name)sNode.Variant.class)),
 ''' % {
-    'jsdoc': _jsdoc_of(' '.join([t[0] for t in prod['toks']])),
+    'jsdoc': _jsdoc_of(_tokens_to_text(prod['toks']), prefix = '   * '),
     'name': prod['name'],
     'name_str': _java_str_lit(prod['name']),
     'base_type': base_type,
@@ -498,7 +520,7 @@ public enum NodeType implements ParSerable {
 }
         ''' % {
             'package': _JAVA_PACKAGE,
-            'generator': _java_str_lit(__file__),
+            'generator': generator,
             'members': ''.join(create_enum_members()),
         })
 
@@ -588,6 +610,8 @@ public enum NodeType implements ParSerable {
             '[]': walk_optional,
             # Treat Kleene star as optional Kleene plus
             '{}': walk_optional,
+            # Lookahead consumes no input.
+            'nla': walk_optional,
         }
 
         def walk_pt(pt, seen):
@@ -657,15 +681,18 @@ public enum NodeType implements ParSerable {
         left_calls = []
         def add_left_calls(pts):
             for pt in pts:
-                if pt['name'] in ('{}', '[]', '()'):
+                ptn = pt['name']
+                if ptn in ('{}', '[]', '()'):
                     add_left_calls(pt['ptree'])
-                elif pt['name'] == 'ref':
+                elif ptn == 'ref':
                     name = pt['pleaf'][0]
                     if name == 'builtin':
                         break
                     left_calls.append(name)
                     if name not in empty_matching:
                         break
+                    elif ptn == 'nla':
+                        continue
                 else:
                     break
         add_left_calls(v['ptree'])
@@ -782,24 +809,26 @@ public enum NodeType implements ParSerable {
                     elif r != CONTINUE:
                         return r
                 return CONTINUE
+            elif nm == 'nla':
+                return CONTINUE
             elif nm == 'lit':
                 assert ptree['pleaf'][0]
                 return NO_MORE_LEFT_CALLS
             elif nm == 'ref':
                 callee_name = ptree['pleaf'][0]
-                print '\trecurse to %s' % callee_name
+                if verbose: print '\trecurse to %s' % callee_name
                 if callee_name == 'builtin':
                     return NO_MORE_LEFT_CALLS
                 callee = prods_by_name[callee_name]
                 for callee_variant in callee['variants']:
                     key = (callee_name, callee_variant['name'])
-                    print '\t\tfound key %r vs %r' % (key, dest)
+                    if verbose: print '\t\tfound key %r vs %r' % (key, dest)
                     if key == dest:
-                        print '\t\tMATCH'
+                        if verbose: print '\t\tMATCH'
                         return (dest, None)
                     if callee_name not in visited:
                         visited.add(callee_name)
-                        print '\t\tRECURSING to %r' % (key,)
+                        if verbose: print '\t\tRECURSING to %r' % (key,)
                         r = shortest_left_call_chain(
                             { 'name': '()', 'ptree': callee_variant['ptree'] },
                             dest,
@@ -813,7 +842,6 @@ public enum NodeType implements ParSerable {
                     return NO_MORE_LEFT_CALLS
             else:
                 raise AssertionError(nm)
-        DEBUGGED=[False]
         def find_shortest_left_call_chain_btw(src_pn, dest):
             visited = set()
             r = shortest_left_call_chain(
@@ -825,9 +853,6 @@ public enum NodeType implements ParSerable {
             while r is not None:
                 left_call_chain.append(r[0])
                 r = r[1]
-            if not DEBUGGED[0] and len(left_call_chain) >= 3:
-                DEBUGGED[0]=True
-                print 'DEBUG LCC:\n\tleft_call_chain=%r\n\tsrc_pn=%r\n\tdest=%r\n\tr=%r' % (left_call_chain, src_pn, dest, r)
             assert left_call_chain[-1] == dest
             del left_call_chain[-1]
             return tuple(left_call_chain)
@@ -917,7 +942,8 @@ public enum NodeType implements ParSerable {
                     prefix='    ')
                 extra_imports.update(v_extra_imports)
                 is_lr = v['name'] in left_recursion[prod['name']]
-                if is_lr: print 'LR: %s::%s' % (prod['name'], v['name'])
+                if is_lr and verbose:
+                    print 'LR: %s::%s' % (prod['name'], v['name'])
                 variant_code.append(
                     (
                         '    /** */\n'
@@ -1007,7 +1033,7 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 ''' % {
     'package': _JAVA_PACKAGE,
     'extra_import_stmts': extra_import_stmts,
-    'generator': _java_str_lit(__file__),
+    'generator': generator,
     'grammar_jsdoc': _jsdoc_of(_tokens_to_text(prod['toks'])),
     'node_class_name': node_class_name,
     'name': prod['name'],
@@ -1026,7 +1052,7 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
         def java_variant(pn, vn):
             return '%sNode.Variant.%s' % (pn, vn)
-        for (((pn, vn), callee_name), chain) in (
+        for (((pn, vn), callee_name), chain) in sorted(
                 shortest_left_call_loop_map.iteritems()):
             lr_table_puts.append(
                 '.put(%s, NodeType.%s, ImmutableList.of(%s))' % (
@@ -1076,7 +1102,7 @@ public final class LeftRecursivePaths {
 }
 ''' % {
     'package': _JAVA_PACKAGE,
-    'generator': _java_str_lit(__file__),
+    'generator': generator,
     'indent': indent,
     'lr_table_puts': ('\n%s' % indent).join(lr_table_puts),
     'empty_matcher_args': empty_matcher_args,

@@ -31,6 +31,8 @@ public final class PTree {
     LITERAL,
     /** Delegates to a named production. */
     REFERENCE,
+    /** Consumes no input and passes when its body fails. */
+    NEGATIVE_LOOKAHEAD,
   }
 
   /**
@@ -124,6 +126,8 @@ public final class PTree {
           return Repetition.of(Concatenation.of(ps));
         case SEQUENCE:
           return Concatenation.of(ps);
+        case NEGATIVE_LOOKAHEAD:
+          return Lookahead.of(Lookahead.Valence.NEGATIVE, Concatenation.of(ps));
       }
       throw new AssertionError(kind);
     }
