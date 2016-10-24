@@ -60,7 +60,9 @@ final class Concatenation extends PTParSer {
     for (ParSerable p : ps) {
       ParSer parser = p.getParSer();
       Optional<ParseState> next = parser.parse(state, err);
-      if (!next.isPresent()) { return Optional.absent(); }
+      if (!next.isPresent()) {
+        return Optional.absent();
+      }
       state = next.get();
     }
     return Optional.of(state);
