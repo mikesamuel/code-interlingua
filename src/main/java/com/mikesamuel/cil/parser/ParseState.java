@@ -146,4 +146,18 @@ public final class ParseState {
     }
     return indexAfterIgnorable;
   }
+
+  @Override
+  public String toString() {
+    String content = input.content;
+    String inputFragment;
+    int fragmentEnd = index + 10;
+    if (fragmentEnd >= content.length()) {
+      inputFragment = content.substring(
+          index, Math.min(fragmentEnd, content.length()));
+    } else {
+      inputFragment = content.substring(index, fragmentEnd) + "...";
+    }
+    return "(ParseState index=" + index + ", input=`" + inputFragment + "`)";
+  }
 }
