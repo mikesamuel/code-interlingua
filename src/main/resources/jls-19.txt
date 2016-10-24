@@ -19,18 +19,79 @@
 This is brittle, but I produced the bulk of this file thus:
 
 curl https://docs.oracle.com/javase/specs/jls/se8/html/jls-19.html \
-    > /tmp/jsl-19.html
-perl -i.bak -pe 's/<code class="literal">.*?<\/code>/&quot;$&&quot;/g' \
-    /tmp/jsl-19.html
-perl -i.bak -pe 's/<div class="rhs">/<blockquote class="rhs">/' \
-    /tmp/jsl-19.html
-perl -i.bak -pe 's/<div class="rhs">/<blockquote class="rhs">/' \
-    /tmp/jsl-19.html
-perl -i.bak -pe 's/^( {25}\n {18})<\/div>/$1<\/blockquote>/' \
-    /tmo/jsl-19.html
-html2text -nobs < /tmp/jsl-19.html > /tmp/jsl-19.txt
+    > /tmp/jls-19.html
 
-and then manually expanding "(one of)" blocks.
+And then adding the following to the bottom before the </body>,
+loading it in a browser and copy/pasting the text form.
+
+<pre id="text-grammar"></pre>
+<script>
+  function strip(s) {
+    return String(s).replace(/^\s+|\s+$/g, '');
+  }
+
+  var output = '';
+  var prods = document.querySelectorAll('.production');
+  for (var i = 0, n = prods.length; i !== n; ++i) {
+    var prod = prods[i];
+    var lhs  = prod.querySelector('.lhs');
+    var rhs  = prod.querySelector('.rhs');
+    var name = strip(lhs.textContent);
+    var variant = [];
+    var variants = [];
+    function processRhs(rhsNodes) {
+      for (var i = 0, n = rhsNodes.length; i !== n; ++i) {
+        var rhsNode = rhsNodes[i];
+        switch (rhsNode.nodeType) {
+          case Node.TEXT_NODE:
+            var text = strip(rhsNode.nodeValue);
+            var parts = rhsNode.nodeValue.match(/\S+/g);
+            if (parts) {
+              for (var j = 0, m = parts.length; j !== m; ++j) {
+                variant.push(parts[j]);
+              }
+            }
+            break;
+          case Node.ELEMENT_NODE:
+            switch (rhsNode.tagName) {
+              case 'BR':
+                if (variant.length) {
+                  variants.push(variant.join(' '));
+                  variant.length = 0;
+                }
+                break;
+              case 'A':  // Reference to production
+                variant.push(strip(rhsNode.textContent));
+                break;
+              case 'SPAN':
+                variant.push('/' + '*' + strip(rhsNode.textContent) + '*' + '/');
+                break;
+              case 'CODE':  // Literal.  Quoted strings in lexical grammar not here.
+                variant.push('"' + strip(rhsNode.textContent) + '"');
+                break;
+              case 'PRE':
+                processRhs(rhsNode.childNodes);
+                break;
+              default:
+                throw new Error(rhs.tagName + ' not expected');
+            }
+            break;
+        }
+      }
+    }
+    processRhs(rhs.childNodes);
+    if (variant.length) { variants.push(variant.join(' ')); }
+    var variantBreak = '\n    ';
+    var variantsOutput = variants.join(variantBreak);
+    var noOneOf = variantsOutput.replace(/^\s*\(one of\)(?:\s*)/, '');
+    if (noOneOf != variantsOutput) {
+      variantsOutput = noOneOf.replace(/\s+/g, variantBreak);
+    }
+    output += lhs.textContent + variantBreak + variantsOutput + '\n';
+  }
+  document.querySelector('#text-grammar').appendChild(document.createTextNode(output));
+</script>
+
 */
 
 
@@ -136,7 +197,13 @@ PackageOrTypeName:
      PackageOrTypeName "." Identifier
      Identifier
 ExpressionName:
-     AmbiguousName "." Identifier
+     // In the original grammar, this production
+     // was AmbiguousName | AmbiguousName [.] Identifier
+     // which is necessary because FieldAccess does not
+     // left-recurse to ExpressionName
+     // This is not PEG compatible, so we
+     // deal with it here.
+     ExpressionName "." Identifier !"("
      Identifier
 MethodName:
      Identifier
