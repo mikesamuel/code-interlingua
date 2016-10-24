@@ -17,7 +17,6 @@ abstract class PTParSer extends ParSer {
     LIT,
     REX,
     REF,
-//  VNT,
   }
 
   abstract Kind getKind();
