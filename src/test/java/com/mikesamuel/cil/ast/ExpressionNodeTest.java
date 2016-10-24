@@ -3,6 +3,8 @@ package com.mikesamuel.cil.ast;
 import org.junit.Test;
 
 import com.mikesamuel.cil.ptree.PTree;
+import com.mikesamuel.cil.ptree.Profile;
+
 import static com.mikesamuel.cil.ast.MatchEvent.content;
 import static com.mikesamuel.cil.ast.MatchEvent.pop;
 import static com.mikesamuel.cil.ast.MatchEvent.push;
@@ -106,6 +108,74 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         /*....*/pop(),
         /*..*/pop(),
         /**/pop());
+  }
+
+  @Test
+  public void testSimpleFieldAccess() {
+    assertParsePasses(
+        PTree.complete(NodeType.Expression),
+        EnumSet.of(
+            NodeType.Expression,
+            NodeType.ExpressionName,
+            NodeType.FieldAccess,
+            NodeType.Identifier,
+            NodeType.Primary),
+        // This does not actually match the FieldAccess production.
+        // It actually matches the ExpressionName production.
+        // FieldAccess is reserved for those productions like
+        // (complexExpression).field.
+        "obj.field",
+        push(ExpressionNode.Variant.AssignmentExpression),
+        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifierNotLp),
+        push(ExpressionNameNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("obj"),
+        pop(),
+        pop(),
+        token("."),
+        push(IdentifierNode.Variant.Builtin),
+        content("field"),
+        pop(),
+        pop(),
+        pop());
+  }
+
+  @Test
+  public void testSimpleMethodCall() {
+    try (Profile p = Profile.startCounting()) {
+      assertParsePasses(
+          PTree.complete(NodeType.Expression),
+          EnumSet.of(
+              NodeType.Expression,
+              NodeType.ExpressionName,
+              NodeType.FieldAccess,
+              NodeType.MethodInvocation,
+              NodeType.Identifier,
+              NodeType.Primary),
+          // This does not actually match the FieldAccess production.
+          // It actually matches the ExpressionName production.
+          // FieldAccess is reserved for those productions like
+          // (complexExpression).field.
+          "obj.method()",
+          /**/push(ExpressionNode.Variant.AssignmentExpression),
+          /*..*/push(PrimaryNode.Variant.PrimaryNoNewArray),
+          /*....*/push(MethodInvocationNode.Variant
+          /*....*/     .ExpressionNameDotTypeArgumentsIdentifierLpArgumentListRp),
+          /*......*/push(ExpressionNameNode.Variant.Identifier),
+          /*........*/push(IdentifierNode.Variant.Builtin),
+          /*..........*/content("obj"),
+          /*........*/pop(),
+          /*......*/pop(),
+          /*......*/token("."),
+          /*......*/push(IdentifierNode.Variant.Builtin),
+          /*........*/content("method"),
+          /*......*/pop(),
+          /*......*/token("("),
+          /*......*/token(")"),
+          /*....*/pop(),
+          /*..*/pop(),
+          /**/pop());
+    }
   }
 
 }
