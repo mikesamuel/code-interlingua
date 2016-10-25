@@ -119,8 +119,8 @@ NullLiteral:
 //JavaLetterOrDigit:
 //     any Unicode character that is a "Java letter-or-digit"
 Literal:
-     IntegerLiteral
      FloatingPointLiteral
+     IntegerLiteral
      BooleanLiteral
      CharacterLiteral
      StringLiteral
@@ -147,15 +147,15 @@ FloatingPointType:
      "float"
      "double"
 ReferenceType:
+     ArrayType
      ClassOrInterfaceType
      TypeVariable
-     ArrayType
 ClassOrInterfaceType:
      ClassType
      InterfaceType
 ClassType:
-     {Annotation} Identifier [TypeArguments]
      ClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
+     {Annotation} Identifier [TypeArguments]
 InterfaceType:
      ClassType
 TypeVariable:
@@ -171,8 +171,8 @@ TypeParameter:
 TypeParameterModifier:
      Annotation
 TypeBound:
-     "extends" TypeVariable
      "extends" ClassOrInterfaceType {AdditionalBound}
+     "extends" TypeVariable
 AdditionalBound:
      "&" InterfaceType
 TypeArguments:
@@ -306,9 +306,9 @@ UnannPrimitiveType:
      NumericType
      "boolean"
 UnannReferenceType:
+     UnannArrayType
      UnannClassOrInterfaceType
      UnannTypeVariable
-     UnannArrayType
 UnannClassOrInterfaceType:
      UnannClassType
      UnannInterfaceType
@@ -467,8 +467,8 @@ DefaultValue:
      "default" ElementValue
 Annotation:
      NormalAnnotation
-     MarkerAnnotation
      SingleElementAnnotation
+     MarkerAnnotation
 NormalAnnotation:
      "@" TypeName "(" [ElementValuePairList] ")"
 ElementValuePairList:
@@ -512,8 +512,8 @@ LocalVariableDeclaration:
 Statement:
      StatementWithoutTrailingSubstatement
      LabeledStatement
-     IfThenStatement
      IfThenElseStatement
+     IfThenStatement
      WhileStatement
      ForStatement
 StatementNoShortIf:
@@ -609,8 +609,8 @@ ThrowStatement:
 SynchronizedStatement:
      "synchronized" "(" Expression ")" Block
 TryStatement:
-     "try" Block Catches
      "try" Block [Catches] Finally
+     "try" Block Catches
      TryWithResourcesStatement
 Catches:
      CatchClause {CatchClause}
@@ -641,12 +641,12 @@ PrimaryNoNewArray:
      ClassLiteral
      "this"
      TypeName "." "this"
-     "(" Expression ")"
      ClassInstanceCreationExpression
      FieldAccess
      ArrayAccess
      MethodInvocation
      MethodReference
+     "(" Expression ")"
 ClassLiteral:
      TypeName {"[" "]"} "." "class"
      NumericType {"[" "]"} "." "class"
@@ -680,8 +680,8 @@ MethodInvocation:
 ArgumentList:
      Expression {"," Expression}
 MethodReference:
-     ExpressionName "::" [TypeArguments] Identifier
      ReferenceType "::" [TypeArguments] Identifier
+     ExpressionName "::" [TypeArguments] Identifier
      Primary "::" [TypeArguments] Identifier
      "super" "::" [TypeArguments] Identifier
      TypeName "." "super" "::" [TypeArguments] Identifier
@@ -711,14 +711,14 @@ InferredFormalParameterList:
 //     Expression
 //     Block
 AssignmentExpression:
-     ConditionalExpression
      Assignment
+     ConditionalExpression
 Assignment:
      LeftHandSide AssignmentOperator Expression
 LeftHandSide:
-     ExpressionName
      FieldAccess
      ArrayAccess
+     ExpressionName
 AssignmentOperator:
      "="
      "*="
@@ -797,10 +797,10 @@ IncrDecrOperator:
      "++"
      "--"
 UnaryExpressionNotPlusMinus:
+     CastExpression
      PostfixExpression
      "~" UnaryExpression
      "!" UnaryExpression
-     CastExpression
 PostfixExpression:
      PostExpression
      Primary
