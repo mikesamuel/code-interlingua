@@ -239,9 +239,6 @@ final class Reference extends PTParSer {
       if (result != null) {
         state.input.ratPack.cache(
             state.index, result.index, RatPack.Kind.WHOLE, result.output);
-        if (nodeType == NodeType.AmbiguousName) {
-          Thread.dumpStack();
-        }
         return Optional.of(result);
       }
     }
