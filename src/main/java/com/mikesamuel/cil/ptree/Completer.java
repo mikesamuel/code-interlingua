@@ -27,7 +27,12 @@ final class Completer extends ParSer {
       if (nextState.isEmpty()) {
         return Optional.of(nextState);
       }
-      err.error(state, "Unparsed input");
+      String unparsed =
+          nextState.input.content.substring(nextState.indexAfterIgnorables());
+      if (unparsed.length() > 10) {
+        unparsed = unparsed.substring(0, 10) + "...";
+      }
+      err.error(nextState, "Unparsed input `" + unparsed + "`");
     }
     return Optional.absent();
   }
