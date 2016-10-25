@@ -1,7 +1,18 @@
 package com.mikesamuel.cil.ptree;
 
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
+import com.mikesamuel.cil.ast.TokenStrings;
 
 /**
  * Defines lexical structures.
@@ -31,6 +42,8 @@ public final class Tokens {
   public static final PatternMatch INTEGER_LITERAL;
 
   static {
+    String numMergeConflict = "(?![\\p{javaJavaIdentifierPart}])";
+
     String underscores = "_+";
     String underscoresOpt = "_*";
 
@@ -225,7 +238,7 @@ public final class Tokens {
         + hexadecimalFloatingPointLiteral + ")";
 
     FLOATING_POINT_LITERAL = new PatternMatch(
-        floatingPointLiteral,
+        floatingPointLiteral + numMergeConflict,
         ImmutableRangeSet.<Integer>builder()
             // Signs are prefix operators
             .add(Range.singleton((int) '.'))
@@ -268,7 +281,7 @@ public final class Tokens {
       + ")";
 
     INTEGER_LITERAL = new PatternMatch(
-        integerLiteral,
+        integerLiteral + numMergeConflict,
         ImmutableRangeSet.<Integer>builder()
             // Signs are prefix operators
             .add(Range.closed((int) '0', (int) '9'))
@@ -283,18 +296,65 @@ public final class Tokens {
   private static final String IDENTIFIER_CHARS_RE =
       "(?:" + JAVA_IDENTIFIER_START + JAVA_IDENTIFIER_PART + "*)";
 
-  private static final String KEYWORD_OR_BOOLEAN_OR_NULL =
-      ""
-      + "abstract|continue|for|new|switch"
-      + "|assert|default|if|package|synchronized"
-      + "|boolean|do(?:uble)?|goto|private|this"
-      + "|break|implements|protected|throws?"
-      + "|byte|else|import|public"
-      + "|case|enum|instanceof|return|transient"
-      + "|catch|extends|int|short|try"
-      + "|char|final(?:ly)?|interface|static|void"
-      + "|class|long|strictfp|volatile"
-      + "|const|float|native|super|while";
+  @VisibleForTesting
+  static final String KEYWORD_OR_BOOLEAN_OR_NULL;
+
+  private static final Comparator<String> AFTER_THEIR_PREFIXES =
+      new Comparator<String>() {
+
+        @Override
+        public int compare(String a, String b) {
+          int lengthDelta = a.length() - b.length();
+          if (lengthDelta < 0) {
+            if (b.startsWith(a)) {
+              return 1;
+            }
+          } else if (lengthDelta != 0 && a.startsWith(b)) {
+            return -1;
+          }
+          return a.compareTo(b);
+        }
+
+      };
+
+  static {
+    List<String> words = Lists.newArrayList(TokenStrings.RESERVED);
+
+    // Sort "finally" before "final" and "instanceof" before "in" so that
+    // matches that aren't right anchored match the longest keyword.
+    Collections.sort(words, AFTER_THEIR_PREFIXES);
+
+    KEYWORD_OR_BOOLEAN_OR_NULL = Joiner.on('|').join(words);
+  }
+
+  private static final ImmutableSortedSet<String> puncStrs =
+      ImmutableSortedSet.<String>naturalOrder()
+      .addAll(TokenStrings.PUNCTUATION)
+      .build();
+
+  /**
+   * The punctuation strings that appear in the grammar that have the given
+   * string as a prefix.
+   * <p>
+   * Since the parser is scannerless, we don't first break input into maximal
+   * tokens, which means that we might find a token {@code >} in {@code a >> b}
+   * if the parser checks for greater than before shift operators.
+   */
+  public static final ImmutableCollection<String> punctuationSuffixes(
+      String puncStr) {
+    StringBuilder nextSameLength = new StringBuilder(puncStr);
+    int lastIndex = nextSameLength.length() - 1;
+    char lastChar = nextSameLength.charAt(lastIndex);
+    Preconditions.checkState(lastChar < Character.MAX_VALUE);
+    nextSameLength.setCharAt(lastIndex, (char) (lastChar + 1));
+
+    return puncStrs.subSet(
+        puncStr,
+        false,  // false -> exclusive
+        nextSameLength.toString(),
+        false  // false -> exclusive
+        );
+  }
 
   private static final ImmutableRangeSet<Integer> JAVA_START_CHARS;
   static {
@@ -322,7 +382,8 @@ public final class Tokens {
   public static final PatternMatch IDENTIFIER = new PatternMatch(
       // Identifier:
       //     IdentifierChars but not a Keyword or BooleanLiteral or NullLiteral
-      "(?!=" + KEYWORD_OR_BOOLEAN_OR_NULL + "(?!" + JAVA_IDENTIFIER_PART + "))"
+      "(?!(?:" + KEYWORD_OR_BOOLEAN_OR_NULL + ")"
+      + "(?!" + JAVA_IDENTIFIER_PART + "))"
       + IDENTIFIER_CHARS_RE,
       JAVA_START_CHARS,
       "ident");
@@ -335,7 +396,8 @@ public final class Tokens {
 
   /** 3.10.5 */
   public static final PatternMatch STRING_LITERAL = new PatternMatch(
-      "\"(?:\"|" + CHAR_NO_QUOTES + ")*\"",
+      "\"(?:'|" + CHAR_NO_QUOTES + ")*\"",
       ImmutableRangeSet.of(Range.singleton((int) '"')),
       "\"...\"");
+
 }

@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 import org.junit.Test;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharSource;
 
@@ -51,12 +52,12 @@ public final class ParseStateTest extends TestCase {
   @Test
   public static void testStartsWith() throws IOException {
     ParseState ps = new ParseState(new Input("test", CharSource.wrap("foo")));
-    assertTrue(ps.startsWith("f"));
-    assertFalse(ps.startsWith("F"));
-    assertTrue(ps.startsWith("fo"));
-    assertFalse(ps.startsWith("food"));
-    assertTrue(ps.advance(1, false).startsWith("oo"));
-    assertFalse(ps.advance(1, false).startsWith("f"));
+    assertTrue(ps.startsWith("f", Optional.absent()));
+    assertFalse(ps.startsWith("F", Optional.absent()));
+    assertTrue(ps.startsWith("fo", Optional.absent()));
+    assertFalse(ps.startsWith("food", Optional.absent()));
+    assertTrue(ps.advance(1, false).startsWith("oo", Optional.absent()));
+    assertFalse(ps.advance(1, false).startsWith("f", Optional.absent()));
   }
 
   @Test

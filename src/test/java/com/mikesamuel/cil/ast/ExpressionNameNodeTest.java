@@ -41,4 +41,15 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
         pop());
   }
 
+  @Test
+  public void testExpressionNameThatHasKeywordAsPrefix() {
+    assertParsePasses(
+        PTree.complete(NodeType.ExpressionName),
+        "donut",
+        push(ExpressionNameNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("donut"),
+        pop(),
+        pop());
+  }
 }

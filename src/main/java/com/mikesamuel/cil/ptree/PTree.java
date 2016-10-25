@@ -103,7 +103,14 @@ public final class PTree {
 
     /** Specifies that the text is matched literally. */
     public Builder leaf(String leafText, int ln, int co, int ix) {
-      parSerables.add(Literal.of(leafText, ln, co, ix));
+      return leaf(leafText, false, ln, co, ix);
+    }
+
+    /** Specifies that the text is matched literally. */
+    public Builder leaf(
+        String leafText, boolean ignoreMergeHazards,
+        int ln, int co, int ix) {
+      parSerables.add(Literal.of(leafText, ignoreMergeHazards, ln, co, ix));
       return this;
     }
 

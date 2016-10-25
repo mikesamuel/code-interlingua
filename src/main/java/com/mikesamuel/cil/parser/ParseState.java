@@ -5,6 +5,7 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.mikesamuel.cil.ast.MatchEvent;
 
@@ -82,9 +83,18 @@ public final class ParseState {
    * Since this parser is scannerless, this will return true if the given text
    * is a prefix of the next token.
    */
-  public boolean startsWith(String text) {
-    return input.content.regionMatches(
-        indexAfterIgnorables(), text, 0, text.length());
+  public boolean startsWith(String text, Optional<TokenMergeGuard> hazardDetector) {
+    int start = indexAfterIgnorables();
+    if (input.content.regionMatches(start, text, 0, text.length())) {
+      if (!hazardDetector.isPresent()) {
+        return true;
+      }
+      TokenMergeGuard hazard = hazardDetector.get();
+      if (!hazard.isHazard(input.content, start, start + text.length())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

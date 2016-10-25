@@ -294,6 +294,8 @@ def process_grammar(
             items.append(item)
         return items
 
+    all_lits = set()
+
     def make_ptree(toks):
         """
         Matches bracket operators to group the right-hand-side of a
@@ -303,6 +305,7 @@ def process_grammar(
             tok = toks[i]
             classification = _classify_token(tok)
             if classification == _TOK_STRING:
+                all_lits.add(tok[0])
                 return ({ 'name': 'lit', 'pleaf': tok }, i + 1)
             if classification == _TOK_IDENT:
                 return ({ 'name': 'ref', 'pleaf': tok }, i + 1)
@@ -907,8 +910,13 @@ public enum NodeType implements ParSerable {
                     sub = '%s.add(NodeType.%s)' % (prefix_plus, leaf_text)
             else:  # 'lit'
                 leaf_value = _java_str_lit(leaf_text[1:-1])
-                sub = '%s.leaf(%s, %d, %d, %d)' % (
-                    prefix_plus, leaf_value,
+                optional_token_merge_hazard = ''
+                if (leaf_value == '">"'
+                    and prod['name'] in ('TypeArguments', 'TypeParameters')):
+                    optional_token_merge_hazard = ', true'
+                sub = '%s.leaf(%s%s, %d, %d, %d)' % (
+                    prefix_plus,
+                    leaf_value, optional_token_merge_hazard,
                     leaf_ln, leaf_co, leaf_ci)
 
         return (
@@ -1109,6 +1117,60 @@ public final class LeftRecursivePaths {
 })
 
     write_lr_chains()
+
+    def write_literal_tokens():
+        keywords = []
+        punctuation = []
+        for lit in all_lits:
+            content = lit[1:-1]
+            if 'a' <= content[0] and content[0] <= 'z':
+                keywords.append(content)
+            else:
+                punctuation.append(content)
+        keywords.sort()
+        punctuation.sort()
+        emit_java_file(
+            'TokenStrings',
+            '''
+package %(package)s;
+
+import com.google.common.collect.ImmutableSet;
+
+/**
+ * All the tokens that appear literally in the grammar.
+ */
+public final class TokenStrings {
+
+  private TokenStrings() {
+    // Provides static API
+  }
+
+  /**
+   * Language keywords.
+   * This includes literals like {@code false} that are not part of the
+   * keyword list, but are instead reserved type names.
+   */
+  public static final ImmutableSet<String> RESERVED = ImmutableSet.copyOf(
+      new String[] { %(reserved_words)s }
+  );
+
+  /**
+   * Non-alphabetic strings that appear literally in the grammar.
+   * This excludes strings that appear purely in the lexical grammar like
+   * whitespace characters, comment boundaries, and string/char literal boundaries.
+   */
+  public static final ImmutableSet<String> PUNCTUATION = ImmutableSet.copyOf(
+      new String[] { %(punctuation)s }
+  );
+}
+''' % {
+    'package': _JAVA_PACKAGE,
+    'generator': generator,
+    'reserved_words': ', '.join(_java_str_lit(s) for s in keywords),
+    'punctuation': ', '.join(_java_str_lit(s) for s in punctuation),
+})
+
+    write_literal_tokens()
 
 if __name__ == '__main__':
     import argparse

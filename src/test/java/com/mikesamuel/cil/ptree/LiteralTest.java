@@ -18,7 +18,7 @@ public final class LiteralTest extends TestCase {
 
   @Test
   public final void testParse() throws Exception {
-    ParSer lit = Literal.of("===", 1, 1, 1);
+    ParSer lit = Literal.of("===", false, 1, 1, 1);
     ParseState ps = new ParseState(
         new Input(getName(), CharSource.wrap(" === ")));
     Optional<ParseState> resultOpt = lit.parse(ps, null);
