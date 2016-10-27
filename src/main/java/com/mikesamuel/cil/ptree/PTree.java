@@ -2,7 +2,6 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.ast.NodeVariant;
 
@@ -41,30 +40,8 @@ public final class PTree {
   public static ParSerable nodeWrapper(
       final String name,
       final Class<? extends Enum<? extends NodeVariant>> variantClass) {
-    return new ParSerable() {
-      private Reference r;
-
-      @Override
-      public ParSer getParSer() {
-        if (r == null) {
-          r = new Reference(name, variantClass);
-        }
-        return r;
-      }
-    };
+    return new Reference(name, variantClass);
   }
-
-  /* *
-   * A parSer that generates {@link MatchEvent#push} and pop events during parse
-   * and consume them during match and unparse operations.
-   *
-   * @param isLeftRecursive when this variant is directly left-recursive.
-   *     Indirect left-recursion is not handled.
-   *
-  public static ParSerable variantWrapper(
-      NodeVariant v, ParSerable p, boolean isLeftRecursive) {
-    return new VariantWrapper(v, p, isLeftRecursive);
-  }*/
 
   /**
    * A ParSer that assumes/verifies that it is dealing with a complete

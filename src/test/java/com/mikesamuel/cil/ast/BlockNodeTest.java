@@ -17,8 +17,8 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         "{}",
 
         push(BlockNode.Variant.LcBlockStatementsRc),
-        token("{"),
-        token("}"),
+        token("{", -1),
+        token("}", -1),
         pop()
         );
   }
@@ -30,7 +30,7 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         "{;}",
 
         push(BlockNode.Variant.LcBlockStatementsRc),
-        token("{"),
+        token("{", -1),
         push(
             BlockStatementsNode.Variant.BlockStatementBlockStatement),
         push(BlockStatementNode.Variant.Statement),
@@ -39,13 +39,13 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         push(
             StatementWithoutTrailingSubstatementNode.Variant.EmptyStatement),
         push(EmptyStatementNode.Variant.Sem),
-        token(";"),
+        token(";", -1),
         pop(),
         pop(),
         pop(),
         pop(),
         pop(),
-        token("}"),
+        token("}", -1),
         pop()
         );
   }
@@ -57,20 +57,20 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
         "{ { } } // block block",
 
         push(BlockNode.Variant.LcBlockStatementsRc),
-        token("{"),
+        token("{", -1),
         push(BlockStatementsNode.Variant.BlockStatementBlockStatement),
         push(BlockStatementNode.Variant.Statement),
         push(StatementNode.Variant.StatementWithoutTrailingSubstatement),
         push(StatementWithoutTrailingSubstatementNode.Variant.Block),
         push(BlockNode.Variant.LcBlockStatementsRc),
-        token("{"),
-        token("}"),
+        token("{", -1),
+        token("}", -1),
         pop(),
         pop(),
         pop(),
         pop(),
         pop(),
-        token("}"),
+        token("}", -1),
         pop()
         );
   }

@@ -9,7 +9,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.RangeSet;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.MatchEvent.LRSuffix;
-import com.mikesamuel.cil.ast.MatchEvent.PushMatchEvent;
+import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.Chain;
@@ -26,28 +26,43 @@ import com.mikesamuel.cil.parser.SerialState;
 
 final class Reference extends PTParSer {
   final String name;
-  final NodeType nodeType;
-  final ImmutableList<NodeVariant> variants;
+  final Class<? extends Enum<? extends ParSerable>> variantClass;
+  private NodeType nodeType;
+  private ImmutableList<NodeVariant> variants;
   private GrowTheSeed growTheSeed;
   private LeftRecursionDone transferBackToStart;
 
   Reference(
       String name, Class<? extends Enum<? extends ParSerable>> variantClass) {
     this.name = name;
-    ImmutableList.Builder<NodeVariant> variantsBuilder =
-        ImmutableList.builder();
-    NodeType nt = null;
-    for (Enum<?> e : variantClass.getEnumConstants()) {
-      NodeVariant nv = (NodeVariant) e;
-      variantsBuilder.add(nv);
-      if (nt == null) {
-        nt = nv.getNodeType();
-      } else {
-        Preconditions.checkState(nt == nv.getNodeType());
+    this.variantClass = Preconditions.checkNotNull(variantClass);
+  }
+
+
+  void initLazy() {
+    if (nodeType == null) {
+      ImmutableList.Builder<NodeVariant> variantsBuilder =
+          ImmutableList.builder();
+      NodeType nt = null;
+      for (Enum<?> e : variantClass.getEnumConstants()) {
+        NodeVariant nv = (NodeVariant) e;
+        variantsBuilder.add(nv);
+        if (nt == null) {
+          nt = nv.getNodeType();
+        } else {
+          Preconditions.checkState(nt == nv.getNodeType());
+        }
       }
+      this.nodeType = Preconditions.checkNotNull(nt);
+      this.variants = variantsBuilder.build();
+      Preconditions.checkState(name.equals(nodeType.name()));
     }
-    this.nodeType = Preconditions.checkNotNull(nt);
-    this.variants = variantsBuilder.build();
+  }
+
+  /** The production referred to. */
+  public NodeType getNodeType() {
+    initLazy();
+    return nodeType;
   }
 
   @Override
@@ -107,6 +122,7 @@ final class Reference extends PTParSer {
 
   @Override
   public Optional<ParseState> parse(ParseState state, ParseErrorReceiver err) {
+    initLazy();
     ParseCacheEntry cachedParse = state.input.ratPack.getCachedParse(
         nodeType, state.index, RatPack.Kind.WHOLE);
     if (cachedParse.wasTried()) {
@@ -181,21 +197,11 @@ final class Reference extends PTParSer {
             throw transferBackToStart;
           } else {
             if (DEBUG) {
-              System.err.println(indent() + variant + " had failing seed");
+              System.err.println(
+                  indent() + variant + " had failing seed at " + state.index);
             }
             leftRecursionFailed = true;
             continue;
-          }
-        }
-      } else if (!lookedForStartOfLeftRecursion) {
-        boolean foundAnLR = false;
-        for (NodeVariant v : variants) {
-          if (v.isLeftRecursive()) { foundAnLR = true; break; }
-        }
-        if (!foundAnLR) {
-          lookedForStartOfLeftRecursion = true;
-          if (hasLeftRecursion(state)) {
-            throw new AssertionError(nodeType.name());
           }
         }
       }
@@ -333,11 +339,11 @@ final class Reference extends PTParSer {
     for (Chain<? extends MatchEvent> o = state.output; o != null; o = o.prev) {
       if (o.x.nCharsConsumed() > 0) {
         break;
-      } else if (o.x instanceof MatchEvent.PopMatchEvent) {
+      } else if (o.x instanceof MatchEvent.Pop) {
         ++nUnpushedPops;
-      } else if (o.x instanceof MatchEvent.PushMatchEvent) {
+      } else if (o.x instanceof MatchEvent.Push) {
         if (nUnpushedPops == 0) {
-          MatchEvent.PushMatchEvent push = (PushMatchEvent) o.x;
+          MatchEvent.Push push = (Push) o.x;
           if (push.variant.getNodeType() == nodeType) {
             if (sawLookaheadMarker) {
               // Lookaheads should not be on a left-call-cycle.
@@ -368,17 +374,17 @@ final class Reference extends PTParSer {
   }
 
   private static Chain<MatchEvent> doPushback(
-      Chain<? extends MatchEvent> out, List<MatchEvent> pushback,
+      Chain<MatchEvent> out, List<MatchEvent> pushback,
       List<MatchEvent> pops) {
     Preconditions.checkNotNull(out, "Did not find LRStart");
     if (out.x instanceof MatchEvent.LRStart) {
-      Chain<MatchEvent> withPushback = Chain.copyOf(out.prev);
+      Chain<MatchEvent> withPushback = out.prev;
       for (MatchEvent pb : pushback) {
         withPushback = Chain.append(withPushback, pb);
       }
       return withPushback;
     } else if (out.x instanceof MatchEvent.LRSuffix) {
-      Chain<MatchEvent> processed = Chain.copyOf(out.prev);
+      Chain<MatchEvent> processed = out.prev;
       MatchEvent.LRSuffix suffix = (LRSuffix) out.x;
       for (NodeVariant nv : suffix.variants) {
         pushback.add(MatchEvent.push(nv));
@@ -409,17 +415,20 @@ final class Reference extends PTParSer {
   @Override
   public Optional<SerialState> unparse(
       SerialState state, SerialErrorReceiver err) {
+    initLazy();
     return Alternation.of(variants).getParSer().unparse(state, err);
   }
 
   @Override
   public Optional<MatchState> match(
       MatchState state, MatchErrorReceiver err) {
+    initLazy();
     return Alternation.of(variants).getParSer().match(state, err);
   }
 
   @Override
   RangeSet<Integer> computeLookahead1() {
+    initLazy();
     if (variants.get(0).isLeftRecursive()) {
       GrowTheSeed gts = this.getGrowTheSeed();
       // TODO: This is probably not sound.

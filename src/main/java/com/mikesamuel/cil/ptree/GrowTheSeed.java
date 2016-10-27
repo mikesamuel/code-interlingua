@@ -2,10 +2,13 @@ package com.mikesamuel.cil.ptree;
 
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.LeftRecursivePaths;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeType;
@@ -61,20 +64,37 @@ public final class GrowTheSeed {
     }
   }
 
+  private static final boolean DEBUG = false;
+
   private static GrowTheSeed split(NodeType nt) {
-//    System.err.println("GrowTheSeed " + nt);
+    if (DEBUG) {
+      System.err.println("GrowTheSeed " + nt);
+    }
+
+    ImmutableList<NodeVariant> variants = ImmutableList.copyOf(
+        Lists.transform(
+            ImmutableList.copyOf(nt.getVariantType().getEnumConstants()),
+            new Function<Enum<?>, NodeVariant>() {
+              @Override
+              public NodeVariant apply(Enum<?> ev) {
+                return (NodeVariant) ev;
+              }
+            })
+        );
+
     ImmutableList.Builder<ParSerable> seeds = ImmutableList.builder();
     ImmutableList.Builder<ParSerable> suffixes = ImmutableList.builder();
 
-    for (Enum<?> ev : nt.getVariantType().getEnumConstants()) {
-      NodeVariant nv = (NodeVariant) ev;
+    for (NodeVariant nv : variants) {
       ParSer body = nv.getParSer();
 
       Decomposition d = decompose(nv, body, true);
-//      System.err.println(
-//          "split " + nv + " : " + body
-//          + "\n\tseed: " + d.seed + "\n\tsuff: " + d.suffix
-//          + "\n\thasLeftCall: " + d.hasLeftCall);
+      if (DEBUG) {
+        System.err.println(
+            "\nsplit " + nv + " : " + body
+            + "\n\tseed: " + d.seed + "\n\tsuff: " + d.suffix
+            + "\n\thasLeftCall: " + d.hasLeftCall + "\n");
+      }
       seeds.add(Concatenation.of(ImmutableList.of(
           new AppendMatchEvent(MatchEvent.push(nv)),
           d.seed, APPEND_POP)));
@@ -86,9 +106,14 @@ public final class GrowTheSeed {
     ParSerable seed = Alternation.of(seeds.build());
     ParSerable suffix = Alternation.of(suffixes.build());
 
-//    System.err.println("\nseed\n" + seed);
-//    System.err.println("\nsuffix\n" + suffix);
-//    if (true) throw new Error();
+    if (DEBUG) {
+      System.err.println("\nseed\n" + seed);
+      System.err.println("\nsuffix\n" + suffix);
+    }
+
+    if (seed == Alternation.NULL_LANGUAGE) {
+      throw new AssertionError("LR production " + nt + " cannot be handled");
+    }
 
     return new GrowTheSeed(seed, suffix);
   }
@@ -98,22 +123,24 @@ public final class GrowTheSeed {
     ImmutableList.Builder<ParSerable> seedEls = ImmutableList.builder();
     ImmutableList.Builder<ParSerable> suffixEls = ImmutableList.builder();
     boolean leftCallStillPossible = leftCallPossible;
+    boolean hasLeftCall = false;
     for (ParSerable c : p.ps) {
-      Decomposition d = decompose(nv, c.getParSer(), leftCallPossible);
+      Decomposition d = decompose(nv, c, leftCallPossible);
       seedEls.add(d.seed);
-      if (d.hasLeftCall) {
+      if (!leftCallPossible || d.hasLeftCall) {
         suffixEls.add(d.suffix);
       }
       if (!d.leftCallsPossible) {
         leftCallStillPossible = false;
       }
+      hasLeftCall |= d.hasLeftCall;
     }
     ParSerable suffix = Alternation.of(suffixEls.build());
     return new Decomposition(
         Alternation.of(seedEls.build()),
         suffix,
         leftCallStillPossible,
-        !alwaysFails(suffix));
+        hasLeftCall && !alwaysFails(suffix));
   }
 
   private static Decomposition decompose(
@@ -123,7 +150,7 @@ public final class GrowTheSeed {
     boolean leftCallStillPossible = leftCallPossible;
     boolean hasLeftCall = false;
     for (ParSerable c : p.ps) {
-      Decomposition d = decompose(nv, c.getParSer(), leftCallStillPossible);
+      Decomposition d = decompose(nv, c, leftCallStillPossible);
 
       seedEls.add(d.seed);
       suffixEls.add(d.suffix);
@@ -149,18 +176,24 @@ public final class GrowTheSeed {
 
   private static Decomposition decompose(
       NodeVariant nv, Repetition p, boolean leftCallPossible) {
-    Decomposition d = decompose(nv, p.p.getParSer(), leftCallPossible);
+    Decomposition d = decompose(nv, p.p, leftCallPossible);
 
     ParSerable seed, suffix;
 
     // If we encountered a transition from allowing left calls to not allowing
     // left calls then we need to split the seed into an optional use of the
     // non-left recursing variant followed by a possibly recursing loop.
-    boolean needToSplit = (leftCallPossible && !d.leftCallsPossible);
-    if (needToSplit) {
-      seed = Concatenation.of(ImmutableList.of(d.seed, p));
+    if (d.seed == p.p) {
+      seed = p;
     } else {
-      seed = Repetition.of(d.seed);
+      boolean needToSplit = (leftCallPossible && !d.leftCallsPossible);
+      if (needToSplit) {
+        seed = Alternation.of(ImmutableList.of(
+            Concatenation.of(ImmutableList.of(d.seed, p)),
+            Concatenation.EMPTY));
+      } else {
+        seed = Repetition.of(d.seed);
+      }
     }
 
     suffix = Repetition.of(d.suffix);
@@ -191,14 +224,14 @@ public final class GrowTheSeed {
       NodeVariant nv, Reference p, boolean leftCallPossible) {
     ImmutableList<NodeVariant> leftCallChain;
     if (leftCallPossible) {
-      leftCallChain = LeftRecursivePaths.LR_CYCLES.get(nv, p.nodeType);
+      leftCallChain = LeftRecursivePaths.LR_CYCLES.get(nv, p.getNodeType());
     } else {
       leftCallChain = null;
     }
 
     boolean leftCallStillPossible =
         leftCallPossible
-        && LeftRecursivePaths.EPSILON_MATCHERS.contains(p.nodeType);
+        && LeftRecursivePaths.EPSILON_MATCHERS.contains(p.getNodeType());
 
     if (leftCallChain != null) {
       return new Decomposition(
@@ -216,19 +249,32 @@ public final class GrowTheSeed {
   }
 
   private static Decomposition decompose(
-      NodeVariant nv, ParSer ps, boolean leftCallPossible) {
+      NodeVariant nv, ParSerable ps, boolean leftCallPossible) {
     PTParSer pts = (PTParSer) ps.getParSer();
     PTParSer.Kind k = pts.getKind();
+    Decomposition d = null;
     switch (k) {
-      case ALT:   return decompose(nv, (Alternation)    pts, leftCallPossible);
-      case CAT:   return decompose(nv, (Concatenation)  pts, leftCallPossible);
-      case LIT:   return decompose(nv, (Literal)        pts, leftCallPossible);
-      case REF:   return decompose(nv, (Reference)      pts, leftCallPossible);
-      case REP:   return decompose(nv, (Repetition)     pts, leftCallPossible);
-      case REX:   return decompose(nv, (PatternMatch)   pts, leftCallPossible);
-      case LA:    return decompose(nv, (Lookahead)      pts, leftCallPossible);
+      case ALT: d = decompose(nv, (Alternation)   pts, leftCallPossible); break;
+      case CAT: d = decompose(nv, (Concatenation) pts, leftCallPossible); break;
+      case LIT: d = decompose(nv, (Literal)       pts, leftCallPossible); break;
+      case REF: d = decompose(nv, (Reference)     pts, leftCallPossible); break;
+      case REP: d = decompose(nv, (Repetition)    pts, leftCallPossible); break;
+      case REX: d = decompose(nv, (PatternMatch)  pts, leftCallPossible); break;
+      case LA:  d = decompose(nv, (Lookahead)     pts, leftCallPossible); break;
     }
-    throw new AssertionError(k);
+    Preconditions.checkNotNull(d, k);  // switch should cover all cases
+
+    if (DEBUG) {
+      System.err.println(
+          "Decomposed " + pts
+          + " : " + pts.getClass().getSimpleName() + ", nv=" + nv);
+      System.err.println("\tleftCallPossible=" + leftCallPossible);
+      System.err.println("\td.hasLeftCall=" + d.hasLeftCall);
+      System.err.println("\td.leftCallsPossible=" + d.leftCallsPossible);
+      System.err.println("\td.seed=" + d.seed);
+      System.err.println("\td.suffix=" + d.suffix);
+    }
+    return d;
   }
 
 

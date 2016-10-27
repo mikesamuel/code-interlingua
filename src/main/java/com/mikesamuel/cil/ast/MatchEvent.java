@@ -10,31 +10,31 @@ public abstract class MatchEvent {
   /**
    * An event fired on entering a node before visiting its content or children.
    */
-  public static PushMatchEvent push(NodeVariant v) {
-    return new PushMatchEvent(v);
+  public static Push push(NodeVariant v) {
+    return new Push(v);
   }
 
   /**
    * An event that happens when we leave a node after visiting its content and
    * children.
    */
-  public static PopMatchEvent pop() {
-    return PopMatchEvent.INSTANCE;
+  public static Pop pop() {
+    return Pop.INSTANCE;
   }
 
   /**
    * Fired for leaf nodes.
    */
-  public static ContentMatchEvent content(String s) {
-    return new ContentMatchEvent(s);
+  public static Content content(String s, int index) {
+    return new Content(s, index);
   }
 
   /**
    * Generated during parse for tokens matched so that our LR detection can
    * determine whether content has been consumed since a push of a variant.
    */
-  public static TokenMatchEvent token(String s) {
-    return new TokenMatchEvent(s);
+  public static Token token(String s, int index) {
+    return new Token(s, index);
   }
 
   /**
@@ -75,10 +75,10 @@ public abstract class MatchEvent {
    * An event that happens when we leave a node after visiting its content and
    * children.
    */
-  public static final class PopMatchEvent extends MatchEvent {
-    private PopMatchEvent() {}
+  public static final class Pop extends MatchEvent {
+    private Pop() {}
 
-    static final PopMatchEvent INSTANCE = new PopMatchEvent();
+    static final Pop INSTANCE = new Pop();
 
     @Override
     public String toString() {
@@ -94,11 +94,11 @@ public abstract class MatchEvent {
   /**
    * An event fired on entering a node before visiting its content or children.
    */
-  public static final class PushMatchEvent extends MatchEvent {
+  public static final class Push extends MatchEvent {
     /** Variant of the node entered. */
     public final NodeVariant variant;
 
-    PushMatchEvent(NodeVariant variant) {
+    Push(NodeVariant variant) {
       this.variant = variant;
     }
 
@@ -126,7 +126,7 @@ public abstract class MatchEvent {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      PushMatchEvent other = (PushMatchEvent) obj;
+      Push other = (Push) obj;
       if (variant == null) {
         if (other.variant != null) {
           return false;
@@ -146,12 +146,15 @@ public abstract class MatchEvent {
   /**
    * Fired for leaf nodes.
    */
-  public static final class ContentMatchEvent extends MatchEvent {
+  public static final class Content extends MatchEvent {
     /** The leaf value. */
     public final String content;
+    /** Character index into the input of the start of the token. */
+    public final int index;
 
-    ContentMatchEvent(String content) {
+    Content(String content, int index) {
       this.content = content;
+      this.index = index;
     }
 
     @Override
@@ -178,7 +181,7 @@ public abstract class MatchEvent {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      ContentMatchEvent other = (ContentMatchEvent) obj;
+      Content other = (Content) obj;
       if (content == null) {
         if (other.content != null) {
           return false;
@@ -198,12 +201,15 @@ public abstract class MatchEvent {
   /**
    * Added for tokens that do not contribute directly to tree content.
    */
-  public static final class TokenMatchEvent extends MatchEvent {
-    /** The leaf value. */
+  public static final class Token extends MatchEvent {
+    /** The token text. */
     public final String content;
+    /** Character index into the input of the start of the token. */
+    public final int index;
 
-    TokenMatchEvent(String content) {
+    Token(String content, int index) {
       this.content = content;
+      this.index = index;
     }
 
     @Override
@@ -230,7 +236,7 @@ public abstract class MatchEvent {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      TokenMatchEvent other = (TokenMatchEvent) obj;
+      Token other = (Token) obj;
       if (content == null) {
         if (other.content != null) {
           return false;

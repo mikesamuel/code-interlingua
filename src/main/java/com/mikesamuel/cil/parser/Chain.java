@@ -10,9 +10,9 @@ public final class Chain<T> {
   /** The content. */
   public final T x;
   /** The previous element in the chain. */
-  public final Chain<? extends T> prev;
+  public final Chain<T> prev;
 
-  private Chain(T x, Chain<? extends T> prev) {
+  private Chain(T x, Chain<T> prev) {
     this.x = x;
     this.prev = prev;
   }
@@ -56,15 +56,5 @@ public final class Chain<T> {
    */
   public static <T> Chain<T> append(Chain<T> prev, T next) {
     return new Chain<>(next, prev);
-  }
-
-  /**
-   * A chain that is equivalent to the given chain.
-   */
-  public static <T>
-  Chain<T> copyOf(Chain<? extends T> output) {
-    @SuppressWarnings("unchecked")  // Chain is immutable.
-    Chain<T> notReallyACopy = (Chain<T>) output;
-    return notReallyACopy;
   }
 }

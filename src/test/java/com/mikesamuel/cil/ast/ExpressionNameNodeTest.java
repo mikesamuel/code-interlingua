@@ -18,7 +18,7 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
         "name",
         push(ExpressionNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
-        content("name"),
+        content("name", -1),
         pop(),
         pop());
   }
@@ -28,15 +28,15 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.ExpressionName),
         "one.two",
-        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifierNotLp),
+        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifier),
         push(ExpressionNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
-        content("one"),
+        content("one", -1),
         pop(),
         pop(),
-        token("."),
+        token(".", -1),
         push(IdentifierNode.Variant.Builtin),
-        content("two"),
+        content("two", -1),
         pop(),
         pop());
   }
@@ -48,7 +48,7 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
         "donut",
         push(ExpressionNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
-        content("donut"),
+        content("donut", -1),
         pop(),
         pop());
   }

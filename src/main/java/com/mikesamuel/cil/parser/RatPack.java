@@ -34,20 +34,20 @@ public final class RatPack {
   public void cache(int indexBeforeParse, int indexAfterParse, Kind kind,
                     Chain<MatchEvent> output) {
     Preconditions.checkArgument(
-        output !=  null && output.x instanceof MatchEvent.PopMatchEvent);
+        output !=  null && output.x instanceof MatchEvent.Pop);
 
     NodeType nodeType = null;
     int popCount = 0;
     for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
       MatchEvent e = o.x;
-      if (e instanceof MatchEvent.PopMatchEvent) {
+      if (e instanceof MatchEvent.Pop) {
         ++popCount;
-      } else if (e instanceof MatchEvent.PushMatchEvent) {
+      } else if (e instanceof MatchEvent.Push) {
         // popCount should not go negative (module underflow) because of the
         // argument check above.
         --popCount;
         if (popCount == 0 && kind == Kind.WHOLE) {
-          nodeType = ((MatchEvent.PushMatchEvent) e).variant.getNodeType();
+          nodeType = ((MatchEvent.Push) e).variant.getNodeType();
           break;
         }
       } else if (e instanceof MatchEvent.LRStart
@@ -218,16 +218,16 @@ public final class RatPack {
         for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
           MatchEvent e = o.x;
           resultReverse = Chain.append(resultReverse, e);
-          if (e instanceof MatchEvent.PopMatchEvent) {
+          if (e instanceof MatchEvent.Pop) {
             ++popCount;
-          } else if (e instanceof MatchEvent.PushMatchEvent) {
+          } else if (e instanceof MatchEvent.Push) {
             // popCount should not go negative (module underflow) because of the
             // argument check above.
             --popCount;
             if (popCount == 0 && kind == Kind.WHOLE) {
               Preconditions.checkState(
                   nodeType
-                  == ((MatchEvent.PushMatchEvent) e).variant.getNodeType());
+                  == ((MatchEvent.Push) e).variant.getNodeType());
               break;
             }
           } else if (popCount == 0

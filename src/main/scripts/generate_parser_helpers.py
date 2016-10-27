@@ -943,13 +943,31 @@ public enum NodeType implements ParSerable {
         def create_variant_members():
             variant_code = []
             extra_imports = set()
+            lr_prod = left_recursion[prod['name']]
+            is_lr_forwarding = True
+            # Treat LR productions that just forward to other
+            # productions, so have no seed of their own as not
+            # really LR.
+            for v in prod['variants']:
+                if v['name'] in lr_prod:
+                    vptree = v['ptree']
+                    if len(vptree) == 1 and vptree[0]['name'] == 'ref':
+                        alias_name = vptree[0]['pleaf'][0]
+                        alias = prods_by_name[alias_name]
+                        lr_alias = left_recursion[alias_name]
+                        if any(av['name'] in lr_alias for av in alias['variants']):
+                            continue
+                is_lr_forwarding = False
+                break
+            if is_lr_forwarding and verbose:
+                print 'LR FORWARDING: %s' % prod['name']
             for v in prod['variants']:
                 ptree_builder, v_extra_imports = ptree_to_java_builder(
                     prod,
                     { 'name': None, 'ptree': v['ptree'] },
                     prefix='    ')
                 extra_imports.update(v_extra_imports)
-                is_lr = v['name'] in left_recursion[prod['name']]
+                is_lr = v['name'] in lr_prod and not is_lr_forwarding
                 if is_lr and verbose:
                     print 'LR: %s::%s' % (prod['name'], v['name'])
                 variant_code.append(

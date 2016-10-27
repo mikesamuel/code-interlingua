@@ -28,11 +28,11 @@ public final class ParseState {
   }
 
   private ParseState(
-      Input input, int index, @Nullable Chain<? extends MatchEvent> output) {
+      Input input, int index, @Nullable Chain<MatchEvent> output) {
     Preconditions.checkState(0 <= index && index <= input.content.length());
     this.input = input;
     this.index = index;
-    this.output = output != null ? Chain.<MatchEvent>copyOf(output) : null;
+    this.output = output != null ? output : null;
   }
 
   /** True if no unprocessed input except for ignorable tokens. */
@@ -65,7 +65,7 @@ public final class ParseState {
   /**
    * A state like this but with the given output.
    */
-  public ParseState withOutput(Chain<? extends MatchEvent> newOutput) {
+  public ParseState withOutput(Chain<MatchEvent> newOutput) {
     ParseState ps = new ParseState(input, index, newOutput);
     ps.indexAfterIgnorable = this.indexAfterIgnorable;
     return ps;

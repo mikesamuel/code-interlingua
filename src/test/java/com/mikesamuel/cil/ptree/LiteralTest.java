@@ -25,7 +25,7 @@ public final class LiteralTest extends TestCase {
     assertTrue(resultOpt.isPresent());
     ParseState result = resultOpt.get();
     assertEquals(
-        ImmutableList.of(MatchEvent.token("===")),
+        ImmutableList.of(MatchEvent.token("===", -1)),
         ImmutableList.copyOf(Chain.forward(result.output)));
     assertEquals(4, result.index);
     assertEquals(' ', result.input.content.charAt(result.index));

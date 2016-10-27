@@ -32,8 +32,11 @@ final class PatternMatch extends PTParSer {
     Matcher m = state.matcherAtStart(p);
     if (m.find()) {
       Preconditions.checkState(m.start() == state.indexAfterIgnorables());
-      ParseState stateAfter = state.advance(m.end() - m.start(), true)
-          .appendOutput(MatchEvent.content(m.group()));
+      MatchEvent.Content content = MatchEvent.content(
+          m.group(), state.indexAfterIgnorables());
+      ParseState stateAfter = state
+          .advance(m.end() - m.start(), true)
+          .appendOutput(content);
       return Optional.of(stateAfter);
     } else {
       String message;
@@ -68,8 +71,8 @@ final class PatternMatch extends PTParSer {
       return Optional.absent();
     }
     MatchEvent e = state.events.get(state.index);
-    if (e instanceof MatchEvent.ContentMatchEvent) {
-      String content = ((MatchEvent.ContentMatchEvent) e).content;
+    if (e instanceof MatchEvent.Content) {
+      String content = ((MatchEvent.Content) e).content;
       if (p.matcher(content).matches()) {
         return Optional.of(state.append(content).advance());
       } else {
@@ -91,8 +94,8 @@ final class PatternMatch extends PTParSer {
       return Optional.absent();
     }
     MatchEvent e = state.events.get(state.index);
-    if (e instanceof MatchEvent.ContentMatchEvent) {
-      String content = ((MatchEvent.ContentMatchEvent) e).content;
+    if (e instanceof MatchEvent.Content) {
+      String content = ((MatchEvent.Content) e).content;
       if (p.matcher(content).matches()) {
         return Optional.of(state.advance());
       } else {

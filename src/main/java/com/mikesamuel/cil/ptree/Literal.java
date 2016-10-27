@@ -22,7 +22,6 @@ final class Literal extends PTParSer {
   final String text;
   final Optional<TokenMergeGuard> tokenMergeGuard;
   final int ln, co, ix;
-  final MatchEvent.TokenMatchEvent event;
 
   private Literal(
       String text, Optional<TokenMergeGuard> tokenMergeGuard,
@@ -32,7 +31,6 @@ final class Literal extends PTParSer {
     this.ln = ln;
     this.co = co;
     this.ix = ix;
-    event = MatchEvent.token(text);
   }
 
   static PTParSer of(
@@ -63,8 +61,9 @@ final class Literal extends PTParSer {
   public Optional<ParseState> parse(
       ParseState state, ParseErrorReceiver err) {
     if (state.startsWith(text, this.tokenMergeGuard)) {
-      return Optional.of(state.advance(text.length(), true)
-          .appendOutput(event));
+      return Optional.of(
+          state.advance(text.length(), true)
+          .appendOutput(MatchEvent.token(text, state.indexAfterIgnorables())));
     }
     err.error(state, "Expected `" + text + "`");
     return Optional.absent();
@@ -79,7 +78,7 @@ final class Literal extends PTParSer {
   @Override
   public Optional<MatchState> match(
       MatchState state, MatchErrorReceiver err) {
-    return state.expectEvent(MatchEvent.content(this.text), err);
+    return state.expectEvent(MatchEvent.content(this.text, -1), err);
   }
 
   @Override

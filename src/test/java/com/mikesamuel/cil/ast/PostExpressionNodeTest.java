@@ -18,11 +18,11 @@ public class PostExpressionNodeTest extends AbstractParSerTestCase {
         push(PostExpressionNode.Variant.ExpressionNameIncrDecrOperator),
         push(ExpressionNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
-        content("x"),
+        content("x", -1),
         pop(),
         pop(),
         push(IncrDecrOperatorNode.Variant.PlsPls),
-        token("++"),
+        token("++", -1),
         pop(),
         pop()
         );

@@ -364,7 +364,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
 
   /**
    * <pre>InterfaceType</pre>
-   */
+   *
   @Test
   public void testClassOrInterfaceTypeInterfaceType() {
     parseSanityCheck(
@@ -373,7 +373,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
         // Can't lexically distinguish ClassType from InterfaceType
         Fuzz.SAME_VARIANT
         );
-  }
+  }*/
 
   /**
    * <pre>{ Annotation } Identifier [ TypeArguments ]</pre>
@@ -494,7 +494,9 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testTypeBoundExtendsTypeVariable() {
     parseSanityCheck(
         TypeBoundNode.Variant.ExtendsTypeVariable,
-        "extends T"
+        "extends T",
+        // TypeVariable is lexically ambiguous with ClassOrInterfaceType
+        Fuzz.SAME_VARIANT
         );
   }
 
@@ -647,7 +649,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testExpressionNameExpressionNameDotIdentifierNotLp() {
     parseSanityCheck(
-        ExpressionNameNode.Variant.ExpressionNameDotIdentifierNotLp,
+        ExpressionNameNode.Variant.ExpressionNameDotIdentifier,
         "foo.bar"
         );
   }

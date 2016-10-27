@@ -152,7 +152,7 @@ ReferenceType:
      TypeVariable
 ClassOrInterfaceType:
      ClassType
-     InterfaceType
+//     InterfaceType
 ClassType:
      ClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
      {Annotation} Identifier [TypeArguments]
@@ -197,13 +197,7 @@ PackageOrTypeName:
      PackageOrTypeName "." Identifier
      Identifier
 ExpressionName:
-     // In the original grammar, this production
-     // was AmbiguousName | AmbiguousName [.] Identifier
-     // which is necessary because FieldAccess does not
-     // left-recurse to ExpressionName.
-     // This is not PEG compatible, so we
-     // deal with it here.
-     ExpressionName "." Identifier !"("
+     ExpressionName "." Identifier
      Identifier
 MethodName:
      Identifier
@@ -219,6 +213,7 @@ AmbiguousName:
 CompilationUnit:
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
+     // TODO: Why is the package name here right-associative and only here?
      {PackageModifier} "package" Identifier {"." Identifier} ";"
 PackageModifier:
      Annotation

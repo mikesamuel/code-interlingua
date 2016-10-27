@@ -15,7 +15,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.common.io.CharSource;
-import com.mikesamuel.cil.ast.MatchEvent.PushMatchEvent;
+import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -25,7 +25,10 @@ import com.mikesamuel.cil.ptree.PTree;
 
 import junit.framework.TestCase;
 
-abstract class AbstractParSerTestCase extends TestCase {
+/**
+ * Base class for tests that exercise ParSers.
+ */
+public abstract class AbstractParSerTestCase extends TestCase {
 
   protected LatestParseErrorReceiver parseErr;
 
@@ -96,26 +99,26 @@ abstract class AbstractParSerTestCase extends TestCase {
     }
     StringBuilder tokensOnOutput = new StringBuilder();
     ParseState afterParse = afterParseOpt.get();
-    MatchEvent.PushMatchEvent firstPush = null;
+    MatchEvent.Push firstPush = null;
     // Check that pops and pushes match up so that the tree is well-formed.
     int stackDepth = 0;
     for (MatchEvent e : Chain.forward(afterParse.output)) {
-      if (e instanceof MatchEvent.PushMatchEvent) {
+      if (e instanceof MatchEvent.Push) {
         ++stackDepth;
         if (firstPush == null) {
-          firstPush = (MatchEvent.PushMatchEvent) e;
+          firstPush = (MatchEvent.Push) e;
         }
-      } else if (e instanceof MatchEvent.PopMatchEvent) {
+      } else if (e instanceof MatchEvent.Pop) {
         if (stackDepth == 0) {
           fail(
               "Parsing `" + content + "`, depth goes negative after `"
               + tokensOnOutput + "`");
         }
         --stackDepth;
-      } else if (e instanceof MatchEvent.TokenMatchEvent) {
-        tokensOnOutput.append(((MatchEvent.TokenMatchEvent) e).content);
-      } else if (e instanceof MatchEvent.ContentMatchEvent) {
-        tokensOnOutput.append(((MatchEvent.ContentMatchEvent) e).content);
+      } else if (e instanceof MatchEvent.Token) {
+        tokensOnOutput.append(((MatchEvent.Token) e).content);
+      } else if (e instanceof MatchEvent.Content) {
+        tokensOnOutput.append(((MatchEvent.Content) e).content);
       }
     }
     if (firstPush == null) {
@@ -133,15 +136,15 @@ abstract class AbstractParSerTestCase extends TestCase {
     BitSet included = new BitSet();  // Per depth, whether to include the pop
     ImmutableList.Builder<MatchEvent> b = ImmutableList.builder();
     for (MatchEvent e : events) {
-      if (e instanceof MatchEvent.PushMatchEvent) {
-        MatchEvent.PushMatchEvent push = (PushMatchEvent) e;
+      if (e instanceof MatchEvent.Push) {
+        MatchEvent.Push push = (Push) e;
         boolean pushRelevant = relevant.contains(push.variant.getNodeType());
         included.set(depth, pushRelevant);
         if (pushRelevant) {
           b.add(e);
         }
         ++depth;
-      } else if (e instanceof MatchEvent.PopMatchEvent) {
+      } else if (e instanceof MatchEvent.Pop) {
         Preconditions.checkState(depth >= 0);
         --depth;
         if (included.get(depth)) {

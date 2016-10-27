@@ -19,7 +19,7 @@ public final class PackageOrTypeNameTest extends AbstractParSerTestCase {
         "foo",
         push(PackageOrTypeNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
-        content("foo"),
+        content("foo", -1),
         pop(),
         pop()
         );
@@ -33,12 +33,12 @@ public final class PackageOrTypeNameTest extends AbstractParSerTestCase {
         /**/push(PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier),
         /*..*/push(PackageOrTypeNameNode.Variant.Identifier),
         /*....*/push(IdentifierNode.Variant.Builtin),
-        /*......*/content("foo"),
+        /*......*/content("foo", -1),
         /*....*/pop(),
         /*..*/pop(),
-        /*..*/token("."),
+        /*..*/token(".", -1),
         /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("bar"),
+        /*....*/content("bar", -1),
         /*..*/pop(),
         /**/pop()
         );
@@ -53,17 +53,17 @@ public final class PackageOrTypeNameTest extends AbstractParSerTestCase {
         /*..*/push(PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier),
         /*....*/push(PackageOrTypeNameNode.Variant.Identifier),
         /*......*/push(IdentifierNode.Variant.Builtin),
-        /*........*/content("foo"),
+        /*........*/content("foo", -1),
         /*......*/pop(),
         /*....*/pop(),
-        /*....*/token("."),
+        /*....*/token(".", -1),
         /*....*/push(IdentifierNode.Variant.Builtin),
-        /*......*/content("bar"),
+        /*......*/content("bar", -1),
         /*....*/pop(),
         /*..*/pop(),
-        /*..*/token("."),
+        /*..*/token(".", -1),
         /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("baz"),
+        /*....*/content("baz", -1),
         /*..*/pop(),
         /**/pop()
         );
