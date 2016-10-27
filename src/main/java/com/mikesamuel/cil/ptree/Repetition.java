@@ -128,4 +128,9 @@ final class Repetition extends PTParSer {
   RangeSet<Integer> computeLookahead1() {
     return null;  // Worst case for when no content is matched.
   }
+
+  @Override
+  public String toString() {
+    return "{" + this.p + "}";
+  }
 }

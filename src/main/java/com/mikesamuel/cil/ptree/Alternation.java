@@ -100,6 +100,11 @@ final class Alternation extends PTParSer {
   public String toString() {
     if (ps.isEmpty()) { return "[]"; }
 
+    Optional<ParSerable> notEmpty = getOptionBody(this);
+    if (notEmpty.isPresent()) {
+      return "[" + notEmpty.get() + "]";
+    }
+
     StringBuilder sb = new StringBuilder();
     boolean first = true;
     for (ParSerable p : ps) {
