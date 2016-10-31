@@ -24,11 +24,13 @@ public abstract class ParSer implements ParSerable {
    *     if a later branch passes.  If the parse as a whole fails, the parse
    *     error that occurs at the rightmost point is a good one to pass on to
    *     the end user.
-   * @return absent when there is no string in this parser's language that is
-   *     a prefix of state's content.
+   * @param lr state that lets productions handle left-recursive invocations.
+   * @return failure when there is no string in this parser's language that is
+   *     a prefix of state's content, and lrFailure when there is no string
+   *     given the state's LR exclusions.
    */
-  public abstract Optional<ParseState> parse(
-      ParseState state, ParseErrorReceiver err);
+  public abstract ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err);
 
   /**
    * Given a serializer state, consumes events and emits output necessary to

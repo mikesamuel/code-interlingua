@@ -18,7 +18,7 @@ public final class Chain<T> {
   }
 
   /** Iterates in reverse order. */
-  public static <T> Iterable<T> reverse(final Chain<? extends T> c) {
+  public static <T> Iterable<T> reverseIterable(final Chain<? extends T> c) {
     return new Iterable<T>() {
       @Override
       public Iterator<T> iterator() {
@@ -43,7 +43,7 @@ public final class Chain<T> {
   }
 
   /** Iterates from farthest back to the current. */
-  public static <T> Iterable<T> forward(final Chain<? extends T> c) {
+  public static <T> Iterable<T> forwardIterable(final Chain<? extends T> c) {
     ImmutableList.Builder<T> b = ImmutableList.builder();
     for (Chain<? extends T> ch = c; ch != null; ch = ch.prev) {
       b.add(ch.x);
@@ -56,5 +56,26 @@ public final class Chain<T> {
    */
   public static <T> Chain<T> append(Chain<T> prev, T next) {
     return new Chain<>(next, prev);
+  }
+
+  /** A chain of the same length as ls with the elements in reverse order. */
+  public static <T> Chain<T> reverse(Chain<T> ls) {
+    Chain<T> rev = null;
+    for (Chain<T> rest = ls; rest != null; rest = rest.prev) {
+      rev = append(rev, rest.x);
+    }
+    return rev;
+  }
+
+  /**
+   * The chain that has all the elements of prev followed by
+   * {@link #reverse reverse}{@code (next)}.
+   */
+  public static <T> Chain<T> revAppendAll(Chain<T> prev, Chain<T> next) {
+    Chain<T> out = prev;
+    for (Chain<T> c = next; c != null; c = c.prev) {
+      out = append(out, c.x);
+    }
+    return out;
   }
 }

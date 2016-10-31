@@ -5,12 +5,13 @@ import java.util.regex.Pattern;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -18,32 +19,28 @@ import com.mikesamuel.cil.parser.SerialState;
 final class PatternMatch extends PTParSer {
   final Pattern p;
   final String diagnostic;
-  final ImmutableRangeSet<Integer> la1;
 
-  PatternMatch(String regex, ImmutableRangeSet<Integer> la1, String diagnostic) {
+  PatternMatch(String regex, String diagnostic) {
     this.p = Pattern.compile("^(?:" + regex + ")");
     this.diagnostic = diagnostic;
-    this.la1 = la1;
   }
 
   @Override
-  public Optional<ParseState> parse(
-      ParseState state, ParseErrorReceiver err) {
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
     Matcher m = state.matcherAtStart(p);
     if (m.find()) {
-      Preconditions.checkState(m.start() == state.indexAfterIgnorables());
-      MatchEvent.Content content = MatchEvent.content(
-          m.group(), state.indexAfterIgnorables());
-      ParseState stateAfter = state
-          .advance(m.end() - m.start(), true)
+      Preconditions.checkState(m.start() == state.index);
+      MatchEvent.Content content = MatchEvent.content(m.group(), state.index);
+      ParseState stateAfter = state.advance(m.end() - m.start())
           .appendOutput(content);
-      return Optional.of(stateAfter);
+      return ParseResult.success(stateAfter, ImmutableSet.of());
     } else {
       String message;
       if (state.isEmpty()) {
         message = "Expected Literal but found end of file";
       } else {
-        int snippetIndex = state.indexAfterIgnorables();
+        int snippetIndex = state.index;
         int snippetEnd = snippetIndex + 10;
         String content = state.input.content;
         int contentEnd = content.length();
@@ -59,7 +56,7 @@ final class PatternMatch extends PTParSer {
             + (needsEllipsis ? "..." : "") + "`";
       }
       err.error(state, message);
-      return Optional.absent();
+      return ParseResult.failure();
     }
   }
 
@@ -118,10 +115,5 @@ final class PatternMatch extends PTParSer {
   @Override
   public String toString() {
     return "(/" + this.p.pattern() + "/)";
-  }
-
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    return la1;
   }
 }

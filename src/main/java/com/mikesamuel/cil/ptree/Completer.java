@@ -1,11 +1,13 @@
 package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -18,23 +20,27 @@ final class Completer extends ParSer {
   }
 
   @Override
-  public Optional<ParseState> parse(
-      ParseState state, ParseErrorReceiver err) {
-    Optional<ParseState> next = p.getParSer().parse(state, err);
-    if (next.isPresent()) {
-      // Test empty except for ignorable tokens.
-      ParseState nextState = next.get().advance(0, true);
-      if (nextState.isEmpty()) {
-        return Optional.of(nextState);
-      }
-      String unparsed =
-          nextState.input.content.substring(nextState.indexAfterIgnorables());
-      if (unparsed.length() > 10) {
-        unparsed = unparsed.substring(0, 10) + "...";
-      }
-      err.error(nextState, "Unparsed input `" + unparsed + "`");
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
+    ParseResult result = p.getParSer().parse(state, lr, err);
+    switch (result.synopsis) {
+      case FAILURE:
+      case FAILURE_DUE_TO_LR_EXCLUSION:
+        return result;
+      case SUCCESS:
+        ParseState nextState = result.next();
+        if (nextState.isEmpty()) {
+          return result;
+        }
+        String unparsed =
+            nextState.input.content.substring(nextState.index);
+        if (unparsed.length() > 10) {
+          unparsed = unparsed.substring(0, 10) + "...";
+        }
+        err.error(nextState, "Unparsed input `" + unparsed + "`");
+        return ParseResult.failure();
     }
-    return Optional.absent();
+    throw new AssertionError(result.synopsis);
   }
 
   @Override

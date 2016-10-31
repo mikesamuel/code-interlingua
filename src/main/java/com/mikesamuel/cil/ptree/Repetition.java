@@ -2,12 +2,15 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.ImmutableSet;
+import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -41,32 +44,35 @@ final class Repetition extends PTParSer {
   }
 
   @Override
-  public Optional<ParseState> parse(
-      ParseState start, ParseErrorReceiver err) {
-    return Optional.of(parseRepeatedly(this.p, start, err));
+  public ParseResult parse(
+      ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
+    return parseRepeatedly(this.p, start, lr, err);
   }
 
-  static ParseState parseRepeatedly(
-      ParSerable p, ParseState start, ParseErrorReceiver err) {
-    boolean matchedOne = false;
+  static ParseResult parseRepeatedly(
+      ParSerable p,
+      ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
     ParseState state = start;
     ParSer parser = p.getParSer();
+    ImmutableSet<NodeType> lrExclusionsTriggered = ImmutableSet.of();
     while (true) {
-      Optional<ParseState> next = parser.parse(state, err);
-      if (next.isPresent()) {
-        ParseState nextState = next.get();
-        // Guarantee termination
-        if (nextState.index == state.index) {
-          return state;
-        }
-        Preconditions.checkState(nextState.index > state.index);
-        state = nextState;
-        matchedOne = true;
-      } else if (matchedOne) {
-        return state;
-      } else {
-        // This is Kleene-star, so zero matches are ok.
-        return start;
+      ParseResult result = parser.parse(state, lr, err);
+      lrExclusionsTriggered = ParseResult.union(
+          lrExclusionsTriggered, result.lrExclusionsTriggered);
+
+      switch (result.synopsis) {
+        case FAILURE_DUE_TO_LR_EXCLUSION:
+        case FAILURE:
+            return ParseResult.success(state, lrExclusionsTriggered);
+
+        case SUCCESS:
+          ParseState nextState = result.next();
+          // Guarantee termination
+          if (nextState.index == state.index) {
+            return ParseResult.success(state, lrExclusionsTriggered);
+          }
+          Preconditions.checkState(nextState.index > state.index);
+          state = nextState;
       }
     }
   }
@@ -122,11 +128,6 @@ final class Repetition extends PTParSer {
   @Override
   Kind getKind() {
     return Kind.REP;
-  }
-
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    return null;  // Worst case for when no content is matched.
   }
 
   @Override

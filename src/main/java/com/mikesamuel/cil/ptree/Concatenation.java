@@ -1,19 +1,20 @@
 package com.mikesamuel.cil.ptree;
 
+import java.util.EnumSet;
 import java.util.List;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.RangeSet;
-import com.google.common.collect.TreeRangeSet;
+import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -80,7 +81,7 @@ class Concatenation extends PTParSer {
               && ".".equals(((Literal) maybeDot).text)) {
             List<ParSerable> magicBits = flat.subList(
                 maybeDotIndex, flat.size());
-            MagicDotIdentifierHandler magic =
+            ParSerable magic =
                 MagicDotIdentifierHandler.of(
                     ImmutableList.<ParSerable>builder()
                     .addAll(magicBits)
@@ -99,18 +100,26 @@ class Concatenation extends PTParSer {
   }
 
   @Override
-  public Optional<ParseState> parse(
-      ParseState start, ParseErrorReceiver err) {
+  public ParseResult parse(
+      ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
     ParseState state = start;
+    EnumSet<NodeType> lrExclusionsTriggered = EnumSet.noneOf(NodeType.class);
     for (ParSerable p : ps) {
       ParSer parser = p.getParSer();
-      Optional<ParseState> next = parser.parse(state, err);
-      if (!next.isPresent()) {
-        return Optional.absent();
+      ParseResult result = parser.parse(state, lr, err);
+      lrExclusionsTriggered.addAll(result.lrExclusionsTriggered);
+      switch (result.synopsis) {
+        case FAILURE:
+        case FAILURE_DUE_TO_LR_EXCLUSION:
+          return ParseResult.failure(lrExclusionsTriggered);
+        case SUCCESS:
+          state = result.next();
+          continue;
       }
-      state = next.get();
+      throw new AssertionError(result.synopsis);
     }
-    return Optional.of(state);
+    return ParseResult.success(
+        state, Sets.immutableEnumSet(lrExclusionsTriggered));
   }
 
   @Override
@@ -169,54 +178,5 @@ class Concatenation extends PTParSer {
       }
     }
     return sb.toString();
-  }
-
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    if (ps.isEmpty()) { return null; }
-    RangeSet<Integer> la = TreeRangeSet.create();
-    boolean lookThrough = true;
-    for (int i = 0, n = ps.size(); i < n; ++i) {
-      ParSer child = ps.get(i).getParSer();
-      if (child instanceof AppendMatchEvent) {  // Consumes no chars.
-        continue;
-      }
-      if (!(child instanceof PTParSer)) {
-        return null;
-      }
-      PTParSer contentChild = (PTParSer) child;
-      lookThrough = false;
-      if (child instanceof Alternation) {
-        Optional<ParSerable> cb = Alternation.getOptionBody(
-            (Alternation) child);
-        if (cb.isPresent()) {
-          ParSerable cc = cb.get().getParSer();
-          if (cc instanceof PTParSer) {
-            contentChild = (PTParSer) cc;
-            lookThrough = true;
-          }
-        }
-      } else if (child instanceof Repetition) {
-        ParSer rb = ((Repetition) child).p.getParSer();
-        if (rb instanceof PTParSer) {
-          contentChild = (PTParSer) rb;
-          lookThrough = true;
-        }
-      }
-
-      RangeSet<Integer> ccla = contentChild.getLookahead1();
-      if (ccla == null) {
-        return null;
-      }
-      la.addAll(ccla);
-
-      if (!lookThrough) {
-        break;
-      }
-    }
-    if (lookThrough) {
-      return null;
-    }
-    return ImmutableRangeSet.copyOf(la);
   }
 }

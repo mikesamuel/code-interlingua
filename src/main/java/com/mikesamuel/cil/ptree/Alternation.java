@@ -2,14 +2,13 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.RangeSet;
-import com.google.common.collect.TreeRangeSet;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -25,25 +24,30 @@ final class Alternation extends PTParSer {
   }
 
   @Override
-  public Optional<ParseState> parse(
-      ParseState state, ParseErrorReceiver err) {
-    int idx = state.indexAfterIgnorables();
-    int firstChar = idx < state.input.content.length()
-        ? state.input.content.charAt(idx) : -1;
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
+    return alternate(ps, state, lr, err);
+  }
+
+  static ParseResult alternate(
+      Iterable<? extends ParSerable> ps, ParseState state,
+      LeftRecursion lr, ParseErrorReceiver err) {
+
+    ParseResult failure = ParseResult.failure();
 
     for (ParSerable p : ps) {
-      ParSer parser = p.getParSer();
-      if (firstChar >= 0 && parser instanceof PTParSer) {
-        RangeSet<Integer> la1 = ((PTParSer) parser).getLookahead1();
-        if (la1 != null && !la1.contains(firstChar)) {
-          continue;
-        }
+      ParseResult result = p.getParSer().parse(state, lr, err);
+      switch (result.synopsis) {
+        case FAILURE:
+          break;
+        case FAILURE_DUE_TO_LR_EXCLUSION:
+          failure = result;
+          break;
+        case SUCCESS:
+          return result;
       }
-
-      Optional<ParseState> next = parser.parse(state, err);
-      if (next.isPresent()) { return next; }
     }
-    return Optional.absent();
+    return failure;
   }
 
   @Override
@@ -133,22 +137,5 @@ final class Alternation extends PTParSer {
       return Optional.of(Alternation.of(alt.ps.subList(0, n - 1)));
     }
     return Optional.absent();
-  }
-
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    RangeSet<Integer> la = TreeRangeSet.create();
-    for (ParSerable c : ps) {
-      ParSer p = c.getParSer();
-      if (!(p instanceof PTParSer)) {
-        return null;
-      }
-      RangeSet<Integer> cla = ((PTParSer) p).getLookahead1();
-      if (cla == null) {
-        return null;
-      }
-      la.addAll(cla);
-    }
-    return ImmutableRangeSet.copyOf(la);
   }
 }

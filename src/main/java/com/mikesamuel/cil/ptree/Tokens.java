@@ -8,10 +8,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Range;
 import com.mikesamuel.cil.ast.TokenStrings;
 
 /**
@@ -33,7 +31,6 @@ public final class Tokens {
   /** Matches a {@code '.'} style character literal. Section 3.10.4. */
   public static final PatternMatch CHARACTER_LITERAL = new PatternMatch(
       "'(?:\"|" + CHAR_NO_QUOTES + ")'",
-      ImmutableRangeSet.of(Range.singleton((int) '\'')),
       "'.'");
 
   /** 3.10.2 */
@@ -239,11 +236,6 @@ public final class Tokens {
 
     FLOATING_POINT_LITERAL = new PatternMatch(
         floatingPointLiteral + numMergeConflict,
-        ImmutableRangeSet.<Integer>builder()
-            // Signs are prefix operators
-            .add(Range.singleton((int) '.'))
-            .add(Range.closed((int) '0', (int) '9'))
-            .build(),
         "0.123"
         );
 
@@ -282,10 +274,6 @@ public final class Tokens {
 
     INTEGER_LITERAL = new PatternMatch(
         integerLiteral + numMergeConflict,
-        ImmutableRangeSet.<Integer>builder()
-            // Signs are prefix operators
-            .add(Range.closed((int) '0', (int) '9'))
-            .build(),
         "123");
   }
 
@@ -356,28 +344,6 @@ public final class Tokens {
         );
   }
 
-  private static final ImmutableRangeSet<Integer> JAVA_START_CHARS;
-  static {
-    int rangeStart = -1;
-    int limit = 0x10000;
-    ImmutableRangeSet.Builder<Integer> b = ImmutableRangeSet.builder();
-    for (int i = 0; i < limit; ++i) {
-      char c = (char) i;
-      if (Character.isJavaIdentifierStart(c)) {
-        if (rangeStart < 0) {
-          rangeStart = i;
-        }
-      } else if (rangeStart >= 0) {
-        b.add(Range.closed(rangeStart, i - 1));
-        rangeStart = -1;
-      }
-    }
-    if (rangeStart >= 0) {
-      b.add(Range.closed(rangeStart, limit - 1));
-    }
-    JAVA_START_CHARS = b.build();
-  }
-
   /** Section 3.8 */
   public static final PatternMatch IDENTIFIER = new PatternMatch(
       // Identifier:
@@ -385,19 +351,16 @@ public final class Tokens {
       "(?!(?:" + KEYWORD_OR_BOOLEAN_OR_NULL + ")"
       + "(?!" + JAVA_IDENTIFIER_PART + "))"
       + IDENTIFIER_CHARS_RE,
-      JAVA_START_CHARS,
       "ident");
 
   /** Section 3.8 */
   public static final PatternMatch IDENTIFIER_CHARS = new PatternMatch(
       IDENTIFIER_CHARS_RE,
-      JAVA_START_CHARS,
       "ident");
 
   /** 3.10.5 */
   public static final PatternMatch STRING_LITERAL = new PatternMatch(
       "\"(?:'|" + CHAR_NO_QUOTES + ")*\"",
-      ImmutableRangeSet.of(Range.singleton((int) '"')),
       "\"...\"");
 
 }

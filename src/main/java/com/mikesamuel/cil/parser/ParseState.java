@@ -19,12 +19,10 @@ public final class ParseState {
   public final int index;
   /** The output which can be replayed for a tree builder. */
   public final @Nullable Chain<MatchEvent> output;
-  /** Cache the index after ignorable tokens like spaces and comments. */
-  private int indexAfterIgnorable = -1;
 
   /** A parse state at the beginning of input with no output. */
   public ParseState(Input input) {
-    this(input, 0, null);
+    this(input, input.indexAfterIgnorables(0), null);
   }
 
   private ParseState(
@@ -37,19 +35,18 @@ public final class ParseState {
 
   /** True if no unprocessed input except for ignorable tokens. */
   public boolean isEmpty() {
-    return indexAfterIgnorables() == input.content.length();
+    return index == input.content.length();
   }
 
   /**
-   * A state whose parse point is n chars forward of the specified parse
-   * position.
-   * @param afterIgnorable true if characters should be counted from
-   *   {@link #indexAfterIgnorables()} instead of {@link #index}.
+   * A state whose parse point is at the beginning of the leftmost token that
+   * starts at least n chars forward of the current parse position or at the
+   * end of input if there are no tokens that start n or more characters from
+   * the current parse position.
    */
-  public ParseState advance(int n, boolean afterIgnorable) {
+  public ParseState advance(int n) {
     Preconditions.checkArgument(n >= 0);
-    int newIndex =
-        (afterIgnorable ? this.indexAfterIgnorables() : index) + n;
+    int newIndex = input.indexAfterIgnorables(index + n);
     if (newIndex == index) {
       return this;
     }
@@ -67,7 +64,6 @@ public final class ParseState {
    */
   public ParseState withOutput(Chain<MatchEvent> newOutput) {
     ParseState ps = new ParseState(input, index, newOutput);
-    ps.indexAfterIgnorable = this.indexAfterIgnorable;
     return ps;
   }
 
@@ -75,22 +71,31 @@ public final class ParseState {
    * A state like this but with the given input index.
    */
   public ParseState withIndex(int newIndex) {
+    Preconditions.checkArgument(
+        input.indexAfterIgnorables(newIndex) == newIndex,
+        "Ignorable tokens not skipped");
+    if (index == newIndex) {
+      return this;
+    }
     return new ParseState(input, newIndex, output);
   }
 
   /**
-   * True if the next token after any ignorable tokens has the given text.
+   * True iff there is a token at the current parse position with the given text.
    * Since this parser is scannerless, this will return true if the given text
-   * is a prefix of the next token.
+   * is a prefix of the next token unless a merge guard is provided.
+   *
+   * @param hazardDetector if present, receives the input and bounds of the
+   *    matched token so it can check for token merging hazards.
    */
-  public boolean startsWith(String text, Optional<TokenMergeGuard> hazardDetector) {
-    int start = indexAfterIgnorables();
-    if (input.content.regionMatches(start, text, 0, text.length())) {
+  public boolean startsWith(
+      String text, Optional<TokenMergeGuard> hazardDetector) {
+    if (input.content.regionMatches(index, text, 0, text.length())) {
       if (!hazardDetector.isPresent()) {
         return true;
       }
       TokenMergeGuard hazard = hazardDetector.get();
-      if (!hazard.isHazard(input.content, start, start + text.length())) {
+      if (!hazard.isHazard(input.content, index, index + text.length())) {
         return true;
       }
     }
@@ -98,63 +103,14 @@ public final class ParseState {
   }
 
   /**
-   * A matcher for the given pattern at the index after any ignorable tokens.
+   * A matcher for the given pattern at the current parse position.
    */
   public Matcher matcherAtStart(Pattern p) {
     Matcher m = p.matcher(input.content);
-    m.region(indexAfterIgnorables(), input.content.length());
+    m.region(index, input.content.length());
     m.useTransparentBounds(false);
     m.useAnchoringBounds(true);
     return m;
-  }
-
-  private static final long SPACE_BITS =
-      (1L << ' ') | (1L << '\t') | (1L << '\f') | (1L << '\r') | (1L << '\n');
-  /** The index after any ignorable tokens like spaces and comments. */
-  public int indexAfterIgnorables() {
-    if (this.indexAfterIgnorable < 0) {
-      int idx;
-      String content = input.content;
-      int n = content.length();
-      ign_loop:
-      for (idx = index; idx < n; ++idx) {
-        char ch = content.charAt(idx);
-        if (ch < 64) {
-          if ((SPACE_BITS & (1L << ch)) != 0) {
-            continue;
-          } else if (ch == '/' && idx + 1 < n) {
-            char ch1 = content.charAt(idx + 1);
-            if (ch1 == '/') {
-              int commentEnd = idx + 2;
-              for (; commentEnd < n; ++commentEnd) {
-                char commentChar = content.charAt(commentEnd);
-                if (commentChar == '\r' || commentChar == '\n') {
-                  break;
-                }
-              }
-              idx = commentEnd - 1;  // increment above
-              continue;
-            } else if (ch1 == '*') {
-              int commentEnd = idx + 2;
-              for (; commentEnd < n; ++commentEnd) {
-                char commentChar = content.charAt(commentEnd);
-                if (commentChar == '*' && commentEnd + 1 < n) {
-                  if ('/' == content.charAt(commentEnd + 1)) {
-                    // Incremented past '/' by for loop.
-                    idx = commentEnd + (2 - 1);
-                    continue ign_loop;
-                  }
-                }
-              }
-              break;  // Unclosed comment.  TODO: Should error out.
-            }
-          }
-        }
-        break;
-      }
-      indexAfterIgnorable = idx;
-    }
-    return indexAfterIgnorable;
   }
 
   @Override

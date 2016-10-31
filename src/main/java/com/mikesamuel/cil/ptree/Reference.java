@@ -1,25 +1,26 @@
 package com.mikesamuel.cil.ptree;
 
+import java.util.EnumSet;
 import java.util.List;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.MatchEvent;
-import com.mikesamuel.cil.ast.MatchEvent.LRSuffix;
-import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.LeftRecursion;
+import com.mikesamuel.cil.parser.LeftRecursion.Stage;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
-import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
-import com.mikesamuel.cil.parser.RatPack;
 import com.mikesamuel.cil.parser.RatPack.ParseCacheEntry;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -29,8 +30,6 @@ final class Reference extends PTParSer {
   final Class<? extends Enum<? extends ParSerable>> variantClass;
   private NodeType nodeType;
   private ImmutableList<NodeVariant> variants;
-  private GrowTheSeed growTheSeed;
-  private LeftRecursionDone transferBackToStart;
 
   Reference(
       String name, Class<? extends Enum<? extends ParSerable>> variantClass) {
@@ -63,6 +62,11 @@ final class Reference extends PTParSer {
   public NodeType getNodeType() {
     initLazy();
     return nodeType;
+  }
+
+  ImmutableList<NodeVariant> getVariants() {
+    initLazy();
+    return this.variants;
   }
 
   @Override
@@ -103,7 +107,7 @@ final class Reference extends PTParSer {
   private static String dumpOutput(Chain<MatchEvent> out) {
     ImmutableList<MatchEvent> lastList = lastOutputSeen;
     ImmutableList<MatchEvent> outList = ImmutableList.copyOf(
-        Chain.forward(out));
+        Chain.forwardIterable(out));
     lastOutputSeen = outList;
     if (!lastList.isEmpty() && outList.size() >= lastList.size()
         && outList.subList(0, lastList.size()).equals(lastList)) {
@@ -121,25 +125,44 @@ final class Reference extends PTParSer {
   }
 
   @Override
-  public Optional<ParseState> parse(ParseState state, ParseErrorReceiver err) {
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
     initLazy();
+
     ParseCacheEntry cachedParse = state.input.ratPack.getCachedParse(
-        nodeType, state.index, RatPack.Kind.WHOLE);
+        nodeType, state.index);
     if (cachedParse.wasTried()) {
       if (cachedParse.passed()) {
         if (DEBUG) {
           System.err.println(indent() + "Using cached success for " + nodeType);
         }
-        return Optional.of(cachedParse.apply(state));
+        return ParseResult.success(
+            cachedParse.apply(state), ImmutableSet.of());
       } else {
         if (DEBUG) {
           System.err.println(indent() + "Using cached failure for " + nodeType);
         }
-        return Optional.absent();
+        return ParseResult.failure();
       }
     }
 
     Profile.count(nodeType);
+
+    LeftRecursion.Stage stage = lr.stageForProductionAt(nodeType, state.index);
+    switch (stage) {
+      case GROWING:
+        return ParseResult.success(
+            state.appendOutput(MatchEvent.leftRecursionSuffixEnd(nodeType)),
+            // Checked to make sure that the growing does not accidentally take
+            // a non-left recursing path.
+            Sets.immutableEnumSet(nodeType)
+            );
+      case NOT_ON_STACK:
+        break;
+      case SEEDING:
+        // Do not cache this failure since it is not a foregone conclusion.
+        return ParseResult.failure(Sets.immutableEnumSet(nodeType));
+    }
 
     if (DEBUG) {
       System.err.println(indent() + "Entered " + nodeType);
@@ -153,264 +176,128 @@ final class Reference extends PTParSer {
       }
     }
 
-    int idx = state.indexAfterIgnorables();
-    int firstChar = idx < state.input.content.length()
-        ? state.input.content.charAt(idx) : -1;
+    EnumSet<NodeType> allExclusionsTriggered =
+        EnumSet.noneOf(NodeType.class);
+    ParseResult result = parseVariants(
+        state, lr, err, LeftRecursion.Stage.SEEDING,
+        allExclusionsTriggered);
+    allExclusionsTriggered.addAll(result.lrExclusionsTriggered);
 
-    boolean lookedForStartOfLeftRecursion = false;
-    boolean leftRecursionFailed = false;
-    for (NodeVariant variant : variants) {
-      ParSer variantParSer = variant.getParSer();
-      if (firstChar >= 0 && variantParSer instanceof PTParSer) {
-        RangeSet<Integer> la1 = ((PTParSer) variantParSer).getLookahead1();
-        if (la1 != null && !la1.contains(firstChar)) {
-          continue;
-        }
-      }
+    boolean wasLrTriggered = allExclusionsTriggered.remove(nodeType);
 
-      if (variant.isLeftRecursive()) {
-        if (leftRecursionFailed) {
-          continue;
-        }
-        boolean hasLeftRecursion = false;
-        if (!lookedForStartOfLeftRecursion) {
-          lookedForStartOfLeftRecursion = true;
-          hasLeftRecursion = hasLeftRecursion(state);
-        }
-        if (hasLeftRecursion) {
-          // We pre-parse the seed to make sure that the left-recursion
-          // succeeds.  Otherwise we just fail.
-          // This allows us to fail-over to later non-LR options.
-          // For example, there is a prefix ambiguity between
-          //     foo.new bar
-          //     foo.bar
-          //     foo.bar()
-          // which is resolved by processing them in that order, but
-          // the `new` operator production is left-recursive via Primary.
-          if (this.parseSeed(state, err).isPresent()) {
-            if (DEBUG) {
-              System.err.println(indent() + "Throwing " + transferBackToStart);
-            }
-            if (transferBackToStart == null) {
-              transferBackToStart = new LeftRecursionDone(nodeType);
-            }
-            throw transferBackToStart;
-          } else {
-            if (DEBUG) {
-              System.err.println(
-                  indent() + variant + " had failing seed at " + state.index);
-            }
-            leftRecursionFailed = true;
-            continue;
-          }
-        }
-      }
-      ParseState result = null;
-      if (DEBUG) { indent(1); }
-      try {
-        try {
-          Optional<ParseState> next = variantParSer.parse(
-              state.appendOutput(MatchEvent.push(variant)), err);
-          if (next.isPresent()) {
-            result = next.get().appendOutput(MatchEvent.pop());
-          }
-        } finally {
-          if (DEBUG) {
-            indent(-1);
-          }
-        }
-      } catch (LeftRecursionDone d) {
-        if (d.leftRecursiveNodeType != nodeType) {
-          if (DEBUG) {
-            System.err.println(
-                indent() + "LeftRecursing out of " + nodeType + " to "
-                + d.leftRecursiveNodeType);
-          }
-          throw d;
-        }
-        if (DEBUG) {
-          System.err.println(indent() + "Control returned to " + nodeType);
-        }
-        result = handleAsLeftRecursive(state, err).orNull();
-        if (DEBUG) {
-          System.err.println(
-              indent() + "handleAsLeftRecursive produced " + result);
-        }
-      }
+    if (wasLrTriggered && result.synopsis == ParseResult.Synopsis.SUCCESS) {
+      ParseState afterSeed = result.next();
       if (DEBUG) {
         System.err.println(
-            indent() + "Result for " + variant
-               + (result != null ? " @ " + result.index : " is <null>"));
+            indent() + "AfterSeed " + nodeType
+            + "\n" + indent() + ". . input=`"
+            + afterSeed.input.content.substring(afterSeed.index) + "`"
+            + "\n" + indent() + ". . output="
+            + ImmutableList.copyOf(Chain.forwardIterable(afterSeed.output)));
       }
-      if (result != null) {
-        state.input.ratPack.cache(
-            state.index, result.index, RatPack.Kind.WHOLE, result.output);
-        return Optional.of(result);
-      }
-    }
-    if (DEBUG) {
-      System.err.println(indent() + "Fail " + nodeType);
-    }
-    state.input.ratPack.cacheFailure(state.index, nodeType, RatPack.Kind.WHOLE);
-    return Optional.absent();
-  }
 
-  private Optional<ParseState> parseSeed(
-      ParseState beforeRecursing, ParseErrorReceiver err) {
-    RatPack ratPack = beforeRecursing.input.ratPack;
-    RatPack.ParseCacheEntry e = ratPack.getCachedParse(
-        nodeType, beforeRecursing.index, RatPack.Kind.SEED);
-    if (e.wasTried()) {
-      if (e.passed()) {
-        ParseState afterSeed = e.apply(beforeRecursing);
-        if (DEBUG) {
-          System.err.println(
-              indent() + "Using cached seed @ " + afterSeed.index);
-        }
-        return Optional.of(afterSeed);
-      } else {
-        if (DEBUG) {
-          System.err.println(indent() + "Seed failure cached");
-        }
-        return Optional.absent();
-      }
-    }
+      ParseState grown = afterSeed;
 
-    GrowTheSeed gts = getGrowTheSeed();
-    if (DEBUG) {
-      System.err.println(indent() + ". . seed=" + gts.seed);
-      System.err.println(indent() + ". . suffix=" + gts.suffix);
-    }
-    ParseState atStartOfLeftRecursion = beforeRecursing
-        .appendOutput(MatchEvent.leftRecursionStart(nodeType));
-
-    Optional<ParseState> afterSeedOpt =
-        gts.seed.getParSer().parse(atStartOfLeftRecursion, err);
-
-    // Since we apply the seed before popping the stack back to the initial
-    // invocation which has to reapply the seed, storage of a successful result
-    // here is guaranteed to be used.
-    if (afterSeedOpt.isPresent()) {
-      ParseState afterSeed = afterSeedOpt.get();
-      ratPack.cache(
-          beforeRecursing.index, afterSeed.index, RatPack.Kind.SEED,
-          afterSeed.output);
-    } else {
-      ratPack.cacheFailure(
-          beforeRecursing.index, nodeType, RatPack.Kind.SEED);
-    }
-
-    return afterSeedOpt;
-  }
-
-  private Optional<ParseState> handleAsLeftRecursive(
-      ParseState beforeRecursing, ParseErrorReceiver err) {
-    // Grow the seed instead of calling into it.
-    GrowTheSeed gts = getGrowTheSeed();
-
-    Optional<ParseState> afterSeedOpt = parseSeed(beforeRecursing, err);
-
-    if (!afterSeedOpt.isPresent()) {
-      return Optional.absent();
-    }
-    ParseState afterSeed = afterSeedOpt.get();
-
-    if (DEBUG) {
-      System.err.println(
-          indent() + "AfterSeed " + nodeType
-          + "\n" + indent() + ". . input=`"
-          + afterSeed.input.content.substring(afterSeed.index) + "`"
-          + "\n" + indent() + ". . output="
-          + ImmutableList.copyOf(Chain.forward(afterSeed.output)));
-    }
-
-    ParseState afterSuffix = Repetition.parseRepeatedly(
-        gts.suffix, afterSeed, err);
-    if (DEBUG) {
-      System.err.println(indent() + "LR passed");
-    }
-    return Optional.of(
-        afterSuffix.withOutput(rewriteLRMatchEvents(afterSuffix.output)));
-  }
-
-  private boolean hasLeftRecursion(ParseState state) {
-    int nUnpushedPops = 0;
-    boolean sawLookaheadMarker = false;
-    for (Chain<? extends MatchEvent> o = state.output; o != null; o = o.prev) {
-      if (o.x.nCharsConsumed() > 0) {
-        break;
-      } else if (o.x instanceof MatchEvent.Pop) {
-        ++nUnpushedPops;
-      } else if (o.x instanceof MatchEvent.Push) {
-        if (nUnpushedPops == 0) {
-          MatchEvent.Push push = (Push) o.x;
-          if (push.variant.getNodeType() == nodeType) {
-            if (sawLookaheadMarker) {
-              // Lookaheads should not be on a left-call-cycle.
-              throw new IllegalStateException(
-                  "Left-recursion of " + nodeType
-                  + " ends up crossing lookahead boundary to " + push.variant);
+      grow_the_seed:
+      while (true) {
+        ParseResult growResult = parseVariants(
+            grown.appendOutput(MatchEvent.leftRecursionSuffixStart()),
+            lr, err, LeftRecursion.Stage.GROWING,
+            allExclusionsTriggered);
+        allExclusionsTriggered.addAll(growResult.lrExclusionsTriggered);
+        switch (growResult.synopsis) {
+          case FAILURE:
+          case FAILURE_DUE_TO_LR_EXCLUSION:
+            // Use the last successful growing.
+            break grow_the_seed;
+          case SUCCESS:
+            if (!growResult.lrExclusionsTriggered.contains(nodeType)) {
+              // TODO: check that left-recursion occurred at grown.index.
+              // We could walk and check that there is in fact an LREnd on the
+              // output, but it would be more efficient for lr to keep track of
+              // this.
+              break grow_the_seed;
             }
-            return true;
-          }
-        } else {
-          --nUnpushedPops;
+            ParseState next = growResult.next();
+            if (next.index == grown.index) {
+              // no progress made.
+              break grow_the_seed;
+            }
+            Preconditions.checkState(next.index > grown.index);
+            grown = next;
+            continue;
         }
-      } else if (o.x == Lookahead.LOOKAHEAD_START) {
-        sawLookaheadMarker = true;
+      }
+
+      allExclusionsTriggered.remove(nodeType);
+      LRRewriter rewriter = new LRRewriter(nodeType);
+      result = ParseResult.success(
+          grown.withOutput(rewriter.rewrite(grown.output)),
+          allExclusionsTriggered);
+    }
+
+    boolean canCache = true;
+    for (NodeType nt : allExclusionsTriggered) {
+      if (nt != nodeType &&
+          lr.stageForProductionAt(nt, state.index)
+          != LeftRecursion.Stage.NOT_ON_STACK) {
+        canCache = false;
+        break;
       }
     }
-    return false;
+
+    switch (result.synopsis) {
+      case FAILURE:
+      case FAILURE_DUE_TO_LR_EXCLUSION:
+        if (canCache) {
+          state.input.ratPack.cacheFailure(state.index, nodeType);
+        }
+        if (DEBUG) {
+          System.err.println(indent() + "Fail " + nodeType);
+        }
+        return ParseResult.failure(allExclusionsTriggered);
+      case SUCCESS:
+        ParseState next = result.next();
+        if (canCache) {
+          state.input.ratPack.cacheSuccess(
+              state.index, next.index, nodeType, next.output);
+        }
+        return ParseResult.success(next, allExclusionsTriggered);
+    }
+    throw new AssertionError(result.synopsis);
   }
 
-  private static Chain<MatchEvent> rewriteLRMatchEvents(Chain<MatchEvent> out) {
-    List<MatchEvent> pushback = Lists.newArrayList();
-    List<MatchEvent> pops = Lists.newArrayList();
-    Chain<MatchEvent> withPushbackAndPops = doPushback(out, pushback, pops);
-    for (MatchEvent pop : pops) {
-      withPushbackAndPops = Chain.append(withPushbackAndPops, pop);
+  private ParseResult parseVariants(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err, Stage stage,
+      EnumSet<NodeType> failureExclusionsTriggered) {
+    if (DEBUG) { indent(1); }
+    try {
+      for (NodeVariant variant : variants) {
+        try (LeftRecursion.VariantScope scope = lr.enter(
+                 variant, state.index, stage)) {
+          ParseResult result = variant.getParSer().parse(
+              state.appendOutput(MatchEvent.push(variant)), lr, err);
+          switch (result.synopsis) {
+            case FAILURE:
+            case FAILURE_DUE_TO_LR_EXCLUSION:
+              failureExclusionsTriggered.addAll(result.lrExclusionsTriggered);
+              continue;
+            case SUCCESS:
+              MatchEvent.Pop pop = DEBUG
+                  ? MatchEvent.pop(variant) : MatchEvent.pop();
+              return ParseResult.success(
+                  result.next().appendOutput(pop),
+                  result.lrExclusionsTriggered);
+          }
+          throw new AssertionError(result.synopsis);
+        }
+      }
+    } finally {
+      if (DEBUG) { indent(-1); }
     }
-    return withPushbackAndPops;
-  }
 
-  private static Chain<MatchEvent> doPushback(
-      Chain<MatchEvent> out, List<MatchEvent> pushback,
-      List<MatchEvent> pops) {
-    Preconditions.checkNotNull(out, "Did not find LRStart");
-    if (out.x instanceof MatchEvent.LRStart) {
-      Chain<MatchEvent> withPushback = out.prev;
-      for (MatchEvent pb : pushback) {
-        withPushback = Chain.append(withPushback, pb);
-      }
-      return withPushback;
-    } else if (out.x instanceof MatchEvent.LRSuffix) {
-      Chain<MatchEvent> processed = out.prev;
-      MatchEvent.LRSuffix suffix = (LRSuffix) out.x;
-      for (NodeVariant nv : suffix.variants) {
-        pushback.add(MatchEvent.push(nv));
-      }
-      Chain<MatchEvent> withPushbackAndPops = doPushback(
-          processed, pushback, pops);
-      for (MatchEvent pop : pops) {
-        withPushbackAndPops = Chain.append(withPushbackAndPops, pop);
-      }
-      pops.clear();
-      for (@SuppressWarnings("unused") NodeVariant nv : suffix.variants) {
-        // Pop corresponding to pushback added above.
-        pops.add(MatchEvent.pop());
-      }
-      return withPushbackAndPops;
-    } else {
-      return Chain.append(doPushback(out.prev, pushback, pops), out.x);
-    }
+    return ParseResult.failure();
   }
-
-  private GrowTheSeed getGrowTheSeed() {
-    if (this.growTheSeed == null) {
-      this.growTheSeed = GrowTheSeed.of(nodeType);
-    }
-    return this.growTheSeed;
-   }
 
   @Override
   public Optional<SerialState> unparse(
@@ -426,42 +313,126 @@ final class Reference extends PTParSer {
     return Alternation.of(variants).getParSer().match(state, err);
   }
 
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    initLazy();
-    if (variants.get(0).isLeftRecursive()) {
-      GrowTheSeed gts = this.getGrowTheSeed();
-      // TODO: This is probably not sound.
-      ParSer seed = gts.seed.getParSer();
-      if (seed != Alternation.NULL_LANGUAGE) {
-        if (seed instanceof PTParSer) {
-          return ((PTParSer) seed).getLookahead1();
+
+  private static final class LRRewriter {
+    private final MatchEvent.LREnd toPushback;
+    private final List<MatchEvent> pushback = Lists.newArrayList();
+    private int popDepth;
+
+    LRRewriter(NodeType nodeType) {
+      this.toPushback = MatchEvent.leftRecursionSuffixEnd(nodeType);
+    }
+
+    Chain<MatchEvent> rewrite(Chain<MatchEvent> out) {
+      if (DEBUG) {
+        @SuppressWarnings("synthetic-access")
+        String indent = indent();
+        System.err.println(indent + "before rewriteLR " + toPushback);
+        dumpEvents(indent, out);
+      }
+      List<MatchEvent.Pop> pops = Lists.newArrayList();
+      Chain<MatchEvent> withPushbackAndPops = pushback(out);
+      for (MatchEvent pop : pops) {
+        withPushbackAndPops = Chain.append(withPushbackAndPops, pop);
+      }
+      Preconditions.checkState(pushback.isEmpty());
+      if (DEBUG) {
+        @SuppressWarnings("synthetic-access")
+        String indent = indent();
+        System.err.println(indent + "after rewriteLR " + toPushback);
+        dumpEvents(indent, withPushbackAndPops);
+      }
+      return withPushbackAndPops;
+    }
+
+    /**
+     * Scan until we find the push of the seed and distribute pushes and pops
+     * from LRSuffix events.
+     */
+    private Chain<MatchEvent> pushback(Chain<MatchEvent> out) {
+      if (DEBUG) {
+        @SuppressWarnings("synthetic-access")
+        String indent = indent();
+        System.err.println(
+            indent + "pushback(" + (out != null ? "...," + out.x : "<null>")
+            + ", popDepth=" + popDepth + ", pushback=" + pushback + ")");
+      }
+      Preconditions.checkNotNull(out);
+
+      MatchEvent e = out.x;
+
+      Chain<MatchEvent> pushedBack;
+      if (e instanceof MatchEvent.Pop) {
+        ++popDepth;
+        pushedBack = Chain.append(pushback(out.prev), e);
+      } else if (e instanceof MatchEvent.Push) {
+        MatchEvent.Push push = (MatchEvent.Push) e;
+        Preconditions.checkState(popDepth != 0);  // pop required above.
+        --popDepth;
+        if (popDepth == 0) {
+          Preconditions.checkState(
+              toPushback.nodeType == push.variant.getNodeType());
+          pushedBack = out.prev;
+          for (MatchEvent pb : Lists.reverse(pushback)) {
+            pushedBack = Chain.append(pushedBack, pb);
+          }
+          pushback.clear();
+          pushedBack = Chain.append(pushedBack, e);
+        } else {
+          pushedBack = Chain.append(pushback(out.prev), e);
+        }
+      } else if (toPushback.equals(e)) {
+        int pushCount = 0;
+        int popCount = 0;
+
+        pushedBack = null;
+        boolean foundStart = false;
+        for (Chain<MatchEvent> c = out.prev; c != null; c = c.prev) {
+          MatchEvent ce = c.x;
+          if (ce instanceof MatchEvent.LRStart) {
+            Preconditions.checkState(pushCount >= popCount);
+            popDepth += popCount - pushCount;
+            Preconditions.checkState(popDepth >= 0);
+            pushedBack = pushback(c.prev);
+            foundStart = true;
+            break;
+          } else if (ce instanceof MatchEvent.Pop) {
+            pushback.add(ce);
+            ++popCount;
+          } else if (ce instanceof MatchEvent.Push) {
+            pushback.add(ce);
+            ++pushCount;
+          } else {
+            throw new AssertionError("Non push/pop on path to LR invocation");
+          }
+        }
+        Preconditions.checkState(foundStart);
+      } else {
+        pushedBack = Chain.append(pushback(out.prev), e);
+      }
+      return pushedBack;
+    }
+  }
+
+  private static void dumpEvents(String indent, Chain<MatchEvent> events) {
+    StringBuilder sb = new StringBuilder(indent).append(". ");
+    int pushDepth = 0;
+    for (MatchEvent e : Chain.forwardIterable(events)) {
+      if (e instanceof MatchEvent.Pop) {
+        if (pushDepth > 0) {
+          --pushDepth;
+          sb.setLength(sb.length() - 2);
         }
       }
-    }
-    return ((PTParSer) (Alternation.of(variants).getParSer()))
-        .getLookahead1();
-  }
-
-
-  /**
-   * Thrown to do a non-local transfer of control from where left-recursion is
-   * detected to where it started.
-   */
-  static final class LeftRecursionDone extends Error {
-
-    private static final long serialVersionUID = 1L;
-
-    final NodeType leftRecursiveNodeType;
-
-    LeftRecursionDone(NodeType nt) {
-      this.setStackTrace(new StackTraceElement[0]);
-      this.leftRecursiveNodeType = nt;
-    }
-
-    @Override
-    public String toString() {
-      return getClass().getSimpleName() + "(" + leftRecursiveNodeType + ")";
+      int len = sb.length();
+      sb.append(e);
+      System.err.println(sb);
+      sb.setLength(len);
+      if (e instanceof MatchEvent.Push) {
+        ++pushDepth;
+        sb.append(". ");
+      }
     }
   }
+
 }

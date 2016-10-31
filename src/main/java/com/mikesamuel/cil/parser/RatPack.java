@@ -1,8 +1,15 @@
 package com.mikesamuel.cil.parser;
 
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.Map;
+
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.ImmutableList;
+import com.google.common.io.CharSource;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeType;
 
@@ -22,8 +29,8 @@ public final class RatPack {
   /**
    * Cache the fact that a parse failed at the given index.
    */
-  public void cacheFailure(int index, NodeType nodeType, Kind kind) {
-    RatDropping d = new RatDropping(nodeType, index, kind);
+  public void cacheFailure(int index, NodeType nodeType) {
+    RatDropping d = new RatDropping(nodeType, index);
     parseCache.put(d, ParseFailure.INSTANCE);
   }
 
@@ -31,12 +38,13 @@ public final class RatPack {
    * @param output An output event chain after parsing a production that starts
    *     at index.
    */
-  public void cache(int indexBeforeParse, int indexAfterParse, Kind kind,
-                    Chain<MatchEvent> output) {
+  public void cacheSuccess(
+      int indexBeforeParse, int indexAfterParse,
+      NodeType nodeType,
+      Chain<MatchEvent> output) {
     Preconditions.checkArgument(
         output !=  null && output.x instanceof MatchEvent.Pop);
 
-    NodeType nodeType = null;
     int popCount = 0;
     for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
       MatchEvent e = o.x;
@@ -46,21 +54,17 @@ public final class RatPack {
         // popCount should not go negative (module underflow) because of the
         // argument check above.
         --popCount;
-        if (popCount == 0 && kind == Kind.WHOLE) {
-          nodeType = ((MatchEvent.Push) e).variant.getNodeType();
+        if (popCount == 0) {
+          Preconditions.checkState(
+              nodeType.equals(((MatchEvent.Push) e).variant.getNodeType()));
           break;
         }
-      } else if (e instanceof MatchEvent.LRStart
-                 && popCount == 0 && kind == Kind.SEED) {
-        nodeType = ((MatchEvent.LRStart) e).nodeType;
-        break;
       }
     }
-    Preconditions.checkNotNull(nodeType);
+    Preconditions.checkState(popCount == 0);
 
-    RatDropping d = new RatDropping(nodeType, indexBeforeParse, kind);
-    parseCache.put(d, new ParseSuccess(
-        nodeType, indexAfterParse, kind, output));
+    RatDropping d = new RatDropping(nodeType, indexBeforeParse);
+    parseCache.put(d, new ParseSuccess(nodeType, indexAfterParse, output));
   }
 
   /**
@@ -69,33 +73,21 @@ public final class RatPack {
    *
    * @return absent if nothing in the cache.
    */
-  public ParseCacheEntry getCachedParse(
-      NodeType nodeType, int index, Kind kind) {
-    RatDropping d = new RatDropping(nodeType, index, kind);
+  public ParseCacheEntry getCachedParse(NodeType nodeType, int index) {
+    RatDropping d = new RatDropping(nodeType, index);
     ParseCacheEntry e = parseCache.getIfPresent(d);
     if (e == null) { e = ParseUncached.INSTANCE; }
     return e;
-  }
-
-  /** The type of parse that is being cached. */
-  public enum Kind {
-    /** A parse of the whole production. */
-    WHOLE,
-    /** A parse of just the seed. */
-    SEED,
-    ;
   }
 
 
   private static final class RatDropping {
     final NodeType nodeType;
     final int index;
-    final Kind kind;
 
-    RatDropping(NodeType nodeType, int index, Kind kind) {
+    RatDropping(NodeType nodeType, int index) {
       this.nodeType = nodeType;
       this.index = index;
-      this.kind = kind;
     }
 
     @Override
@@ -104,7 +96,6 @@ public final class RatPack {
       int result = 1;
       result = prime * result + index;
       result = prime * result + nodeType.hashCode();
-      result = prime * result + kind.hashCode();
       return result;
     }
 
@@ -126,12 +117,27 @@ public final class RatPack {
       if (nodeType != other.nodeType) {
         return false;
       }
-      if (kind != other.kind) {
-        return false;
-      }
       return true;
     }
   }
+
+
+  /**
+   * Dumps cache content for debugging.
+   */
+  @VisibleForTesting
+  public void dump(PrintStream out) {
+    out.println("RAT PACK");
+    for (Map.Entry<RatDropping, ParseCacheEntry> e
+        : this.parseCache.asMap().entrySet()) {
+      RatDropping k = e.getKey();
+      ParseCacheEntry v = e.getValue();
+      out.println(
+          ". " + k.nodeType + " @ " + k.index + "  =>  " + v.toString());
+    }
+  }
+
+
 
   /**
    * A result from the parse cache.
@@ -180,20 +186,22 @@ public final class RatPack {
     throws UnsupportedOperationException{
       throw new UnsupportedOperationException();
     }
+
+    @Override
+    public String toString() {
+      return "ParseFailure";
+    }
   }
 
   static final class ParseSuccess implements ParseCacheEntry {
     final NodeType nodeType;
     final int indexAfterParse;
-    final Kind kind;
     final Chain<MatchEvent> output;
 
     ParseSuccess(
-        NodeType nodeType, int indexAfterParse, Kind kind,
-        Chain<MatchEvent> output) {
+        NodeType nodeType, int indexAfterParse, Chain<MatchEvent> output) {
       this.nodeType = nodeType;
       this.indexAfterParse = indexAfterParse;
-      this.kind = kind;
       this.output = output;
     }
 
@@ -224,17 +232,12 @@ public final class RatPack {
             // popCount should not go negative (module underflow) because of the
             // argument check above.
             --popCount;
-            if (popCount == 0 && kind == Kind.WHOLE) {
+            if (popCount == 0) {
               Preconditions.checkState(
                   nodeType
                   == ((MatchEvent.Push) e).variant.getNodeType());
               break;
             }
-          } else if (popCount == 0
-                     && e instanceof MatchEvent.LRStart && kind == Kind.SEED) {
-            Preconditions.checkState(
-                nodeType == ((MatchEvent.LRStart) e).nodeType);
-            break;
           }
         }
       }
@@ -245,6 +248,25 @@ public final class RatPack {
         afterParse = Chain.append(afterParse, r.x);
       }
       return state.withOutput(afterParse).withIndex(indexAfterParse);
+    }
+
+    @Override
+    public String toString() {
+      ParseState state;
+      StringBuilder sb = new StringBuilder(".");
+      while (sb.length() < this.indexAfterParse) {
+        sb.append(sb);
+      }
+      try {
+        state = apply(
+            new ParseState(new Input("empty", CharSource.wrap(sb))));
+      } catch (IOException ex) {
+        throw (AssertionError) new AssertionError().initCause(ex);
+      }
+
+      return "ParseSuccess("
+          + ImmutableList.copyOf(Chain.forwardIterable(state.output))
+          + ", index<-" + state.index + ")";
     }
   }
 
@@ -270,6 +292,10 @@ public final class RatPack {
     throws UnsupportedOperationException{
       throw new UnsupportedOperationException();
     }
-  }
 
+    @Override
+    public String toString() {
+      return "ParseUncached";
+    }
+  }
 }

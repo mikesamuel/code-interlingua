@@ -181,9 +181,39 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
   @Test
   public final void testFieldOfCast() {
     assertParsePasses(
-        //PTree.complete
-        (NodeType.Expression),
-        "((Foo) foo).bar");
+        NodeType.Expression,
+        EnumSet.of(
+            NodeType.FieldAccess,
+            NodeType.CastExpression,
+            NodeType.Identifier,
+            NodeType.ExpressionName,
+            NodeType.ReferenceType
+            ),
+        "((Foo) foo).bar",
+        push(FieldAccessNode.Variant.PrimaryDotIdentifier),
+        token("(", -1),
+        push(CastExpressionNode.Variant
+             .LpReferenceTypeAdditionalBoundRpUnaryExpressionNotPlusMinus),
+        token("(", -1),
+        push(ReferenceTypeNode.Variant.ClassOrInterfaceType),
+        push(IdentifierNode.Variant.Builtin),
+        content("Foo", -1),
+        pop(),
+        pop(),
+        token(")", -1),
+        push(ExpressionNameNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("foo", -1),
+        pop(),
+        pop(),
+        pop(),
+        token(")", -1),
+        token(".", -1),
+        push(IdentifierNode.Variant.Builtin),
+        content("bar", -1),
+        pop(),
+        pop()
+        );
   }
 
 }

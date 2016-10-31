@@ -195,8 +195,22 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     this.assertParsePasses(
         PTree.complete(NodeType.UnaryExpression),
         "o.f",
-        push(UnaryExpressionNode.Variant.PreExpression),
-        // TODO
+        push(UnaryExpressionNode.Variant.UnaryExpressionNotPlusMinus),
+        push(UnaryExpressionNotPlusMinusNode.Variant.PostfixExpression),
+        push(PostfixExpressionNode.Variant.ExpressionName),
+        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifier),
+        push(ExpressionNameNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("o", -1),
+        pop(),
+        pop(),
+        token(".", -1),
+        push(IdentifierNode.Variant.Builtin),
+        content("f", -1),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
         pop());
   }
 }

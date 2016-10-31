@@ -2,13 +2,14 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.RangeSet;
 import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -68,11 +69,6 @@ final class Lookahead extends PTParSer {
     return Kind.LA;
   }
 
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    return null;
-  }
-
   static final MatchEvent LOOKAHEAD_START = new MatchEvent() {
 
     @Override
@@ -87,15 +83,30 @@ final class Lookahead extends PTParSer {
   };
 
   @Override
-  public Optional<ParseState> parse(ParseState state, ParseErrorReceiver err) {
-    Optional<ParseState> afterBody = body.getParSer().parse(
-        state.appendOutput(LOOKAHEAD_START), err);
-    if (afterBody.isPresent() == (valence == Valence.POSITIVE)) {
-      // Don't leave the lookahead start or anything else.
-      return Optional.of(state);
-    } else {
-      return Optional.absent();
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
+    ParseResult result = body.getParSer().parse(
+        state.appendOutput(LOOKAHEAD_START), lr, err);
+    switch (result.synopsis) {
+      case FAILURE:
+      case FAILURE_DUE_TO_LR_EXCLUSION:
+        switch (valence) {
+          case NEGATIVE:
+            return ParseResult.success(state, result.lrExclusionsTriggered);
+          case POSITIVE:
+            return result;
+        }
+        break;
+      case SUCCESS:
+        switch (valence) {
+          case POSITIVE:
+            // Don't advance the index or preserve outputs.
+            return ParseResult.success(state, result.lrExclusionsTriggered);
+          case NEGATIVE:
+            return ParseResult.failure(result.lrExclusionsTriggered);
+        }
     }
+    throw new AssertionError(result.synopsis + ", " + valence);
   }
 
   @Override

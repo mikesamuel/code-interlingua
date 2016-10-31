@@ -1,6 +1,5 @@
 package com.mikesamuel.cil.ptree;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -13,13 +12,20 @@ import com.mikesamuel.cil.ast.PackageNameNode;
 import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 
 final class MagicDotIdentifierHandler extends Concatenation {
 
-  static MagicDotIdentifierHandler of(Iterable<? extends ParSerable> els) {
+  static ParSerable of(Iterable<? extends ParSerable> els) {
+    for (ParSerable el : els) {
+      if (el == Alternation.NULL_LANGUAGE) {
+        return el;
+      }
+    }
     return new MagicDotIdentifierHandler(els);
   }
 
@@ -78,17 +84,19 @@ final class MagicDotIdentifierHandler extends Concatenation {
 
   @SuppressWarnings("synthetic-access")
   @Override
-  public Optional<ParseState> parse(ParseState state, ParseErrorReceiver err) {
-    Optional<ParseState> greedy = super.parse(state, err);
-    if (greedy.isPresent()) {
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
+    ParseResult greedy = super.parse(state, lr, err);
+    if (greedy.synopsis == ParseResult.Synopsis.SUCCESS) {
       return greedy;
     }
+    ParseResult failure = greedy;
 
     // If there is not a pop that completes a variant we can borrow from then we
     // can early out.
     if (state.output == null
         || !(state.output.x instanceof MatchEvent.Pop)) {
-      return Optional.absent();
+      return failure;
     }
 
     int countOfIdentifiers = 0;
@@ -108,7 +116,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
           ++countOfIdentifiers;
         } else if (!MagicVariants.allowedInBorrowSubtree(v)) {
           if (DEBUG) { System.err.println("***" + v); }
-          return Optional.absent();
+          return failure;
         }
         if (popCount == 0) {
           beforeName = c.prev;
@@ -116,25 +124,25 @@ final class MagicDotIdentifierHandler extends Concatenation {
         }
       } else if (e instanceof MatchEvent.Pop) {
         ++popCount;
-      } else if (e instanceof MatchEvent.LRSuffix
-                 || e instanceof MatchEvent.LRStart) {
+      } else if (e instanceof MatchEvent.LRStart
+                 || e instanceof MatchEvent.LREnd) {
         // Parsing an LR name production after having found a seed so we
         // shouldn't expect to find a
-        return Optional.absent();
+        return failure;
       }
     }
     if (countOfIdentifiers < 2) {
       // We cannot borrow one and leave a well-formed name.
-      return Optional.absent();
+      return failure;
     }
     if (DEBUG) {
       System.err.println("countOfIdentifiers=" + countOfIdentifiers);
       System.err.println("lastPushInReverse");
-      for (MatchEvent e : Chain.reverse(lastPushInReverse)) {
+      for (MatchEvent e : Chain.reverseIterable(lastPushInReverse)) {
         System.err.println("\t" + e);
       }
       System.err.println("beforeName");
-      for (MatchEvent e : Chain.forward(beforeName)) {
+      for (MatchEvent e : Chain.forwardIterable(beforeName)) {
         System.err.println("\t" + e);
       }
     }
@@ -154,7 +162,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
 
     if (lastPushInReverse == null
         || !(lastPushInReverse.x instanceof MatchEvent.Push)) {
-      return Optional.absent();
+      return failure;
     }
 
     MatchEvent.Push push = (MatchEvent.Push) lastPushInReverse.x;
@@ -162,7 +170,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
       System.err.println("combining variant " + push.variant);
     }
     if (!MagicVariants.COMBINING_VARIANTS.contains(push.variant)) {
-      return Optional.absent();
+      return failure;
     }
 
     int popsToSkipAtEnd = 1;
@@ -182,11 +190,12 @@ final class MagicDotIdentifierHandler extends Concatenation {
 
     if (DEBUG) {
       System.err.println("outputWithBorrow");
-      for (MatchEvent e : Chain.forward(outputWithBorrow)) {
+      for (MatchEvent e : Chain.forwardIterable(outputWithBorrow)) {
         System.err.println("\t" + e);
       }
     }
 
-    return Optional.of(state.withOutput(outputWithBorrow));
+    return ParseResult.success(
+        state.withOutput(outputWithBorrow), failure.lrExclusionsTriggered);
   }
 }

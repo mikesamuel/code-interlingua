@@ -1,9 +1,13 @@
 package com.mikesamuel.cil.ast;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.base.Optional;
 
 /**
  * An event in a series which describes a pre-order traversal of a parse-tree.
+ * <p>
+ * Some events are "ephemeral" which means they are used for bookkeeping by the
+ * parser during a parse and should not be seen by the tree-builder or emitted
+ * by a tree flattener.
  */
 public abstract class MatchEvent {
 
@@ -23,6 +27,14 @@ public abstract class MatchEvent {
   }
 
   /**
+   * An event that happens when we leave a node after visiting its content and
+   * children.
+   */
+  public static Pop pop(NodeVariant variant) {
+    return new Pop(Optional.of(variant));
+  }
+
+  /**
    * Fired for leaf nodes.
    */
   public static Content content(String s, int index) {
@@ -38,30 +50,22 @@ public abstract class MatchEvent {
   }
 
   /**
-   * Indicates that a left-recursive use was found starting at the given
-   * variant.
-   * What follows is the "seed" as defined in Alessandro Warth's
-   * "grow the seed" algorithm.
+   * An ephemeral event that indicates that we are starting to look for a
+   * left-recursive call so that we can grow a seed.
+   * There should be all/only pushes and pops between an
+   * {@link LRStart} and the {@link LREnd} that brackets it, which can
+   * be pushed back to before the start of the seed.
    */
-  public static LRStart leftRecursionStart(NodeType nodeType) {
-    return new LRStart(nodeType);
+  public static LRStart leftRecursionSuffixStart() {
+    return LRStart.INSTANCE;
   }
 
   /**
-   * Indicates that what follows is a repetition of the LR suffix that grows
-   * the seed using the suffix from the given variant.
+   * An ephemeral event that indicates that the corresponding preceding
+   * {@link LRStart} is finished.
    */
-  public static LRSuffix leftRecursionSuffix(
-      Iterable<? extends NodeVariant> variant) {
-    return new LRSuffix(variant);
-  }
-
-  /**
-   * Indicates that the left-recursive use started by the corresponding
-   * {@link #leftRecursionStart} was completed.
-   */
-  public static LREnd leftRecursionEnd() {
-    return LREnd.INSTANCE;
+  public static LREnd leftRecursionSuffixEnd(NodeType nodeType) {
+    return new LREnd(nodeType);
   }
 
   /**
@@ -76,18 +80,36 @@ public abstract class MatchEvent {
    * children.
    */
   public static final class Pop extends MatchEvent {
-    private Pop() {}
+    /**
+     * The variant popped if known.
+     * This is non-normative, but useful for debugging.
+     */
+    public final Optional<NodeVariant> variant;
 
-    static final Pop INSTANCE = new Pop();
+    Pop(Optional<NodeVariant> variant) {
+      this.variant = variant;
+    }
+
+    static final Pop INSTANCE = new Pop(Optional.absent());
 
     @Override
     public String toString() {
-      return "pop";
+      return variant.isPresent() ? "(pop " + variant.get() + ")" : "pop";
     }
 
     @Override
     public int nCharsConsumed() {
       return 0;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o != null && this.getClass() == o.getClass();
+    }
+
+    @Override
+    public int hashCode() {
+      return getClass().hashCode();
     }
   }
 
@@ -254,64 +276,44 @@ public abstract class MatchEvent {
   }
 
   /**
-   * Indicates that what follows is the start of a "seed" used to handle
-   * a left-recursive invocation of a node of type NodeType.
+   * An ephemeral event that indicates that what follows is a repetition of a
+   * suffix that is used to grow the seed.
    */
   public static final class LRStart extends MatchEvent {
-    /** The variant at which the left-recursive cycle started. */
-    public final NodeType nodeType;
+    static final LRStart INSTANCE = new LRStart();
 
-    LRStart(NodeType nodeType) {
-      this.nodeType = nodeType;
+    private LRStart() {
+      // singleton
+    }
+
+    @Override
+    public String toString() {
+      return "LRStart";
     }
 
     @Override
     public int nCharsConsumed() {
       return 0;
     }
-
-    @Override
-    public int hashCode() {
-      return nodeType.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (obj == null) {
-        return false;
-      }
-      if (getClass() != obj.getClass()) {
-        return false;
-      }
-      LRStart other = (LRStart) obj;
-      return nodeType == other.nodeType;
-    }
-
-    @Override
-    public String toString() {
-      return "(LRStart " + nodeType + ")";
-    }
   }
 
   /**
-   * Indicates that a repetition of the LR tail occurred which means that the
-   * markers between the LR push and the seed need to be duplicated.
+   * An ephemeral event that indicates that the corresponding preceding
+   * {@link LRStart} is finished.
    */
-  public static final class LRSuffix extends MatchEvent {
-    /** The variant that defines the suffix used. */
-    public final ImmutableList<NodeVariant> variants;
+  public static final class LREnd extends MatchEvent {
+    /**
+     * The production that was reached left-recursively.
+     */
+    public final NodeType nodeType;
 
-    LRSuffix(Iterable<? extends NodeVariant> variants) {
-      this.variants = ImmutableList.copyOf(variants);
+    LREnd(NodeType nodeType) {
+      this.nodeType = nodeType;
     }
-
 
     @Override
     public String toString() {
-      return "(LRSuffix " + variants + ")";
+      return "(LREnd " + nodeType + ")";
     }
 
     @Override
@@ -323,7 +325,7 @@ public abstract class MatchEvent {
     public int hashCode() {
       final int prime = 31;
       int result = 1;
-      result = prime * result + variants.hashCode();
+      result = prime * result + ((nodeType == null) ? 0 : nodeType.hashCode());
       return result;
     }
 
@@ -338,32 +340,11 @@ public abstract class MatchEvent {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      LRSuffix other = (LRSuffix) obj;
-      if (!variants.equals(other.variants)) {
+      LREnd other = (LREnd) obj;
+      if (nodeType != other.nodeType) {
         return false;
       }
       return true;
-    }
-  }
-
-  /**
-   * Indicates that the corresponding preceding {@link LRStart} is finished.
-   */
-  public static final class LREnd extends MatchEvent {
-    static final LREnd INSTANCE = new LREnd();
-
-    private LREnd() {
-      // singleton
-    }
-
-    @Override
-    public String toString() {
-      return "LREnd";
-    }
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
     }
   }
 }

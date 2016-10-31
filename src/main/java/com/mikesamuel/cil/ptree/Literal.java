@@ -6,14 +6,14 @@ import java.util.regex.Pattern;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.Range;
-import com.google.common.collect.RangeSet;
+import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.TokenMergeGuard;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -58,15 +58,16 @@ final class Literal extends PTParSer {
   }
 
   @Override
-  public Optional<ParseState> parse(
-      ParseState state, ParseErrorReceiver err) {
+  public ParseResult parse(
+      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
     if (state.startsWith(text, this.tokenMergeGuard)) {
-      return Optional.of(
-          state.advance(text.length(), true)
-          .appendOutput(MatchEvent.token(text, state.indexAfterIgnorables())));
+      return ParseResult.success(
+          state.advance(text.length())
+          .appendOutput(MatchEvent.token(text, state.index)),
+          ImmutableSet.of());
     }
     err.error(state, "Expected `" + text + "`");
-    return Optional.absent();
+    return ParseResult.failure();
   }
 
   @Override
@@ -89,14 +90,6 @@ final class Literal extends PTParSer {
   @Override
   public String toString() {
     return "\"" + this.text + "\"";  // TODO escape
-  }
-
-  @Override
-  RangeSet<Integer> computeLookahead1() {
-    return text.isEmpty()
-        ? null
-        : ImmutableRangeSet.of(
-            Range.<Integer>singleton((int) text.charAt(0)));
   }
 
 
