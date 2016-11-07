@@ -7,9 +7,9 @@ package com.mikesamuel.cil.ast;
 public abstract class BaseStatementNode extends BaseNode {
 
   BaseStatementNode(
-      NodeType type, NodeVariant variant,
+      NodeVariant variant,
       Iterable<? extends BaseNode> children, String value) {
-    super(type, variant, children, value);
+    super(variant, children, value);
     // TODO Auto-generated constructor stub
   }
 

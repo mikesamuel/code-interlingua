@@ -1150,14 +1150,13 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
   private %(node_class_name)s(
       Variant v, Iterable<? extends BaseNode> children, String literalValue) {
-    super(NodeType.%(name)s, v, children, literalValue);
+    super(v, children, literalValue);
   }
 
   /** Mutable builder type. */
-  public static BaseNode.Builder<%(node_class_name)s, Variant>
+  static BaseNode.Builder<%(node_class_name)s, Variant>
   builder(Variant v) {
-    return new BaseNode.Builder<%(node_class_name)s, Variant>(
-        NodeType.%(name)s, v) {
+    return new BaseNode.Builder<%(node_class_name)s, Variant>(v) {
       @Override
       @SuppressWarnings("synthetic-access")
       public %(node_class_name)s build() {
@@ -1198,6 +1197,11 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
     @Override
     public Lookahead1 getLookahead1() { return lookahead1; }
+
+    @Override
+    public %(node_class_name)s.Builder<%(node_class_name)s, Variant> nodeBuilder() {
+      return %(node_class_name)s.builder(this);
+    }
 
     @Override
     public String toString() {

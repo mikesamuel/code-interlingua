@@ -7,9 +7,9 @@ package com.mikesamuel.cil.ast;
 public abstract class BaseClassNode extends BaseNode {
 
   BaseClassNode(
-      NodeType type, NodeVariant variant,
+      NodeVariant variant,
       Iterable<? extends BaseNode> children, String value) {
-    super(type, variant, children, value);
+    super(variant, children, value);
   }
 
 }

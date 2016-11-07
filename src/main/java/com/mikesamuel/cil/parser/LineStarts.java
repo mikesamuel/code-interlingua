@@ -42,18 +42,31 @@ public final class LineStarts {
   }
 
   /**
+   * One less than {@link #getLineNumber}.
+   */
+  public int getZeroIndexedLineNumber(int charInFile) {
+    int ip = Arrays.binarySearch(startsOfLines, charInFile);
+    return (ip < 0 ? ~ip - 1 : ip);
+  }
+
+  /**
    * The line number in which the character at the given index occurs.
+   *
+   * @return one-indexed since source code editors typically treat the start
+   *    of a file as position 1:1.
    */
   public int getLineNumber(int charInFile) {
-    int ip = Arrays.binarySearch(startsOfLines, charInFile);
-    return ip < 0 ? ~ip - 1 : ip;
+    return 1 + getZeroIndexedLineNumber(charInFile);
   }
 
   /**
    * The column on which the character at the given index occurs.
+   *
+   * @return one-indexed because text editors typically treat the start of a
+   *     file as position 1:1.
    */
   public int charInLine(int charInFile) {
-    int ln = getLineNumber(charInFile);
-    return charInFile - startsOfLines[ln];
+    int ln = getZeroIndexedLineNumber(charInFile);
+    return 1 + (charInFile - startsOfLines[ln]);
   }
 }

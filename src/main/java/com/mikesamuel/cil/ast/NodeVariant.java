@@ -34,4 +34,11 @@ public interface NodeVariant extends ParSerable {
    *     character is required at the input cursor for this variant to match.
    */
   Lookahead1 getLookahead1();
+
+  /**
+   * A builder that produces nodes with this variant.
+   *
+   * @return a builder, b,  such that {@code b.build().getVariant() == this}.
+   */
+  BaseNode.Builder<?, ?> nodeBuilder();
 }

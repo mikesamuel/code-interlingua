@@ -1,15 +1,35 @@
 package com.mikesamuel.cil.parser;
 
+import com.google.common.base.Preconditions;
+
 /**
- * A position within a source file.
+ * A range of characters within a source file.
+ * <p>
+ * Starts are inclusive, ends are exclusive.
  */
 public final class SourcePosition {
   private final LineStarts starts;
-  private final int charInFile;
+  private final int startCharInFile;
+  private final int endCharInFile;
 
-  SourcePosition(LineStarts starts, int charInFile) {
+  /** */
+  public SourcePosition(
+      LineStarts starts, int startCharInFile, int endCharInFile) {
     this.starts = starts;
-    this.charInFile = charInFile;
+    this.startCharInFile = startCharInFile;
+    this.endCharInFile = endCharInFile;
+  }
+
+  /**
+   * A source position that starts at the least of the starts of the two
+   * given positions and ends at the greater of the ends.
+   */
+  public static SourcePosition spanning(SourcePosition a, SourcePosition b) {
+    Preconditions.checkArgument(a.starts == b.starts);
+    return new SourcePosition(
+        a.starts,
+        Math.min(a.startCharInFile, b.startCharInFile),
+        Math.max(a.endCharInFile, b.endCharInFile));
   }
 
   /**
@@ -19,24 +39,71 @@ public final class SourcePosition {
   public String getSource() { return starts.source; }
 
   /**
-   * Index of the character (UTF-16 offset) in file.
+   * Index of the character (UTF-16 offset) in file of the start.
    */
-  public int charInFile() { return charInFile; }
+  public int startCharInFile() { return startCharInFile; }
 
   /**
-   * Column within the line.
+   * Column within the line of the start.
    */
-  public int charInLine() {
-    return starts.charInLine(charInFile);
+  public int startCharInLine() {
+    return starts.charInLine(startCharInFile);
   }
 
   /**
-   * Line number within the file.
+   * Line number within the file of the start.
    */
-  public int lineInFile() { return starts.getLineNumber(charInFile); }
+  public int startLineInFile() { return starts.getLineNumber(startCharInFile); }
+
+  /**
+   * Index of the character (UTF-16 offset) in file of the end.
+   */
+  public int endCharInFile() { return endCharInFile; }
+
+  /**
+   * Column within the line of the end.
+   */
+  public int endCharInLine() {
+    return starts.charInLine(endCharInFile);
+  }
+
+  /**
+   * Line number within the file of the end.
+   */
+  public int endLineInFile() { return starts.getLineNumber(endCharInFile); }
+
+  /** A zero-width position at the start of this. */
+  public SourcePosition start() {
+    return startCharInFile == endCharInFile
+        ? this
+        : new SourcePosition(starts, startCharInFile, startCharInFile);
+  }
+
+  /** A zero-width position at the start of this. */
+  public SourcePosition end() {
+    return startCharInFile == endCharInFile
+        ? this
+        : new SourcePosition(starts, endCharInFile, endCharInFile);
+  }
+
 
   @Override
   public String toString() {
-    return getSource() + ":" + lineInFile() + ":" + charInLine();
+    int startLineInFile = startLineInFile();
+    int startCharInLine = startCharInLine();
+    int endLineInFile = endLineInFile();
+    int endCharInLine = endCharInLine();
+    StringBuilder sb = new StringBuilder();
+    sb.append(getSource())
+        .append(":")
+        .append(startLineInFile)
+        .append(":")
+        .append(startCharInLine);
+    if (startLineInFile != endLineInFile) {
+      sb.append(" - ").append(endLineInFile).append(':').append(endCharInLine);
+    } else if (startCharInLine != endCharInLine) {
+      sb.append('-').append(endCharInLine);
+    }
+    return sb.toString();
   }
 }

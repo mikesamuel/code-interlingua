@@ -7,10 +7,9 @@ package com.mikesamuel.cil.ast;
 public abstract class BaseLiteralNode extends BaseNode {
 
   BaseLiteralNode(
-      NodeType type, NodeVariant variant,
+      NodeVariant variant,
       Iterable<? extends BaseNode> children, String value) {
-    super(type, variant, children, value);
-    // TODO Auto-generated constructor stub
+    super(variant, children, value);
   }
 
 }

@@ -19,7 +19,7 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
         "Object.class",
         /**/push(PrimaryNode.Variant.PrimaryNoNewArray),
         /*..*/push(PrimaryNoNewArrayNode.Variant.ClassLiteral),
-        /*....*/push(ClassLiteralNode.Variant.TypeNameLsRsDotClass),
+        /*....*/push(ClassLiteralNode.Variant.TypeNameDimDotClass),
         /*......*/push(TypeNameNode.Variant.NotAtContextFreeNames),
         /*........*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
         /*..........*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),

@@ -457,12 +457,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   }
 
   /**
-   * <pre>{ Annotation } "[" "]" { { Annotation } "[" "]" }</pre>
+   * <pre>{ Annotation } Dim { { Annotation } Dim }</pre>
    */
   @Test
-  public void testDimsAnnotationLsRsAnnotationLsRs() {
+  public void testDimsAnnotationDimAnnotationDim() {
     parseSanityCheck(
-        DimsNode.Variant.AnnotationLsRsAnnotationLsRs,
+        DimsNode.Variant.AnnotationDimAnnotationDim,
         "[][]"
         );
   }
@@ -3774,34 +3774,34 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   }
 
   /**
-   * <pre>TypeName { "[" "]" } "." "class"</pre>
+   * <pre>TypeName { Dim } "." "class"</pre>
    */
   @Test
-  public void testClassLiteralTypeNameLsRsDotClass() {
+  public void testClassLiteralTypeNameDimDotClass() {
     parseSanityCheck(
-        ClassLiteralNode.Variant.TypeNameLsRsDotClass,
+        ClassLiteralNode.Variant.TypeNameDimDotClass,
         "Boolean[].class"
         );
   }
 
   /**
-   * <pre>NumericType { "[" "]" } "." "class"</pre>
+   * <pre>NumericType { Dim } "." "class"</pre>
    */
   @Test
-  public void testClassLiteralNumericTypeLsRsDotClass() {
+  public void testClassLiteralNumericTypeDimDotClass() {
     parseSanityCheck(
-        ClassLiteralNode.Variant.NumericTypeLsRsDotClass,
+        ClassLiteralNode.Variant.NumericTypeDimDotClass,
         "int[].class"
         );
   }
 
   /**
-   * <pre>"boolean" { "[" "]" } "." "class"</pre>
+   * <pre>"boolean" { Dim } "." "class"</pre>
    */
   @Test
-  public void testClassLiteralBooleanLsRsDotClass() {
+  public void testClassLiteralBooleanDimDotClass() {
     parseSanityCheck(
-        ClassLiteralNode.Variant.BooleanLsRsDotClass,
+        ClassLiteralNode.Variant.BooleanDimDotClass,
         "boolean.class"
         );
   }

@@ -202,8 +202,13 @@ ArrayType:
      PrimitiveType Dims
      ClassOrInterfaceType Dims
      TypeVariable Dims
+// This Dim production does not appear in the grammar, but including it here
+// means that the presence of optional or repeated "[]" pairs results in an
+// AST node.
+Dim:
+     "[" "]"
 Dims:
-     {Annotation} "[" "]" {{Annotation} "[" "]"}
+     {Annotation} Dim {{Annotation} Dim}
 TypeParameter:
      {TypeParameterModifier} Identifier [TypeBound]
 TypeParameterModifier:
@@ -704,9 +709,9 @@ PrimaryNoNewArray:
      MethodReference
      !CastExpression "(" Expression ")"
 ClassLiteral:
-     TypeName {"[" "]"} "." "class"
-     NumericType {"[" "]"} "." "class"
-     "boolean" {"[" "]"} "." "class"
+     TypeName {Dim} "." "class"
+     NumericType {Dim} "." "class"
+     "boolean" {Dim} "." "class"
      "void" "." "class"
 ClassInstanceCreationExpression:
      Primary "." UnqualifiedClassInstanceCreationExpression

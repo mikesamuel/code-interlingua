@@ -13,20 +13,20 @@ public final class LineStartsTest extends TestCase {
     //                          111
     //             0123 4567 8 9012
     int[] lineNumbers = new int[] {
-        0, 0, 0, 0,
         1, 1, 1, 1,
-        2,
-        3, 3, 3,
+        2, 2, 2, 2,
+        3,
+        4, 4, 4,
         // After end of file
-        3, 3, 3,
+        4, 4, 4,
     };
     int[] colNumbers = new int[] {
-        0, 1, 2, 3,
-        0, 1, 2, 3,
-        0,
-        0, 1, 2,
+        1, 2, 3, 4,
+        1, 2, 3, 4,
+        1,
+        1, 2, 3,
         // After end of file
-        3, 4, 5,
+        4, 5, 6,
     };
 
     LineStarts ls = new LineStarts("foo", code);
