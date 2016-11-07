@@ -141,6 +141,13 @@ public abstract class AbstractParSerTestCase extends TestCase {
             }
           }
         }
+
+        // Trees.of will throw an IllegalArgumentException if its
+        // well-formedness checks fail.
+        BaseNode node = Trees.of(
+            start.input.lineStarts,
+            Chain.forwardIterable(afterParse.output));
+
         if (firstPushes.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
@@ -155,9 +162,11 @@ public abstract class AbstractParSerTestCase extends TestCase {
             assertTrue(firstPushes.toString(), found);
           } else {
             assertEquals(content, variant, firstPushes.get(0).variant);
+            assertEquals(variant, node.getVariant());
           }
         }
-        assertEquals(content, allTokenText.toString(), tokensOnOutput.toString());
+        assertEquals(
+            content, allTokenText.toString(), tokensOnOutput.toString());
         return;
       case FAILURE:
         fail(
