@@ -19,6 +19,8 @@ _TOKEN_RE = re.compile(
         r'.',  # Other
     ]))
 
+_JAVA_IDENT_START_CHARSET = r'\p{javaJavaIdentifierStart}'
+
 _LINE_BREAK_RE = re.compile(r'(\r\n?|\n)')
 
 _NON_IDENT_CHAR = re.compile(r'[^A-Za-z0-9_$]+')
@@ -546,6 +548,134 @@ public enum NodeType implements ParSerable {
     def assignforlambda(obj, key, val):
         obj[key] = val
 
+    variant_lookaheads = {}
+    def compute_lookaheads():
+        la_toks_all = {}
+        la_refs_all = {}
+
+        regex_esc = {
+            '[':  r'\[',
+            ']':  r'\]',
+            '(':  r'\(',
+            ')':  r'\)',
+            '{':  r'\{',
+            '}':  r'\}',
+            '+':  r'\+',
+            '-':  r'\-',
+            '*':  r'\*',
+            '?':  r'\?',
+            '\\': r'\\',
+            '.':  r'\.',
+            '^':  r'\^',
+            '$':  r'\$',
+            '|':  r'\|',
+            }
+
+        # Compute lookahead by following all paths from each variant
+        # and returning pairs of the form
+        # (atomic_ptrees_la, whether_empty can be matched)
+        def compute_lookahead(c, p, v):
+            pn = p['name']
+            vn = v['name']
+            la_toks = set()
+            la_refs = set()
+
+            def compute_la_ptree(pt):
+                """
+                True if branch definitely matches a token
+                """
+                name = pt['name']
+                if 'ptree' in pt:
+                    sub_matches = False
+                    for sub in pt['ptree']:
+                        if compute_la_ptree(sub):
+                           sub_matches = True
+                           break
+                    return name in ('()') and sub_matches
+                elif name == 'lit':
+                    first_char = pt['pleaf'][0][1]  # Ignore double quotes
+                    la_toks.add(regex_esc.get(first_char, first_char))
+                    return True
+                elif name == 'ref':
+                    la_refs.add(pt['pleaf'][0])
+                    # Assumes that only CompilationUnit matches the empty
+                    # string and it is not used as a right-hand-side nonterminal
+                    return True
+                else:
+                    raise Exception(name)
+
+            matches_token = compute_la_ptree(
+                { 'name': '()', 'ptree': v['ptree'] })
+
+            # Check assumption above.
+            assert matches_token or pn == 'CompilationUnit', pn
+
+            la_toks_all[(pn, vn)] = la_toks
+            la_refs_all[(pn, vn)] = la_refs
+
+        for_each_variant(compute_lookahead)
+        builtin = {
+            'Identifier': (_JAVA_IDENT_START_CHARSET,),
+            'IdentifierChars': (_JAVA_IDENT_START_CHARSET,),
+            'FloatingPointLiteral': (r'\.', '0-9',),
+            'IntegerLiteral': (r'0-9',),
+            'CharacterLiteral': (r"'",),
+            'StringLiteral': (r'"',),
+            }
+
+        known = {}
+
+        if verbose:
+            print "la_toks_all"
+            for (pn, vn), v in la_toks_all.iteritems():
+                print '\t%s.%s: %r' % (pn, vn, v)
+            print "\nla_refs_all"
+            for (pn, vn), v in la_refs_all.iteritems():
+                print '\t%s.%s: %r' % (pn, vn, v)
+
+        # Iterate until convergence which handles LR cycles.
+        not_expanded_count = 0
+        was_expanded = [False]
+        while not_expanded_count < 2:
+            was_expanded[0] = False
+
+            def expand(c, p):
+                pn = p['name']
+                if pn not in known:
+                    known[pn] = set()
+                known_for_p = known[pn]
+                size_before = len(known_for_p)
+                for v in p['variants']:
+                    vn = v['name']
+                    toks_for_v = la_toks_all[(pn, vn)]
+                    for referent in la_refs_all[(pn, vn)]:
+                        if referent in builtin:
+                            toks_for_v.update(builtin[referent])
+                        elif referent in known:
+                            toks_for_v.update(known[referent])
+                        elif referent == 'builtin':
+                            toks_for_v.update(builtin[pn])
+                    known_for_p.update(toks_for_v)
+                if len(known_for_p) > size_before:
+                    was_expanded[0] = True
+
+            for_each_prod(expand)
+
+            if not was_expanded[0]:
+                not_expanded_count += 1
+
+        letters = set(c for c in 'abcdefghijklmnopqrstuvwxyz')
+        for k, la in la_toks_all.items():
+            if _JAVA_IDENT_START_CHARSET in la:
+                la.difference_update(letters)
+
+        return la_toks_all
+
+    variant_lookaheads = compute_lookaheads()
+    if verbose:
+        for ((pn, vn), toks) in variant_lookaheads.iteritems():
+            print 'LA %s.%s = %r' % (pn, vn, toks)
+
     prods_by_name = {}
     for_each_prod(lambda c, p: assignforlambda(prods_by_name, p['name'], p))
 
@@ -752,7 +882,8 @@ public enum NodeType implements ParSerable {
             def is_left(src, dest_name):
                 src_name = src['name']
                 for variant in src['variants']:
-                    if dest_name in left_calls_per_variant[(src_name, variant['name'])]:
+                    if dest_name in left_calls_per_variant[
+                            (src_name, variant['name'])]:
                         return True
                 return False
             def walk_variant(c, p, v):
@@ -772,10 +903,12 @@ public enum NodeType implements ParSerable {
             for_each_variant(walk_variant)
             with open(dot_out, 'w') as dot_out_file:
                 print >>dot_out_file, 'digraph nonterminals {'
-                for pn, referent_to_is_left in prod_name_to_referents.iteritems():
+                for pn, referent_to_is_left in (
+                        prod_name_to_referents.iteritems()):
                     print >>dot_out_file, '  %s;' % pn
                     for rn, is_left in referent_to_is_left.iteritems():
-                        print >>dot_out_file, '  %s -> %s [color=%s];' % (pn, rn, is_left and 'blue' or 'black')
+                        print >>dot_out_file, '  %s -> %s [color=%s];' % (
+                            pn, rn, is_left and 'blue' or 'black')
                 print >>dot_out_file, '}'
         write_dot()
     # To handle left recursion, we need to know the shortest depth-first
@@ -945,6 +1078,7 @@ public enum NodeType implements ParSerable {
             extra_imports = set()
             lr_prod = left_recursion[prod['name']]
             is_lr_forwarding = True
+            prod_matches_empty = prod['name'] in empty_matching
             # Treat LR productions that just forward to other
             # productions, so have no seed of their own as not
             # really LR.
@@ -955,7 +1089,8 @@ public enum NodeType implements ParSerable {
                         alias_name = vptree[0]['pleaf'][0]
                         alias = prods_by_name[alias_name]
                         lr_alias = left_recursion[alias_name]
-                        if any(av['name'] in lr_alias for av in alias['variants']):
+                        if any(av['name'] in lr_alias
+                               for av in alias['variants']):
                             continue
                 is_lr_forwarding = False
                 break
@@ -970,14 +1105,22 @@ public enum NodeType implements ParSerable {
                 is_lr = v['name'] in lr_prod and not is_lr_forwarding
                 if is_lr and verbose:
                     print 'LR: %s::%s' % (prod['name'], v['name'])
+                if prod_matches_empty:
+                    la = 'null'
+                else:
+                    la = 'Lookahead1.of(%s)' % (', '.join([
+                        _java_str_lit(la_char) for la_char
+                        in sorted(variant_lookaheads[
+                            (prod['name'], v['name'])])]))
                 variant_code.append(
                     (
                         '    /** */\n'
-                        '    %(variant_name)s(%(ptree)s, %(is_lr)s),'
+                        '    %(variant_name)s(%(ptree)s, %(is_lr)s, %(la)s),'
                         ) % {
                             'variant_name': v['name'],
                             'ptree': ptree_builder,
                             'is_lr': is_lr and 'true' or 'false',
+                            'la': la,
                         })
             return ('\n'.join(variant_code)), extra_imports
 
@@ -990,6 +1133,7 @@ public enum NodeType implements ParSerable {
             '''
 package %(package)s;
 
+import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.ptree.PTree;
@@ -1035,10 +1179,12 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
     private final ParSerable parSerable;
     private final boolean isLeftRecursive;
+    private final Lookahead1 lookahead1;
 
-    Variant(ParSerable parSerable, boolean isLR) {
+    Variant(ParSerable parSerable, boolean isLR, Lookahead1 lookahead1) {
       this.parSerable = parSerable;
       this.isLeftRecursive = isLR;
+      this.lookahead1 = lookahead1;
     }
 
     @Override
@@ -1049,6 +1195,9 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
     @Override
     public boolean isLeftRecursive() { return isLeftRecursive; }
+
+    @Override
+    public Lookahead1 getLookahead1() { return lookahead1; }
 
     @Override
     public String toString() {
