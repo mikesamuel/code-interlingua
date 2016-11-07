@@ -16,9 +16,13 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.ExpressionName),
         "name",
-        push(ExpressionNameNode.Variant.Identifier),
+        push(ExpressionNameNode.Variant.NotAtContextFreeNames),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
         push(IdentifierNode.Variant.Builtin),
         content("name", -1),
+        pop(),
+        pop(),
         pop(),
         pop());
   }
@@ -28,15 +32,19 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.ExpressionName),
         "one.two",
-        push(ExpressionNameNode.Variant.ExpressionNameDotIdentifier),
-        push(ExpressionNameNode.Variant.Identifier),
+        push(ExpressionNameNode.Variant.NotAtContextFreeNames),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
         push(IdentifierNode.Variant.Builtin),
         content("one", -1),
         pop(),
         pop(),
         token(".", -1),
+        push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
         push(IdentifierNode.Variant.Builtin),
         content("two", -1),
+        pop(),
+        pop(),
         pop(),
         pop());
   }
@@ -46,9 +54,13 @@ public final class ExpressionNameNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.ExpressionName),
         "donut",
-        push(ExpressionNameNode.Variant.Identifier),
+        push(ExpressionNameNode.Variant.NotAtContextFreeNames),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
         push(IdentifierNode.Variant.Builtin),
         content("donut", -1),
+        pop(),
+        pop(),
         pop(),
         pop());
   }

@@ -30,8 +30,20 @@ loading it in a browser and copy/pasting the text form.
     return String(s).replace(/^\s+|\s+$/g, '');
   }
 
+  var specialProds = {
+    Identifier: 'builtin',  // Lexical production
+    IdentifierChars: 'builtin',
+    JavaLetter: null,  // Not needed post-lex
+    JavaLetterOrDigit: null,
+    IntegerLiteral: 'builtin',
+    FloatingPointLiteral: 'builtin',
+    StringLiteral: 'builtin',
+    CharacterLiteral: 'builtin',
+  };
+
   var output = '';
   var prods = document.querySelectorAll('.production');
+  var seen = {};
   for (var i = 0, n = prods.length; i !== n; ++i) {
     var prod = prods[i];
     var lhs  = prod.querySelector('.lhs');
@@ -81,13 +93,38 @@ loading it in a browser and copy/pasting the text form.
     }
     processRhs(rhs.childNodes);
     if (variant.length) { variants.push(variant.join(' ')); }
-    var variantBreak = '\n    ';
+    var variantBreak = '\n     ';
     var variantsOutput = variants.join(variantBreak);
     var noOneOf = variantsOutput.replace(/^\s*\(one of\)(?:\s*)/, '');
     if (noOneOf != variantsOutput) {
       variantsOutput = noOneOf.replace(/\s+/g, variantBreak);
     }
-    output += lhs.textContent + variantBreak + variantsOutput + '\n';
+    // Handle lexical productions by mapping them to "builtin".
+    var prodName = lhs.textContent.replace(/:$/, '');
+    seen[prodName] = true;
+    if (Object.hasOwnProperty.call(specialProds, prodName)) {
+      var specialRhs = specialProds[prodName];
+      if (specialRhs) {
+        variantsOutput = specialRhs;
+      } else {
+        continue;
+      }
+    }
+
+    // HACK: Include lexical productions so that every non-terminal on
+    // a RHS appears in a LHS.
+    if ('Literal' == prodName) {
+      for (var specialName in specialProds) {
+        if (Object.hasOwnProperty.call(specialProds, specialName)
+            && !seen[specialName] && specialProds[specialName]) {
+          output += specialName + ':'
+              + variantBreak + specialProds[specialName] + '\n';
+        }
+      }
+    }
+
+    // Output the rule.
+    output += prodName + ':' + variantBreak + variantsOutput + '\n';
   }
   document.querySelector('#text-grammar').appendChild(document.createTextNode(output));
 </script>
@@ -152,8 +189,9 @@ ReferenceType:
      TypeVariable
 ClassOrInterfaceType:
      ClassType
-//     InterfaceType
+     InterfaceType
 ClassType:
+     ContextFreeNames
      ClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
      {Annotation} Identifier [TypeArguments]
 InterfaceType:
@@ -191,22 +229,44 @@ WildcardBounds:
 // Names
 (chapter=Name)
 TypeName:
+     !"@" ContextFreeNames
      PackageOrTypeName "." Identifier
      Identifier
 PackageOrTypeName:
+     !"@" ContextFreeNames
      PackageOrTypeName "." Identifier
      Identifier
 ExpressionName:
-     ExpressionName "." Identifier
+     !"@" ContextFreeNames
+     AmbiguousName "." Identifier
      Identifier
 MethodName:
      Identifier
 PackageName:
+     !"@" ContextFreeNames
      PackageName "." Identifier
      Identifier
 AmbiguousName:
+     !"@" ContextFreeNames
      AmbiguousName "." Identifier
      Identifier
+
+// ContextFreeNames matches a series of dotted names, possibly with
+// annotations and/or type parameters.
+// There are a number of productions like ClassType, InterfaceType, TypeVariable
+// which are lexically ambiguous, so we order productions so that a parse
+// reached ContextFreeNames first which allows a later pass to take into
+// account scoping and declarations to disambiguate dotted identifier soup
+// into approriate sub-trees.
+// It is frequently the case also that a dotted name appears to the left of
+// some variation of ("." [Stuff] Identifier).  This makes it easy for the
+// parser to greedily match names and then borrow however many are necessary
+// for the right.
+ContextFreeNames:
+      ContextFreeName {"." ContextFreeName}
+ContextFreeName:
+      {Annotation} Identifier [TypeArgumentsOrDiamond]
+
 
 // Packages
 (chapter=Package)
@@ -308,6 +368,7 @@ UnannClassOrInterfaceType:
      UnannClassType
      UnannInterfaceType
 UnannClassType:
+     !"@" ContextFreeNames
      Identifier [TypeArguments]
      UnannClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
 UnannInterfaceType:
@@ -386,8 +447,8 @@ ConstructorBody:
 ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-     ExpressionName "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
+     ExpressionName "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
 EnumDeclaration:
      {ClassModifier} "enum" Identifier [Superinterfaces] EnumBody
 EnumBody:
@@ -641,19 +702,20 @@ PrimaryNoNewArray:
      ArrayAccess
      MethodInvocation
      MethodReference
-     "(" Expression ")"
+     !CastExpression "(" Expression ")"
 ClassLiteral:
      TypeName {"[" "]"} "." "class"
      NumericType {"[" "]"} "." "class"
      "boolean" {"[" "]"} "." "class"
      "void" "." "class"
 ClassInstanceCreationExpression:
+     Primary "." UnqualifiedClassInstanceCreationExpression
      UnqualifiedClassInstanceCreationExpression
      ExpressionName "." UnqualifiedClassInstanceCreationExpression
-     Primary "." UnqualifiedClassInstanceCreationExpression
 UnqualifiedClassInstanceCreationExpression:
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
+     ContextFreeNames
      {Annotation} Identifier {"." {Annotation} Identifier} [TypeArgumentsOrDiamond]
 TypeArgumentsOrDiamond:
      TypeArguments
@@ -663,21 +725,21 @@ FieldAccess:
      "super" "." Identifier
      TypeName "." "super" "." Identifier
 ArrayAccess:
-     ExpressionName "[" Expression "]"
      PrimaryNoNewArray "[" Expression "]"
+     ExpressionName "[" Expression "]"
 MethodInvocation:
+     Primary "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      MethodName "(" [ArgumentList] ")"
      ExpressionName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      TypeName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      TypeName "." "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
      "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     Primary "." [TypeArguments] Identifier "(" [ArgumentList] ")"
 ArgumentList:
      Expression {"," Expression}
 MethodReference:
+     Primary "::" [TypeArguments] Identifier
      ReferenceType "::" [TypeArguments] Identifier
      ExpressionName "::" [TypeArguments] Identifier
-     Primary "::" [TypeArguments] Identifier
      "super" "::" [TypeArguments] Identifier
      TypeName "." "super" "::" [TypeArguments] Identifier
      ClassType "::" [TypeArguments] "new"
@@ -692,19 +754,19 @@ DimExprs:
 DimExpr:
      {Annotation} "[" Expression "]"
 Expression:
-//     LambdaExpression
+     LambdaExpression
      AssignmentExpression
-//LambdaExpression:
-//     LambdaParameters "->" LambdaBody
-//LambdaParameters:
-//     Identifier
-//     "(" [FormalParameterList] ")"
-//     "(" InferredFormalParameterList ")"
+LambdaExpression:
+     LambdaParameters "->" LambdaBody
+LambdaParameters:
+     Identifier
+     "(" [FormalParameterList] ")"
+     "(" InferredFormalParameterList ")"
 InferredFormalParameterList:
      Identifier {"," Identifier}
-//LambdaBody:
-//     Expression
-//     Block
+LambdaBody:
+     Expression
+     Block
 AssignmentExpression:
      Assignment
      ConditionalExpression
@@ -729,7 +791,7 @@ AssignmentOperator:
      "|="
 ConditionalExpression:
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
-//     ConditionalOrExpression "?" Expression ":" LambdaExpression
+     ConditionalOrExpression "?" Expression ":" LambdaExpression
      ConditionalOrExpression
 ConditionalOrExpression:
      ConditionalOrExpression "||" ConditionalAndExpression
@@ -803,10 +865,9 @@ PostfixExpression:
 PostExpression:
      Primary IncrDecrOperator
      ExpressionName IncrDecrOperator
-     PostfixExpression IncrDecrOperator
 CastExpression:
      "(" PrimitiveType ")" UnaryExpression
      "(" ReferenceType {AdditionalBound} ")" UnaryExpressionNotPlusMinus
-//     "(" ReferenceType {AdditionalBound} ")" LambdaExpression
+     "(" ReferenceType {AdditionalBound} ")" LambdaExpression
 ConstantExpression:
      Expression

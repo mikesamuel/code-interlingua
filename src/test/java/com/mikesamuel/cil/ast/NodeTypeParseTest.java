@@ -382,7 +382,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testClassTypeAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
         ClassTypeNode.Variant.AnnotationIdentifierTypeArguments,
-        "@Nonnull String"
+        "@Nonnull String",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -393,7 +394,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testClassTypeClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
         ClassTypeNode.Variant.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments,
-        "ImmutableList.Builder<String>"
+        "ImmutableList.Builder<String>",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -606,7 +608,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testTypeNamePackageOrTypeNameDotIdentifier() {
     parseSanityCheck(
         TypeNameNode.Variant.PackageOrTypeNameDotIdentifier,
-        "foo.Bar"
+        "foo.Bar",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -617,7 +620,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testTypeNameIdentifier() {
     parseSanityCheck(
         TypeNameNode.Variant.Identifier,
-        "Foo"
+        "Foo",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -628,7 +632,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testPackageOrTypeNamePackageOrTypeNameDotIdentifier() {
     parseSanityCheck(
         PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier,
-        "foo.Bar"
+        "foo.Bar",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -639,7 +644,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testPackageOrTypeNameIdentifier() {
     parseSanityCheck(
         PackageOrTypeNameNode.Variant.Identifier,
-        "bar"
+        "bar",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -649,8 +655,9 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testExpressionNameExpressionNameDotIdentifierNotLp() {
     parseSanityCheck(
-        ExpressionNameNode.Variant.ExpressionNameDotIdentifier,
-        "foo.bar"
+        ExpressionNameNode.Variant.AmbiguousNameDotIdentifier,
+        "foo.bar",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -660,7 +667,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testExpressionNameIdentifier() {
     parseSanityCheck(
-        ExpressionNameNode.Variant.Identifier,
+        ExpressionNameNode.Variant.NotAtContextFreeNames,
         "foo"
         );
   }
@@ -683,7 +690,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testPackageNamePackageNameDotIdentifier() {
     parseSanityCheck(
         PackageNameNode.Variant.PackageNameDotIdentifier,
-        "foo.bar.baz"
+        "foo.bar.baz",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -694,7 +702,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testPackageNameIdentifier() {
     parseSanityCheck(
         PackageNameNode.Variant.Identifier,
-        "com"
+        "com",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -705,7 +714,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testAmbiguousNameAmbiguousNameDotIdentifier() {
     parseSanityCheck(
         AmbiguousNameNode.Variant.AmbiguousNameDotIdentifier,
-        "foo.bar"
+        "foo.bar",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -715,8 +725,9 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testAmbiguousNameIdentifier() {
     parseSanityCheck(
-        AmbiguousNameNode.Variant.Identifier,
-        "ambiguous"
+        AmbiguousNameNode.Variant.NotAtContextFreeNames,
+        "ambiguous",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -1429,7 +1440,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassTypeIdentifierTypeArguments() {
     parseSanityCheck(
-        UnannClassTypeNode.Variant.IdentifierTypeArguments,
+        UnannClassTypeNode.Variant.NotAtContextFreeNames,
         "List<String>"
         );
   }
@@ -1441,7 +1452,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testUnannClassTypeUnannClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
         UnannClassTypeNode.Variant.UnannClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments,
-        "ImmutableList.@Awesome Builder<T>"
+        "ImmutableList.@Awesome Builder<T>",
+        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
@@ -3701,7 +3713,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryNoNewArrayLpExpressionRp() {
     parseSanityCheck(
-        PrimaryNoNewArrayNode.Variant.LpExpressionRp,
+        PrimaryNoNewArrayNode.Variant.NotCastExpressionLpExpressionRp,
         "(c ? t : e)"
         );
   }
@@ -3834,7 +3846,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testClassInstanceCreationExpressionPrimaryDotUnqualifiedClassInstanceCreationExpression() {
     parseSanityCheck(
         ClassInstanceCreationExpressionNode.Variant.PrimaryDotUnqualifiedClassInstanceCreationExpression,
-        "(getOuter()).new Inner(x)"
+        "(getOuter()).new Inner(x)",
+        Fuzz.START_AT_EXPRESSION
         );
   }
 
@@ -3855,7 +3868,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassOrInterfaceTypeToInstantiateAnnotationIdentifierDotAnnotationIdentifierTypeArgumentsOrDiamond() {
     parseSanityCheck(
-        ClassOrInterfaceTypeToInstantiateNode.Variant.AnnotationIdentifierDotAnnotationIdentifierTypeArgumentsOrDiamond,
+        ClassOrInterfaceTypeToInstantiateNode.Variant.ContextFreeNames,
         "@A Outer. @B Inner. @C Inner<>"
         );
   }
@@ -4236,7 +4249,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testLeftHandSideFieldAccess() {
     parseSanityCheck(
         LeftHandSideNode.Variant.FieldAccess,
-        "((T) t).f"
+        "((T) t).f",
+        Fuzz.START_AT_EXPRESSION, Fuzz.SAME_VARIANT
         );
   }
 
@@ -4963,17 +4977,6 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
     parseSanityCheck(
         PostExpressionNode.Variant.ExpressionNameIncrDecrOperator,
         "foo--"
-        );
-  }
-
-  /**
-   * <pre>PostfixExpression IncrDecrOperator</pre>
-   */
-  @Test
-  public void testPostExpressionPostfixExpressionIncrDecrOperator() {
-    parseSanityCheck(
-        PostExpressionNode.Variant.PostfixExpressionIncrDecrOperator,
-        "a-- ++"
         );
   }
 

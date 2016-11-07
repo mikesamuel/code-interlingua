@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 import org.junit.After;
@@ -12,6 +13,7 @@ import org.junit.Before;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.io.CharSource;
 import com.mikesamuel.cil.ast.MatchEvent.Push;
@@ -88,6 +90,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   /** SanityChecks to skip for a particular test case. */
   enum Fuzz {
     SAME_VARIANT,
+    START_AT_EXPRESSION,
   }
 
   protected void parseSanityCheck(
@@ -101,38 +104,58 @@ public abstract class AbstractParSerTestCase extends TestCase {
     }
     LeftRecursion lr = new LeftRecursion();
 
-    ParseResult result = PTree.complete(variant.getNodeType())
+    NodeType startNodeType = variant.getNodeType();
+    if (fuzzSet.contains(Fuzz.START_AT_EXPRESSION)) {
+      startNodeType = NodeType.Expression;
+    }
+
+    ParseResult result = PTree.complete(startNodeType)
         .getParSer().parse(start, lr, parseErr);
     switch (result.synopsis) {
       case SUCCESS:
         StringBuilder tokensOnOutput = new StringBuilder();
         ParseState afterParse = result.next();
-        MatchEvent.Push firstPush = null;
+        List<MatchEvent.Push> firstPushes = Lists.newArrayList();
+        boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
         for (MatchEvent e : Chain.forwardIterable(afterParse.output)) {
           if (e instanceof MatchEvent.Push) {
             ++stackDepth;
-            if (firstPush == null) {
-              firstPush = (MatchEvent.Push) e;
+            if (!sawNonPush) {
+              firstPushes.add((MatchEvent.Push) e);
             }
-          } else if (e instanceof MatchEvent.Pop) {
-            if (stackDepth == 0) {
-              fail(
-                  "Parsing `" + content + "`, depth goes negative after `"
-                      + tokensOnOutput + "`");
+          } else {
+            sawNonPush = true;
+            if (e instanceof MatchEvent.Pop) {
+              if (stackDepth == 0) {
+                fail(
+                    "Parsing `" + content + "`, depth goes negative after `"
+                        + tokensOnOutput + "`");
+              }
+              --stackDepth;
+            } else if (e instanceof MatchEvent.Token) {
+              tokensOnOutput.append(((MatchEvent.Token) e).content);
+            } else if (e instanceof MatchEvent.Content) {
+              tokensOnOutput.append(((MatchEvent.Content) e).content);
             }
-            --stackDepth;
-          } else if (e instanceof MatchEvent.Token) {
-            tokensOnOutput.append(((MatchEvent.Token) e).content);
-          } else if (e instanceof MatchEvent.Content) {
-            tokensOnOutput.append(((MatchEvent.Content) e).content);
           }
         }
-        if (firstPush == null) {
+        if (firstPushes.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
-          assertEquals(content, variant, firstPush.variant);
+          if (fuzzSet.contains(Fuzz.START_AT_EXPRESSION)) {
+            boolean found = false;
+            for (MatchEvent.Push p : firstPushes) {
+              if (p.variant == variant) {
+                found = true;
+                break;
+              }
+            }
+            assertTrue(firstPushes.toString(), found);
+          } else {
+            assertEquals(content, variant, firstPushes.get(0).variant);
+          }
         }
         assertEquals(content, allTokenText.toString(), tokensOnOutput.toString());
         return;

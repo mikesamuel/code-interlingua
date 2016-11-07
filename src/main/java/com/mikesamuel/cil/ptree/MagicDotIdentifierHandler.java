@@ -1,16 +1,11 @@
 package com.mikesamuel.cil.ptree;
 
-import com.google.common.base.Preconditions;
+import java.util.BitSet;
+
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.mikesamuel.cil.ast.AmbiguousNameNode;
-import com.mikesamuel.cil.ast.ExpressionNameNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
+import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.MatchEvent;
-import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.PackageNameNode;
-import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
-import com.mikesamuel.cil.ast.TypeNameNode;
+import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -33,56 +28,8 @@ final class MagicDotIdentifierHandler extends Concatenation {
     super(ImmutableList.copyOf(els));
   }
 
-  static final class MagicVariants {
-    /**
-     * Variants that we can borrow trailing identifiers from, but which do
-     * not directly have a trailing identifier.
-     *
-     * These left-call a combining variant but are not themselves
-     * left-recursive.
-     */
-    private static final ImmutableSet<NodeVariant> CAN_BORROW_FROM =
-        ImmutableSet.<NodeVariant>of(
-            TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-            );
-
-    /**
-     * Left-associative name variants that we can borrow identifiers from.
-     * They must have the form
-     * <pre>
-     * ThisName:
-     *     ThisName "." Identifier
-     * </pre>
-     */
-    private static final ImmutableSet<NodeVariant> COMBINING_VARIANTS =
-        ImmutableSet.<NodeVariant>of(
-            AmbiguousNameNode.Variant.AmbiguousNameDotIdentifier,
-            ExpressionNameNode.Variant.ExpressionNameDotIdentifier,
-            PackageNameNode.Variant.PackageNameDotIdentifier,
-            PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-            );
-
-    /**
-     * Variants that simply delegate to {@link NodeType.Identifier}.
-     */
-    private static final ImmutableSet<NodeVariant> LEAF_VARIANTS =
-        ImmutableSet.<NodeVariant>of(
-            AmbiguousNameNode.Variant.Identifier,
-            ExpressionNameNode.Variant.Identifier,
-            PackageNameNode.Variant.Identifier,
-            PackageOrTypeNameNode.Variant.Identifier
-            );
-
-    static boolean allowedInBorrowSubtree(NodeVariant v) {
-      return (COMBINING_VARIANTS.contains(v)
-          || LEAF_VARIANTS.contains(v)
-          || CAN_BORROW_FROM.contains(v));
-    }
-  }
-
   private static final boolean DEBUG = false;
 
-  @SuppressWarnings("synthetic-access")
   @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
@@ -99,103 +46,102 @@ final class MagicDotIdentifierHandler extends Concatenation {
       return failure;
     }
 
-    int countOfIdentifiers = 0;
-    Chain<MatchEvent> lastPushInReverse = null;
-    int popCount = 0;
-    Chain<MatchEvent> beforeName = null;
-
-    for (Chain<MatchEvent> c = state.output; ; c = c.prev) {
-      Preconditions.checkNotNull(c);  // Unmatched push/pop
-      MatchEvent e = c.x;
-      lastPushInReverse = Chain.<MatchEvent>append(lastPushInReverse, e);
-      if (e instanceof MatchEvent.Push) {
-        Preconditions.checkState(popCount > 0);
-        --popCount;
-        NodeVariant v = ((MatchEvent.Push) e).variant;
-        if (v == IdentifierNode.Variant.Builtin) {
-          ++countOfIdentifiers;
-        } else if (!MagicVariants.allowedInBorrowSubtree(v)) {
-          if (DEBUG) { System.err.println("***" + v); }
-          return failure;
+    if (DEBUG) {
+      System.err.println("Magic happening");
+      StringBuilder sb = new StringBuilder(". ");
+      for (MatchEvent e : Chain.forwardIterable(state.output)) {
+        if (e instanceof MatchEvent.Pop) {
+          if (sb.length() != 0) {
+            sb.setLength(sb.length() - 2);
+          }
         }
-        if (popCount == 0) {
-          beforeName = c.prev;
+        int len = sb.length();
+        System.err.println(sb.append(e));
+        sb.setLength(len);
+        if (e instanceof MatchEvent.Push) {
+          sb.append(". ");
+        }
+      }
+    }
+
+    // Look for push(ContextFreeNameNode...)
+    // Look for the preceding diamond.
+    BitSet textAfterPop = new BitSet();
+    int popDepth = 0;
+    boolean sawText = false;
+    Chain<MatchEvent> tailInReverse = null;
+
+    for (Chain<MatchEvent> c = state.output; c != null; c = c.prev) {
+      MatchEvent e = c.x;
+      tailInReverse = Chain.append(tailInReverse, e);
+      if (e instanceof MatchEvent.Pop) {
+        if (sawText) {
+          textAfterPop.set(popDepth);
+        }
+        ++popDepth;
+      } else if (e instanceof MatchEvent.Push) {
+        if (popDepth == 0) {
           break;
         }
+        --popDepth;
+        MatchEvent.Push push = (Push) e;
+        if (push.variant ==
+            ContextFreeNameNode.Variant
+            .AnnotationIdentifierTypeArgumentsOrDiamond) {
+          if (!textAfterPop.get(popDepth)) {
+            if (c.prev != null && c.prev.x instanceof MatchEvent.Token) {
+              MatchEvent.Token prevTok = (MatchEvent.Token) c.prev.x;
+              if (".".equals(prevTok.content)) {
+                ParseState borrowState = borrow(
+                    state, c.prev.prev, prevTok.index, tailInReverse);
+                ParseResult borrowResult = super.parse(borrowState, lr, err);
+                switch (borrowResult.synopsis) {
+                  case FAILURE:
+                  case FAILURE_DUE_TO_LR_EXCLUSION:
+                    return failure;
+                  case SUCCESS:
+                    return ParseResult.success(
+                        borrowResult.next(),
+                        ParseResult.union(
+                            failure.lrExclusionsTriggered,
+                            borrowResult.lrExclusionsTriggered));
+                }
+              }
+            }
+          }
+          break;
+        }
+      } else if (e.nCharsConsumed() != 0) {
+        sawText = true;
+      }
+    }
+    return failure;
+  }
+
+  private static ParseState borrow(
+      ParseState state, Chain<MatchEvent> beforeDot, int dotIndex,
+      Chain<MatchEvent> contextFreeNamePushAndAfterInReverse) {
+    Chain<MatchEvent> outputWithoutLastIdentifierOrDot = beforeDot;
+    int pushDepth = 0;
+    boolean skippedOverContextFreeName = false;
+    for (Chain<MatchEvent> c = contextFreeNamePushAndAfterInReverse; c != null;
+         c = c.prev) {
+      MatchEvent e = c.x;
+      if (skippedOverContextFreeName) {
+        outputWithoutLastIdentifierOrDot = Chain.append(
+            outputWithoutLastIdentifierOrDot, e);
+      }
+      if (e instanceof MatchEvent.Push) {
+        ++pushDepth;
       } else if (e instanceof MatchEvent.Pop) {
-        ++popCount;
-      } else if (e instanceof MatchEvent.LRStart
-                 || e instanceof MatchEvent.LREnd) {
-        // Parsing an LR name production after having found a seed so we
-        // shouldn't expect to find a
-        return failure;
-      }
-    }
-    if (countOfIdentifiers < 2) {
-      // We cannot borrow one and leave a well-formed name.
-      return failure;
-    }
-    if (DEBUG) {
-      System.err.println("countOfIdentifiers=" + countOfIdentifiers);
-      System.err.println("lastPushInReverse");
-      for (MatchEvent e : Chain.reverseIterable(lastPushInReverse)) {
-        System.err.println("\t" + e);
-      }
-      System.err.println("beforeName");
-      for (MatchEvent e : Chain.forwardIterable(beforeName)) {
-        System.err.println("\t" + e);
+        --pushDepth;
+        if (pushDepth == 0) {
+          skippedOverContextFreeName = true;
+        }
       }
     }
 
-    Preconditions.checkNotNull(
-        lastPushInReverse);  // Because loop above always runs once.
-    Preconditions.checkState(
-        lastPushInReverse.x instanceof MatchEvent.Push);
-
-    while (lastPushInReverse != null
-           && lastPushInReverse.x instanceof MatchEvent.Push
-           && MagicVariants.CAN_BORROW_FROM.contains(
-               ((MatchEvent.Push) lastPushInReverse.x).variant)) {
-      beforeName = Chain.append(beforeName, lastPushInReverse.x);
-      lastPushInReverse = lastPushInReverse.prev;
-    }
-
-    if (lastPushInReverse == null
-        || !(lastPushInReverse.x instanceof MatchEvent.Push)) {
-      return failure;
-    }
-
-    MatchEvent.Push push = (MatchEvent.Push) lastPushInReverse.x;
-    if (DEBUG) {
-      System.err.println("combining variant " + push.variant);
-    }
-    if (!MagicVariants.COMBINING_VARIANTS.contains(push.variant)) {
-      return failure;
-    }
-
-    int popsToSkipAtEnd = 1;
-    Chain<? extends MatchEvent> toReplay = lastPushInReverse.prev;
-
-    Chain<MatchEvent> outputWithBorrow = beforeName;
-    for (; toReplay != null; toReplay = toReplay.prev) {
-      outputWithBorrow = Chain.append(outputWithBorrow, toReplay.x);
-    }
-
-    for (int i = 0; i < popsToSkipAtEnd; ++i) {
-      Preconditions.checkNotNull(outputWithBorrow);
-      Preconditions.checkState(
-          outputWithBorrow.x instanceof MatchEvent.Pop);
-      outputWithBorrow = outputWithBorrow.prev;
-    }
-
-    if (DEBUG) {
-      System.err.println("outputWithBorrow");
-      for (MatchEvent e : Chain.forwardIterable(outputWithBorrow)) {
-        System.err.println("\t" + e);
-      }
-    }
-
-    return ParseResult.success(
-        state.withOutput(outputWithBorrow), failure.lrExclusionsTriggered);
+    return state.withIndex(dotIndex)
+        .withOutput(outputWithoutLastIdentifierOrDot);
   }
 }
