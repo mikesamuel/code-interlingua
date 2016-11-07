@@ -15,12 +15,14 @@ import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
+import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.RatPack;
 import com.mikesamuel.cil.parser.RatPack.ParseCacheEntry;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
@@ -81,6 +83,7 @@ final class Reference extends PTParSer {
 
   // HACK DEBUG: Not thread safe
   private static final boolean DEBUG = false;
+  private static final boolean DEBUG_LR = false;
   private static int depth = 0;
   private static String indent() {
     StringBuilder sb = new StringBuilder();
@@ -151,6 +154,10 @@ final class Reference extends PTParSer {
     LeftRecursion.Stage stage = lr.stageForProductionAt(nodeType, state.index);
     switch (stage) {
       case GROWING:
+        if (DEBUG) {
+          System.err.println(
+              indent() + "Found LR Growing " + nodeType + " @ " + state.index);
+        }
         return ParseResult.success(
             state.appendOutput(MatchEvent.leftRecursionSuffixEnd(nodeType)),
             // Checked to make sure that the growing does not accidentally take
@@ -161,17 +168,21 @@ final class Reference extends PTParSer {
         break;
       case SEEDING:
         // Do not cache this failure since it is not a foregone conclusion.
+        if (DEBUG) {
+          System.err.println(
+              indent() + "Found LR seeding " + nodeType + " @ " + state.index);
+        }
         return ParseResult.failure(Sets.immutableEnumSet(nodeType));
     }
 
     if (DEBUG) {
-      System.err.println(indent() + "Entered " + nodeType);
+      System.err.println(indent() + "Entered " + nodeType + " @ " + state.index);
       String din = dumpInput(state.input.content.substring(state.index));
       if (din != null) {
         System.err.println(indent() + ". . input=`" + din + "`");
       }
       String dout = dumpOutput(state.output);
-      if (dout != null) {
+      if (dout != null && false) {
         System.err.println(indent() + ". . output=" + dout);
       }
     }
@@ -249,11 +260,22 @@ final class Reference extends PTParSer {
     switch (result.synopsis) {
       case FAILURE:
       case FAILURE_DUE_TO_LR_EXCLUSION:
+        RatPack.ParseCacheEntry e = state.input.ratPack.getCachedParse(
+            nodeType, state.index);
+        if (false && e.wasTried() && e.passed()) {
+          // TODO: Is this necessary?
+          // If so, our ratpack should be a growable map not an evicting cache.
+          System.err.println(
+              indent() + "Passing " + nodeType
+              + " @ " + state.index + " due to cached result");
+          return ParseResult.success(e.apply(state), allExclusionsTriggered);
+        }
         if (canCache) {
           state.input.ratPack.cacheFailure(state.index, nodeType);
         }
         if (DEBUG) {
-          System.err.println(indent() + "Fail " + nodeType);
+          System.err.println(
+              indent() + "Fail " + nodeType + " @ " + state.index);
         }
         return ParseResult.failure(allExclusionsTriggered);
       case SUCCESS:
@@ -261,6 +283,11 @@ final class Reference extends PTParSer {
         if (canCache) {
           state.input.ratPack.cacheSuccess(
               state.index, next.index, nodeType, next.output);
+        }
+        if (DEBUG) {
+          System.err.println(
+              indent() + "Pass " + nodeType + " @ " + state.index
+              + " -> " + next.index);
         }
         return ParseResult.success(next, allExclusionsTriggered);
     }
@@ -271,8 +298,16 @@ final class Reference extends PTParSer {
       ParseState state, LeftRecursion lr, ParseErrorReceiver err, Stage stage,
       EnumSet<NodeType> failureExclusionsTriggered) {
     if (DEBUG) { indent(1); }
+
     try {
       for (NodeVariant variant : variants) {
+        if (stage == Stage.SEEDING) {
+          Lookahead1 la1 = variant.getLookahead1();
+          if (!(la1 == null || la1.canFollow(state))) {
+            continue;
+          }
+        }
+
         try (LeftRecursion.VariantScope scope = lr.enter(
                  variant, state.index, stage)) {
           ParseResult result = variant.getParSer().parse(
@@ -324,7 +359,7 @@ final class Reference extends PTParSer {
     }
 
     Chain<MatchEvent> rewrite(Chain<MatchEvent> out) {
-      if (DEBUG) {
+      if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "before rewriteLR " + toPushback);
@@ -336,7 +371,7 @@ final class Reference extends PTParSer {
         withPushbackAndPops = Chain.append(withPushbackAndPops, pop);
       }
       Preconditions.checkState(pushback.isEmpty());
-      if (DEBUG) {
+      if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "after rewriteLR " + toPushback);
@@ -350,7 +385,7 @@ final class Reference extends PTParSer {
      * from LRSuffix events.
      */
     private Chain<MatchEvent> pushback(Chain<MatchEvent> out) {
-      if (DEBUG) {
+      if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(
