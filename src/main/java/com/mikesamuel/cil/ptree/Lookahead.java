@@ -89,10 +89,10 @@ final class Lookahead extends PTParSer {
         state.appendOutput(LOOKAHEAD_START), lr, err);
     switch (result.synopsis) {
       case FAILURE:
-      case FAILURE_DUE_TO_LR_EXCLUSION:
         switch (valence) {
           case NEGATIVE:
-            return ParseResult.success(state, result.lrExclusionsTriggered);
+            return ParseResult.success(
+                state, false, result.lrExclusionsTriggered);
           case POSITIVE:
             return result;
         }
@@ -101,7 +101,8 @@ final class Lookahead extends PTParSer {
         switch (valence) {
           case POSITIVE:
             // Don't advance the index or preserve outputs.
-            return ParseResult.success(state, result.lrExclusionsTriggered);
+            return ParseResult.success(
+                state, false, result.lrExclusionsTriggered);
           case NEGATIVE:
             return ParseResult.failure(result.lrExclusionsTriggered);
         }

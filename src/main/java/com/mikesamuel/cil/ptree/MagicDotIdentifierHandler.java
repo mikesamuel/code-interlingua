@@ -39,13 +39,6 @@ final class MagicDotIdentifierHandler extends Concatenation {
     }
     ParseResult failure = greedy;
 
-    // If there is not a pop that completes a variant we can borrow from then we
-    // can early out.
-    if (state.output == null
-        || !(state.output.x instanceof MatchEvent.Pop)) {
-      return failure;
-    }
-
     if (DEBUG) {
       System.err.println("Magic happening");
       StringBuilder sb = new StringBuilder(". ");
@@ -71,24 +64,24 @@ final class MagicDotIdentifierHandler extends Concatenation {
     boolean sawText = false;
     Chain<MatchEvent> tailInReverse = null;
 
+    // If there is not a pop that completes a variant we can borrow from then we
+    // can early out.
     for (Chain<MatchEvent> c = state.output; c != null; c = c.prev) {
       MatchEvent e = c.x;
       tailInReverse = Chain.append(tailInReverse, e);
       if (e instanceof MatchEvent.Pop) {
         if (sawText) {
-          textAfterPop.set(popDepth);
+          int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
+          textAfterPop.set(popIndex);
         }
         ++popDepth;
       } else if (e instanceof MatchEvent.Push) {
-        if (popDepth == 0) {
-          break;
-        }
+        // We allow things to go negative.
         --popDepth;
         MatchEvent.Push push = (Push) e;
-        if (push.variant ==
-            ContextFreeNameNode.Variant
-            .AnnotationIdentifierTypeArgumentsOrDiamond) {
-          if (!textAfterPop.get(popDepth)) {
+        if (push.variant == ContextFreeNameNode.Variant.Name) {
+          int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
+          if (!textAfterPop.get(popIndex)) {
             if (c.prev != null && c.prev.x instanceof MatchEvent.Token) {
               MatchEvent.Token prevTok = (MatchEvent.Token) c.prev.x;
               if (".".equals(prevTok.content)) {
@@ -97,11 +90,11 @@ final class MagicDotIdentifierHandler extends Concatenation {
                 ParseResult borrowResult = super.parse(borrowState, lr, err);
                 switch (borrowResult.synopsis) {
                   case FAILURE:
-                  case FAILURE_DUE_TO_LR_EXCLUSION:
                     return failure;
                   case SUCCESS:
                     return ParseResult.success(
                         borrowResult.next(),
+                        true,
                         ParseResult.union(
                             failure.lrExclusionsTriggered,
                             borrowResult.lrExclusionsTriggered));

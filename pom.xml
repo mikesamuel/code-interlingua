@@ -80,6 +80,21 @@
               </sources>
             </configuration>
           </execution>
+          <execution>
+            <id>add-test-resource</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-resource</goal>
+            </goals>
+            <configuration>
+              <resources>
+                <resource>
+                  <!-- We parse our own source files as a sanity check for the parser. -->
+                  <directory>${project.basedir}/src/main/java</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
 

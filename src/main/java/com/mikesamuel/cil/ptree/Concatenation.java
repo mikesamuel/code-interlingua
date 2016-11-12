@@ -104,22 +104,23 @@ class Concatenation extends PTParSer {
       ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
     ParseState state = start;
     EnumSet<NodeType> lrExclusionsTriggered = EnumSet.noneOf(NodeType.class);
+    boolean wroteBack = false;
     for (ParSerable p : ps) {
       ParSer parser = p.getParSer();
       ParseResult result = parser.parse(state, lr, err);
       lrExclusionsTriggered.addAll(result.lrExclusionsTriggered);
       switch (result.synopsis) {
         case FAILURE:
-        case FAILURE_DUE_TO_LR_EXCLUSION:
           return ParseResult.failure(lrExclusionsTriggered);
         case SUCCESS:
           state = result.next();
+          wroteBack |= result.wroteBack;
           continue;
       }
       throw new AssertionError(result.synopsis);
     }
     return ParseResult.success(
-        state, Sets.immutableEnumSet(lrExclusionsTriggered));
+        state, wroteBack, Sets.immutableEnumSet(lrExclusionsTriggered));
   }
 
   @Override

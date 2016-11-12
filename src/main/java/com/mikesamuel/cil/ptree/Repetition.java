@@ -55,24 +55,25 @@ final class Repetition extends PTParSer {
     ParseState state = start;
     ParSer parser = p.getParSer();
     ImmutableSet<NodeType> lrExclusionsTriggered = ImmutableSet.of();
+    boolean wroteBack = false;
     while (true) {
       ParseResult result = parser.parse(state, lr, err);
       lrExclusionsTriggered = ParseResult.union(
           lrExclusionsTriggered, result.lrExclusionsTriggered);
 
       switch (result.synopsis) {
-        case FAILURE_DUE_TO_LR_EXCLUSION:
         case FAILURE:
-            return ParseResult.success(state, lrExclusionsTriggered);
+            return ParseResult.success(state, wroteBack, lrExclusionsTriggered);
 
         case SUCCESS:
           ParseState nextState = result.next();
           // Guarantee termination
           if (nextState.index == state.index) {
-            return ParseResult.success(state, lrExclusionsTriggered);
+            return ParseResult.success(state, wroteBack, lrExclusionsTriggered);
           }
           Preconditions.checkState(nextState.index > state.index);
           state = nextState;
+          wroteBack |= result.wroteBack;
       }
     }
   }

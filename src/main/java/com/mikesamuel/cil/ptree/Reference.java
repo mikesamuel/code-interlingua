@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -15,7 +16,6 @@ import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
-import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -140,7 +140,7 @@ final class Reference extends PTParSer {
           System.err.println(indent() + "Using cached success for " + nodeType);
         }
         return ParseResult.success(
-            cachedParse.apply(state), ImmutableSet.of());
+            cachedParse.apply(state), false, ImmutableSet.of());
       } else {
         if (DEBUG) {
           System.err.println(indent() + "Using cached failure for " + nodeType);
@@ -160,6 +160,7 @@ final class Reference extends PTParSer {
         }
         return ParseResult.success(
             state.appendOutput(MatchEvent.leftRecursionSuffixEnd(nodeType)),
+            false,
             // Checked to make sure that the growing does not accidentally take
             // a non-left recursing path.
             Sets.immutableEnumSet(nodeType)
@@ -193,6 +194,7 @@ final class Reference extends PTParSer {
         state, lr, err, LeftRecursion.Stage.SEEDING,
         allExclusionsTriggered);
     allExclusionsTriggered.addAll(result.lrExclusionsTriggered);
+    boolean wroteBack = result.wroteBack;
 
     boolean wasLrTriggered = allExclusionsTriggered.remove(nodeType);
 
@@ -202,9 +204,12 @@ final class Reference extends PTParSer {
         System.err.println(
             indent() + "AfterSeed " + nodeType
             + "\n" + indent() + ". . input=`"
-            + afterSeed.input.content.substring(afterSeed.index) + "`"
-            + "\n" + indent() + ". . output="
-            + ImmutableList.copyOf(Chain.forwardIterable(afterSeed.output)));
+            + afterSeed.input.content.substring(afterSeed.index) + "`");
+        if (false) {
+          System.err.println(
+              indent() + ". . output="
+              + ImmutableList.copyOf(Chain.forwardIterable(afterSeed.output)));
+        }
       }
 
       ParseState grown = afterSeed;
@@ -218,7 +223,6 @@ final class Reference extends PTParSer {
         allExclusionsTriggered.addAll(growResult.lrExclusionsTriggered);
         switch (growResult.synopsis) {
           case FAILURE:
-          case FAILURE_DUE_TO_LR_EXCLUSION:
             // Use the last successful growing.
             break grow_the_seed;
           case SUCCESS:
@@ -230,6 +234,7 @@ final class Reference extends PTParSer {
               break grow_the_seed;
             }
             ParseState next = growResult.next();
+            wroteBack |= growResult.wroteBack;
             if (next.index == grown.index) {
               // no progress made.
               break grow_the_seed;
@@ -242,24 +247,30 @@ final class Reference extends PTParSer {
 
       allExclusionsTriggered.remove(nodeType);
       LRRewriter rewriter = new LRRewriter(nodeType);
+      // TODO: do we need to reapply the postcondition here?
       result = ParseResult.success(
           grown.withOutput(rewriter.rewrite(grown.output)),
+          wroteBack,
           allExclusionsTriggered);
     }
 
-    boolean canCache = true;
-    for (NodeType nt : allExclusionsTriggered) {
-      if (nt != nodeType &&
-          lr.stageForProductionAt(nt, state.index)
-          != LeftRecursion.Stage.NOT_ON_STACK) {
-        canCache = false;
-        break;
+    boolean canCache;
+    if (wroteBack) {
+      canCache = false;
+    } else {
+      canCache = true;
+      for (NodeType nt : allExclusionsTriggered) {
+        if (nt != nodeType &&
+            lr.stageForProductionAt(nt, state.index)
+            != LeftRecursion.Stage.NOT_ON_STACK) {
+          canCache = false;
+          break;
+        }
       }
     }
 
     switch (result.synopsis) {
       case FAILURE:
-      case FAILURE_DUE_TO_LR_EXCLUSION:
         RatPack.ParseCacheEntry e = state.input.ratPack.getCachedParse(
             nodeType, state.index);
         if (false && e.wasTried() && e.passed()) {
@@ -268,7 +279,8 @@ final class Reference extends PTParSer {
           System.err.println(
               indent() + "Passing " + nodeType
               + " @ " + state.index + " due to cached result");
-          return ParseResult.success(e.apply(state), allExclusionsTriggered);
+          return ParseResult.success(
+              e.apply(state), false, allExclusionsTriggered);
         }
         if (canCache) {
           state.input.ratPack.cacheFailure(state.index, nodeType);
@@ -289,7 +301,7 @@ final class Reference extends PTParSer {
               indent() + "Pass " + nodeType + " @ " + state.index
               + " -> " + next.index);
         }
-        return ParseResult.success(next, allExclusionsTriggered);
+        return ParseResult.success(next, wroteBack, allExclusionsTriggered);
     }
     throw new AssertionError(result.synopsis);
   }
@@ -302,27 +314,34 @@ final class Reference extends PTParSer {
     try {
       for (NodeVariant variant : variants) {
         if (stage == Stage.SEEDING) {
-          Lookahead1 la1 = variant.getLookahead1();
-          if (!(la1 == null || la1.canFollow(state))) {
-            continue;
-          }
+          //Lookahead1 la1 = variant.getLookahead1();
+          //if (!(la1 == null || la1.canFollow(state))) {
+          //  continue;
+          //}
         }
 
         try (LeftRecursion.VariantScope scope = lr.enter(
                  variant, state.index, stage)) {
-          ParseResult result = variant.getParSer().parse(
-              state.appendOutput(MatchEvent.push(variant)), lr, err);
+          ParseState beforeBody = state.appendOutput(MatchEvent.push(variant));
+          ParseResult result = variant.getParSer().parse(beforeBody, lr, err);
           switch (result.synopsis) {
             case FAILURE:
-            case FAILURE_DUE_TO_LR_EXCLUSION:
               failureExclusionsTriggered.addAll(result.lrExclusionsTriggered);
               continue;
             case SUCCESS:
+              ParseState afterBody = result.next();
               MatchEvent.Pop pop = DEBUG
                   ? MatchEvent.pop(variant) : MatchEvent.pop();
-              return ParseResult.success(
-                  result.next().appendOutput(pop),
-                  result.lrExclusionsTriggered);
+              ParseState afterVariant = afterBody.appendOutput(pop);
+              Predicate<Chain<MatchEvent>> postcond = variant.getPostcond();
+              if (postcond.apply(afterVariant.output)) {
+                return ParseResult.success(
+                    afterVariant,
+                    result.wroteBack, result.lrExclusionsTriggered);
+              } else {
+                failureExclusionsTriggered.addAll(result.lrExclusionsTriggered);
+                continue;
+              }
           }
           throw new AssertionError(result.synopsis);
         }
@@ -469,5 +488,4 @@ final class Reference extends PTParSer {
       }
     }
   }
-
 }

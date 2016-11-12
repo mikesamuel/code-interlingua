@@ -62,8 +62,10 @@ final class Literal extends PTParSer {
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
     if (state.startsWith(text, this.tokenMergeGuard)) {
       return ParseResult.success(
-          state.advance(text.length())
-          .appendOutput(MatchEvent.token(text, state.index)),
+          (state
+              .advance(text.length())
+              .appendOutput(MatchEvent.token(text, state.index))),
+          false,
           ImmutableSet.of());
     }
     err.error(state, "Expected `" + text + "`");

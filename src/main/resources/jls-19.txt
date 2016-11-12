@@ -16,7 +16,10 @@
 
 
 /*
-This is brittle, but I produced the bulk of this file thus:
+
+DERIVATION
+==========
+I produced the bulk of this file thus:
 
 curl https://docs.oracle.com/javase/specs/jls/se8/html/jls-19.html \
     > /tmp/jls-19.html
@@ -128,6 +131,80 @@ loading it in a browser and copy/pasting the text form.
   }
   document.querySelector('#text-grammar').appendChild(document.createTextNode(output));
 </script>
+
+
+CHANGES
+=======
+The expression grammar has been rewritten to make it PEG-compatible and statement
+productions have been re-ordered for the same reason.
+
+Name productions have been reworked because, in a context-free parse,
+    foo
+can be multiple of variable name, field name, interface type, class type, type variable
+in many positions.
+
+
+GRAMMAR SYNTAX
+==============
+The syntactic conventions are similar to those defined in JLS Chapter 2, but
+instead of using a fixed-width font for literal tokens, double quotes are used.
+The "one of ..." syntactic sugar is not used and there is a negative lookahead
+explained below.
+
+Productions are defined thus
+```
+NonTerminal:
+    Variant1
+    Variant2
+```
+
+where variants are on separate lines and are indented.
+A variant is a sequence of
+```
+    [OptionalContent]
+    {RepeatedContent}
+    "LiteralToken"
+    NonTerminalReference
+    !NegativeLookahead
+    !!PositiveLookahead
+```
+
+A variants body can be followed by annotations
+```
+    (@name=Name)
+    @anon
+```
+
+(@name=Name) specifies an explicit name for the variant.
+If not specified, the variant name is derived from the body tokens.
+
+@anon specifies that no push/pop events are added to the output when
+parsing using the variant.  This makes for much more manageable
+expression sub-trees since every precedence layer does not introduce
+an inner node.  Instead of the input "1" parsing as
+   Expression.AssignemntExpression
+   |
+   +--AssignmentExpression.ConditionalExpression
+      |
+      +--ConditionalExpression.ConditionalOrExpression
+         |
+         +--ConditionalOrExpression.ConditionalAndExpression
+            |
+            +--ConditionalAndExpression.InclusiveOrExpression
+               |
+               +--...
+                  |
+                  +--Primary
+                     |
+                     +--Literal
+                        |
+                        +--IntLiteral
+                          |
+                           +--"1"
+
+judicious use of @anon cuts out all the *Expression.*Expression variant
+inner nodes which must have exactly one child which is itself a *Expression
+inner node.
 
 */
 
@@ -270,7 +347,7 @@ AmbiguousName:
 ContextFreeNames:
       ContextFreeName {"." ContextFreeName}
 ContextFreeName:
-      {Annotation} Identifier [TypeArgumentsOrDiamond]
+      {Annotation} Identifier [TypeArgumentsOrDiamond] (@name=Name)
 
 
 // Packages
@@ -406,8 +483,7 @@ Result:
 MethodDeclarator:
      Identifier "(" [FormalParameterList] ")" [Dims]
 FormalParameterList:
-     ReceiverParameter
-     FormalParameters "," LastFormalParameter
+     FormalParameters ["," LastFormalParameter]
      LastFormalParameter
 FormalParameters:
      FormalParameter {"," FormalParameter}
@@ -453,7 +529,6 @@ ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-     ExpressionName "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
 EnumDeclaration:
      {ClassModifier} "enum" Identifier [Superinterfaces] EnumBody
 EnumBody:
@@ -694,73 +769,85 @@ Resource:
 
 // Expressions
 (chapter=Expression)
-Primary:
-     PrimaryNoNewArray
+ExpressionAtom:
+     UnqualifiedClassInstanceCreationExpression
      ArrayCreationExpression
-PrimaryNoNewArray:
      Literal
      ClassLiteral
-     "this"
-     TypeName "." "this"
-     ClassInstanceCreationExpression
-     FieldAccess
-     ArrayAccess
-     MethodInvocation
-     MethodReference
-     !CastExpression "(" Expression ")"
+     [TypeName "."] "this" (@name=This)
+     [TypeName "."] "super" !"[" !!UsePrefix  (@name=Super)
+     ClassType "::" [TypeArguments] "new"  (@name=ConstructorReference)
+     ArrayType "::" "new"  (@name=ArrayConstructorReference)
+     Identifier "(" [ArgumentList] ")" (@name=MethodInvocation)
+     ContextFreeNames
+     Identifier !!UsePrefix  (@name=Local)
+     Identifier !!UsePrefix  (@name=FreeField)
+     TypeName !!"."  (@name=StaticMember)
+     ReferenceType !!"::"  (@name=StaticReference)
+     !CastExpression "(" Expression ")"  (@name=Parenthesized)
+Primary:
+     !SimpleCallPrefix ContextFreeNames !DotKeywordDimsOrCtorRef [!PostOpFieldAccess {PostOp}] (@name=Ambiguous)
+     ExpressionAtom {PostOp}
+LeftHandSide:
+     Primary (@postcond=Postconds.Primary.PostOp.FieldAccess)       (@name=FieldAccess)
+     Primary (@postcond=Postconds.Primary.PostOp.ArrayAccess)       (@name=ArrayAccess)
+     Primary (@postcond=Postconds.Primary.ExpressionAtom.Local)     (@name=Local)
+     Primary (@postcond=Postconds.Primary.ExpressionAtom.FreeField) (@name=FreeField)
+     Primary (@postcond=Postconds.Primary.Ambiguous)                (@name=Ambiguous)
+DotKeywordDimsOrCtorRef:
+     "." "class"
+     "." "new"
+     "." "super"
+     "." "this"
+     Dims
+     "::" [TypeArguments] "new"
+SimpleCallPrefix:
+     Identifier "("
+MethodInvocation:
+     Primary (@postcond=Postconds.Primary.PostOp.MethodInvocation) (@name=ExplicitCallee)
+     Primary (@postcond=Postconds.Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
+ClassInstanceCreationExpression:
+     Primary (@postcond=Postconds.Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
+     Primary (@postcond=Postconds.Primary.PostOp.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
+UsePrefix:
+     "."
+     "["
+     "::"
 ClassLiteral:
      TypeName {Dim} "." "class"
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-ClassInstanceCreationExpression:
-     Primary "." UnqualifiedClassInstanceCreationExpression
-     UnqualifiedClassInstanceCreationExpression
-     ExpressionName "." UnqualifiedClassInstanceCreationExpression
 UnqualifiedClassInstanceCreationExpression:
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
-     ContextFreeNames
      {Annotation} Identifier {"." {Annotation} Identifier} [TypeArgumentsOrDiamond]
 TypeArgumentsOrDiamond:
      TypeArguments
      "<>"
-FieldAccess:
-     Primary "." Identifier
-     "super" "." Identifier
-     TypeName "." "super" "." Identifier
-ArrayAccess:
-     PrimaryNoNewArray "[" Expression "]"
-     ExpressionName "[" Expression "]"
-MethodInvocation:
-     Primary "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     MethodName "(" [ArgumentList] ")"
-     ExpressionName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     TypeName "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     TypeName "." "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
-     "super" "." [TypeArguments] Identifier "(" [ArgumentList] ")"
+PostOpFieldAccess:
+     PostOp (@postcond=Postconds.PostOp.FieldAccess)
+PostOp:
+     "." [TypeArguments] Identifier "(" [ArgumentList] ")"  (@name=MethodInvocation)
+     "::" [TypeArguments] Identifier  (@name=MethodReference)
+     "." UnqualifiedClassInstanceCreationExpression  (@name=InnerClassCreation)
+     "." Identifier  (@name=FieldAccess)
+     "[" Expression "]"  (@name=ArrayAccess)
 ArgumentList:
      Expression {"," Expression}
-MethodReference:
-     Primary "::" [TypeArguments] Identifier
-     ReferenceType "::" [TypeArguments] Identifier
-     ExpressionName "::" [TypeArguments] Identifier
-     "super" "::" [TypeArguments] Identifier
-     TypeName "." "super" "::" [TypeArguments] Identifier
-     ClassType "::" [TypeArguments] "new"
-     ArrayType "::" "new"
 ArrayCreationExpression:
-     "new" PrimitiveType DimExprs [Dims]
-     "new" ClassOrInterfaceType DimExprs [Dims]
-     "new" PrimitiveType Dims ArrayInitializer
-     "new" ClassOrInterfaceType Dims ArrayInitializer
+     "new" PrimitiveType Dims ArrayInitializer !"["
+     "new" ClassOrInterfaceType Dims ArrayInitializer !"["
+     "new" PrimitiveType DimExprs [Dims] !"["
+     "new" ClassOrInterfaceType DimExprs [Dims] !"["
 DimExprs:
      DimExpr {DimExpr}
 DimExpr:
      {Annotation} "[" Expression "]"
 Expression:
+     Assignment
      LambdaExpression
-     AssignmentExpression
+     ConditionalExpression
 LambdaExpression:
      LambdaParameters "->" LambdaBody
 LambdaParameters:
@@ -772,15 +859,8 @@ InferredFormalParameterList:
 LambdaBody:
      Expression
      Block
-AssignmentExpression:
-     Assignment
-     ConditionalExpression
 Assignment:
      LeftHandSide AssignmentOperator Expression
-LeftHandSide:
-     FieldAccess
-     ArrayAccess
-     ExpressionName
 AssignmentOperator:
      "="
      "*="
@@ -795,34 +875,34 @@ AssignmentOperator:
      "^="
      "|="
 ConditionalExpression:
-     ConditionalOrExpression "?" Expression ":" ConditionalExpression
      ConditionalOrExpression "?" Expression ":" LambdaExpression
-     ConditionalOrExpression
+     ConditionalOrExpression "?" Expression ":" ConditionalExpression
+     ConditionalOrExpression @anon
 ConditionalOrExpression:
      ConditionalOrExpression "||" ConditionalAndExpression
-     ConditionalAndExpression
+     ConditionalAndExpression @anon
 ConditionalAndExpression:
      ConditionalAndExpression "&&" InclusiveOrExpression
-     InclusiveOrExpression
+     InclusiveOrExpression @anon
 InclusiveOrExpression:
      InclusiveOrExpression "|" ExclusiveOrExpression
-     ExclusiveOrExpression
+     ExclusiveOrExpression @anon
 ExclusiveOrExpression:
      ExclusiveOrExpression "^" AndExpression
-     AndExpression
+     AndExpression @anon
 AndExpression:
      AndExpression "&" EqualityExpression
-     EqualityExpression
+     EqualityExpression @anon
 EqualityExpression:
      EqualityExpression EqualityOperator RelationalExpression
-     RelationalExpression
+     RelationalExpression @anon
 EqualityOperator:
      "=="
      "!="
 RelationalExpression:
      RelationalExpression RelationalOperator ShiftExpression
      RelationalExpression "instanceof" ReferenceType
-     ShiftExpression
+     ShiftExpression @anon
 RelationalOperator:
      "<="
      ">="
@@ -830,49 +910,50 @@ RelationalOperator:
      ">"
 ShiftExpression:
      ShiftExpression ShiftOperator AdditiveExpression
-     AdditiveExpression
+     AdditiveExpression @anon
 ShiftOperator:
-     ">>>"
      "<<"
+     ">>>"
      ">>"
 AdditiveExpression:
      AdditiveExpression AdditiveOperator MultiplicativeExpression
-     MultiplicativeExpression
+     MultiplicativeExpression @anon
 AdditiveOperator:
      "+"
      "-"
 MultiplicativeExpression:
      MultiplicativeExpression MultiplicativeOperator UnaryExpression
-     UnaryExpression
+     UnaryExpression @anon
 MultiplicativeOperator:
      "*"
      "/"
      "%"
 UnaryExpression:
-     UnaryExpressionNotPlusMinus
+     CastExpression
      PreExpression
-     "+" UnaryExpression
-     "-" UnaryExpression
-PreExpression:
-     IncrDecrOperator UnaryExpression
+     PostExpression
+     {PrefixOperator} Primary
+PrefixOperator:
+     "+"
+     "-"
+     "~"
+     "!"
 IncrDecrOperator:
      "++"
      "--"
-UnaryExpressionNotPlusMinus:
-     CastExpression
-     PostfixExpression
-     "~" UnaryExpression
-     "!" UnaryExpression
-PostfixExpression:
-     PostExpression
-     Primary
-     ExpressionName
+PreExpression:
+     IncrDecrOperator LeftHandSideExpression
 PostExpression:
-     Primary IncrDecrOperator
-     ExpressionName IncrDecrOperator
+     LeftHandSideExpression IncrDecrOperator
+LeftHandSideExpression:
+     LeftHandSide @anon
+     "(" LeftHandSideExpression ")"
 CastExpression:
-     "(" PrimitiveType ")" UnaryExpression
-     "(" ReferenceType {AdditionalBound} ")" UnaryExpressionNotPlusMinus
-     "(" ReferenceType {AdditionalBound} ")" LambdaExpression
+     "(" PrimitiveType ")" UnaryExpression (@name=Primitive)
+     "(" ReferenceType {AdditionalBound} ")" !AmbiguousBinaryUnaryOperator UnaryExpression (@name=Reference)
+     "(" ReferenceType {AdditionalBound} ")" LambdaExpression (@name=Lambda)
+AmbiguousBinaryUnaryOperator:
+     "+"
+     "-"
 ConstantExpression:
      Expression

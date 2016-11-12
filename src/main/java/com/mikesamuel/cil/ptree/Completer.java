@@ -25,7 +25,6 @@ final class Completer extends ParSer {
     ParseResult result = p.getParSer().parse(state, lr, err);
     switch (result.synopsis) {
       case FAILURE:
-      case FAILURE_DUE_TO_LR_EXCLUSION:
         return result;
       case SUCCESS:
         ParseState nextState = result.next();

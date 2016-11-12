@@ -1,5 +1,8 @@
 package com.mikesamuel.cil.ast;
 
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.ParSerable;
 
@@ -41,4 +44,20 @@ public interface NodeVariant extends ParSerable {
    * @return a builder, b,  such that {@code b.build().getVariant() == this}.
    */
   BaseNode.Builder<?, ?> nodeBuilder();
+
+  /**
+   * True iff the variant is anonymous meaning that parsing using it should not
+   * result in {@linkplain MatchEvent.Push push}/{@linkplain MatchEvent.Pop pop}
+   * events.
+   */
+  default boolean isAnon() {
+    return false;
+  }
+
+  /**
+   * A post-condition that is applied to the output after parsing is completed.
+   */
+  default Predicate<Chain<MatchEvent>> getPostcond() {
+    return Predicates.alwaysTrue();
+  }
 }

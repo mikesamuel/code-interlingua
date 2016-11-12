@@ -7,11 +7,12 @@ import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.ClassTypeNode;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.ContextFreeNamesNode;
-import com.mikesamuel.cil.ast.ExpressionNameNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.MethodInvocationNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageDeclarationNode;
+import com.mikesamuel.cil.ast.PostOpNode;
+import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
@@ -39,22 +40,19 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
         /*..*/push(TypeNameNode.Variant.NotAtContextFreeNames),
         /*....*/push(ContextFreeNamesNode.Variant
                     .ContextFreeNameDotContextFreeName),
-        /*......*/push(ContextFreeNameNode.Variant
-                      .AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),  // child of package
         /*..........*/content("com", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*......*/token(".", -1),
-        /*......*/push(ContextFreeNameNode.Variant
-                      .AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),  // child of package
         /*..........*/content("example", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*......*/token(".", -1),
-        /*......*/push(ContextFreeNameNode.Variant
-            .AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),  // Child of type name
         /*..........*/content("Foo", -1),
         /*........*/pop(),
@@ -98,39 +96,36 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
     assertParsePasses(
         NodeType.MethodInvocation,
         "Foo.f1.f2.method_name()",
-        /**/push(MethodInvocationNode.Variant
-                .ExpressionNameDotTypeArgumentsIdentifierLpArgumentListRp),
-        /*..*/push(ExpressionNameNode.Variant.NotAtContextFreeNames),
-        /*....*/push(ContextFreeNamesNode.Variant
-                    .ContextFreeNameDotContextFreeName),
-        /*......*/push(ContextFreeNameNode.Variant
-                      .AnnotationIdentifierTypeArgumentsOrDiamond),
+        /**/push(MethodInvocationNode.Variant.ExplicitCallee),
+        /*..*/push(PrimaryNode.Variant.Ambiguous),
+        /*....*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),
         /*..........*/content("Foo", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*......*/token(".", -1),
-        /*......*/push(ContextFreeNameNode.Variant
-                      .AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),
         /*..........*/content("f1", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*......*/token(".", -1),
-        /*......*/push(ContextFreeNameNode.Variant
-                      .AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),
         /*..........*/content("f2", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*....*/pop(),
+        /*....*/push(PostOpNode.Variant.MethodInvocation),
+        /*......*/token(".", -1),
+        /*......*/push(IdentifierNode.Variant.Builtin),
+        /*........*/content("method_name", -1),
+        /*......*/pop(),
+        /*......*/token("(", -1),
+        /*......*/token(")", -1),
+        /*....*/pop(),
         /*..*/pop(),
-        /*..*/token(".", -1),
-        /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("method_name", -1),
-        /*..*/pop(),
-        /*..*/token("(", -1),
-        /*..*/token(")", -1),
         /**/pop()
         );
   }
@@ -140,57 +135,58 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
     assertParsePasses(
         NodeType.MethodInvocation,
         "Foo.f1.f2.<T>method_name()",
-        /**/push(MethodInvocationNode.Variant
-        /**/    .ExpressionNameDotTypeArgumentsIdentifierLpArgumentListRp),
-        /*..*/push(ExpressionNameNode.Variant.NotAtContextFreeNames),
+        /**/push(MethodInvocationNode.Variant.ExplicitCallee),
+        /*..*/push(PrimaryNode.Variant.Ambiguous),
         /*....*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
-        /*......*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),
         /*..........*/content("Foo", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*......*/token(".", -1),
-        /*......*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),
         /*..........*/content("f1", -1),
         /*........*/pop(),
         /*......*/pop(),
         /*......*/token(".", -1),
-        /*......*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
         /*........*/push(IdentifierNode.Variant.Builtin),
         /*..........*/content("f2", -1),
-        /*.......*/pop(),
+        /*........*/pop(),
         /*......*/pop(),
         /*....*/pop(),
-        /*..*/pop(),
-        /*..*/token(".", -1),
-        /*..*/push(TypeArgumentsNode.Variant.LtTypeArgumentListGt),
-        /*....*/token("<", -1),
-        /*....*/push(TypeArgumentListNode.Variant.TypeArgumentComTypeArgument),
-        /*......*/push(TypeArgumentNode.Variant.ReferenceType),
-        //          Lexically ambiguous with TypeParameter
-        /*........*/push(ReferenceTypeNode.Variant.ClassOrInterfaceType),
-        /*..........*/push(ClassOrInterfaceTypeNode.Variant.ClassType),
-        /*............*/push(ClassTypeNode.Variant.ContextFreeNames),
-        /*..............*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
-        /*................*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
-        /*..................*/push(IdentifierNode.Variant.Builtin),
-        /*....................*/content("T", -1),
+        /*..  */push(PostOpNode.Variant.MethodInvocation),
+        /*......*/token(".", -1),
+        /*......*/push(TypeArgumentsNode.Variant.LtTypeArgumentListGt),
+        /*........*/token("<", -1),
+        /*........*/push(TypeArgumentListNode.Variant.TypeArgumentComTypeArgument),
+        /*..........*/push(TypeArgumentNode.Variant.ReferenceType),
+        //              Lexically ambiguous with TypeParameter
+        /*............*/push(ReferenceTypeNode.Variant.ClassOrInterfaceType),
+        /*..............*/push(ClassOrInterfaceTypeNode.Variant.ClassType),
+        /*................*/push(ClassTypeNode.Variant.ContextFreeNames),
+        /*..................*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        /*....................*/push(ContextFreeNameNode.Variant.Name),
+        /*......................*/push(IdentifierNode.Variant.Builtin),
+        /*........................*/content("T", -1),
+        /*......................*/pop(),
+        /*....................*/pop(),
         /*..................*/pop(),
         /*................*/pop(),
         /*..............*/pop(),
         /*............*/pop(),
         /*..........*/pop(),
         /*........*/pop(),
+        /*........*/token(">", -1),
         /*......*/pop(),
+        /*......*/push(IdentifierNode.Variant.Builtin),
+        /*........*/content("method_name", -1),
+        /*......*/pop(),
+        /*......*/token("(", -1),
+        /*......*/token(")", -1),
         /*....*/pop(),
-        /*....*/token(">", -1),
         /*..*/pop(),
-        /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("method_name", -1),
-        /*..*/pop(),
-        /*..*/token("(", -1),
-        /*..*/token(")", -1),
         /**/pop()
         );
   }
@@ -205,19 +201,19 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
         /*..*/push(ClassOrInterfaceTypeNode.Variant.ClassType),
         /*....*/push(ClassTypeNode.Variant.ContextFreeNames),
         /*......*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
-        /*........*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*........*/push(ContextFreeNameNode.Variant.Name),
         /*..........*/push(IdentifierNode.Variant.Builtin),
         /*............*/content("java", -1),
         /*..........*/pop(),
         /*........*/pop(),
         /*........*/token(".", -1),
-        /*........*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*........*/push(ContextFreeNameNode.Variant.Name),
         /*..........*/push(IdentifierNode.Variant.Builtin),
         /*............*/content("lang", -1),
         /*..........*/pop(),
         /*........*/pop(),
         /*........*/token(".", -1),
-        /*........*/push(ContextFreeNameNode.Variant.AnnotationIdentifierTypeArgumentsOrDiamond),
+        /*........*/push(ContextFreeNameNode.Variant.Name),
         /*..........*/push(IdentifierNode.Variant.Builtin),
         /*............*/content("Object", -1),
         /*..........*/pop(),

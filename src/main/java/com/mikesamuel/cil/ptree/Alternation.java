@@ -39,8 +39,6 @@ final class Alternation extends PTParSer {
       ParseResult result = p.getParSer().parse(state, lr, err);
       switch (result.synopsis) {
         case FAILURE:
-          break;
-        case FAILURE_DUE_TO_LR_EXCLUSION:
           failure = result;
           break;
         case SUCCESS:

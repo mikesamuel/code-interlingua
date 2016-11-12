@@ -34,7 +34,7 @@ final class PatternMatch extends PTParSer {
       MatchEvent.Content content = MatchEvent.content(m.group(), state.index);
       ParseState stateAfter = state.advance(m.end() - m.start())
           .appendOutput(content);
-      return ParseResult.success(stateAfter, ImmutableSet.of());
+      return ParseResult.success(stateAfter, false, ImmutableSet.of());
     } else {
       String message;
       if (state.isEmpty()) {

@@ -79,10 +79,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
       case FAILURE:
         fail("`" + content + "` does not match " + ps.getParSer()
              + " : " + parseErr.getErrorMessage());
-
         return;
-      case FAILURE_DUE_TO_LR_EXCLUSION:
-        fail("LR recursion failure not recovered from");
     }
     throw new AssertionError(result.synopsis);
   }
@@ -95,12 +92,34 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
   protected void parseSanityCheck(
       NodeVariant variant, String content, Fuzz... fuzzes) {
+    parseSanityCheck(variant, input(content), fuzzes);
+  }
+
+  protected void parseSanityCheck(
+      NodeVariant variant, Input input, Fuzz... fuzzes) {
     Set<Fuzz> fuzzSet = Sets.immutableEnumSet(Arrays.asList(fuzzes));
 
     StringBuilder allTokenText = new StringBuilder();
-    ParseState start = parseState(content);
-    for (ParseState ps = start; !ps.isEmpty(); ps = ps.advance(1)) {
-      allTokenText.append(content.charAt(ps.index));
+    ParseState start = new ParseState(input);
+    for (ParseState ps = start; !ps.isEmpty();) {
+      char ch = input.content.charAt(ps.index);
+      int nConsumed = 1;
+      if (ch == '\'' || ch == '"') {
+        int end;
+        int limit = input.content.length();
+        for (end = ps.index + 1; end < limit; ++end) {
+          char c = input.content.charAt(end);
+          if (c == ch) {
+            ++end;
+            break;
+          } else if (c == '\\') {
+            ++end;
+          }
+        }
+        nConsumed = end - ps.index;
+      }
+      allTokenText.append(input.content, ps.index, ps.index + nConsumed);
+      ps = ps.advance(nConsumed);
     }
     LeftRecursion lr = new LeftRecursion();
 
@@ -111,6 +130,9 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
     ParseResult result = PTree.complete(startNodeType)
         .getParSer().parse(start, lr, parseErr);
+    if (!result.lrExclusionsTriggered.isEmpty()) {
+      fail("LR failure not recovered from");
+    }
     switch (result.synopsis) {
       case SUCCESS:
         StringBuilder tokensOnOutput = new StringBuilder();
@@ -130,8 +152,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
             if (e instanceof MatchEvent.Pop) {
               if (stackDepth == 0) {
                 fail(
-                    "Parsing `" + content + "`, depth goes negative after `"
-                        + tokensOnOutput + "`");
+                    "Parsing `" + input.content
+                    + "`, depth goes negative after `" + tokensOnOutput + "`");
               }
               --stackDepth;
             } else if (e instanceof MatchEvent.Token) {
@@ -161,20 +183,17 @@ public abstract class AbstractParSerTestCase extends TestCase {
             }
             assertTrue(firstPushes.toString(), found);
           } else {
-            assertEquals(content, variant, firstPushes.get(0).variant);
+            assertEquals(input.content, variant, firstPushes.get(0).variant);
             assertEquals(variant, node.getVariant());
           }
         }
         assertEquals(
-            content, allTokenText.toString(), tokensOnOutput.toString());
+            input.content, allTokenText.toString(), tokensOnOutput.toString());
         return;
       case FAILURE:
         fail(
-            "`" + content + "` does not match " + variant + "\n"
+            "`" + input.content + "` does not match " + variant + "\n"
                 + parseErr.getErrorMessage());
-        return;
-      case FAILURE_DUE_TO_LR_EXCLUSION:
-        fail("LR failure not recovered from");
         return;
     }
     throw new AssertionError(result.synopsis);
@@ -189,7 +208,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
     for (MatchEvent e : events) {
       if (e instanceof MatchEvent.Push) {
         MatchEvent.Push push = (Push) e;
-        boolean pushRelevant = relevant.contains(push.variant.getNodeType());
+        boolean pushRelevant = !push.variant.isAnon()
+            && relevant.contains(push.variant.getNodeType());
         included.set(depth, pushRelevant);
         if (pushRelevant) {
           b.add(e);
@@ -213,6 +233,9 @@ public abstract class AbstractParSerTestCase extends TestCase {
     ParseState state = parseState(content);
     LeftRecursion lr = new LeftRecursion();
     ParseResult result = ps.getParSer().parse(state, lr, parseErr);
+    if (!result.lrExclusionsTriggered.isEmpty()) {
+      fail("LR failure not recovered from");
+    }
     switch (result.synopsis) {
       case SUCCESS:
         ParseState afterParse = result.next();
@@ -222,16 +245,17 @@ public abstract class AbstractParSerTestCase extends TestCase {
         return;
       case FAILURE:
         return;
-      case FAILURE_DUE_TO_LR_EXCLUSION:
-        fail("LR failure not recovered from");
-        return;
     }
     throw new AssertionError(result.synopsis);
   }
 
   protected ParseState parseState(String content) {
+      return new ParseState(input(content));
+  }
+
+  protected Input input(String content) {
     try {
-      return new ParseState(new Input(getName(), CharSource.wrap(content)));
+      return new Input(getName(), CharSource.wrap(content));
     } catch (IOException ex) {
       throw (AssertionError) new AssertionError().initCause(ex);
     }

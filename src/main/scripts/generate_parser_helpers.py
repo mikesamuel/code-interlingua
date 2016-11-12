@@ -6,7 +6,6 @@ import re
 
 _JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
 
-
 _TOKEN_RE = re.compile(
     '|'.join([
         r'//[^\r\n]*',  # Line comment
@@ -15,6 +14,8 @@ _TOKEN_RE = re.compile(
         r'[\r\n]+',  # Line breaks
         r'"(?:[^"\\]*|\\.)*"',  # Quoted string
         r'[A-Za-z_$]\w*',  # Word
+        r'\(@\w+=[^"\'()]*\)',  # Annotation with value
+        r'@\w+',  # Valueless annotation
         r'[\[\]\{\}:.]',  # Punctuation
         r'.',  # Other
     ]))
@@ -31,7 +32,8 @@ _TOK_LINEBREAK = 1
 _TOK_COMMENT = 2
 _TOK_STRING = 3
 _TOK_IDENT = 4
-_TOK_OTHER = 5
+_TOK_ANNOT = 5
+_TOK_OTHER = 6
 
 _PTREE_NAME_TO_KIND = {
     None: 'PTree.Kind.SEQUENCE',
@@ -49,6 +51,8 @@ def _is_ident_start(c):
 
 def _is_ident_part(c):
     return ('0' <= c and c <= '9') or _is_ident_start(c)
+def _is_annotation(tok_text):
+    return tok_text[0] == '@' or tok_text[0:2] == '(@'
 
 def _classify_token((text, _)):
     n = len(text)
@@ -67,6 +71,8 @@ def _classify_token((text, _)):
         return _TOK_LINEBREAK
     if _is_ident_start(t0):
         return _TOK_IDENT
+    if _is_annotation(text):
+        return _TOK_ANNOT
     return _TOK_OTHER
 
 
@@ -315,6 +321,8 @@ def process_grammar(
                 if i + 1 == len(toks):
                     raise SyntaxError('Expected content after "!"')
                 sub_node, j = make_node(toks, i + 1)
+                if sub_node is None:
+                    raise SyntaxError('Expected content after "!" not annotation')
                 return ({ 'name': 'nla', 'ptree': [sub_node] }), j
             if tok[0] in ('(', '[', '{'):
                 end_bracket = _BRACKET_OTHERS[tok[0]]
@@ -333,60 +341,88 @@ def process_grammar(
                         )
                     else:
                         sub_node, j = make_node(toks, j)
-                        ptree.append(sub_node)
+                        if sub_node is not None:
+                            ptree.append(sub_node)
+                        else:
+                            break
+            if _is_annotation(tok[0]):
+                return None, i
             raise SyntaxError(repr((tok, toks)))
         ptree = []
         i, n = 0, len(toks)
         while i < n:
             node, j = make_node(toks, i)
+            if node is None:
+                assert j == i
+                break
             assert j > i
             ptree.append(node)
             i = j
-        return ptree
+        return ptree, i
 
     def line_of((_, pos)):
         ln, _, _ = pos
         return ln
     def variant_maker():
         names_used = set()
-        def get_variant_name(toks):
-            base_name_parts = []
-            for tok in toks:
-                if _classify_token(tok) == _TOK_STRING:
-                    str_content = tok[0][1:-1]
-                    str_index = 0
-                    while str_index < len(str_content):
-                        alnum = _to_alnum(str_content, str_index)
-                        if alnum is None:
-                            str_index += 1
+        def get_variant_name(toks, annots):
+            name_from_annotation = None
+            for annot in annots:
+                if annot[0].startswith('(@name='):
+                    name_from_annotation = annot[0][len('(@name='):-1]
+                    break
+            if name_from_annotation is not None:
+                name = name_from_annotation
+            else:
+                base_name_parts = []
+                for tok in toks:
+                    if _classify_token(tok) == _TOK_STRING:
+                        str_content = tok[0][1:-1]
+                        str_index = 0
+                        while str_index < len(str_content):
+                            alnum = _to_alnum(str_content, str_index)
+                            if alnum is None:
+                                str_index += 1
+                            else:
+                                alnum_part, str_index = alnum
+                                base_name_parts.append(alnum_part)
+                    elif has_text(tok, '!'):
+                        if base_name_parts and base_name_parts[-1] == 'not':
+                            base_name_parts[-1] = 'exp'
                         else:
-                            alnum_part, str_index = alnum
-                            base_name_parts.append(alnum_part)
-                elif has_text(tok, '!'):
-                    base_name_parts.append('not')
-                else:
-                    base_name_parts.append(_NON_IDENT_CHAR.sub('', tok[0]))
-            base_name_parts = [x for x in base_name_parts if x]
-            # Now we have parts that contain the names of child productions
-            # and descriptions of literal text.
-            # Normalize underscores and turn it into one nice big
-            # UpperCamelCase identifier.
-            base_name = _UNDERSCORE_NEEDED.sub('_', '_'.join(base_name_parts))
-            base_name = _underscores_to_upper_camel(base_name or 'epsilon')
-            counter = 0
-            name = base_name
+                            base_name_parts.append('not')
+                    elif _is_annotation(tok[0]):
+                        break
+                    else:
+                        base_name_parts.append(_NON_IDENT_CHAR.sub('', tok[0]))
+                base_name_parts = [x for x in base_name_parts if x]
+                # Now we have parts that contain the names of child productions
+                # and descriptions of literal text.
+                # Normalize underscores and turn it into one nice big
+                # UpperCamelCase identifier.
+                base_name = _UNDERSCORE_NEEDED.sub('_', '_'.join(base_name_parts))
+                base_name = _underscores_to_upper_camel(base_name or 'epsilon')
+                counter = 0
+                name = base_name
             while name in names_used:
                 counter += 1
                 name = '%s$%d' % (base_name, counter)
             names_used.add(name)
+            if name_from_annotation is not None and name != name_from_annotation:
+                raise Exception('name from annotations %r is %s but needed disambiguation from %r'
+                                % (annots, name_from_annotation, names_used))
             return name
         def maybe_make_variant(toks, s, e):
             if e == len(toks) or line_of(toks[s]) != line_of(toks[e]):
                 sub_toks = toks[s:e]
-                name = get_variant_name(sub_toks)
+                ptree, index_after = make_ptree(sub_toks)
+                annots = sub_toks[index_after:]
+                assert all(_is_annotation(annot_text) for annot_text, annot_pos in annots), repr(annots)
+                name = get_variant_name(sub_toks, annots)
                 return {
                     'name': name,
-                    'ptree': make_ptree(sub_toks)
+                    'ptree': ptree,
+                    'annots': annots,
                     }
             return None
 
@@ -1075,10 +1111,26 @@ public enum NodeType implements ParSerable {
 
         def create_variant_members():
             variant_code = []
-            extra_imports = set()
+            extra_imports = set((
+                'com.mikesamuel.cil.parser.Lookahead1',
+                'com.mikesamuel.cil.parser.ParSer',
+                'com.mikesamuel.cil.parser.ParSerable',
+                'com.mikesamuel.cil.ptree.PTree',
+            ))
             lr_prod = left_recursion[prod['name']]
             is_lr_forwarding = True
             prod_matches_empty = prod['name'] in empty_matching
+
+            annot_converters = {
+                'name': None,
+                'postcond': (
+                    'Predicate<Chain<MatchEvent>>',
+                    ('com.mikesamuel.cil.parser.Chain',
+                     'com.google.common.base.Predicate'),
+                    lambda x: x
+                ),
+            }
+
             # Treat LR productions that just forward to other
             # productions, so have no seed of their own as not
             # really LR.
@@ -1112,31 +1164,62 @@ public enum NodeType implements ParSerable {
                         _java_str_lit(la_char) for la_char
                         in sorted(variant_lookaheads[
                             (prod['name'], v['name'])])]))
+                overridden_methods = []
+                for (annot_text, _) in v['annots']:
+                    if annot_text.startswith('(@name='): continue
+                    annot_value, annot_name = None, None
+                    override = None
+                    if annot_text.startswith('('):
+                        annot_name, annot_value = annot_text[2:-1].split('=')
+                        annot_converter = annot_converters[annot_name]
+                        if annot_converter is not None:
+                            annot_type, annot_extra_imports, annot_value_conv = annot_converter
+                            override = {
+                                'type': annot_type,
+                                'name': 'get%s%s' % (annot_name[0].upper(), annot_name[1:]),
+                                'value': annot_value_conv(annot_value),
+                            }
+                            extra_imports.update(annot_extra_imports)
+                    else:
+                        annot_name = annot_text[1:]
+                        override = {
+                            'type': 'boolean',
+                            'name': 'is%s%s' % (annot_name[0].upper(), annot_name[1:]),
+                            'value': 'true'
+                            }
+                    if override is not None:
+                        overridden_methods.append(
+                            (
+                                '      @Override\n'
+                                '      public %(type)s %(name)s() {\n'
+                                '        return %(value)s;\n'
+                                '      }\n'
+                            ) % override)
+
                 variant_code.append(
                     (
                         '    /** */\n'
-                        '    %(variant_name)s(%(ptree)s, %(is_lr)s, %(la)s),'
-                        ) % {
-                            'variant_name': v['name'],
-                            'ptree': ptree_builder,
-                            'is_lr': is_lr and 'true' or 'false',
-                            'la': la,
-                        })
+                        '    %(variant_name)s(%(ptree)s, %(is_lr)s, %(la)s)%(overrides)s,'
+                    ) % {
+                        'variant_name': v['name'],
+                        'ptree': ptree_builder,
+                        'is_lr': is_lr and 'true' or 'false',
+                        'la': la,
+                        'overrides': (
+                            overridden_methods
+                            and '{\n%s    }' % '\n'.join(overridden_methods) or ''),
+                    })
             return ('\n'.join(variant_code)), extra_imports
 
         variant_members, extra_imports = create_variant_members()
         extra_import_stmts = ''.join(
-            ['import %s;\n' % imp for imp in extra_imports])
+            ['import %s;\n' % imp for imp in sorted(extra_imports)])
 
         emit_java_file(
             node_class_name,
             '''
 package %(package)s;
 
-import com.mikesamuel.cil.parser.Lookahead1;
-import com.mikesamuel.cil.parser.ParSer;
-import com.mikesamuel.cil.parser.ParSerable;
-import com.mikesamuel.cil.ptree.PTree;
 %(extra_import_stmts)s
 /**
  * Node for the JLS %(name)s production.

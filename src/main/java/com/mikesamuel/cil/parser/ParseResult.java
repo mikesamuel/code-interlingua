@@ -14,12 +14,19 @@ import com.mikesamuel.cil.ast.NodeType;
 public class ParseResult {
   /** A summary of the result. */
   public final Synopsis synopsis;
+  /**
+   * True if there is a {@link #next} state and its output might not have the
+   * start state's output as a prefix.
+   */
+  public final boolean wroteBack;
   /** LR exclusions whose failure contributed to this result. */
   public final ImmutableSet<NodeType> lrExclusionsTriggered;
 
   private ParseResult(
-      Synopsis synopsis, ImmutableSet<NodeType> lrExclusionsTriggered) {
+      Synopsis synopsis, boolean wroteBack,
+      ImmutableSet<NodeType> lrExclusionsTriggered) {
     this.synopsis = synopsis;
+    this.wroteBack = wroteBack;
     this.lrExclusionsTriggered = lrExclusionsTriggered;
   }
 
@@ -30,12 +37,6 @@ public class ParseResult {
      * the {@link RatPack}.
      */
     FAILURE,
-
-    /**
-     * Failed in part due to a LR exclusion.
-     * @see LeftRecursion#stageForProductionAt
-     */
-    FAILURE_DUE_TO_LR_EXCLUSION,
 
     /** Indicates the parse operation passed and there is a next state. */
     SUCCESS,
@@ -66,7 +67,7 @@ public class ParseResult {
     boolean success =
         a.synopsis == b.synopsis && a.synopsis == Synopsis.SUCCESS;
     if (success) {
-      return success(a.next(), allLrExcl);
+      return success(a.next(), a.wroteBack || b.wroteBack, allLrExcl);
     } else {
       return failure(allLrExcl);
     }
@@ -78,27 +79,28 @@ public class ParseResult {
   }
 
   private static final ParseResult FAILURE_INSTANCE =
-      new ParseResult(Synopsis.FAILURE, ImmutableSet.of());
+      new ParseResult(Synopsis.FAILURE, false, ImmutableSet.of());
 
   /** @see Synopsis#FAILURE */
   public static ParseResult failure() {
     return FAILURE_INSTANCE;
   }
 
-  /** @see Synopsis#FAILURE_DUE_TO_LR_EXCLUSION */
+  /** @see Synopsis#FAILURE */
   public static ParseResult failure(Set<NodeType> exclusionsTriggered) {
     if (exclusionsTriggered.isEmpty()) {
       return FAILURE_INSTANCE;
     }
     return new ParseResult(
-        Synopsis.FAILURE_DUE_TO_LR_EXCLUSION,
+        Synopsis.FAILURE, false,
         Sets.immutableEnumSet(exclusionsTriggered));
   }
 
   /** @see Synopsis#SUCCESS */
   public static ParseResult success(
-      ParseState after, Iterable<NodeType> lrExclusionsTriggered) {
-    return new Pass(after, lrExclusionsTriggered);
+      ParseState after, boolean wroteBack,
+      Iterable<NodeType> lrExclusionsTriggered) {
+    return new Pass(after, wroteBack, lrExclusionsTriggered);
   }
 
 
@@ -106,8 +108,12 @@ public class ParseResult {
     final ParseState next;
 
     @SuppressWarnings("synthetic-access")
-    Pass(ParseState next, Iterable<NodeType> lrExclusionsTriggereed) {
-      super(Synopsis.SUCCESS, Sets.immutableEnumSet(lrExclusionsTriggereed));
+    Pass(
+        ParseState next, boolean wroteBack,
+        Iterable<NodeType> lrExclusionsTriggereed) {
+      super(
+          Synopsis.SUCCESS, wroteBack,
+          Sets.immutableEnumSet(lrExclusionsTriggereed));
       this.next = Preconditions.checkNotNull(next);
     }
 
