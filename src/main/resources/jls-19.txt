@@ -243,8 +243,8 @@ Literal:
 // 4. Types, Values, and Variables
 (chapter=Type)
 Type:
-     PrimitiveType
      ReferenceType
+     PrimitiveType
 PrimitiveType:
      {Annotation} NumericType
      {Annotation} "boolean"
@@ -437,8 +437,8 @@ VariableInitializer:
      Expression
      ArrayInitializer
 UnannType:
-     UnannPrimitiveType
      UnannReferenceType
+     UnannPrimitiveType
 UnannPrimitiveType:
      NumericType
      "boolean"
