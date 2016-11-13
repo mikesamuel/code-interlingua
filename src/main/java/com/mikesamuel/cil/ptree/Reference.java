@@ -140,7 +140,8 @@ final class Reference extends PTParSer {
           System.err.println(indent() + "Using cached success for " + nodeType);
         }
         return ParseResult.success(
-            cachedParse.apply(state), false, ImmutableSet.of());
+            cachedParse.apply(state),
+            ParseResult.NO_WRITE_BACK_RESTRICTION, ImmutableSet.of());
       } else {
         if (DEBUG) {
           System.err.println(indent() + "Using cached failure for " + nodeType);
@@ -160,7 +161,7 @@ final class Reference extends PTParSer {
         }
         return ParseResult.success(
             state.appendOutput(MatchEvent.leftRecursionSuffixEnd(nodeType)),
-            false,
+            ParseResult.NO_WRITE_BACK_RESTRICTION,
             // Checked to make sure that the growing does not accidentally take
             // a non-left recursing path.
             Sets.immutableEnumSet(nodeType)
@@ -194,7 +195,7 @@ final class Reference extends PTParSer {
         state, lr, err, LeftRecursion.Stage.SEEDING,
         allExclusionsTriggered);
     allExclusionsTriggered.addAll(result.lrExclusionsTriggered);
-    boolean wroteBack = result.wroteBack;
+    int writeBack = result.writeBack;
 
     boolean wasLrTriggered = allExclusionsTriggered.remove(nodeType);
 
@@ -234,7 +235,7 @@ final class Reference extends PTParSer {
               break grow_the_seed;
             }
             ParseState next = growResult.next();
-            wroteBack |= growResult.wroteBack;
+            writeBack = Math.min(writeBack, growResult.writeBack);
             if (next.index == grown.index) {
               // no progress made.
               break grow_the_seed;
@@ -250,12 +251,12 @@ final class Reference extends PTParSer {
       // TODO: do we need to reapply the postcondition here?
       result = ParseResult.success(
           grown.withOutput(rewriter.rewrite(grown.output)),
-          wroteBack,
+          writeBack,
           allExclusionsTriggered);
     }
 
     boolean canCache;
-    if (wroteBack) {
+    if (writeBack <= state.index) {
       canCache = false;
     } else {
       canCache = true;
@@ -280,7 +281,8 @@ final class Reference extends PTParSer {
               indent() + "Passing " + nodeType
               + " @ " + state.index + " due to cached result");
           return ParseResult.success(
-              e.apply(state), false, allExclusionsTriggered);
+              e.apply(state), ParseResult.NO_WRITE_BACK_RESTRICTION,
+              allExclusionsTriggered);
         }
         if (canCache) {
           state.input.ratPack.cacheFailure(state.index, nodeType);
@@ -301,7 +303,7 @@ final class Reference extends PTParSer {
               indent() + "Pass " + nodeType + " @ " + state.index
               + " -> " + next.index);
         }
-        return ParseResult.success(next, wroteBack, allExclusionsTriggered);
+        return ParseResult.success(next, writeBack, allExclusionsTriggered);
     }
     throw new AssertionError(result.synopsis);
   }
@@ -337,7 +339,7 @@ final class Reference extends PTParSer {
               if (postcond.apply(afterVariant.output)) {
                 return ParseResult.success(
                     afterVariant,
-                    result.wroteBack, result.lrExclusionsTriggered);
+                    result.writeBack, result.lrExclusionsTriggered);
               } else {
                 failureExclusionsTriggered.addAll(result.lrExclusionsTriggered);
                 continue;

@@ -65,7 +65,7 @@ final class Literal extends PTParSer {
           (state
               .advance(text.length())
               .appendOutput(MatchEvent.token(text, state.index))),
-          false,
+          ParseResult.NO_WRITE_BACK_RESTRICTION,
           ImmutableSet.of());
     }
     err.error(state, "Expected `" + text + "`");

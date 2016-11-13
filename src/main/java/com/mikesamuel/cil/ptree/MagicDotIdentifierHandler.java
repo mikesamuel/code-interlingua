@@ -94,7 +94,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
                   case SUCCESS:
                     return ParseResult.success(
                         borrowResult.next(),
-                        true,
+                        prevTok.index,
                         ParseResult.union(
                             failure.lrExclusionsTriggered,
                             borrowResult.lrExclusionsTriggered));

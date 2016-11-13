@@ -15,18 +15,22 @@ public class ParseResult {
   /** A summary of the result. */
   public final Synopsis synopsis;
   /**
-   * True if there is a {@link #next} state and its output might not have the
-   * start state's output as a prefix.
+   * If there is a {@link #next} state, then this is an index such that
+   * all events produced by parsing input up to the index on the start state
+   * also appear as a prefix of the events on the next state.
+   * <p>
+   * If there is no next state or the start state events are a prefix of the
+   * next state events, then {@link #NO_WRITE_BACK_RESTRICTION} is appropriate.
    */
-  public final boolean wroteBack;
+  public final int writeBack;
   /** LR exclusions whose failure contributed to this result. */
   public final ImmutableSet<NodeType> lrExclusionsTriggered;
 
   private ParseResult(
-      Synopsis synopsis, boolean wroteBack,
+      Synopsis synopsis, int writeBack,
       ImmutableSet<NodeType> lrExclusionsTriggered) {
     this.synopsis = synopsis;
-    this.wroteBack = wroteBack;
+    this.writeBack = writeBack;
     this.lrExclusionsTriggered = lrExclusionsTriggered;
   }
 
@@ -67,7 +71,10 @@ public class ParseResult {
     boolean success =
         a.synopsis == b.synopsis && a.synopsis == Synopsis.SUCCESS;
     if (success) {
-      return success(a.next(), a.wroteBack || b.wroteBack, allLrExcl);
+      return success(
+          a.next(),
+          Math.min(a.writeBack, b.writeBack),
+          allLrExcl);
     } else {
       return failure(allLrExcl);
     }
@@ -78,8 +85,13 @@ public class ParseResult {
     return synopsis.name();
   }
 
-  private static final ParseResult FAILURE_INSTANCE =
-      new ParseResult(Synopsis.FAILURE, false, ImmutableSet.of());
+  /**
+   * {@link Integer#MAX_VALUE} per {@link ParseResult#writeBack}.
+   */
+  public static final int NO_WRITE_BACK_RESTRICTION = Integer.MAX_VALUE;
+
+  private static final ParseResult FAILURE_INSTANCE = new ParseResult(
+      Synopsis.FAILURE, NO_WRITE_BACK_RESTRICTION, ImmutableSet.of());
 
   /** @see Synopsis#FAILURE */
   public static ParseResult failure() {
@@ -92,13 +104,16 @@ public class ParseResult {
       return FAILURE_INSTANCE;
     }
     return new ParseResult(
-        Synopsis.FAILURE, false,
+        Synopsis.FAILURE, NO_WRITE_BACK_RESTRICTION,
         Sets.immutableEnumSet(exclusionsTriggered));
   }
 
-  /** @see Synopsis#SUCCESS */
+  /**
+   * @param wroteBack per {@link ParseResult#writeBack}.
+   * @see Synopsis#SUCCESS
+   */
   public static ParseResult success(
-      ParseState after, boolean wroteBack,
+      ParseState after, int wroteBack,
       Iterable<NodeType> lrExclusionsTriggered) {
     return new Pass(after, wroteBack, lrExclusionsTriggered);
   }
@@ -109,7 +124,7 @@ public class ParseResult {
 
     @SuppressWarnings("synthetic-access")
     Pass(
-        ParseState next, boolean wroteBack,
+        ParseState next, int wroteBack,
         Iterable<NodeType> lrExclusionsTriggereed) {
       super(
           Synopsis.SUCCESS, wroteBack,

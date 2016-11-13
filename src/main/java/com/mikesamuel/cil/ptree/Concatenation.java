@@ -104,7 +104,7 @@ class Concatenation extends PTParSer {
       ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
     ParseState state = start;
     EnumSet<NodeType> lrExclusionsTriggered = EnumSet.noneOf(NodeType.class);
-    boolean wroteBack = false;
+    int writeBack = ParseResult.NO_WRITE_BACK_RESTRICTION;
     for (ParSerable p : ps) {
       ParSer parser = p.getParSer();
       ParseResult result = parser.parse(state, lr, err);
@@ -114,13 +114,13 @@ class Concatenation extends PTParSer {
           return ParseResult.failure(lrExclusionsTriggered);
         case SUCCESS:
           state = result.next();
-          wroteBack |= result.wroteBack;
+          writeBack = Math.min(writeBack, result.writeBack);
           continue;
       }
       throw new AssertionError(result.synopsis);
     }
     return ParseResult.success(
-        state, wroteBack, Sets.immutableEnumSet(lrExclusionsTriggered));
+        state, writeBack, Sets.immutableEnumSet(lrExclusionsTriggered));
   }
 
   @Override

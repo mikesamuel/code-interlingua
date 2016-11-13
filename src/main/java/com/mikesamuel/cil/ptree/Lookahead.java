@@ -92,7 +92,8 @@ final class Lookahead extends PTParSer {
         switch (valence) {
           case NEGATIVE:
             return ParseResult.success(
-                state, false, result.lrExclusionsTriggered);
+                state, ParseResult.NO_WRITE_BACK_RESTRICTION,
+                result.lrExclusionsTriggered);
           case POSITIVE:
             return result;
         }
@@ -102,7 +103,8 @@ final class Lookahead extends PTParSer {
           case POSITIVE:
             // Don't advance the index or preserve outputs.
             return ParseResult.success(
-                state, false, result.lrExclusionsTriggered);
+                state, ParseResult.NO_WRITE_BACK_RESTRICTION,
+                result.lrExclusionsTriggered);
           case NEGATIVE:
             return ParseResult.failure(result.lrExclusionsTriggered);
         }
