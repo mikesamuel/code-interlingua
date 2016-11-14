@@ -494,9 +494,7 @@ def process_grammar(
   /**
    * <pre>%(jsdoc)s</pre>
    */
-  %(name)s(
-      %(base_type)s, %(name)sNode.Variant.class,
-      PTree.nodeWrapper(%(name_str)s, %(name)sNode.Variant.class)),
+  %(name)s(%(base_type)s, %(name)sNode.Variant.class),
 ''' % {
     'jsdoc': _jsdoc_of(_tokens_to_text(prod['toks']), prefix = '   * '),
     'name': prod['name'],
@@ -530,11 +528,10 @@ public enum NodeType implements ParSerable {
 
   NodeType(
       Class<? extends BaseNode> nodeBaseType,
-      Class<? extends Enum<? extends NodeVariant>> variantType,
-      ParSerable parSerable) {
+      Class<? extends Enum<? extends NodeVariant>> variantType) {
     this.nodeBaseType = nodeBaseType;
     this.variantType = variantType;
-    this.parSerable = parSerable;
+    this.parSerable = PTree.nodeWrapper(this);
   }
 
   /**
@@ -1306,73 +1303,6 @@ public final class %(node_class_name)s extends %(base_node_class)s {
 
     for_each_prod(write_node_class_for_production)
 
-    # Write out the shortest (depth-first) LR paths so that our LR
-    # handling code in the parser can use that to "grow the seed"
-    # properly based on the variant taken.
-    def write_lr_chains():
-        lr_table_puts = []
-        indent = '        '
-
-        def java_variant(pn, vn):
-            return '%sNode.Variant.%s' % (pn, vn)
-        for (((pn, vn), callee_name), chain) in sorted(
-                shortest_left_call_loop_map.iteritems()):
-            lr_table_puts.append(
-                '.put(%s, NodeType.%s, ImmutableList.of(%s))' % (
-                    java_variant(pn, vn),
-                    callee_name,
-                    ', '.join([java_variant(cpn, cvn)
-                               for (cpn, cvn) in chain])))
-
-        empty_matcher_args = ', '.join(
-            ['NodeType.%s' % pn for pn in empty_matching])
-
-        emit_java_file(
-            'LeftRecursivePaths',
-            '''
-package %(package)s;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableTable;
-import com.google.common.collect.ImmutableSet;
-
-/**
- * Maps left-recursive variants to the shortest (depth-first)
- * cycle through the Grammar reference graph.
- */
-@javax.annotation.Generated(%(generator)s)
-public final class LeftRecursivePaths {
-
-  /**
-   * Maps variants to the shortest left-recursive cycles starting at that
-   * variant.
-   */
-  public static final
-  ImmutableTable<NodeVariant, NodeType, ImmutableList<NodeVariant>> LR_CYCLES;
-
-  static {
-    LR_CYCLES =
-    ImmutableTable.<NodeVariant, NodeType, ImmutableList<NodeVariant>>builder()
-%(indent)s%(lr_table_puts)s
-        .build();
-  }
-
-  /**
-   * Productions that can match the empty string.
-   */
-  public static final ImmutableSet<NodeType> EPSILON_MATCHERS =
-      ImmutableSet.of(%(empty_matcher_args)s);
-}
-''' % {
-    'package': _JAVA_PACKAGE,
-    'generator': generator,
-    'indent': indent,
-    'lr_table_puts': ('\n%s' % indent).join(lr_table_puts),
-    'empty_matcher_args': empty_matcher_args,
-})
-
-    write_lr_chains()
-
     def write_literal_tokens():
         keywords = []
         punctuation = []
@@ -1426,6 +1356,58 @@ public final class TokenStrings {
 })
 
     write_literal_tokens()
+
+    def write_identifier_wrappers():
+        wrappers = set(('Identifier',))
+        def find_wrapper(c, p):
+            variants = p['variants']
+            if len(variants) == 1:
+                v = variants[0]
+                pt = v['ptree']
+                if len(pt) == 1:
+                    pt0 = pt[0]
+                    if pt0['name'] == 'ref' and pt0['pleaf'][0] == 'Identifier':
+                        wrappers.add(p['name'])
+
+        for_each_prod(find_wrapper)
+
+        emit_java_file(
+            'IdentifierWrappers',
+            '''
+package %(package)s;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+import java.util.EnumSet;
+
+/**
+ * The set of productions which just decorate {@link NodeType#Identifier}.
+ */
+public final class IdentifierWrappers {
+
+  private IdentifierWrappers() {
+    // Provides static API
+  }
+
+  // We key off the classes instead of the node types to avoid class-initialization cycles.
+  private static final ImmutableSet<NodeType> IDENT_WRAPPERS =
+      Sets.immutableEnumSet(EnumSet.of(
+%(wrappers)s));
+
+  /**
+   * True iff the given nodetype has a single variant that simply delegate to Identifier.
+   */
+  public static boolean isIdentifierWrapper(NodeType nodeType) {
+    return IDENT_WRAPPERS.contains(nodeType);
+  }
+}
+''' % {
+    'package': _JAVA_PACKAGE,
+    'generator': generator,
+    'wrappers': ',\n'.join('          NodeType.%s' % wrapper for wrapper in sorted(wrappers)),
+})
+
+    write_identifier_wrappers()
 
 if __name__ == '__main__':
     import argparse

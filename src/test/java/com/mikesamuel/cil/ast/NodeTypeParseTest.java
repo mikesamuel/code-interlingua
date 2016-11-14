@@ -755,7 +755,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPackageDeclarationPackageModifierPackageIdentifierDotIdentifierSem() {
     parseSanityCheck(
-        PackageDeclarationNode.Variant.PackageModifierPackageIdentifierDotIdentifierSem,
+        PackageDeclarationNode.Variant.Declaration,
         "@javax.annotations.ParametersAreNonnullByDefault package foo;"
         );
   }
@@ -920,7 +920,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testNormalClassDeclarationClassModifierClassIdentifierTypeParametersSuperclassSuperinterfacesClassBody() {
     parseSanityCheck(
-        NormalClassDeclarationNode.Variant.ClassModifierClassIdentifierTypeParametersSuperclassSuperinterfacesClassBody,
+        NormalClassDeclarationNode.Variant.Declaration,
         "abstract class AbstractC<T> extends Object implements Serializable {}"
         );
   }
@@ -1184,7 +1184,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testFieldDeclarationFieldModifierUnannTypeVariableDeclaratorListSem() {
     parseSanityCheck(
-        FieldDeclarationNode.Variant.FieldModifierUnannTypeVariableDeclaratorListSem,
+        FieldDeclarationNode.Variant.Declaration,
         "private final int x, y = 2, z;"
         );
   }
@@ -1689,7 +1689,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodDeclaratorIdentifierLpFormalParameterListRpDims() {
     parseSanityCheck(
-        MethodDeclaratorNode.Variant.IdentifierLpFormalParameterListRpDims,
+        MethodDeclaratorNode.Variant.MethodNameLpFormalParameterListRpDims,
         "foo()[]"
         );
   }
@@ -1799,7 +1799,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testReceiverParameterAnnotationUnannTypeIdentifierDotThis() {
     parseSanityCheck(
-        ReceiverParameterNode.Variant.AnnotationUnannTypeIdentifierDotThis,
+        ReceiverParameterNode.Variant.AnnotationUnannTypeSimpleTypeNameDotThis,
         "@GuardedBy(\"lockName\") Enclosing Outer.this"
         );
   }
@@ -1900,7 +1900,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testConstructorDeclarationConstructorModifierConstructorDeclaratorThrowsConstructorBody() {
     parseSanityCheck(
-        ConstructorDeclarationNode.Variant.ConstructorModifierConstructorDeclaratorThrowsConstructorBody,
+        ConstructorDeclarationNode.Variant.Declaration,
         "public Ctor(int x) throws IllegalArgumentException { this.x = x; }"
         );
   }
@@ -2032,7 +2032,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnumDeclarationClassModifierEnumIdentifierSuperinterfacesEnumBody() {
     parseSanityCheck(
-        EnumDeclarationNode.Variant.ClassModifierEnumIdentifierSuperinterfacesEnumBody,
+        EnumDeclarationNode.Variant.Declaration,
         "public enum Colors implements InappropriateUseOfEnum { Red, Blue }"
         );
   }
@@ -2065,7 +2065,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnumConstantEnumConstantModifierIdentifierLpArgumentListRpClassBody() {
     parseSanityCheck(
-        EnumConstantNode.Variant.EnumConstantModifierIdentifierLpArgumentListRpClassBody,
+        EnumConstantNode.Variant.EnumConstantModifierFieldNameLpArgumentListRpClassBody,
         "@Deprecated Foo(42) { @Override int f(int x) { return -x; }\n}"
         );
   }
@@ -2120,7 +2120,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testNormalInterfaceDeclarationInterfaceModifierInterfaceIdentifierTypeParametersExtendsInterfacesInterfaceBody() {
     parseSanityCheck(
-        NormalInterfaceDeclarationNode.Variant.InterfaceModifierInterfaceIdentifierTypeParametersExtendsInterfacesInterfaceBody,
+        NormalInterfaceDeclarationNode.Variant.Declaration,
         "interface IFace<T> {}"
         );
   }
@@ -2285,7 +2285,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testConstantDeclarationConstantModifierUnannTypeVariableDeclaratorListSem() {
     parseSanityCheck(
-        ConstantDeclarationNode.Variant.ConstantModifierUnannTypeVariableDeclaratorListSem,
+        ConstantDeclarationNode.Variant.Declaration,
         "static final int FOUR = 4, FIVE = 5, SIX = 6;"
         );
   }
@@ -2340,7 +2340,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testInterfaceMethodDeclarationInterfaceMethodModifierMethodHeaderMethodBody() {
     parseSanityCheck(
-        InterfaceMethodDeclarationNode.Variant.InterfaceMethodModifierMethodHeaderMethodBody,
+        InterfaceMethodDeclarationNode.Variant.Declaration,
         "public void foo();"
         );
   }
@@ -2417,7 +2417,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testAnnotationTypeDeclarationInterfaceModifierAtInterfaceIdentifierAnnotationTypeBody() {
     parseSanityCheck(
-        AnnotationTypeDeclarationNode.Variant.InterfaceModifierAtInterfaceIdentifierAnnotationTypeBody,
+        AnnotationTypeDeclarationNode.Variant.Declaration,
         "@interface AnnType { String text(); }"
         );
   }
@@ -2494,7 +2494,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testAnnotationTypeElementDeclarationAnnotationTypeElementModifierUnannTypeIdentifierLpRpDimsDefaultValueSem() {
     parseSanityCheck(
-        AnnotationTypeElementDeclarationNode.Variant.AnnotationTypeElementModifierUnannTypeIdentifierLpRpDimsDefaultValueSem,
+        AnnotationTypeElementDeclarationNode.Variant.Declaration,
         "String str() [] default {};"
         );
   }
@@ -2780,7 +2780,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testLocalVariableDeclarationVariableModifierUnannTypeVariableDeclaratorList() {
     parseSanityCheck(
-        LocalVariableDeclarationNode.Variant.VariableModifierUnannTypeVariableDeclaratorList,
+        LocalVariableDeclarationNode.Variant.Declaration,
         "final String s = foo(), t = bar()"
         );
   }
@@ -3049,7 +3049,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testLabeledStatementIdentifierClnStatement() {
     parseSanityCheck(
-        LabeledStatementNode.Variant.IdentifierClnStatement,
+        LabeledStatementNode.Variant.LabelClnStatement,
         "label: if (danger) panic();"
         );
   }
@@ -3060,7 +3060,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testLabeledStatementNoShortIfIdentifierClnStatementNoShortIf() {
     parseSanityCheck(
-        LabeledStatementNode.Variant.IdentifierClnStatement,
+        LabeledStatementNode.Variant.LabelClnStatement,
         "label: if (danger) { panic(); } else {}"
         );
   }
@@ -3260,7 +3260,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnumConstantNameIdentifier() {
     parseSanityCheck(
-        EnumConstantNameNode.Variant.Identifier,
+        EnumConstantNameNode.Variant.FieldName,
         "MyEnumMember"
         );
   }
@@ -3437,7 +3437,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testBreakStatementBreakIdentifierSem() {
     parseSanityCheck(
-        BreakStatementNode.Variant.BreakIdentifierSem,
+        BreakStatementNode.Variant.BreakLabelSem,
         "break out;"
         );
   }
@@ -3448,7 +3448,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testContinueStatementContinueIdentifierSem() {
     parseSanityCheck(
-        ContinueStatementNode.Variant.ContinueIdentifierSem,
+        ContinueStatementNode.Variant.ContinueLabelSem,
         "continue;"
         );
   }

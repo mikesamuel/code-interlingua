@@ -18,7 +18,6 @@ import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
-import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
@@ -28,24 +27,20 @@ import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
 
 final class Reference extends PTParSer {
-  final String name;
-  final Class<? extends Enum<? extends ParSerable>> variantClass;
-  private NodeType nodeType;
+  final NodeType nodeType;
   private ImmutableList<NodeVariant> variants;
 
-  Reference(
-      String name, Class<? extends Enum<? extends ParSerable>> variantClass) {
-    this.name = name;
-    this.variantClass = Preconditions.checkNotNull(variantClass);
+  Reference(NodeType nodeType) {
+    this.nodeType = nodeType;
   }
 
 
-  void initLazy() {
-    if (nodeType == null) {
+  private void initLazy() {
+    if (variants == null) {
       ImmutableList.Builder<NodeVariant> variantsBuilder =
           ImmutableList.builder();
       NodeType nt = null;
-      for (Enum<?> e : variantClass.getEnumConstants()) {
+      for (Enum<?> e : nodeType.getVariantType().getEnumConstants()) {
         NodeVariant nv = (NodeVariant) e;
         variantsBuilder.add(nv);
         if (nt == null) {
@@ -54,15 +49,12 @@ final class Reference extends PTParSer {
           Preconditions.checkState(nt == nv.getNodeType());
         }
       }
-      this.nodeType = Preconditions.checkNotNull(nt);
       this.variants = variantsBuilder.build();
-      Preconditions.checkState(name.equals(nodeType.name()));
     }
   }
 
   /** The production referred to. */
   public NodeType getNodeType() {
-    initLazy();
     return nodeType;
   }
 
@@ -73,7 +65,7 @@ final class Reference extends PTParSer {
 
   @Override
   public String toString() {
-    return name;
+    return nodeType.name();
   }
 
   @Override

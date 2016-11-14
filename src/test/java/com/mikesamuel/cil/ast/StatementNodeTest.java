@@ -5,7 +5,7 @@ import static com.mikesamuel.cil.ast.MatchEvent.pop;
 import static com.mikesamuel.cil.ast.MatchEvent.push;
 
 @SuppressWarnings("javadoc")
-public final class StatementTest extends AbstractParSerTestCase {
+public final class StatementNodeTest extends AbstractParSerTestCase {
 
   private static MatchEvent token(String s) {
     return MatchEvent.token(s, -1);
@@ -87,7 +87,7 @@ public final class StatementTest extends AbstractParSerTestCase {
         token("else"),
 
         push(StatementNode.Variant.BreakStatement),
-        push(BreakStatementNode.Variant.BreakIdentifierSem),
+        push(BreakStatementNode.Variant.BreakLabelSem),
         token("break"),
         token(";"),
         pop(),
@@ -153,7 +153,7 @@ public final class StatementTest extends AbstractParSerTestCase {
         token("else"),
 
         push(StatementNode.Variant.BreakStatement),
-        push(BreakStatementNode.Variant.BreakIdentifierSem),
+        push(BreakStatementNode.Variant.BreakLabelSem),
         token("break"),
         token(";"),
         pop(),
@@ -220,8 +220,10 @@ public final class StatementTest extends AbstractParSerTestCase {
         push(ExpressionNode.Variant.ConditionalExpression),
         push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.MethodInvocation),
+        push(MethodNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
         content("z"),
+        pop(),
         pop(),
         token("("),
         token(")"),
@@ -241,7 +243,7 @@ public final class StatementTest extends AbstractParSerTestCase {
         token("else"),
 
         push(StatementNode.Variant.BreakStatement),
-        push(BreakStatementNode.Variant.BreakIdentifierSem),
+        push(BreakStatementNode.Variant.BreakLabelSem),
         token("break"),
         token(";"),
         pop(),
@@ -255,5 +257,96 @@ public final class StatementTest extends AbstractParSerTestCase {
 
         pop(),
         pop());
+  }
+
+  @Test
+  public void testLabeledLoop() {
+    assertParsePasses(
+        NodeType.Statement,
+        "label: do if (c) break label; while(m());",
+        push(StatementNode.Variant.LabeledStatement),
+        push(LabeledStatementNode.Variant.LabelClnStatement),
+
+        push(LabelNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("label"),
+        pop(),
+        pop(),
+
+        token(":"),
+
+        push(StatementNode.Variant.DoStatement),
+        push(DoStatementNode.Variant.DoStatementWhileLpExpressionRpSem),
+
+        token("do"),
+
+        push(StatementNode.Variant.IfStatement),
+        push(IfStatementNode.Variant.IfLpExpressionRpStatementNotElse),
+
+        token("if"),
+        token("("),
+
+        push(ExpressionNode.Variant.ConditionalExpression),
+        push(PrimaryNode.Variant.Ambiguous),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        push(ContextFreeNameNode.Variant.Name),
+        push(IdentifierNode.Variant.Builtin),
+        content("c"),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
+
+        token(")"),
+
+        push(StatementNode.Variant.BreakStatement),
+        push(BreakStatementNode.Variant.BreakLabelSem),
+
+        token("break"),
+
+        push(LabelNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("label"),
+        pop(),
+        pop(),
+
+        token(";"),
+
+        pop(),
+        pop(),
+
+        pop(),
+        pop(),
+
+        token("while"),
+        token("("),
+
+        push(ExpressionNode.Variant.ConditionalExpression),
+        push(PrimaryNode.Variant.ExpressionAtomPostOp),
+        push(ExpressionAtomNode.Variant.MethodInvocation),
+
+        push(MethodNameNode.Variant.Identifier),
+        push(IdentifierNode.Variant.Builtin),
+        content("m"),
+        pop(),
+        pop(),
+
+        token("("),
+        token(")"),
+
+        pop(),
+        pop(),
+        pop(),
+
+        token(")"),
+        token(";"),
+
+        pop(),
+        pop(),
+
+        pop(),
+        pop());
+
   }
 }

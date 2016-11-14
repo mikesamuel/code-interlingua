@@ -7,6 +7,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.mikesamuel.cil.ast.IdentifierWrappers;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
@@ -57,9 +58,7 @@ class Concatenation extends PTParSer {
     for (ParSerable p : els) {
       if (p instanceof Concatenation) {
         flattenOnto(flat, ((Concatenation) p).ps);
-      } else if (p == NodeType.Identifier
-                 || (p instanceof Reference
-                     && "Identifier".equals(((Reference) p).name))) {
+      } else if (isIdentifierWrapper(p)) {
         // Group ("." Identifier) into a MagicDotIdentifier clause to allow
         // just enough back-tracking to deal with left-recursive name
         // productions.
@@ -146,6 +145,17 @@ class Concatenation extends PTParSer {
       state = next.get();
     }
     return Optional.of(state);
+  }
+
+
+  private static boolean isIdentifierWrapper(ParSerable ps) {
+    if (ps instanceof NodeType) {
+      return IdentifierWrappers.isIdentifierWrapper((NodeType) ps);
+    } else {
+      ParSer p = ps.getParSer();
+      return p instanceof Reference &&
+          IdentifierWrappers.isIdentifierWrapper(((Reference) p).getNodeType());
+    }
   }
 
   @Override

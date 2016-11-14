@@ -3,7 +3,7 @@ package com.mikesamuel.cil.ptree;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.parser.ParSerable;
-import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.NodeType;
 
 /**
  * ParSers that work based on a JLS style grammar.
@@ -37,10 +37,8 @@ public final class PTree {
   /**
    * A parSer that tries each variant in turn.
    */
-  public static ParSerable nodeWrapper(
-      final String name,
-      final Class<? extends Enum<? extends NodeVariant>> variantClass) {
-    return new Reference(name, variantClass);
+  public static ParSerable nodeWrapper(NodeType nodeType) {
+    return new Reference(nodeType);
   }
 
   /**

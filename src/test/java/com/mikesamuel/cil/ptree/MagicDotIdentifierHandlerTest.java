@@ -8,6 +8,7 @@ import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.ContextFreeNamesNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.MethodInvocationNode;
+import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageDeclarationNode;
 import com.mikesamuel.cil.ast.PostOpNode;
@@ -71,8 +72,7 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
     assertParsePasses(
         NodeType.PackageDeclaration,
         "package com.foo.bar;",
-        /**/push(PackageDeclarationNode.Variant
-                .PackageModifierPackageIdentifierDotIdentifierSem),
+        /**/push(PackageDeclarationNode.Variant.Declaration),
         /*..*/token("package", -1),
         // Actually n-ary for no apparent reason so should not trigger.
         /*..*/push(IdentifierNode.Variant.Builtin),
@@ -118,8 +118,10 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
         /*....*/pop(),
         /*....*/push(PostOpNode.Variant.MethodInvocation),
         /*......*/token(".", -1),
-        /*......*/push(IdentifierNode.Variant.Builtin),
-        /*........*/content("method_name", -1),
+        /*......*/push(MethodNameNode.Variant.Identifier),
+        /*........*/push(IdentifierNode.Variant.Builtin),
+        /*..........*/content("method_name", -1),
+        /*........*/pop(),
         /*......*/pop(),
         /*......*/token("(", -1),
         /*......*/token(")", -1),
@@ -177,8 +179,10 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
         /*........*/pop(),
         /*........*/token(">", -1),
         /*......*/pop(),
-        /*......*/push(IdentifierNode.Variant.Builtin),
-        /*........*/content("method_name", -1),
+        /*......*/push(MethodNameNode.Variant.Identifier),
+        /*........*/push(IdentifierNode.Variant.Builtin),
+        /*..........*/content("method_name", -1),
+        /*........*/pop(),
         /*......*/pop(),
         /*......*/token("(", -1),
         /*......*/token(")", -1),

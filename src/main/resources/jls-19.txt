@@ -311,6 +311,16 @@ WildcardBounds:
 
 // Names
 (chapter=Name)
+FieldName:
+     Identifier
+Label:
+     Identifier
+LocalName:
+     Identifier
+MethodName:
+     Identifier
+SimpleTypeName:
+     Identifier
 TypeName:
      !"@" ContextFreeNames
      PackageOrTypeName "." Identifier
@@ -322,8 +332,6 @@ PackageOrTypeName:
 ExpressionName:
      !"@" ContextFreeNames
      AmbiguousName "." Identifier
-     Identifier
-MethodName:
      Identifier
 PackageName:
      !"@" ContextFreeNames
@@ -356,8 +364,8 @@ ContextFreeName:
 CompilationUnit:
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
-     // TODO: Why is the package name here right-associative and only here?
-     {PackageModifier} "package" Identifier {"." Identifier} ";"
+     // TODO: Why is the package name here not left-associative as it is under the names chapter?
+     {PackageModifier} "package" Identifier {"." Identifier} ";" (@name=Declaration)
 PackageModifier:
      Annotation
 ImportDeclaration:
@@ -384,7 +392,7 @@ ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
 NormalClassDeclaration:
-     {ClassModifier} "class" Identifier [TypeParameters] [Superclass] [Superinterfaces] ClassBody
+     {ClassModifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
      "public"
@@ -418,7 +426,7 @@ ClassMemberDeclaration:
      InterfaceDeclaration
      ";"
 FieldDeclaration:
-     {FieldModifier} UnannType VariableDeclaratorList ";"
+     {FieldModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
      Annotation
      "public"
@@ -483,7 +491,7 @@ Result:
      UnannType
      "void"
 MethodDeclarator:
-     Identifier "(" [FormalParameterList] ")" [Dims]
+     MethodName "(" [FormalParameterList] ")" [Dims]
 FormalParameterList:
      FormalParameters ["," LastFormalParameter]
      LastFormalParameter
@@ -499,7 +507,7 @@ LastFormalParameter:
      {VariableModifier} UnannType {Annotation} "..." VariableDeclaratorId
      FormalParameter
 ReceiverParameter:
-     {Annotation} UnannType [Identifier "."] "this"
+     {Annotation} UnannType [SimpleTypeName "."] "this"
 Throws:
      "throws" ExceptionTypeList
 ExceptionTypeList:
@@ -515,7 +523,7 @@ InstanceInitializer:
 StaticInitializer:
      "static" Block
 ConstructorDeclaration:
-     {ConstructorModifier} ConstructorDeclarator [Throws] ConstructorBody
+     {ConstructorModifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
 ConstructorModifier:
      Annotation
      "public"
@@ -523,8 +531,6 @@ ConstructorModifier:
      "private"
 ConstructorDeclarator:
      [TypeParameters] SimpleTypeName "(" [FormalParameterList] ")"
-SimpleTypeName:
-     Identifier
 ConstructorBody:
      "{" [ExplicitConstructorInvocation] [BlockStatements] "}"
 ExplicitConstructorInvocation:
@@ -532,13 +538,13 @@ ExplicitConstructorInvocation:
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
 EnumDeclaration:
-     {ClassModifier} "enum" Identifier [Superinterfaces] EnumBody
+     {ClassModifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
 EnumBody:
      "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
 EnumConstantList:
      EnumConstant {"," EnumConstant}
 EnumConstant:
-     {EnumConstantModifier} Identifier ["(" [ArgumentList] ")"] [ClassBody]
+     {EnumConstantModifier} FieldName ["(" [ArgumentList] ")"] [ClassBody]
 EnumConstantModifier:
      Annotation
 EnumBodyDeclarations:
@@ -550,7 +556,7 @@ InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
 NormalInterfaceDeclaration:
-     {InterfaceModifier} "interface" Identifier [TypeParameters] [ExtendsInterfaces] InterfaceBody
+     {InterfaceModifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
 InterfaceModifier:
      Annotation
      "public"
@@ -570,14 +576,14 @@ InterfaceMemberDeclaration:
      InterfaceDeclaration
      ";"
 ConstantDeclaration:
-     {ConstantModifier} UnannType VariableDeclaratorList ";"
+     {ConstantModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 ConstantModifier:
      Annotation
      "public"
      "static"
      "final"
 InterfaceMethodDeclaration:
-     {InterfaceMethodModifier} MethodHeader MethodBody
+     {InterfaceMethodModifier} MethodHeader MethodBody (@name=Declaration)
 InterfaceMethodModifier:
      Annotation
      "public"
@@ -586,7 +592,7 @@ InterfaceMethodModifier:
      "static"
      "strictfp"
 AnnotationTypeDeclaration:
-     {InterfaceModifier} "@" "interface" Identifier AnnotationTypeBody
+     {InterfaceModifier} "@" "interface" SimpleTypeName AnnotationTypeBody (@name=Declaration)
 AnnotationTypeBody:
      "{" {AnnotationTypeMemberDeclaration} "}"
 AnnotationTypeMemberDeclaration:
@@ -596,7 +602,7 @@ AnnotationTypeMemberDeclaration:
      InterfaceDeclaration
      ";"
 AnnotationTypeElementDeclaration:
-     {AnnotationTypeElementModifier} UnannType Identifier "(" ")" [Dims] [DefaultValue] ";"
+     {AnnotationTypeElementModifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
 AnnotationTypeElementModifier:
      Annotation
      "public"
@@ -646,7 +652,7 @@ BlockStatement:
 LocalVariableDeclarationStatement:
      LocalVariableDeclaration ";"
 LocalVariableDeclaration:
-     {VariableModifier} UnannType VariableDeclaratorList
+     {VariableModifier} UnannType VariableDeclaratorList (@name=Declaration)
 Statement:
      Block
      EmptyStatement
@@ -667,7 +673,7 @@ Statement:
 EmptyStatement:
      ";"
 LabeledStatement:
-     Identifier ":" Statement
+     Label ":" Statement
 ExpressionStatement:
      StatementExpression ";"
 StatementExpression:
@@ -694,7 +700,7 @@ SwitchLabel:
      "case" EnumConstantName ":"
      "default" ":"
 EnumConstantName:
-     Identifier
+     FieldName
 WhileStatement:
      "while" "(" Expression ")" Statement
 DoStatement:
@@ -714,9 +720,9 @@ StatementExpressionList:
 EnhancedForStatement:
      "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":" Expression ")" Statement
 BreakStatement:
-     "break" [Identifier] ";"
+     "break" [Label] ";"
 ContinueStatement:
-     "continue" [Identifier] ";"
+     "continue" [Label] ";"
 ReturnStatement:
      "return" [Expression] ";"
 ThrowStatement:
@@ -757,10 +763,10 @@ ExpressionAtom:
      [TypeName "."] "super" !"[" !!UsePrefix  (@name=Super)
      ClassType "::" [TypeArguments] "new"  (@name=ConstructorReference)
      ArrayType "::" "new"  (@name=ArrayConstructorReference)
-     Identifier "(" [ArgumentList] ")" (@name=MethodInvocation)
+     MethodName "(" [ArgumentList] ")" (@name=MethodInvocation)
      ContextFreeNames
-     Identifier !!UsePrefix  (@name=Local)
-     Identifier !!UsePrefix  (@name=FreeField)
+     LocalName !!UsePrefix  (@name=Local)
+     FieldName !!UsePrefix  (@name=FreeField)
      TypeName !!"."  (@name=StaticMember)
      ReferenceType !!"::"  (@name=StaticReference)
      !CastExpression "(" Expression ")"  (@name=Parenthesized)
@@ -781,7 +787,7 @@ DotKeywordDimsOrCtorRef:
      Dims
      "::" [TypeArguments] "new"
 SimpleCallPrefix:
-     Identifier "("
+     MethodName "("
 MethodInvocation:
      Primary (@postcond=Postconds.Primary.PostOp.MethodInvocation) (@name=ExplicitCallee)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
@@ -807,10 +813,10 @@ TypeArgumentsOrDiamond:
 PostOpFieldAccess:
      PostOp (@postcond=Postconds.PostOp.FieldAccess)
 PostOp:
-     "." [TypeArguments] Identifier "(" [ArgumentList] ")"  (@name=MethodInvocation)
-     "::" [TypeArguments] Identifier  (@name=MethodReference)
+     "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
+     "::" [TypeArguments] MethodName  (@name=MethodReference)
      "." UnqualifiedClassInstanceCreationExpression  (@name=InnerClassCreation)
-     "." Identifier  (@name=FieldAccess)
+     "." FieldName  (@name=FieldAccess)
      "[" Expression "]"  (@name=ArrayAccess)
 ArgumentList:
      Expression {"," Expression}
