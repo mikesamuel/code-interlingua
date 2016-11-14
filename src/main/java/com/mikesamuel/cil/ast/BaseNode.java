@@ -11,14 +11,16 @@ import com.mikesamuel.cil.parser.SourcePosition;
  * A node in a Java AST.
  */
 public abstract class BaseNode {
+  private final ImmutableList<NodeVariant> anonVariants;
   private final NodeVariant variant;
   private final ImmutableList<BaseNode> children;
   private final @Nullable String literalValue;
   private @Nullable SourcePosition sourcePosition;
 
   BaseNode(
-      NodeVariant variant,
+      Iterable<? extends NodeVariant> anonVariants, NodeVariant variant,
       Iterable<? extends BaseNode> children, @Nullable String literalValue) {
+    this.anonVariants = ImmutableList.copyOf(anonVariants);
     this.variant = Preconditions.checkNotNull(variant);
 
     NodeType type = variant.getNodeType();
@@ -26,6 +28,17 @@ public abstract class BaseNode {
 
     this.children = ImmutableList.copyOf(children);
     this.literalValue = literalValue;
+  }
+
+  /**
+   * Any anonymous variants that are on the parse path between this node's
+   * parent and it.  These correspond to non-terminals that did not contribute
+   * ancestor nodes to the parse tree.
+   *
+   * @see NodeVariant#isAnon
+   */
+  public ImmutableList<NodeVariant> getAnonVariants() {
+    return anonVariants;
   }
 
   /** The particular variant within the production. */
@@ -82,6 +95,8 @@ public abstract class BaseNode {
   public static abstract
   class Builder<N extends BaseNode, V extends NodeVariant> {
     private final V newNodeVariant;
+    private final ImmutableList.Builder<NodeVariant> anonVariants =
+        ImmutableList.builder();
     private final ImmutableList.Builder<BaseNode> newNodeChildren =
         ImmutableList.builder();
     private Optional<String> newLiteralValue = Optional.absent();
@@ -92,6 +107,10 @@ public abstract class BaseNode {
 
     protected V getVariant() {
       return newNodeVariant;
+    }
+
+    protected ImmutableList<NodeVariant> getAnonVariants() {
+      return anonVariants.build();
     }
 
     protected ImmutableList<BaseNode> getChildren() {

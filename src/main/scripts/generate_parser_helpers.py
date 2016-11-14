@@ -1232,8 +1232,9 @@ package %(package)s;
 public final class %(node_class_name)s extends %(base_node_class)s {
 
   private %(node_class_name)s(
-      Variant v, Iterable<? extends BaseNode> children, String literalValue) {
-    super(v, children, literalValue);
+      Iterable<? extends NodeVariant> anons, Variant v,
+      Iterable<? extends BaseNode> children, String literalValue) {
+    super(anons, v, children, literalValue);
   }
 
   /** Mutable builder type. */
@@ -1244,7 +1245,7 @@ public final class %(node_class_name)s extends %(base_node_class)s {
       @SuppressWarnings("synthetic-access")
       public %(node_class_name)s build() {
         return new %(node_class_name)s(
-            getVariant(), getChildren(), getLiteralValue());
+            getAnonVariants(), getVariant(), getChildren(), getLiteralValue());
       }
     };
   }

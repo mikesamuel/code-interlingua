@@ -7,8 +7,9 @@ package com.mikesamuel.cil.ast;
 public abstract class BaseExpressionNode extends BaseNode {
 
   BaseExpressionNode(
-      NodeVariant variant, Iterable<? extends BaseNode> children,
+      Iterable<? extends NodeVariant> anonVariants, NodeVariant variant,
+      Iterable<? extends BaseNode> children,
       String value) {
-    super(variant, children, value);
+    super(anonVariants, variant, children, value);
   }
 }
