@@ -358,7 +358,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testClassOrInterfaceTypeClassType() {
     parseSanityCheck(
         ClassOrInterfaceTypeNode.Variant.ClassType,
-        "@Nonnull String"
+        "@Nonnull String",
+        Fuzz.SAME_VARIANT
         );
   }
 
@@ -1417,7 +1418,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testUnannClassOrInterfaceTypeUnannClassType() {
     parseSanityCheck(
         UnannClassOrInterfaceTypeNode.Variant.UnannClassType,
-        "Foo"
+        "Foo",
+        Fuzz.SAME_VARIANT
         );
   }
 
@@ -4236,7 +4238,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
     parseSanityCheck(
         LeftHandSideNode.Variant.FieldAccess,
         "((T) t).f",
-        Fuzz.START_AT_EXPRESSION, Fuzz.SAME_VARIANT
+        Fuzz.SAME_VARIANT
         );
   }
 
@@ -4796,7 +4798,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnaryExpressionUnaryExpressionNotPlusMinus() {
     parseSanityCheck(
-        UnaryExpressionNode.Variant.PrefixOperatorPrimary,
+        UnaryExpressionNode.Variant.PrefixOperatorUnaryExpression,
         "!cond"
         );
   }
@@ -4818,7 +4820,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnaryExpressionPlsUnaryExpression() {
     parseSanityCheck(
-        UnaryExpressionNode.Variant.PrefixOperatorPrimary,
+        UnaryExpressionNode.Variant.PrefixOperatorUnaryExpression,
         "+arr[i]"
         );
   }
@@ -4829,7 +4831,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnaryExpressionDshUnaryExpression() {
     parseSanityCheck(
-        UnaryExpressionNode.Variant.PrefixOperatorPrimary,
+        UnaryExpressionNode.Variant.PrefixOperatorUnaryExpression,
         "-(o.f)"
         );
   }
@@ -4884,7 +4886,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnaryExpressionNotPlusMinusTldUnaryExpression() {
     parseSanityCheck(
-        UnaryExpressionNode.Variant.PrefixOperatorPrimary,
+        UnaryExpressionNode.Variant.PrefixOperatorUnaryExpression,
         "~~u"
         );
   }
@@ -4895,7 +4897,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnaryExpressionNotPlusMinusBngUnaryExpression() {
     parseSanityCheck(
-        UnaryExpressionNode.Variant.PrefixOperatorPrimary,
+        UnaryExpressionNode.Variant.PrefixOperatorUnaryExpression,
         "!(a instanceof T)"
         );
   }

@@ -265,6 +265,7 @@ ReferenceType:
      ClassOrInterfaceType
      TypeVariable
 ClassOrInterfaceType:
+     ContextFreeNames
      ClassType
      InterfaceType
 ClassType:
@@ -447,6 +448,7 @@ UnannReferenceType:
      UnannClassOrInterfaceType
      UnannTypeVariable
 UnannClassOrInterfaceType:
+     ContextFreeNames
      UnannClassType
      UnannInterfaceType
 UnannClassType:
@@ -932,7 +934,8 @@ UnaryExpression:
      CastExpression
      PreExpression
      PostExpression
-     {PrefixOperator} Primary
+     PrefixOperator UnaryExpression
+     Primary @anon
 PrefixOperator:
      "+"
      "-"

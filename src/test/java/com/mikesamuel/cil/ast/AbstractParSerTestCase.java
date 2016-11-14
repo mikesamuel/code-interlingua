@@ -87,7 +87,6 @@ public abstract class AbstractParSerTestCase extends TestCase {
   /** SanityChecks to skip for a particular test case. */
   enum Fuzz {
     SAME_VARIANT,
-    START_AT_EXPRESSION,
   }
 
   protected void parseSanityCheck(
@@ -124,9 +123,6 @@ public abstract class AbstractParSerTestCase extends TestCase {
     LeftRecursion lr = new LeftRecursion();
 
     NodeType startNodeType = variant.getNodeType();
-    if (fuzzSet.contains(Fuzz.START_AT_EXPRESSION)) {
-      startNodeType = NodeType.Expression;
-    }
 
     ParseResult result = PTree.complete(startNodeType)
         .getParSer().parse(start, lr, parseErr);
@@ -173,19 +169,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
         if (firstPushes.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
-          if (fuzzSet.contains(Fuzz.START_AT_EXPRESSION)) {
-            boolean found = false;
-            for (MatchEvent.Push p : firstPushes) {
-              if (p.variant == variant) {
-                found = true;
-                break;
-              }
-            }
-            assertTrue(firstPushes.toString(), found);
-          } else {
-            assertEquals(input.content, variant, firstPushes.get(0).variant);
-            assertEquals(variant, node.getVariant());
-          }
+          assertEquals(input.content, variant, firstPushes.get(0).variant);
+          assertEquals(variant, node.getVariant());
         }
         assertEquals(
             input.content, allTokenText.toString(), tokensOnOutput.toString());

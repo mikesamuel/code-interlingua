@@ -9,8 +9,6 @@ import static com.mikesamuel.cil.ast.MatchEvent.pop;
 import static com.mikesamuel.cil.ast.MatchEvent.push;
 import static com.mikesamuel.cil.ast.MatchEvent.token;
 
-import java.util.EnumSet;
-
 @SuppressWarnings("javadoc")
 public final class ExpressionNodeTest extends AbstractParSerTestCase {
 
@@ -20,13 +18,11 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         PTree.complete(NodeType.Expression),
         "1",
         push(ExpressionNode.Variant.ConditionalExpression),
-        push(UnaryExpressionNode.Variant.PrefixOperatorPrimary),
         push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.IntegerLiteral),
         push(IntegerLiteralNode.Variant.Builtin),
         content("1", -1),
-        pop(),
         pop(),
         pop(),
         pop(),
@@ -46,13 +42,11 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
             .AdditiveExpressionAdditiveOperatorMultiplicativeExpression),
         /*....*/push(AdditiveExpressionNode.Variant
             .AdditiveExpressionAdditiveOperatorMultiplicativeExpression),
-        /*......*/push(UnaryExpressionNode.Variant.PrefixOperatorPrimary),
-        /*........*/push(PrimaryNode.Variant.ExpressionAtomPostOp),
-        /*..........*/push(ExpressionAtomNode.Variant.Literal),
-        /*............*/push(LiteralNode.Variant.IntegerLiteral),
-        /*..............*/push(IntegerLiteralNode.Variant.Builtin),
-        /*................*/content("1", -1),
-        /*..............*/pop(),
+        /*......*/push(PrimaryNode.Variant.ExpressionAtomPostOp),
+        /*........*/push(ExpressionAtomNode.Variant.Literal),
+        /*..........*/push(LiteralNode.Variant.IntegerLiteral),
+        /*............*/push(IntegerLiteralNode.Variant.Builtin),
+        /*..............*/content("1", -1),
         /*............*/pop(),
         /*..........*/pop(),
         /*........*/pop(),
@@ -60,13 +54,11 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         /*......*/push(AdditiveOperatorNode.Variant.Pls),
         /*........*/token("+", -1),
         /*......*/pop(),
-        /*......*/push(UnaryExpressionNode.Variant.PrefixOperatorPrimary),
-        /*........*/push(PrimaryNode.Variant.ExpressionAtomPostOp),
-        /*..........*/push(ExpressionAtomNode.Variant.Literal),
-        /*............*/push(LiteralNode.Variant.IntegerLiteral),
-        /*..............*/push(IntegerLiteralNode.Variant.Builtin),
-        /*................*/content("1", -1),
-        /*..............*/pop(),
+        /*......*/push(PrimaryNode.Variant.ExpressionAtomPostOp),
+        /*........*/push(ExpressionAtomNode.Variant.Literal),
+        /*..........*/push(LiteralNode.Variant.IntegerLiteral),
+        /*............*/push(IntegerLiteralNode.Variant.Builtin),
+        /*..............*/content("1", -1),
         /*............*/pop(),
         /*..........*/pop(),
         /*........*/pop(),
@@ -75,13 +67,11 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         /*....*/push(AdditiveOperatorNode.Variant.Pls),
         /*......*/token("+", -1),  // Why is this a child of multiplicative?
         /*....*/pop(),
-        /*....*/push(UnaryExpressionNode.Variant.PrefixOperatorPrimary),
-        /*......*/push(PrimaryNode.Variant.ExpressionAtomPostOp),
-        /*........*/push(ExpressionAtomNode.Variant.Literal),
-        /*..........*/push(LiteralNode.Variant.IntegerLiteral),
-        /*............*/push(IntegerLiteralNode.Variant.Builtin),
-        /*..............*/content("1", -1),
-        /*............*/pop(),
+        /*....*/push(PrimaryNode.Variant.ExpressionAtomPostOp),
+        /*......*/push(ExpressionAtomNode.Variant.Literal),
+        /*........*/push(LiteralNode.Variant.IntegerLiteral),
+        /*..........*/push(IntegerLiteralNode.Variant.Builtin),
+        /*............*/content("1", -1),
         /*..........*/pop(),
         /*........*/pop(),
         /*......*/pop(),
@@ -94,14 +84,6 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
   public void testSimpleFieldAccess() {
     assertParsePasses(
         PTree.complete(NodeType.Expression),
-        EnumSet.of(
-            NodeType.ContextFreeName,
-            NodeType.Expression,
-            NodeType.ExpressionAtom,
-            NodeType.ExpressionName,
-            NodeType.Identifier,
-            NodeType.PostOp,
-            NodeType.Primary),
         // This does not actually match the FieldAccess production.
         // It actually matches the ExpressionName production.
         // FieldAccess is reserved for those productions like
@@ -109,6 +91,7 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         "obj.field",
         push(ExpressionNode.Variant.ConditionalExpression),
         push(PrimaryNode.Variant.Ambiguous),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
         push(ContextFreeNameNode.Variant.Name),
         push(IdentifierNode.Variant.Builtin),
         content("obj", -1),
@@ -121,6 +104,7 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         pop(),
         pop(),
         pop(),
+        pop(),
         pop());
   }
 
@@ -130,14 +114,6 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
     {
       assertParsePasses(
           PTree.complete(NodeType.Expression),
-          EnumSet.of(
-              NodeType.Expression,
-              NodeType.ExpressionAtom,
-              NodeType.ExpressionName,
-              NodeType.MethodInvocation,
-              NodeType.Identifier,
-              NodeType.PostOp,
-              NodeType.Primary),
           // This does not actually match the FieldAccess production.
           // It actually matches the ExpressionName production.
           // FieldAccess is reserved for those productions like
@@ -145,8 +121,12 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
           "obj.method()",
           /**/push(ExpressionNode.Variant.ConditionalExpression),
           /*..*/push(PrimaryNode.Variant.Ambiguous),
-          /*....*/push(IdentifierNode.Variant.Builtin),
-          /*......*/content("obj", -1),
+          /*....*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+          /*......*/push(ContextFreeNameNode.Variant.Name),
+          /*........*/push(IdentifierNode.Variant.Builtin),
+          /*..........*/content("obj", -1),
+          /*........*/pop(),
+          /*......*/pop(),
           /*....*/pop(),
           /*....*/push(PostOpNode.Variant.MethodInvocation),
           /*......*/token(".", -1),
@@ -165,31 +145,36 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
   public final void testFieldOfCast() {
     assertParsePasses(
         NodeType.Expression,
-        EnumSet.of(
-            NodeType.CastExpression,
-            NodeType.ExpressionAtom,
-            NodeType.ExpressionName,
-            NodeType.MethodInvocation,
-            NodeType.Identifier,
-            NodeType.Primary,
-            NodeType.PostOp,
-            NodeType.ReferenceType
-            ),
         "((Foo) foo).bar",
+        push(ExpressionNode.Variant.ConditionalExpression),
         push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Parenthesized),
         token("(", -1),
+        push(ExpressionNode.Variant.ConditionalExpression),
+        push(UnaryExpressionNode.Variant.CastExpression),
         push(CastExpressionNode.Variant.Reference),
         token("(", -1),
         push(ReferenceTypeNode.Variant.ClassOrInterfaceType),
+        push(ClassOrInterfaceTypeNode.Variant.ContextFreeNames),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        push(ContextFreeNameNode.Variant.Name),
         push(IdentifierNode.Variant.Builtin),
         content("Foo", -1),
         pop(),
         pop(),
+        pop(),
+        pop(),
+        pop(),
         token(")", -1),
         push(PrimaryNode.Variant.Ambiguous),
+        push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        push(ContextFreeNameNode.Variant.Name),
         push(IdentifierNode.Variant.Builtin),
         content("foo", -1),
+        pop(),
+        pop(),
+        pop(),
+        pop(),
         pop(),
         pop(),
         pop(),
@@ -199,6 +184,7 @@ public final class ExpressionNodeTest extends AbstractParSerTestCase {
         token(".", -1),
         push(IdentifierNode.Variant.Builtin),
         content("bar", -1),
+        pop(),
         pop(),
         pop(),
         pop()
