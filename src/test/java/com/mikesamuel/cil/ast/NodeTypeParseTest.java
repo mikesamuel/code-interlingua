@@ -2785,16 +2785,6 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
         );
   }
 
-  /**
-   * <pre>StatementWithoutTrailingSubstatement</pre>
-   */
-  @Test
-  public void testStatementStatementWithoutTrailingSubstatement() {
-    parseSanityCheck(
-        StatementNode.Variant.StatementWithoutTrailingSubstatement,
-        ";"
-        );
-  }
 
   /**
    * <pre>LabeledStatement</pre>
@@ -2813,7 +2803,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementIfThenStatement() {
     parseSanityCheck(
-        StatementNode.Variant.IfThenStatement,
+        StatementNode.Variant.IfStatement,
         "if (foo()) bar();"
         );
   }
@@ -2824,7 +2814,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementIfThenElseStatement() {
     parseSanityCheck(
-        StatementNode.Variant.IfThenElseStatement,
+        StatementNode.Variant.IfStatement,
         "if (c) then(); else alt();"
         );
   }
@@ -2857,7 +2847,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementNoShortIfStatementWithoutTrailingSubstatement() {
     parseSanityCheck(
-        StatementNoShortIfNode.Variant.StatementWithoutTrailingSubstatement,
+        StatementNode.Variant.SynchronizedStatement,
         "synchronized (mutex) { critSec(); }"
         );
   }
@@ -2868,7 +2858,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementNoShortIfLabeledStatementNoShortIf() {
     parseSanityCheck(
-        StatementNoShortIfNode.Variant.LabeledStatementNoShortIf,
+        StatementNode.Variant.LabeledStatement,
         "foo: { if (x) break foo; bar(); }"
         );
   }
@@ -2879,7 +2869,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementNoShortIfIfThenElseStatementNoShortIf() {
     parseSanityCheck(
-        StatementNoShortIfNode.Variant.IfThenElseStatementNoShortIf,
+        StatementNode.Variant.IfStatement,
         "if (cond) foo(); else bar();"
         );
   }
@@ -2890,7 +2880,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementNoShortIfWhileStatementNoShortIf() {
     parseSanityCheck(
-        StatementNoShortIfNode.Variant.WhileStatementNoShortIf,
+        StatementNode.Variant.WhileStatement,
         "while (a != b) { op(); }"
         );
   }
@@ -2901,7 +2891,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementNoShortIfForStatementNoShortIf() {
     parseSanityCheck(
-        StatementNoShortIfNode.Variant.ForStatementNoShortIf,
+        StatementNode.Variant.ForStatement,
         "for (;;) { op(); }"
         );
   }
@@ -2912,7 +2902,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementBlock() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.Block,
+        StatementNode.Variant.Block,
         "{ b(); l(); o(); c(); k(); }"
         );
   }
@@ -2923,7 +2913,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementEmptyStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.EmptyStatement,
+        StatementNode.Variant.EmptyStatement,
         ";"
         );
   }
@@ -2934,7 +2924,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementExpressionStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.ExpressionStatement,
+        StatementNode.Variant.ExpressionStatement,
         "a = b;"
         );
   }
@@ -2945,7 +2935,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementAssertStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.AssertStatement,
+        StatementNode.Variant.AssertStatement,
         "assert cond : message;"
         );
   }
@@ -2956,7 +2946,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementSwitchStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.SwitchStatement,
+        StatementNode.Variant.SwitchStatement,
         "switch (foo) {\n"
         + "  case \"foo\": case \"FOO\": foo(); break;\n"
         + "  case \"BAR\":               bar(); break;\n"
@@ -2971,7 +2961,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementDoStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.DoStatement,
+        StatementNode.Variant.DoStatement,
         "do it(); while (cond);"
         );
   }
@@ -2982,7 +2972,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementBreakStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.BreakStatement,
+        StatementNode.Variant.BreakStatement,
         "break label;"
         );
   }
@@ -2993,7 +2983,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementContinueStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.ContinueStatement,
+        StatementNode.Variant.ContinueStatement,
         "continue label;"
         );
   }
@@ -3004,7 +2994,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementReturnStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.ReturnStatement,
+        StatementNode.Variant.ReturnStatement,
         "return expr;"
         );
   }
@@ -3015,7 +3005,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementSynchronizedStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.SynchronizedStatement,
+        StatementNode.Variant.SynchronizedStatement,
         "synchronized (this) { this.op(); }"
         );
   }
@@ -3026,7 +3016,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementThrowStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.ThrowStatement,
+        StatementNode.Variant.ThrowStatement,
         "throw myException;"
         );
   }
@@ -3037,7 +3027,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testStatementWithoutTrailingSubstatementTryStatement() {
     parseSanityCheck(
-        StatementWithoutTrailingSubstatementNode.Variant.TryStatement,
+        StatementNode.Variant.TryStatement,
         "try (InputStream in = open(it)) { useResource(in); }"
         );
   }
@@ -3070,7 +3060,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testLabeledStatementNoShortIfIdentifierClnStatementNoShortIf() {
     parseSanityCheck(
-        LabeledStatementNoShortIfNode.Variant.IdentifierClnStatementNoShortIf,
+        LabeledStatementNode.Variant.IdentifierClnStatement,
         "label: if (danger) { panic(); } else {}"
         );
   }
@@ -3147,7 +3137,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testIfThenStatementIfLpExpressionRpStatement() {
     parseSanityCheck(
-        IfThenStatementNode.Variant.IfLpExpressionRpStatement,
+        IfStatementNode.Variant.IfLpExpressionRpStatementNotElse,
         "if (cond) foo();"
         );
   }
@@ -3158,7 +3148,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testIfThenElseStatementIfLpExpressionRpStatementNoShortIfElseStatement() {
     parseSanityCheck(
-        IfThenElseStatementNode.Variant.IfLpExpressionRpStatementNoShortIfElseStatement,
+        IfStatementNode.Variant.IfLpExpressionRpStatementElseStatement,
         "if (cond) foo(); else if (bar()) baz();"
         );
   }
@@ -3169,7 +3159,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testIfThenElseStatementNoShortIfIfLpExpressionRpStatementNoShortIfElseStatementNoShortIf() {
     parseSanityCheck(
-        IfThenElseStatementNoShortIfNode.Variant.IfLpExpressionRpStatementNoShortIfElseStatementNoShortIf,
+        IfStatementNode.Variant.IfLpExpressionRpStatementElseStatement,
         "if (cond) foo(); else {}"
         );
   }
@@ -3292,7 +3282,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testWhileStatementNoShortIfWhileLpExpressionRpStatementNoShortIf() {
     parseSanityCheck(
-        WhileStatementNoShortIfNode.Variant.WhileLpExpressionRpStatementNoShortIf,
+        WhileStatementNode.Variant.WhileLpExpressionRpStatement,
         "while (cond) if (othercond) { action(); } else ;"
         );
   }
@@ -3336,7 +3326,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testForStatementNoShortIfBasicForStatementNoShortIf() {
     parseSanityCheck(
-        ForStatementNoShortIfNode.Variant.BasicForStatementNoShortIf,
+        ForStatementNode.Variant.BasicForStatement,
         "for (i = 0, n = els.length; i < n; ++i)"
         + " { if (cond(els[i])) op(el[i]); }"
         );
@@ -3348,7 +3338,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testForStatementNoShortIfEnhancedForStatementNoShortIf() {
     parseSanityCheck(
-        ForStatementNoShortIfNode.Variant.EnhancedForStatementNoShortIf,
+        ForStatementNode.Variant.EnhancedForStatement,
         "for (T el : iterable) { if (cond(el)) op(el); }"
         );
   }
@@ -3370,7 +3360,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testBasicForStatementNoShortIfForLpForInitSemExpressionSemForUpdateRpStatementNoShortIf() {
     parseSanityCheck(
-        BasicForStatementNoShortIfNode.Variant.ForLpForInitSemExpressionSemForUpdateRpStatementNoShortIf,
+        BasicForStatementNode.Variant.ForLpForInitSemExpressionSemForUpdateRpStatement,
         "for (;;) foo();"
         );
   }
@@ -3436,7 +3426,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnhancedForStatementNoShortIfForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatementNoShortIf() {
     parseSanityCheck(
-        EnhancedForStatementNoShortIfNode.Variant.ForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatementNoShortIf,
+        EnhancedForStatementNode.Variant.ForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatement,
         "for (final T el : iterable) { if (filter(el)) use(el); }"
         );
   }

@@ -648,19 +648,6 @@ LocalVariableDeclarationStatement:
 LocalVariableDeclaration:
      {VariableModifier} UnannType VariableDeclaratorList
 Statement:
-     StatementWithoutTrailingSubstatement
-     LabeledStatement
-     IfThenElseStatement
-     IfThenStatement
-     WhileStatement
-     ForStatement
-StatementNoShortIf:
-     StatementWithoutTrailingSubstatement
-     LabeledStatementNoShortIf
-     IfThenElseStatementNoShortIf
-     WhileStatementNoShortIf
-     ForStatementNoShortIf
-StatementWithoutTrailingSubstatement:
      Block
      EmptyStatement
      ExpressionStatement
@@ -673,12 +660,14 @@ StatementWithoutTrailingSubstatement:
      SynchronizedStatement
      ThrowStatement
      TryStatement
+     LabeledStatement
+     IfStatement
+     WhileStatement
+     ForStatement
 EmptyStatement:
      ";"
 LabeledStatement:
      Identifier ":" Statement
-LabeledStatementNoShortIf:
-     Identifier ":" StatementNoShortIf
 ExpressionStatement:
      StatementExpression ";"
 StatementExpression:
@@ -687,12 +676,9 @@ StatementExpression:
      PostExpression
      MethodInvocation
      ClassInstanceCreationExpression
-IfThenStatement:
-     "if" "(" Expression ")" Statement
-IfThenElseStatement:
-     "if" "(" Expression ")" StatementNoShortIf "else" Statement
-IfThenElseStatementNoShortIf:
-     "if" "(" Expression ")" StatementNoShortIf "else" StatementNoShortIf
+IfStatement:
+     "if" "(" Expression ")" Statement "else" Statement
+     "if" "(" Expression ")" Statement !"else"
 AssertStatement:
      "assert" Expression [":" Expression] ";"
 SwitchStatement:
@@ -711,20 +697,13 @@ EnumConstantName:
      Identifier
 WhileStatement:
      "while" "(" Expression ")" Statement
-WhileStatementNoShortIf:
-     "while" "(" Expression ")" StatementNoShortIf
 DoStatement:
      "do" Statement "while" "(" Expression ")" ";"
 ForStatement:
      BasicForStatement
      EnhancedForStatement
-ForStatementNoShortIf:
-     BasicForStatementNoShortIf
-     EnhancedForStatementNoShortIf
 BasicForStatement:
      "for" "(" [ForInit] ";" [Expression] ";" [ForUpdate] ")" Statement
-BasicForStatementNoShortIf:
-     "for" "(" [ForInit] ";" [Expression] ";" [ForUpdate] ")" StatementNoShortIf
 ForInit:
      StatementExpressionList
      LocalVariableDeclaration
@@ -734,8 +713,6 @@ StatementExpressionList:
      StatementExpression {"," StatementExpression}
 EnhancedForStatement:
      "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":" Expression ")" Statement
-EnhancedForStatementNoShortIf:
-     "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":" Expression ")" StatementNoShortIf
 BreakStatement:
      "break" [Identifier] ";"
 ContinueStatement:
