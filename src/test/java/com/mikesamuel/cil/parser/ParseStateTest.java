@@ -1,32 +1,29 @@
 package com.mikesamuel.cil.parser;
 
-import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.Test;
 
 import com.google.common.base.Optional;
-import com.google.common.io.CharSource;
 
 import junit.framework.TestCase;
 
 @SuppressWarnings("javadoc")
 public final class ParseStateTest extends TestCase {
 
-  private static void assertIndexAfterIgnorables(String content, int idxNext)
-  throws IOException {
+  private static void assertIndexAfterIgnorables(String content, int idxNext) {
     ParseState ps0 = new ParseState(
-        new Input("test", CharSource.wrap(content)));
+        Input.fromCharSequence("test", content));
     assertEquals(content, idxNext, ps0.index);
 
     ParseState ps1 = new ParseState(
-        new Input("test", CharSource.wrap("xyz" + content)));
+        Input.fromCharSequence("test", "xyz" + content));
     assertEquals(content, idxNext + 3, ps1.advance(3).index);
   }
 
   @Test
-  public static void testIndexAfterIgnorables() throws Exception {
+  public static void testIndexAfterIgnorables() {
     assertIndexAfterIgnorables("", 0);
     assertIndexAfterIgnorables("foo", 0);
     assertIndexAfterIgnorables("  ", 2);
@@ -47,8 +44,8 @@ public final class ParseStateTest extends TestCase {
   }
 
   @Test
-  public static void testStartsWith() throws IOException {
-    ParseState ps = new ParseState(new Input("test", CharSource.wrap("foo")));
+  public static void testStartsWith() {
+    ParseState ps = new ParseState(Input.fromCharSequence("test", "foo"));
     assertTrue(ps.startsWith("f", Optional.absent()));
     assertFalse(ps.startsWith("F", Optional.absent()));
     assertTrue(ps.startsWith("fo", Optional.absent()));
@@ -58,8 +55,8 @@ public final class ParseStateTest extends TestCase {
   }
 
   @Test
-  public static void testMatcherAt() throws IOException {
-    ParseState ps = new ParseState(new Input("test", CharSource.wrap("foo")));
+  public static void testMatcherAt() {
+    ParseState ps = new ParseState(Input.fromCharSequence("test", "foo"));
 
     Matcher mfoo = ps.matcherAtStart(Pattern.compile("^foo"));
     assertTrue(mfoo.find());

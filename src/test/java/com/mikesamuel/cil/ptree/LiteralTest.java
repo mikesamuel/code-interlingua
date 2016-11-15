@@ -3,7 +3,6 @@ package com.mikesamuel.cil.ptree;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.io.CharSource;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
@@ -18,10 +17,9 @@ import junit.framework.TestCase;
 public final class LiteralTest extends TestCase {
 
   @Test
-  public final void testParse() throws Exception {
+  public final void testParse() {
     ParSer lit = Literal.of("===", false, 1, 1, 1);
-    ParseState ps = new ParseState(
-        new Input(getName(), CharSource.wrap(" === ")));
+    ParseState ps = new ParseState(Input.fromCharSequence(getName(), " === "));
     LeftRecursion lr = new LeftRecursion();
     ParseResult result = lit.parse(ps, lr, null);
     assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);

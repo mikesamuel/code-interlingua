@@ -3,7 +3,6 @@ package com.mikesamuel.cil.ast;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.io.CharSource;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LineStarts;
 
@@ -13,8 +12,8 @@ import junit.framework.TestCase;
 public final class TreesTest extends TestCase {
 
   @Test
-  public static void testTreesOfIdentifier() throws Exception {
-    LineStarts starts = (new Input("test-file", CharSource.wrap("  foo")))
+  public static void testTreesOfIdentifier() {
+    LineStarts starts = (Input.fromCharSequence("test-file", "  foo"))
         .lineStarts;
 
     BaseNode got = Trees.of(starts, ImmutableList.of(
@@ -37,9 +36,9 @@ public final class TreesTest extends TestCase {
   }
 
   @Test
-  public static void testTreesOfWithInnerNodes() throws Exception {
-    LineStarts starts = new Input(
-        "test-file", CharSource.wrap("  int[][].class")).lineStarts;
+  public static void testTreesOfWithInnerNodes() {
+    LineStarts starts = Input.fromCharSequence("test-file", "  int[][].class")
+        .lineStarts;
     BaseNode got = Trees.of(starts, ImmutableList.of(
         MatchEvent.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
 

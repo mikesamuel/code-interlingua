@@ -1,12 +1,9 @@
 package com.mikesamuel.cil.parser;
 
-import java.io.IOException;
-
 import org.junit.Test;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.io.CharSource;
 
 import junit.framework.TestCase;
 
@@ -14,7 +11,7 @@ import junit.framework.TestCase;
 public final class InputTest extends TestCase {
 
   @Test
-  public static void testTokenBreaks() throws IOException {
+  public static void testTokenBreaks() {
     String code = Joiner.on('\n').join(
         "",
         "package foo.bar.baz;",
@@ -54,7 +51,7 @@ public final class InputTest extends TestCase {
 
     ImmutableList.Builder<String> gotBuilder = ImmutableList.builder();
 
-    Input input = new Input("test", CharSource.wrap(code));
+    Input input = Input.fromCharSequence("test", code);
     StringBuilder token = new StringBuilder();
     int parsed = 0;
     int limit = input.content.length();

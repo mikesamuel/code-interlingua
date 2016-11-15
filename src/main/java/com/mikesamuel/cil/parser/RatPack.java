@@ -1,6 +1,5 @@
 package com.mikesamuel.cil.parser;
 
-import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Map;
 
@@ -9,7 +8,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
-import com.google.common.io.CharSource;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeType;
 
@@ -252,17 +250,12 @@ public final class RatPack {
 
     @Override
     public String toString() {
-      ParseState state;
       StringBuilder sb = new StringBuilder(".");
       while (sb.length() < this.indexAfterParse) {
         sb.append(sb);
       }
-      try {
-        state = apply(
-            new ParseState(new Input("empty", CharSource.wrap(sb))));
-      } catch (IOException ex) {
-        throw (AssertionError) new AssertionError().initCause(ex);
-      }
+      ParseState state = apply(
+          new ParseState(Input.fromCharSequence("empty", sb)));
 
       return "ParseSuccess("
           + ImmutableList.copyOf(Chain.forwardIterable(state.output))

@@ -1,10 +1,6 @@
 package com.mikesamuel.cil.parser;
 
-import java.io.IOException;
-
 import org.junit.Test;
-
-import com.google.common.io.CharSource;
 
 import junit.framework.TestCase;
 
@@ -12,11 +8,11 @@ import junit.framework.TestCase;
 public class Lookahead1Test extends TestCase {
 
   @Test
-  public void testIdentStart() throws IOException {
+  public void testIdentStart() {
     Lookahead1 la1 = Lookahead1.of(
         "!", "\"", "'", ".0-9", "0-9", "@", "\\(", "\\+", "\\-",
         "\\p{javaJavaIdentifierStart}", "~");
-    Input input = new Input(getName(), CharSource.wrap("."));
+    Input input = Input.fromCharSequence(getName(), ".");
     assertTrue(la1.canFollow(new ParseState(input)));
   }
 

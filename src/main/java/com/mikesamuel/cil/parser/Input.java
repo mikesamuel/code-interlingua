@@ -82,4 +82,22 @@ public final class Input {
     }
     return idx;
   }
+
+  /**
+   * Like {@link Input#Input(String, CharSource)} but takes a CharSequence
+   * instead of a CharSource does not need to throw an IOException.
+   *
+   * @param sourceDescription not the string to parse.
+   * @param sourceCode the string to parse.
+   */
+  public static Input fromCharSequence(
+      String sourceDescription, CharSequence sourceCode) {
+    try {
+      return new Input(sourceDescription, CharSource.wrap(sourceCode));
+    } catch (IOException ex) {
+      throw (AssertionError)
+          new AssertionError("CharSource.wrap's result should not throw")
+          .initCause(ex);
+    }
+  }
 }
