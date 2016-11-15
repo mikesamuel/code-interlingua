@@ -4,6 +4,7 @@ import java.util.BitSet;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.Debug;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
@@ -41,20 +42,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
 
     if (DEBUG) {
       System.err.println("Magic happening");
-      StringBuilder sb = new StringBuilder(". ");
-      for (MatchEvent e : Chain.forwardIterable(state.output)) {
-        if (e instanceof MatchEvent.Pop) {
-          if (sb.length() != 0) {
-            sb.setLength(sb.length() - 2);
-          }
-        }
-        int len = sb.length();
-        System.err.println(sb.append(e));
-        sb.setLength(len);
-        if (e instanceof MatchEvent.Push) {
-          sb.append(". ");
-        }
-      }
+      Debug.dumpEvents(Chain.forwardIterable(state.output));
     }
 
     // Look for push(ContextFreeNameNode...)
