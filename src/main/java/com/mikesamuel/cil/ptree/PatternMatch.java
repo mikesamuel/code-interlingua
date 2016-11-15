@@ -68,11 +68,11 @@ final class PatternMatch extends PTParSer {
       err.error(state, "Expected content event but found end-of-input");
       return Optional.absent();
     }
-    MatchEvent e = state.events.get(state.index);
+    MatchEvent e = state.structure.get(state.index);
     if (e instanceof MatchEvent.Content) {
       String content = ((MatchEvent.Content) e).content;
       if (p.matcher(content).matches()) {
-        return Optional.of(state.append(content).advance());
+        return Optional.of(state.advanceWithCopy());
       } else {
         err.error(
             state, "Expected content like " + diagnostic

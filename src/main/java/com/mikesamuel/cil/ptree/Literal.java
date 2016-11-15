@@ -75,7 +75,7 @@ final class Literal extends PTParSer {
   @Override
   public Optional<SerialState> unparse(
       SerialState state, SerialErrorReceiver err) {
-    return Optional.of(state.append(text));
+    return Optional.of(state.append(MatchEvent.token(text, -1)));
   }
 
   @Override

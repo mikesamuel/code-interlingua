@@ -1,6 +1,9 @@
 package com.mikesamuel.cil.ast;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
+import com.mikesamuel.cil.parser.SourcePosition;
+import com.mikesamuel.cil.parser.Unparse;
 
 /**
  * An event in a series which describes a pre-order traversal of a parse-tree.
@@ -66,6 +69,28 @@ public abstract class MatchEvent {
    */
   public static LREnd leftRecursionSuffixEnd(NodeType nodeType) {
     return new LREnd(nodeType);
+  }
+
+  /**
+   * Indicates a source position within a stream of events.
+   * This is not generated during parse, but may be generated during unparse and
+   * used to maintain source location mappings from the original input to
+   * generated code so that debuggers may reverse the mapping when presenting
+   * error messages.
+   */
+  public static SourcePositionMark positionMark(SourcePosition pos) {
+    return new SourcePositionMark(pos);
+  }
+
+  /**
+   * A delayed lookahead that can be applied to the unparsed events that follow
+   * it.
+   * Lookaheads leave no events during parse, so during unparse, we delay
+   * checking the lookahead until the following content is available.
+   */
+  public static DelayedCheck delayedCheck(
+      Predicate<Unparse.Suffix> suffixCheck) {
+    return new DelayedCheck(suffixCheck);
   }
 
   /**
@@ -345,6 +370,117 @@ public abstract class MatchEvent {
         return false;
       }
       return true;
+    }
+  }
+
+  /**
+   * Indicates a source position within a stream of events.
+   * This is not generated during parse, but may be generated during unparse and
+   * used to maintain source location mappings from the original input to
+   * generated code so that debuggers may reverse the mapping when presenting
+   * error messages.
+   */
+  public static final class SourcePositionMark extends MatchEvent {
+    /** Best guess at the source position before the start of the next token. */
+    public final SourcePosition pos;
+
+    SourcePositionMark(SourcePosition pos) {
+      this.pos = pos;
+    }
+
+    @Override
+    public int nCharsConsumed() {
+      return 0;
+    }
+
+    @Override
+    public String toString() {
+      return "(@ " + pos + ")";
+    }
+
+    @Override
+    public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result + ((pos == null) ? 0 : pos.hashCode());
+      return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (obj == null) {
+        return false;
+      }
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      SourcePositionMark other = (SourcePositionMark) obj;
+      if (pos == null) {
+        if (other.pos != null) {
+          return false;
+        }
+      } else if (!pos.equals(other.pos)) {
+        return false;
+      }
+      return true;
+    }
+  }
+
+  /**
+   * A delayed lookahead that can be applied to the unparsed events that follow
+   * it.
+   * Lookaheads leave no events during parse, so during unparse, we delay
+   * checking the lookahead until the following content is available.
+   */
+  public static final class DelayedCheck extends MatchEvent {
+    /** Can be applied to the sub-list of events following the delayed check. */
+    public final Predicate<Unparse.Suffix> p;
+
+    DelayedCheck(Predicate<Unparse.Suffix> p) {
+      this.p = p;
+    }
+
+    @Override
+    public int nCharsConsumed() {
+      return 0;
+    }
+
+    @Override
+    public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result + ((p == null) ? 0 : p.hashCode());
+      return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (obj == null) {
+        return false;
+      }
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      DelayedCheck other = (DelayedCheck) obj;
+      if (p == null) {
+        if (other.p != null) {
+          return false;
+        }
+      } else if (!p.equals(other.p)) {
+        return false;
+      }
+      return true;
+    }
+
+    @Override
+    public String toString() {
+      return "(delayed " + p + ")";
     }
   }
 }

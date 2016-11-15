@@ -55,6 +55,7 @@ public final class PTree {
    * more input events.
    */
   public static ParSerable complete(ParSerable p) {
+    if (p instanceof Completer) { return p; }
     return new Completer(p);
   }
 

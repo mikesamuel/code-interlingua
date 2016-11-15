@@ -11,6 +11,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.Chain;
@@ -76,6 +77,7 @@ final class Reference extends PTParSer {
   // HACK DEBUG: Not thread safe
   private static final boolean DEBUG = false;
   private static final boolean DEBUG_LR = false;
+  private static final boolean DEBUG_UP = false;
   private static int depth = 0;
   private static String indent() {
     StringBuilder sb = new StringBuilder();
@@ -351,7 +353,81 @@ final class Reference extends PTParSer {
   public Optional<SerialState> unparse(
       SerialState state, SerialErrorReceiver err) {
     initLazy();
-    return Alternation.of(variants).getParSer().unparse(state, err);
+    if (DEBUG_UP) {
+      System.err.println(indent() + "Unparse " + nodeType);
+    }
+
+    // Try handling non-anon variants first.
+    if (!state.isEmpty()) {
+      MatchEvent e = state.structure.get(state.index);
+      if (e instanceof MatchEvent.Push) {
+        MatchEvent.Push push = (Push) e;
+        NodeVariant variant = push.variant;
+        if (variant.getNodeType() == nodeType) {
+          if (DEBUG_UP) {
+            System.err.println(indent() + ". Found same variant " + variant);
+          }
+          // Commit to handling non-anon variant.
+          Optional<SerialState> afterContentOpt;
+          if (DEBUG_UP) { indent(1); }
+          try {
+            afterContentOpt = variant.getParSer().unparse(
+                state.advanceWithCopy(), err);
+          } finally {
+            if (DEBUG_UP) { indent(-1); }
+          }
+          if (afterContentOpt.isPresent()) {
+            SerialState afterContent = afterContentOpt.get();
+            if (!afterContent.isEmpty() &&
+                afterContent.structure.get(afterContent.index)
+                instanceof MatchEvent.Pop) {
+              if (DEBUG_UP) {
+                System.err.println(
+                    indent() + "Same variant " + variant + " passed");
+              }
+              return Optional.of(afterContent.advanceWithCopy());
+            }
+          }
+          if (DEBUG_UP) {
+            System.err.println(
+                indent() + "Same variant " + variant + " failed");
+          }
+          return Optional.absent();
+        }
+      }
+    }
+
+    // Recurse to anon-variants to see if we can insert the missing pushes/pops.
+    for (NodeVariant v : this.variants) {
+      if (!v.isAnon()) {
+        continue;
+      }
+
+      SerialState beforeContent = state.append(MatchEvent.push(v));
+      if (DEBUG_UP) {
+        System.err.println(indent() + ". Trying anon variant " + v);
+      }
+      Optional<SerialState> afterContentOpt;
+      if (DEBUG_UP) { indent(1); }
+      try {
+        afterContentOpt = v.getParSer().unparse(beforeContent, err);
+      } finally {
+        if (DEBUG_UP) { indent(-1); }
+      }
+      if (afterContentOpt.isPresent()) {
+        if (DEBUG_UP) {
+          System.err.println(indent() + "Anon variant " + v + " passed");
+        }
+        return Optional.of(afterContentOpt.get().append(MatchEvent.pop()));
+      }
+      if (DEBUG_UP) {
+        System.err.println(indent() + "Anon variant " + v + " failed");
+      }
+    }
+    if (DEBUG_UP) {
+      System.err.println(indent() + "Reference " + nodeType + " failed");
+    }
+    return Optional.absent();
   }
 
   @Override

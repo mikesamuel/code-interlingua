@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.parser;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -9,28 +11,52 @@ import com.mikesamuel.cil.ast.MatchEvent;
  * The state of an unparsing operation.
  */
 public final class SerialState {
-  /** The events to serialize. */
-  public final ImmutableList<MatchEvent> events;
-  /** into events. */
+  /** Events that describe the structure of the parse tree to serialize. */
+  public final ImmutableList<MatchEvent> structure;
+  /** Cursor into {@link #structure}. */
   public final int index;
-  /** Partial string being composed. */
-  public final Chain<String> outputChain;
+  /**
+   * {@code structure.subList(0, index)} but augmented with missing tokens and
+   * other events.
+   */
+  public final @Nullable Chain<MatchEvent> output;
+
+  /** */
+  public SerialState(Iterable<? extends MatchEvent> structure) {
+    this(ImmutableList.copyOf(structure), 0, null);
+  }
 
   /** */
   public SerialState(
-      ImmutableList<MatchEvent> events, int index, Chain<String> outputChain) {
-    Preconditions.checkArgument(0 <= index && index <= events.size());
-    this.events = events;
-    this.index = index;
-    this.outputChain = outputChain;
+      ImmutableList<MatchEvent> structure, int index,
+      @Nullable Chain<MatchEvent> output) {
+    Preconditions.checkArgument(0 <= index && index <= structure.size());
+    this.structure = structure;
+
+    // Silently skip over source position marks, and copy them to the output.
+    // This greatly simplifies ParSer implementations that check the event at
+    // the cursor and advance it by 1.
+    int indexAfterCopyOver = index;
+    Chain<MatchEvent> outputAfterCopyOver = output;
+
+    int n = structure.size();
+    for (MatchEvent e;
+        indexAfterCopyOver < n;
+         outputAfterCopyOver = Chain.append(outputAfterCopyOver, e),
+         ++indexAfterCopyOver) {
+      e = structure.get(indexAfterCopyOver);
+      if (!(e instanceof MatchEvent.SourcePositionMark)) {
+        break;
+      }
+    }
+
+    this.index = indexAfterCopyOver;
+    this.output = outputAfterCopyOver;
   }
 
   /** A state with the given output appended. */
-  public SerialState append(String text) {
-    if (text.length() == 0) { return this; }
-    return new SerialState(
-        events, index,
-        Chain.append(outputChain, text));
+  public SerialState append(MatchEvent event) {
+    return new SerialState(structure, index, Chain.append(output, event));
   }
 
   /**
@@ -42,10 +68,10 @@ public final class SerialState {
   public Optional<SerialState> expectEvent(
       MatchEvent wanted, SerialErrorReceiver err) {
     String message;
-    if (index == events.size()) {
+    if (index == structure.size()) {
       message = "Expected " + wanted + " but no events left";
     } else {
-      MatchEvent e = events.get(index);
+      MatchEvent e = structure.get(index);
       if (e.equals(wanted)) {
         return Optional.of(advance());
       }
@@ -59,14 +85,22 @@ public final class SerialState {
    * True iff there are no events past {@link #index}.
    */
   public boolean isEmpty() {
-    return index == this.events.size();
+    return index == this.structure.size();
   }
 
   /**
    * A state with the index incremented past the current event.
    */
   public SerialState advance() {
-    return new SerialState(events, index + 1, outputChain);
+    return new SerialState(structure, index + 1, output);
   }
 
+  /**
+   * Like {@link #advance} but also copies the event that was skipped over to
+   * the output.
+   */
+  public SerialState advanceWithCopy() {
+    return new SerialState(
+        structure, index + 1, Chain.append(output, structure.get(index)));
+  }
 }

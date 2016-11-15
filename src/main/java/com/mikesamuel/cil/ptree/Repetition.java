@@ -81,7 +81,6 @@ final class Repetition extends PTParSer {
   @Override
   public Optional<SerialState> unparse(
       SerialState start, SerialErrorReceiver err) {
-    boolean matchedOne = false;
     SerialState state = start;
     ParSer serializer = p.getParSer();
     while (true) {
@@ -90,22 +89,20 @@ final class Repetition extends PTParSer {
         SerialState nextState = next.get();
         // Guarantee termination
         if (nextState.index == state.index) {
-          return Optional.of(state);
+          break;
         }
         Preconditions.checkState(nextState.index > state.index);
         state = nextState;
-      } else if (matchedOne) {
-        return Optional.of(state);
       } else {
-        return Optional.absent();
+        break;
       }
     }
+    return Optional.of(state);
   }
 
   @Override
   public Optional<MatchState> match(
       MatchState start, MatchErrorReceiver err) {
-    boolean matchedOne = false;
     MatchState state = start;
     ParSer matcher = p.getParSer();
     while (true) {
@@ -118,10 +115,8 @@ final class Repetition extends PTParSer {
         }
         Preconditions.checkState(nextState.index > state.index);
         state = nextState;
-      } else if (matchedOne) {
-        return Optional.of(state);
       } else {
-        return Optional.absent();
+        return Optional.of(state);
       }
     }
   }

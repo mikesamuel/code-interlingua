@@ -7,7 +7,9 @@ import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.MatchEvent.Content;
 import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.ast.MatchEvent.Token;
+import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LineStarts;
+import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -83,23 +85,28 @@ public final class Trees {
         if (nodes == null) {
           nodes = ImmutableList.builder();
         }
-        BaseNode.Builder<?, ?> nodeBuilder = push.variant.nodeBuilder();
-        if (nodeContent.content != null) {
-          Preconditions.checkState(nodeContent.nodes.isEmpty());
-          nodeBuilder.leaf(nodeContent.content);
+        if (push.variant.isAnon()) {
+          Preconditions.checkState(nodeContent.nodes.size() == 1);
+          nodes.addAll(nodeContent.nodes);
         } else {
-          for (BaseNode child : nodeContent.nodes) {
+          BaseNode.Builder<?, ?> nodeBuilder = push.variant.nodeBuilder();
+          if (nodeContent.content != null) {
+            Preconditions.checkState(nodeContent.nodes.isEmpty());
+            nodeBuilder.leaf(nodeContent.content);
+          } else {
+            for (BaseNode child : nodeContent.nodes) {
             nodeBuilder.add(child);
+            }
           }
+          BaseNode node = nodeBuilder.build();
+          if (nodeContent.content != null) {
+            node.setSourcePosition(nodeContent.contentPosition);
+          } else if (nodeContent.startPosition != null) {
+            node.setSourcePosition(SourcePosition.spanning(
+                nodeContent.startPosition, nodeContent.lastPosition));
+          }
+          nodes.add(node);
         }
-        BaseNode node = nodeBuilder.build();
-        if (nodeContent.content != null) {
-          node.setSourcePosition(nodeContent.contentPosition);
-        } else if (nodeContent.startPosition != null) {
-          node.setSourcePosition(SourcePosition.spanning(
-              nodeContent.startPosition, nodeContent.lastPosition));
-        }
-        nodes.add(node);
         if (tier.startPosition == null) {
           tier.startPosition = nodeContent.startPosition;
         }
@@ -151,5 +158,75 @@ public final class Trees {
     String content = null;
     SourcePosition contentPosition;
     boolean sawPop;
+  }
+
+
+  /**
+   * A series of events that describes the tree structure, but which is missing
+   * some of the information necessary to serialize the tree.
+   *
+   * @return A series of MatchEvent which contains all necessary events except
+   *     for {@link MatchEvent#token} and
+   *     {@link MatchEvent#push}/{@link MatchEvent#pop} for
+   *     {@link NodeVariant#isAnon @anon} variants.
+   *
+   * @see ParSer#unparse
+   */
+  public static Chain<MatchEvent> startUnparse(
+      Chain<MatchEvent> beforeNode, BaseNode node) {
+
+    String value = node.getValue();
+    ImmutableList<? extends BaseNode> children = node.getChildren();
+
+
+    SourcePosition pos = node.getSourcePosition();
+    Chain<MatchEvent> beforeContent = maybeAppendPos(
+        beforeNode, pos != null ? pos.start() : null);
+
+    beforeContent = Chain.append(
+        beforeContent, MatchEvent.push(node.getVariant()));
+
+    Chain<MatchEvent> afterContent;
+    if (value != null) {
+      Preconditions.checkState(children.isEmpty());
+      afterContent = Chain.append(
+          beforeContent,
+          MatchEvent.content(
+              value, node.getSourcePosition().startCharInFile()));
+    } else {
+      afterContent = beforeContent;
+      for (BaseNode child : children) {
+        Chain<MatchEvent> afterChild = startUnparse(afterContent, child);
+        afterContent = afterChild;
+      }
+    }
+
+    Chain<MatchEvent> afterNode = Chain.append(afterContent, MatchEvent.pop());
+    if (pos != null) {
+      afterNode = maybeAppendPos(afterNode, pos.end());
+    }
+
+    return afterNode;
+  }
+
+  private static Chain<MatchEvent> maybeAppendPos(
+      Chain<MatchEvent> beforePos, SourcePosition pos) {
+    if (pos != null) {
+      SourcePosition last = null;
+      for (Chain<MatchEvent> c = beforePos; c != null; c = c.prev) {
+        MatchEvent e = c.x;
+        if (e.nCharsConsumed() != 0) {
+          break;
+        } else if (e instanceof MatchEvent.SourcePositionMark) {
+          last = ((MatchEvent.SourcePositionMark) e).pos;
+          break;
+        }
+      }
+      if (last == null || !pos.equals(last)) {
+        return Chain.append(
+            beforePos, MatchEvent.positionMark(pos));
+      }
+    }
+    return beforePos;
   }
 }

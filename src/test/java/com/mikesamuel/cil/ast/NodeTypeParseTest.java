@@ -910,7 +910,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testClassDeclarationEnumDeclaration() {
     parseSanityCheck(
         ClassDeclarationNode.Variant.EnumDeclaration,
-        "public enum E { X, Y, Z; } "
+        "public enum E { X(), Y(), Z(),; } "
+        );
+    parseSanityCheck(
+        ClassDeclarationNode.Variant.EnumDeclaration,
+        "public enum E { X(), Y, Z() {}; } ",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -2019,7 +2024,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>Primary "." [ TypeArguments ] "super" "(" [ ArgumentList ] ")" ";"</pre>
    */
   @Test
-  public void testExplicitConstructorInvocationPrimaryDotTypeArgumentsSuperLpArgumentListRpSem() {
+  public void testExplicitConstructorInvocationPrimaryDotTypeArgumentsSuperArgumentsSem() {
     parseSanityCheck(
         ExplicitConstructorInvocationNode.Variant.PrimaryDotTypeArgumentsSuperLpArgumentListRpSem,
         "(OuterInstanceFactory.get()).super(x);"
@@ -2033,7 +2038,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testEnumDeclarationClassModifierEnumIdentifierSuperinterfacesEnumBody() {
     parseSanityCheck(
         EnumDeclarationNode.Variant.Declaration,
-        "public enum Colors implements InappropriateUseOfEnum { Red, Blue }"
+        "public enum Colors implements InappropriateUseOfEnum { Red, Blue }",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -2044,7 +2050,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testEnumBodyLcEnumConstantListComEnumBodyDeclarationsRc() {
     parseSanityCheck(
         EnumBodyNode.Variant.LcEnumConstantListComEnumBodyDeclarationsRc,
-        "{ FOO, BAR, }"
+        "{ FOO(), BAR(), }"
+        );
+    parseSanityCheck(
+        EnumBodyNode.Variant.LcEnumConstantListComEnumBodyDeclarationsRc,
+        "{ FOO, BAR }",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -2055,7 +2066,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testEnumConstantListEnumConstantComEnumConstant() {
     parseSanityCheck(
         EnumConstantListNode.Variant.EnumConstantComEnumConstant,
-        "Foo, Bar, Baz"
+        "Foo, Bar, Baz",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -2063,7 +2075,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>{ EnumConstantModifier } Identifier [ "(" [ ArgumentList ] ")" ] [ ClassBody ]</pre>
    */
   @Test
-  public void testEnumConstantEnumConstantModifierIdentifierLpArgumentListRpClassBody() {
+  public void testEnumConstantEnumConstantModifierIdentifierArgumentsClassBody() {
     parseSanityCheck(
         EnumConstantNode.Variant.EnumConstantModifierFieldNameLpArgumentListRpClassBody,
         "@Deprecated Foo(42) { @Override int f(int x) { return -x; }\n}"
@@ -2495,7 +2507,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testAnnotationTypeElementDeclarationAnnotationTypeElementModifierUnannTypeIdentifierLpRpDimsDefaultValueSem() {
     parseSanityCheck(
         AnnotationTypeElementDeclarationNode.Variant.Declaration,
-        "String str() [] default {};"
+        "String str() [] default {,};"
+        );
+    parseSanityCheck(
+        AnnotationTypeElementDeclarationNode.Variant.Declaration,
+        "String str() [] default {};",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -2627,7 +2644,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testElementValueElementValueArrayInitializer() {
     parseSanityCheck(
         ElementValueNode.Variant.ElementValueArrayInitializer,
-        "{ \"foo\", \"bar\", \"baz\" }"
+        "{ \"foo\", \"bar\", \"baz\", }"
+        );
+    parseSanityCheck(
+        ElementValueNode.Variant.ElementValueArrayInitializer,
+        "{ \"foo\", \"bar\", \"baz\" }",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -2693,7 +2715,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testArrayInitializerLcVariableInitializerListComRc() {
     parseSanityCheck(
         ArrayInitializerNode.Variant.LcVariableInitializerListComRc,
-        "{ { }, { 123 } }"
+        "{ { }, { 123 } }",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -3028,7 +3051,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testStatementWithoutTrailingSubstatementTryStatement() {
     parseSanityCheck(
         StatementNode.Variant.TryStatement,
-        "try (InputStream in = open(it)) { useResource(in); }"
+        "try (InputStream in = open(it)) { useResource(in); }",
+        Fuzz.IMPLIED_TOKENS  // semi after open(it)
         );
   }
 
@@ -3517,7 +3541,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testTryStatementTryWithResourcesStatement() {
     parseSanityCheck(
         TryStatementNode.Variant.TryWithResourcesStatement,
-        "try (Closeable c = allocate()) { useInScope(s); }"
+        "try (Closeable c = allocate();) { useInScope(s); }"
+        );
+    parseSanityCheck(
+        TryStatementNode.Variant.TryWithResourcesStatement,
+        "try (Closeable c = allocate()) { useInScope(s); }",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 
@@ -3583,7 +3612,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testTryWithResourcesStatementTryResourceSpecificationBlockCatchesFinally() {
     parseSanityCheck(
         TryWithResourcesStatementNode.Variant.TryResourceSpecificationBlockCatchesFinally,
-        "try (Closeable c = open()) { u(c); }"
+        "try (Closeable c = open();) { u(c); }"
         + " catch (IOException e) { h(c); }"
         + " finally { logend(); }"
         );
@@ -3945,7 +3974,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>ExpressionName "." [ TypeArguments ] Identifier "(" [ ArgumentList ] ")"</pre>
    */
   @Test
-  public void testMethodInvocationExpressionNameDotTypeArgumentsIdentifierLpArgumentListRp() {
+  public void testMethodInvocationExpressionNameDotTypeArgumentsIdentifierArguments() {
     parseSanityCheck(
         MethodInvocationNode.Variant.ExplicitCallee,
         "ImmutableList.<String>copyOf(item0, item1, item2)"
@@ -3956,7 +3985,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>TypeName "." [ TypeArguments ] Identifier "(" [ ArgumentList ] ")"</pre>
    */
   @Test
-  public void testMethodInvocationTypeNameDotTypeArgumentsIdentifierLpArgumentListRp() {
+  public void testMethodInvocationTypeNameDotTypeArgumentsIdentifierArguments() {
     parseSanityCheck(
         MethodInvocationNode.Variant.ExplicitCallee,
         "com.google.common.collect.ImmutableList.<String>copyOf(e0, e1, e2)",
@@ -3969,7 +3998,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>TypeName "." "super" "." [ TypeArguments ] Identifier "(" [ ArgumentList ] ")"</pre>
    */
   @Test
-  public void testMethodInvocationTypeNameDotSuperDotTypeArgumentsIdentifierLpArgumentListRp() {
+  public void testMethodInvocationTypeNameDotSuperDotTypeArgumentsIdentifierArguments() {
     parseSanityCheck(
         MethodInvocationNode.Variant.ExplicitCallee,
         "Outer.super.<T>method()"
@@ -3980,7 +4009,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>"super" "." [ TypeArguments ] Identifier "(" [ ArgumentList ] ")"</pre>
    */
   @Test
-  public void testMethodInvocationSuperDotTypeArgumentsIdentifierLpArgumentListRp() {
+  public void testMethodInvocationSuperDotTypeArgumentsIdentifierArguments() {
     parseSanityCheck(
         MethodInvocationNode.Variant.ExplicitCallee,
         "super.method(foo)"
@@ -3991,7 +4020,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>Primary "." [ TypeArguments ] Identifier "(" [ ArgumentList ] ")"</pre>
    */
   @Test
-  public void testMethodInvocationPrimaryDotTypeArgumentsIdentifierLpArgumentListRp() {
+  public void testMethodInvocationPrimaryDotTypeArgumentsIdentifierArguments() {
     parseSanityCheck(
         MethodInvocationNode.Variant.ExplicitCallee,
         "(o).<A, B, C<D>>method(arg)"
@@ -4117,7 +4146,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testArrayCreationExpressionNewPrimitiveTypeDimsArrayInitializer() {
     parseSanityCheck(
         ArrayCreationExpressionNode.Variant.NewPrimitiveTypeDimsArrayInitializerNotLs,
-        "new int[][] { { 3, 4, 5 }, }"
+        "new int[][] { { 3, 4, 5, }, }"
         );
   }
 
@@ -4128,7 +4157,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testArrayCreationExpressionNewClassOrInterfaceTypeDimsArrayInitializer() {
     parseSanityCheck(
         ArrayCreationExpressionNode.Variant.NewClassOrInterfaceTypeDimsArrayInitializerNotLs,
-        "new String[][] { { str } }"
+        "new String[][] { { str, }, }"
+        );
+    parseSanityCheck(
+        ArrayCreationExpressionNode.Variant.NewClassOrInterfaceTypeDimsArrayInitializerNotLs,
+        "new String[][] { { str } }",
+        Fuzz.IMPLIED_TOKENS
         );
   }
 

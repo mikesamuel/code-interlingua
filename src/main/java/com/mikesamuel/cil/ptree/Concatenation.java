@@ -130,6 +130,7 @@ class Concatenation extends PTParSer {
       ParSer serializer = p.getParSer();
       Optional<SerialState> next = serializer.unparse(state, err);
       if (!next.isPresent()) { return Optional.absent(); }
+      state = next.get();
     }
     return Optional.of(state);
   }

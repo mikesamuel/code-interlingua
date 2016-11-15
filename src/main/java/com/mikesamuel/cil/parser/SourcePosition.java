@@ -106,4 +106,42 @@ public final class SourcePosition {
     }
     return sb.toString();
   }
+
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + endCharInFile;
+    result = prime * result + startCharInFile;
+    result = prime * result + ((starts == null) ? 0 : starts.source.hashCode());
+    return result;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj == null) {
+      return false;
+    }
+    if (getClass() != obj.getClass()) {
+      return false;
+    }
+    SourcePosition other = (SourcePosition) obj;
+    if (endCharInFile != other.endCharInFile) {
+      return false;
+    }
+    if (startCharInFile != other.startCharInFile) {
+      return false;
+    }
+    if (starts == null) {
+      if (other.starts != null) {
+        return false;
+      }
+    } else if (!starts.source.equals(other.starts.source)) {
+      return false;
+    }
+    return true;
+  }
 }

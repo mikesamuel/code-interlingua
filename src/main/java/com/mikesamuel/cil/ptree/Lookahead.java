@@ -2,6 +2,7 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
@@ -13,6 +14,7 @@ import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
+import com.mikesamuel.cil.parser.Unparse;
 
 final class Lookahead extends PTParSer {
 
@@ -114,8 +116,9 @@ final class Lookahead extends PTParSer {
 
   @Override
   public Optional<SerialState> unparse(
-      SerialState state, SerialErrorReceiver err) {
-    return Optional.of(state);
+      SerialState serialState, SerialErrorReceiver err) {
+    DoubleCheckPredicate p = new DoubleCheckPredicate();
+    return Optional.of(serialState.append(MatchEvent.delayedCheck(p)));
   }
 
   @Override
@@ -126,5 +129,47 @@ final class Lookahead extends PTParSer {
   @Override
   public String toString() {
     return (valence == Valence.POSITIVE ? "=(" : "!(") + body + ")";
+  }
+
+
+  private final class DoubleCheckPredicate
+  implements Predicate<Unparse.Suffix> {
+
+    DoubleCheckPredicate() {
+      // Uses implicit outer this.
+    }
+
+    @Override
+    public boolean apply(Unparse.Suffix suffix) {
+      ParseResult result = getLookahead().parse(
+          suffix.asParseState(), new LeftRecursion(),
+          ParseErrorReceiver.DEV_NULL);
+      switch (result.synopsis) {
+        case FAILURE: return false;
+        case SUCCESS: return true;
+      }
+      throw new AssertionError(result.synopsis);
+    }
+
+    private Lookahead getLookahead() {
+      return Lookahead.this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || o.getClass() != this.getClass()) { return false; }
+      DoubleCheckPredicate that = (DoubleCheckPredicate) o;
+      return this.getLookahead().equals(that.getLookahead());
+    }
+
+    @Override
+    public int hashCode() {
+      return Lookahead.this.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return Lookahead.this.toString();
+    }
   }
 }

@@ -44,8 +44,15 @@ final class Completer extends ParSer {
 
   @Override
   public Optional<SerialState> unparse(
-      SerialState state, SerialErrorReceiver err) {
-    return p.getParSer().unparse(state, err);
+      SerialState state, SerialErrorReceiver r) {
+    Optional<SerialState> next = p.getParSer().unparse(state, r);
+    if (next.isPresent()) {
+      if (next.get().isEmpty()) {
+        return next;
+      }
+      r.error(state, "Unmatched input");
+    }
+    return Optional.absent();
   }
 
   @Override

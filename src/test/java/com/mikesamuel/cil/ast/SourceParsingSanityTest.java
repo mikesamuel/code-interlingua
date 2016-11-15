@@ -53,7 +53,8 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
           .PackageDeclarationImportDeclarationTypeDeclaration,
           new Input(
               source.getPath(),
-              Files.asCharSource(source, Charsets.UTF_8)));
+              Files.asCharSource(source, Charsets.UTF_8)),
+          Fuzz.IMPLIED_TOKENS);
       long t1 = System.nanoTime();
       System.err.println(
           "Parsed " + source + " in "
@@ -76,7 +77,8 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
         .PackageDeclarationImportDeclarationTypeDeclaration,
         new Input(
             sourceFileRelPath,
-            Resources.asCharSource(resUrl, Charsets.UTF_8)));
+            Resources.asCharSource(resUrl, Charsets.UTF_8)),
+        Fuzz.IMPLIED_TOKENS);
   }
 }
 
