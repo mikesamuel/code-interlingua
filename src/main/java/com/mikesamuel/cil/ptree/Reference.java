@@ -410,6 +410,7 @@ final class Reference extends PTParSer {
       Optional<SerialState> afterContentOpt;
       if (DEBUG_UP) { indent(1); }
       try {
+        // This assumes there are no @anon cycles in the parse graph.
         afterContentOpt = v.getParSer().unparse(beforeContent, err);
       } finally {
         if (DEBUG_UP) { indent(-1); }
