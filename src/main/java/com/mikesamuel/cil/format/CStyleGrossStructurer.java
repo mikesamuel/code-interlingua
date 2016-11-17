@@ -25,10 +25,11 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
     this.tokenBreaker = tokenBreaker;
   }
 
+  private static final boolean DEBUG = false;
+
   @Override
   public GrossStructure apply(
       ImmutableList<Formatter.DecoratedToken<C>> tokens) {
-
     @SuppressWarnings("synthetic-access")
     Layout layout = new Layout();
 
@@ -42,6 +43,11 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
         TokenBreak newline = tokenBreaker.lineBetween(
             last.content, last.context, token.content, token.context);
         Layout.Break breakBeforeToken = new Layout.Break(space, newline);
+        if (DEBUG) {
+          System.err.println("last=" + last + ", token=" + token +
+              ", space=" + space + ", newline=" + newline + ", brk="
+              + breakBeforeToken);
+        }
         structure.add(breakBeforeToken);
         if (lastBreak != null) {
           lastBreak.nextBreak = breakBeforeToken;
@@ -57,6 +63,10 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
     }
 
     Layout.BlockGrossStructure root = layout.nest(structure);
+    if (DEBUG) {
+      System.err.println("structure=" + structure);
+      System.err.println("root     =" + root);
+    }
     Layout.optimize(root);
     return root;
   }
@@ -92,10 +102,11 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
               case '(': case '[': case '{':
                 ImmutableList.Builder<AbstractGrossStructure> nested =
                     ImmutableList.builder();
-                children.add(new BlockGrossStructure(nested.build()));
+                nested.add(t);
                 i = nest(gs, i + 1, right, nested)
                     - 1  // Undo increment on continue.
                     ;
+                children.add(new BlockGrossStructure(nested.build()));
                 continue;
               case '}': case ']': case ')':
                 // Return control to parent to handle siblings.
@@ -271,6 +282,34 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
         }
         throw new AssertionError(space);
       }
+
+      @Override
+      public String toString() {
+        StringBuilder sb = new StringBuilder("(brk");
+        appendTb("nl", line, sb);
+        appendTb("spc", space, sb);
+        return sb.append(')').toString();
+      }
+
+      private static void appendTb(
+          String desc, TokenBreak tb, StringBuilder out) {
+        String mod = null;
+        switch (tb) {
+          case MAY:
+            mod = "?";
+            break;
+          case MUST:
+            mod = "+";
+            break;
+          case SHOULD:
+            mod = "";
+            break;
+          case SHOULD_NOT:
+            return;
+        }
+        Preconditions.checkNotNull(mod);
+        out.append(' ').append(desc).append(mod);
+      }
     }
 
     static final class OneToken extends AbstractGrossStructure {
@@ -295,6 +334,11 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
       @Override
       Orientation getOrientation() {
         return parent.getOrientation();
+      }
+
+      @Override
+      public String toString() {
+        return "`" + content + "`";
       }
     }
 
@@ -439,6 +483,11 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
             ((BlockGrossStructure) child).addAllBlocks(blocks);
           }
         }
+      }
+
+      @Override
+      public String toString() {
+        return "(Block " + children + ")";
       }
     }
 
