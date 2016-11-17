@@ -211,6 +211,12 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
                   case SHOULD_NOT:
                     break;
                 }
+                // TODO: Here and below, we assume that the token contains no
+                // embedded newlines.  If it does, we should take that into
+                // account.
+                // TODO: Add a hint to decorated token so that we know whether
+                // subsequent lines of a multiline token need to be indented,
+                // like Javadoc comment tokens.
                 columnAfterLookeahead += nextToken.content.length();
                 if (nextBreak != null && nextBreak.nextToken != null) {
                   // See if we want to treat this as a preferred break point
