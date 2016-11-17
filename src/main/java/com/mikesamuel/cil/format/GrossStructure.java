@@ -7,12 +7,7 @@ package com.mikesamuel.cil.format;
  */
 public interface GrossStructure {
   /**
-   * The number of lines needed to render the tokens when the given number of
-   * columns are available.
-   */
-  int countLines(int columnsAvailable);
-  /**
    * Write the tokens to the sink.
    */
-  void appendTokens(TokenSink sink);
+  void appendTokens(TokenSink sink, int softColumnLimit);
 }

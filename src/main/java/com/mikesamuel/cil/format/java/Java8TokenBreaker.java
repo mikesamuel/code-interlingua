@@ -17,7 +17,7 @@ import com.mikesamuel.cil.ptree.Tokens;
  * avoid lexical ambiguity and a desire to format token streams the way a human
  * might.
  */
-public final class Java8TokenBreaker
+final class Java8TokenBreaker
 implements TokenBreaker<Chain<NodeVariant>> {
 
   @Override

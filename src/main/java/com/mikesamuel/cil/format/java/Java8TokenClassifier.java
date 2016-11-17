@@ -5,14 +5,14 @@ import com.google.common.base.Preconditions;
 /**
  * Broad classification of tokens.
  */
-public final class Java8TokenClassifier {
+final class Java8TokenClassifier {
 
   private Java8TokenClassifier() {
     // Static API
   }
 
   /** The classification of the given token. */
-  public static Classification classify(String token) {
+  static Classification classify(String token) {
     Preconditions.checkArgument(!token.isEmpty());
     int cp0 = token.codePointAt(0);
     switch (cp0) {
