@@ -129,6 +129,11 @@ implements TokenBreaker<Chain<NodeVariant>> {
             return TokenBreak.SHOULD_NOT;
           }
           break;
+        case "{":
+          if (!isKeyword(left)) {
+            return TokenBreak.SHOULD;
+          }
+          break;
         default:
           if (isBinaryOperator(right)) {
             return TokenBreak.SHOULD;
@@ -188,6 +193,7 @@ implements TokenBreaker<Chain<NodeVariant>> {
     // > ...
     switch (right) {
       case ",": return TokenBreak.SHOULD_NOT;
+      case "}": return TokenBreak.SHOULD;
     }
     if (isBinaryOperator(left) || isUnaryOperator(left)) {
       // Prefer to break before binary operators
