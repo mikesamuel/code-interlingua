@@ -64,8 +64,6 @@ public abstract class AbstractTokenSink implements TokenSink {
         startOfLine = startIndex + i + 1;
       }
     }
-    int indent = this.indentation();
-    appendSpaceChars(' ', indent);
   }
 
   @Override
@@ -101,6 +99,8 @@ public abstract class AbstractTokenSink implements TokenSink {
       }
       needNewline = false;
       needSpace = false;
+      int indent = this.indentation();
+      appendSpaceChars(' ', indent);
     }
     if (needSpace) {
       if (!atStartOfLine()) {
