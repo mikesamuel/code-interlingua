@@ -20,6 +20,7 @@ public class Formatter<C> {
       ImmutableList.builder();
   private SourcePosition sourcePosition;
   private C context;
+  private int softColumnLimit = 80;
 
   /** */
   public Formatter(
@@ -53,15 +54,27 @@ public class Formatter<C> {
   }
 
   /**
+   * The column limit for formatted code.
+   * <p>
+   * The column limit might be violated (is "soft") if, e.g. a single token
+   * exceeds the column width, or excessive required indentation would lead
+   * to one token per line.
+   */
+  public int getSoftColumnLimit() {
+    return softColumnLimit;
+  }
+
+  /** @see #getSoftColumnLimit() */
+  public void setSoftColumnLimit(int newSoftColumnLimit) {
+    Preconditions.checkArgument(newSoftColumnLimit > 0);
+    this.softColumnLimit = newSoftColumnLimit;
+  }
+
+  /**
    * Appends all previously specified tokens to the given sink with appropriate
    * formatting commands.
-   *
-   * @param softColumnLimit soft column limit for formatted code.
-   *     The column limit might be violated if, e.g. a single token exceeds the
-   *     column width, or excessive required indentation would lead to one token
-   *     per line.
    */
-  public FormattedSource format(int softColumnLimit) {
+  public FormattedSource format() {
     StringBuilderTokenSink sink = new StringBuilderTokenSink();
     ImmutableList<DecoratedToken<C>> tokenList = tokens.build();
     GrossStructure root = grossStructurer.apply(tokenList);
@@ -79,8 +92,10 @@ public class Formatter<C> {
           code.regionMatches(tokIdx, tok.content, 0, tok.content.length()),
           tok.content);
 
-      entries.add(new PositionMapping.Entry(
-          tok.pos, tokIdx, tokIdx + tok.content.length()));
+      if (tok.pos != null) {
+        entries.add(new PositionMapping.Entry(
+            tok.pos, tokIdx, tokIdx + tok.content.length()));
+      }
     }
     PositionMapping positionMapping = new PositionMapping(entries.build());
 
@@ -102,6 +117,11 @@ public class Formatter<C> {
       this.content = content;
       this.pos = pos;
       this.context = context;
+    }
+
+    @Override
+    public String toString() {
+      return content;
     }
   }
 }
