@@ -19,6 +19,7 @@ public final class PositionMapping {
 
   /** */
   public PositionMapping(Iterable<? extends Entry> entries) {
+    // TODO: sort and merge adjacent entries.
     this.entries = ImmutableList.copyOf(entries);
   }
 
