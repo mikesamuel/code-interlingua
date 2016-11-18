@@ -15,23 +15,6 @@ final class Postconds {
 
   private static final boolean DEBUG = false;
 
-  private static void dumpEvents(Chain<MatchEvent> output) {
-    StringBuilder sb = new StringBuilder(". ");
-    for (MatchEvent e : Chain.forwardIterable(output)) {
-      if (e instanceof MatchEvent.Pop) {
-        if (sb.length() != 0) {
-          sb.setLength(sb.length() - 2);
-        }
-      }
-      int len = sb.length();
-      System.err.println(sb.append(e));
-      sb.setLength(len);
-      if (e instanceof MatchEvent.Push) {
-        sb.append(". ");
-      }
-    }
-  }
-
   /**
    * Checks that the last node at a specified depth has a specified variant.
    */
@@ -49,7 +32,7 @@ final class Postconds {
       if (DEBUG) {
         System.err.println(
             "Checking postcondition " + variant + " at depth " + depth);
-        dumpEvents(output);
+        Debug.dumpEvents(Chain.forwardIterable(output));
       }
       if (output == null || !(output.x instanceof MatchEvent.Pop)) {
         return false;
