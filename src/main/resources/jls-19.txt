@@ -771,11 +771,16 @@ ExpressionAtom:
      ReferenceType !!"::"  (@name=StaticReference)
      !CastExpression "(" Expression ")"  (@name=Parenthesized)
 Primary:
-     !SimpleCallPrefix ContextFreeNames !DotKeywordDimsOrCtorRef [!PostOpFieldAccess {PostOp}] (@name=Ambiguous)
-     ExpressionAtom {PostOp}
+     Primary "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
+     Primary "::" [TypeArguments] MethodName  (@name=MethodReference)
+     Primary "." UnqualifiedClassInstanceCreationExpression  (@name=InnerClassCreation)
+     Primary "[" Expression "]"  (@name=ArrayAccess)
+     !SimpleCallPrefix ContextFreeNames !DotKeywordDimsOrCtorRef (@name=Ambiguous)
+     Primary "." FieldName  (@name=FieldAccess)
+     ExpressionAtom @anon
 LeftHandSide:
-     Primary (@postcond=Postconds.Primary.PostOp.FieldAccess)       (@name=FieldAccess)
-     Primary (@postcond=Postconds.Primary.PostOp.ArrayAccess)       (@name=ArrayAccess)
+     Primary (@postcond=Postconds.Primary.FieldAccess)       (@name=FieldAccess)
+     Primary (@postcond=Postconds.Primary.ArrayAccess)       (@name=ArrayAccess)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.Local)     (@name=Local)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.FreeField) (@name=FreeField)
      Primary (@postcond=Postconds.Primary.Ambiguous)                (@name=Ambiguous)
@@ -789,11 +794,11 @@ DotKeywordDimsOrCtorRef:
 SimpleCallPrefix:
      MethodName "("
 MethodInvocation:
-     Primary (@postcond=Postconds.Primary.PostOp.MethodInvocation) (@name=ExplicitCallee)
+     Primary (@postcond=Postconds.Primary.MethodInvocation) (@name=ExplicitCallee)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
 ClassInstanceCreationExpression:
      Primary (@postcond=Postconds.Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
-     Primary (@postcond=Postconds.Primary.PostOp.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
+     Primary (@postcond=Postconds.Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
 UsePrefix:
      "."
      "["
@@ -810,14 +815,6 @@ ClassOrInterfaceTypeToInstantiate:
 TypeArgumentsOrDiamond:
      TypeArguments
      "<>"
-PostOpFieldAccess:
-     PostOp (@postcond=Postconds.PostOp.FieldAccess)
-PostOp:
-     "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
-     "::" [TypeArguments] MethodName  (@name=MethodReference)
-     "." UnqualifiedClassInstanceCreationExpression  (@name=InnerClassCreation)
-     "." FieldName  (@name=FieldAccess)
-     "[" Expression "]"  (@name=ArrayAccess)
 ArgumentList:
      Expression {"," Expression}
 ArrayCreationExpression:

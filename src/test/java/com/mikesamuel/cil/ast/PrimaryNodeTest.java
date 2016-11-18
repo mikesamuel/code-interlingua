@@ -17,21 +17,19 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "Object.class",
-        /**/push(PrimaryNode.Variant.ExpressionAtomPostOp),
-        /*..*/push(ExpressionAtomNode.Variant.ClassLiteral),
-        /*....*/push(ClassLiteralNode.Variant.TypeNameDimDotClass),
-        /*......*/push(TypeNameNode.Variant.NotAtContextFreeNames),
-        /*........*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
-        /*..........*/push(ContextFreeNameNode.Variant.Name),
-        /*............*/push(IdentifierNode.Variant.Builtin),
-        /*..............*/content("Object", -1),
-        /*............*/pop(),
+        /**/push(ExpressionAtomNode.Variant.ClassLiteral),
+        /*..*/push(ClassLiteralNode.Variant.TypeNameDimDotClass),
+        /*....*/push(TypeNameNode.Variant.NotAtContextFreeNames),
+        /*......*/push(ContextFreeNamesNode.Variant.ContextFreeNameDotContextFreeName),
+        /*........*/push(ContextFreeNameNode.Variant.Name),
+        /*..........*/push(IdentifierNode.Variant.Builtin),
+        /*............*/content("Object", -1),
         /*..........*/pop(),
         /*........*/pop(),
         /*......*/pop(),
-        /*......*/token(".", -1),
-        /*......*/token("class", -1),
         /*....*/pop(),
+        /*....*/token(".", -1),
+        /*....*/token("class", -1),
         /*..*/pop(),
         /**/pop()
         );
@@ -42,12 +40,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "\"foo\\nbar\\0\"",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.StringLiteral),
         push(StringLiteralNode.Variant.Builtin),
         content("\"foo\\nbar\\0\"", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -71,12 +67,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "false",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.BooleanLiteral),
         push(BooleanLiteralNode.Variant.False),
         token("false", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -84,12 +78,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "true",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.BooleanLiteral),
         push(BooleanLiteralNode.Variant.True),
         token("true", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -101,12 +93,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "'x'",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.CharacterLiteral),
         push(CharacterLiteralNode.Variant.Builtin),
         content("'x'", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -114,12 +104,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "'\\r'",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.CharacterLiteral),
         push(CharacterLiteralNode.Variant.Builtin),
         content("'\\r'", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -127,12 +115,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "'\"'",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.CharacterLiteral),
         push(CharacterLiteralNode.Variant.Builtin),
         content("'\"'", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -164,12 +150,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "null",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.NullLiteral),
         push(NullLiteralNode.Variant.Null),
         token("null", -1),
-        pop(),
         pop(),
         pop(),
         pop()
@@ -181,12 +165,10 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "1",
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.IntegerLiteral),
         push(IntegerLiteralNode.Variant.Builtin),
         content("1", -1),
-        pop(),
         pop(),
         pop(),
         pop()

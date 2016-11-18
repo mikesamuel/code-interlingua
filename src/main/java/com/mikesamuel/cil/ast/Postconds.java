@@ -63,7 +63,7 @@ final class Postconds {
           --popDepth;
           MatchEvent.Push push = (MatchEvent.Push) e;
           if (DEBUG) {
-            System.err.print("Found " + push + " at depth " + popDepth);
+            System.err.println("Found " + push + " at depth " + popDepth);
           }
           if (popDepth == depth) {
             return push.variant == variant;
@@ -86,20 +86,14 @@ final class Postconds {
     static final Postcond Ambiguous = new Postcond(
         1, PrimaryNode.Variant.Ambiguous);
 
-    /**
-     * Postconditions that apply to Primaries that have a
-     * {@link NodeType#PostOp} and which check the last PostOp's variant.
-     */
-    static final class PostOp {
-      static final Postcond ArrayAccess = new Postcond(
-          2, PostOpNode.Variant.ArrayAccess);
-      static final Postcond FieldAccess = new Postcond(
-          2, PostOpNode.Variant.FieldAccess);
-      static final Postcond InnerClassCreation = new Postcond(
-          2, PostOpNode.Variant.InnerClassCreation);
-      static final Postcond MethodInvocation = new Postcond(
-          2, PostOpNode.Variant.MethodInvocation);
-    }
+    static final Postcond ArrayAccess = new Postcond(
+        1, PrimaryNode.Variant.ArrayAccess);
+    static final Postcond FieldAccess = new Postcond(
+        1, PrimaryNode.Variant.FieldAccess);
+    static final Postcond InnerClassCreation = new Postcond(
+        1, PrimaryNode.Variant.InnerClassCreation);
+    static final Postcond MethodInvocation = new Postcond(
+        1, PrimaryNode.Variant.MethodInvocation);
 
     /**
      * Postconditions that apply to Primaries that have no PostOps and which
@@ -110,6 +104,7 @@ final class Postconds {
           2, ExpressionAtomNode.Variant.FreeField);
       static final Postcond Local = new Postcond(
           2, ExpressionAtomNode.Variant.Local);
+      @SuppressWarnings("hiding")
       static final Postcond MethodInvocation = new Postcond(
           2, ExpressionAtomNode.Variant.MethodInvocation);
       static final Postcond UnqualifiedClassInstanceCreationExpression =
@@ -119,11 +114,4 @@ final class Postconds {
               .UnqualifiedClassInstanceCreationExpression);
     }
   }
-
-  /** Apply directly to PostOp variants. */
-  static final class PostOp {
-    static final Postcond FieldAccess = new Postcond(
-        1, PostOpNode.Variant.FieldAccess);
-  }
-
 }

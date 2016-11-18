@@ -27,12 +27,10 @@ public final class StatementNodeTest extends AbstractParSerTestCase {
         token("("),
 
         push(ExpressionNode.Variant.ConditionalExpression),
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.BooleanLiteral),
         push(BooleanLiteralNode.Variant.True),
         token("true"),
-        pop(),
         pop(),
         pop(),
         pop(),
@@ -64,12 +62,10 @@ public final class StatementNodeTest extends AbstractParSerTestCase {
         token("("),
 
         push(ExpressionNode.Variant.ConditionalExpression),
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.BooleanLiteral),
         push(BooleanLiteralNode.Variant.True),
         token("true"),
-        pop(),
         pop(),
         pop(),
         pop(),
@@ -218,7 +214,6 @@ public final class StatementNodeTest extends AbstractParSerTestCase {
         token("("),
 
         push(ExpressionNode.Variant.ConditionalExpression),
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.MethodInvocation),
         push(MethodNameNode.Variant.Identifier),
         push(IdentifierNode.Variant.Builtin),
@@ -227,7 +222,6 @@ public final class StatementNodeTest extends AbstractParSerTestCase {
         pop(),
         token("("),
         token(")"),
-        pop(),
         pop(),
         pop(),
 
@@ -323,7 +317,6 @@ public final class StatementNodeTest extends AbstractParSerTestCase {
         token("("),
 
         push(ExpressionNode.Variant.ConditionalExpression),
-        push(PrimaryNode.Variant.ExpressionAtomPostOp),
         push(ExpressionAtomNode.Variant.MethodInvocation),
 
         push(MethodNameNode.Variant.Identifier),
@@ -335,7 +328,6 @@ public final class StatementNodeTest extends AbstractParSerTestCase {
         token("("),
         token(")"),
 
-        pop(),
         pop(),
         pop(),
 

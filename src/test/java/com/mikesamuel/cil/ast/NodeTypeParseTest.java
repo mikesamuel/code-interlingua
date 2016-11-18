@@ -3652,23 +3652,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   }
 
   /**
-   * <pre>PrimaryNoNewArray</pre>
-   */
-  @Test
-  public void testPrimaryPrimaryNoNewArray() {
-    parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
-        "123"
-        );
-  }
-
-  /**
    * <pre>ArrayCreationExpression</pre>
    */
   @Test
   public void testPrimaryArrayCreationExpression() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        ExpressionAtomNode.Variant.ArrayCreationExpression,
         "new int[] { 1, 2, 3, }"
         );
   }
@@ -3734,7 +3723,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryClassInstanceCreationExpression() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        ExpressionAtomNode.Variant.UnqualifiedClassInstanceCreationExpression,
         "new Foo()"
         );
   }
@@ -3745,7 +3734,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryFieldAccess() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.FieldAccess,
         "((Foo) foo).bar"
         );
   }
@@ -3756,7 +3745,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryArrayAccess() {
     parseSanityCheck(
-        PrimaryNode.Variant.Ambiguous,
+        PrimaryNode.Variant.ArrayAccess,
         "arr[i]"
         );
   }
@@ -3767,7 +3756,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryMethodInvocation() {
     parseSanityCheck(
-        PrimaryNode.Variant.Ambiguous,
+        PrimaryNode.Variant.MethodInvocation,
         "x.toString()"
         );
   }
@@ -3778,7 +3767,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryMethodReference() {
     parseSanityCheck(
-        PrimaryNode.Variant.Ambiguous,
+        PrimaryNode.Variant.MethodReference,
         "x::toString"
         );
   }
@@ -3910,7 +3899,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryDotIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.FieldAccess,
         "(x).foo"
         );
   }
@@ -3921,7 +3910,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimarySuperDotIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.FieldAccess,
         "super.foo"
         );
   }
@@ -3932,7 +3921,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryTypeNameDotSuperDotIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.FieldAccess,
         "Outer.super.field"
         );
   }
@@ -3943,7 +3932,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayAccessExpressionNameLsExpressionRs() {
     parseSanityCheck(
-        PrimaryNode.Variant.Ambiguous,
+        PrimaryNode.Variant.ArrayAccess,
         "arr[i++]"
         );
   }
@@ -3954,7 +3943,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayAccessPrimaryLsExpressionRs() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.ArrayAccess,
         "getArr()[i]"
         );
   }
@@ -4044,7 +4033,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferenceExpressionNameClnClnTypeArgumentsIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.MethodReference,
         "foo::<String>bar",
         // TODO: can't lexically distinguish ExpressionName from TypeReference.
         Fuzz.SAME_VARIANT
@@ -4057,7 +4046,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferenceReferenceTypeClnClnTypeArgumentsIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.MethodReference,
         "int[]::clone"
         );
   }
@@ -4068,7 +4057,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferencePrimaryClnClnTypeArgumentsIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.MethodReference,
         "(outer)::<T>foo"
         );
   }
@@ -4079,7 +4068,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferenceSuperClnClnTypeArgumentsIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.MethodReference,
         "super::foo"
         );
   }
@@ -4090,7 +4079,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferenceTypeNameDotSuperClnClnTypeArgumentsIdentifier() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        PrimaryNode.Variant.MethodReference,
         "Outer.super::foo"
         );
   }
@@ -4101,7 +4090,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferenceClassTypeClnClnTypeArgumentsNew() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        ExpressionAtomNode.Variant.ConstructorReference,
         "Foo::new"
         );
   }
@@ -4112,7 +4101,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodReferenceArrayTypeClnClnNew() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        ExpressionAtomNode.Variant.ArrayConstructorReference,
         "Object[]::new"
         );
   }
@@ -4954,7 +4943,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPrimaryExpressionParenthesized() {
     parseSanityCheck(
-        PrimaryNode.Variant.ExpressionAtomPostOp,
+        ExpressionAtomNode.Variant.Parenthesized,
         "(a ? b : c)"
         );
   }
