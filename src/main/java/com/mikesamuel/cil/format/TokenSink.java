@@ -3,7 +3,7 @@ package com.mikesamuel.cil.format;
 import com.google.common.base.Preconditions;
 
 /**
- *
+ * An output channel that receives tokens and whitespace hints.
  */
 public interface TokenSink {
   /**
@@ -11,7 +11,7 @@ public interface TokenSink {
    *
    * @param tok a whole non-whitespace token.
    */
-  void append(String tok);
+  void append(String tok, MultilineAdjust multilineAdjust);
   /**
    * Indent to the given column.
    */
@@ -69,4 +69,21 @@ public interface TokenSink {
    * was part of a line break.
    */
   boolean atStartOfLine();
+
+
+  /** What to do with multiline tokens. */
+  public enum MultilineAdjust {
+    /**
+     * Line breaks within a token are counted but the token content is appended
+     * as-is.
+     */
+    AS_IS,
+    /**
+     * Indentation is inserted after a line-break.
+     */
+    INDENT,
+
+    // TODO: We should probably dedent and then reindent Javadoc comments
+    // instead of successively indenting so that formatting is idempotentish.
+  }
 }

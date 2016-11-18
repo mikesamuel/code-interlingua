@@ -26,6 +26,8 @@ implements TokenBreaker<Chain<NodeVariant>> {
       String right, @Nullable Chain<NodeVariant> rightStack) {
     Classification lc = Java8TokenClassifier.classify(left);
     Classification rc = Java8TokenClassifier.classify(right);
+
+    // Handle all the MUST cases first.
     if ((lc == Classification.IDENTIFIER_CHARS
         || lc == Classification.NUMBER_LITERAL)
         && (rc == Classification.IDENTIFIER_CHARS
@@ -171,33 +173,47 @@ implements TokenBreaker<Chain<NodeVariant>> {
   public TokenBreak lineBetween(
       String left,  @Nullable Chain<NodeVariant> leftStack,
       String right, @Nullable Chain<NodeVariant> rightStack) {
-    if (left.startsWith("//")) {
+
+    // Handle all the MUST cases first.
+    Classification lc = Java8TokenClassifier.classify(left);
+    if (lc == Classification.LINE_COMMENT) {
       return TokenBreak.MUST;
     }
-    switch (left) {
-      case "{":
-        if (!right.equals("}")) {
-          return TokenBreak.SHOULD;
-        }
-        break;
-      case "}":
-        if ("else".equals(right) || "catch".equals(right)
-            || "finally".equals(right)) {
-          // Also "while" inside a DoStatement
-          return TokenBreak.SHOULD_NOT;
-        }
-        return TokenBreak.SHOULD;
-      case ";":
-        if (leftStack != null) {
-          switch (leftStack.x.getNodeType()) {
-            case TryWithResourcesStatement:
-            case BasicForStatement:
-              return TokenBreak.SHOULD_NOT;
-            default:
-              break;
+
+    if (lc == Classification.BLOCK_COMMENT) {
+      return TokenBreak.SHOULD;
+    }
+    Classification rc = Java8TokenClassifier.classify(right);
+    if (rc == Classification.BLOCK_COMMENT) {
+      return TokenBreak.SHOULD;
+    }
+
+    if (lc == Classification.PUNCTUATION) {
+      switch (left) {
+        case "{":
+          if (!right.equals("}")) {
+            return TokenBreak.SHOULD;
           }
-        }
-        return TokenBreak.SHOULD;
+          break;
+        case "}":
+          if ("else".equals(right) || "catch".equals(right)
+              || "finally".equals(right)) {
+            // Also "while" inside a DoStatement
+            return TokenBreak.SHOULD_NOT;
+          }
+          return TokenBreak.SHOULD;
+        case ";":
+          if (leftStack != null) {
+            switch (leftStack.x.getNodeType()) {
+              case TryWithResourcesStatement:
+              case BasicForStatement:
+                return TokenBreak.SHOULD_NOT;
+              default:
+                break;
+            }
+          }
+          return TokenBreak.SHOULD;
+      }
     }
     // http://www.oracle.com/technetwork/java/javase/documentation/codeconventions-136091.html#248
     // > When an expression will not fit on a single line, break it according to
@@ -205,17 +221,21 @@ implements TokenBreaker<Chain<NodeVariant>> {
     // > * Break after a comma.
     // > * Break before an operator.
     // > ...
-    switch (right) {
-      case ",": return TokenBreak.SHOULD_NOT;
-      case "}": return TokenBreak.SHOULD;
+    if (rc == Classification.PUNCTUATION) {
+      switch (right) {
+        case ",": return TokenBreak.SHOULD_NOT;
+        case "}": return TokenBreak.SHOULD;
+      }
     }
-    if (isBinaryOperator(left) || isUnaryOperator(left)) {
-      // Prefer to break before binary operators
-      //    foo
-      //    && bar
-      // and not between a unary operator and its operand:
-      //    -4
-      return TokenBreak.SHOULD_NOT;
+    if (lc == Classification.PUNCTUATION) {
+      if (isBinaryOperator(left) || isUnaryOperator(left)) {
+        // Prefer to break before binary operators
+        //    foo
+        //    && bar
+        // and not between a unary operator and its operand:
+        //    -4
+        return TokenBreak.SHOULD_NOT;
+      }
     }
     return TokenBreak.MAY;
   }

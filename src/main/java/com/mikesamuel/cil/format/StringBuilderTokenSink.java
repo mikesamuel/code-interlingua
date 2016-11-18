@@ -11,9 +11,9 @@ public class StringBuilderTokenSink extends AbstractTokenSink {
   private final StringBuilder sb = new StringBuilder();
 
   @Override
-  protected void appendTokenContent(String content) {
+  protected void appendTokenContent(String content, String adjustedContent) {
     tokenIndices.add(sb.length());
-    sb.append(content);
+    sb.append(adjustedContent);
   }
 
   @Override

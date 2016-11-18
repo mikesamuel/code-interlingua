@@ -7,6 +7,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.mikesamuel.cil.ptree.Tokens;
 
 /**
  * A gross structure handler that is suitable for C-like languages whose
@@ -310,12 +311,17 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
         sink.prepareForToken();
         if (sink.column() + content.length() > softColumnLimit
             && getOrientation() == Orientation.ONE_LINE) {
-          parent.setOrientation(Orientation.MULTILINE);
+          for (BlockGrossStructure b = parent; b != null; b = b.parent) {
+            b.setOrientation(Orientation.MULTILINE);
+          }
           @SuppressWarnings("synthetic-access")
           RuntimeException nonLocalTransfer = ONE_LINE_FAILURE;
           throw nonLocalTransfer;
         }
-        sink.append(content);
+        TokenSink.MultilineAdjust adj = Tokens.isBlockComment(content)
+            ? TokenSink.MultilineAdjust.INDENT
+            : TokenSink.MultilineAdjust.AS_IS;
+        sink.append(content, adj);
       }
 
       @Override
@@ -419,8 +425,9 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
       }
 
       @Override
-      protected void appendTokenContent(String content) {
-        charInFile += content.length();
+      protected void appendTokenContent(
+          String content, String adjustedContent) {
+        charInFile += adjustedContent.length();
       }
 
       @Override

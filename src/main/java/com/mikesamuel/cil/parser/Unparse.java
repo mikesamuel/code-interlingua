@@ -6,11 +6,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.mikesamuel.cil.ast.JavaDocCommentNode;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.format.Formatter;
 import com.mikesamuel.cil.format.java.Java8Formatters;
+import com.mikesamuel.cil.ptree.Tokens;
 
 /**
  * Allows converting the output of an {@link ParSer#unparse} operations to
@@ -44,16 +46,28 @@ public final class Unparse {
     List<MatchEvent> verifiedTokens = Lists.newArrayList();
     for (MatchEvent e : unverified) {
       if (e.nCharsConsumed() != 0) {
-        if (e instanceof MatchEvent.Token) {
-          sb.append(((MatchEvent.Token) e).content);
-        } else {
-          sb.append(((MatchEvent.Content) e).content);
-        }
-        verifiedTokens.add(e);
+        sb.append(e.getContent());
         // Add the space here instead of before the token so that indices added
         // below always correspond to the beginning of a token or the end of
         // input.
         sb.append(' ');
+
+        verifiedTokens.add(e);
+      } else if (e instanceof MatchEvent.Ignorable) {
+        int nv = verifiedTokens.size();
+        if (nv != 0) {
+          MatchEvent last = verifiedTokens.get(nv - 1);
+          if (last instanceof MatchEvent.Push
+              && (((MatchEvent.Push) last).variant
+                  == JavaDocCommentNode.Variant.Builtin)) {
+            MatchEvent.Ignorable ign = (MatchEvent.Ignorable) e;
+            String commentContent = ign.ignorableContent;
+            if (Tokens.isBlockComment(commentContent)) {
+              sb.append(commentContent).append(' ');
+              verifiedTokens.add(e);
+            }
+          }
+        }
       } else if (e instanceof MatchEvent.DelayedCheck) {
         delayedAndIndices.add(e);
         delayedAndIndices.add(sb.length());
@@ -116,10 +130,10 @@ public final class Unparse {
       Verified v, Formatter<Chain<NodeVariant>> f) {
     Chain<NodeVariant> contextStack = null;
     for (MatchEvent e : v.events) {
-      if (e instanceof MatchEvent.Token) {
-        f.token(((MatchEvent.Token) e).content);
-      } else if (e instanceof MatchEvent.Content) {
-        f.token(((MatchEvent.Content) e).content);
+      if (e.nCharsConsumed() != 0) {
+        f.token(e.getContent());
+      } else if (e instanceof MatchEvent.Ignorable) {
+        f.token(((MatchEvent.Ignorable) e).ignorableContent);
       } else if (e instanceof MatchEvent.SourcePositionMark) {
         f.sourcePosition(((MatchEvent.SourcePositionMark) e).pos);
       } else if (e instanceof MatchEvent.Push) {

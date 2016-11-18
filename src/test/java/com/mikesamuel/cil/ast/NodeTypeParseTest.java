@@ -1528,7 +1528,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodDeclarationMethodModifierMethodHeaderMethodBody() {
     parseSanityCheck(
-        MethodDeclarationNode.Variant.MethodModifierMethodHeaderMethodBody,
+        MethodDeclarationNode.Variant.Declaration,
         "public abstract void m(int i, long... j) throws Throwable;"
         );
   }

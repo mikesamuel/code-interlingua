@@ -2,11 +2,10 @@ package com.mikesamuel.cil.ast;
 
 import java.util.Iterator;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.MatchEvent.Content;
-import com.mikesamuel.cil.ast.MatchEvent.Push;
-import com.mikesamuel.cil.ast.MatchEvent.Token;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LineStarts;
 import com.mikesamuel.cil.parser.ParSer;
@@ -42,7 +41,7 @@ public final class Trees {
       Iterable<? extends MatchEvent> events) {
     Iterator<? extends MatchEvent> it = events.iterator();
 
-    Tier root = buildTier(starts, it);
+    Tier root = buildTier(null, starts, it);
 
     if (root.content != null) {
       throw new IllegalArgumentException(
@@ -64,6 +63,7 @@ public final class Trees {
   }
 
   private static Tier buildTier(
+      @Nullable NodeVariant variant,
       LineStarts starts,
       Iterator<? extends MatchEvent> events) {
     @SuppressWarnings("synthetic-access")
@@ -76,8 +76,8 @@ public final class Trees {
         tier.sawPop = true;
         break;
       } else if (e instanceof MatchEvent.Push) {
-        MatchEvent.Push push = (Push) e;
-        Tier nodeContent = buildTier(starts, events);
+        MatchEvent.Push push = (MatchEvent.Push) e;
+        Tier nodeContent = buildTier(push.variant, starts, events);
         if (!nodeContent.sawPop) {
           Preconditions.checkState(!events.hasNext());
           throw new IllegalArgumentException("No pop corresponding to " + push);
@@ -116,7 +116,7 @@ public final class Trees {
       } else {
         SourcePosition pos;
         if (e instanceof MatchEvent.Content) {
-          MatchEvent.Content c = (Content) e;
+          MatchEvent.Content c = (MatchEvent.Content) e;
           if (tier.content != null) {
             throw new IllegalArgumentException(
                 "Duplicate content `" + tier.content
@@ -127,9 +127,19 @@ public final class Trees {
               starts, c.index, c.index + c.nCharsConsumed());
           tier.contentPosition = pos;
         } else if (e instanceof MatchEvent.Token) {
-          MatchEvent.Token t = (Token) e;
+          MatchEvent.Token t = (MatchEvent.Token) e;
           pos = new SourcePosition(
               starts, t.index, t.index + t.nCharsConsumed());
+        } else if (e instanceof MatchEvent.Ignorable) {
+          MatchEvent.Ignorable ign = (MatchEvent.Ignorable) e;
+          pos = new SourcePosition(
+              starts, ign.index, ign.index + ign.ignorableContent.length());
+          if (variant == JavaDocCommentNode.Variant.Builtin
+              && ign.ignorableContent.startsWith("/**")) {
+            // Treat the comment as content.
+            tier.content = ign.ignorableContent;
+            tier.contentPosition = pos;
+          }
         } else {
           throw new IllegalArgumentException("Unexpected event " + e);
         }
@@ -183,16 +193,19 @@ public final class Trees {
     Chain<MatchEvent> beforeContent = maybeAppendPos(
         beforeNode, pos != null ? pos.start() : null);
 
+    NodeVariant variant = node.getVariant();
     beforeContent = Chain.append(
         beforeContent, MatchEvent.push(node.getVariant()));
 
     Chain<MatchEvent> afterContent;
     if (value != null) {
       Preconditions.checkState(children.isEmpty());
+      int startIndex = node.getSourcePosition().startCharInFile();
       afterContent = Chain.append(
           beforeContent,
-          MatchEvent.content(
-              value, node.getSourcePosition().startCharInFile()));
+          variant != JavaDocCommentNode.Variant.Builtin
+          ? MatchEvent.content(value, startIndex)
+          : MatchEvent.ignorable(value, startIndex));
     } else {
       afterContent = beforeContent;
       for (BaseNode child : children) {

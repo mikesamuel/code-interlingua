@@ -654,6 +654,9 @@ public enum NodeType implements ParSerable {
             'IntegerLiteral': (r'0-9',),
             'CharacterLiteral': (r"'",),
             'StringLiteral': (r'"',),
+            # Comments are ignorable tokens that we lookback to capture,
+            # so have no effect on lookahead.
+            'JavaDocComment': (),
             }
 
         known = {}
@@ -1117,7 +1120,6 @@ public enum NodeType implements ParSerable {
             lr_prod = left_recursion[prod['name']]
             is_lr_forwarding = True
             prod_matches_empty = prod['name'] in empty_matching
-
             annot_converters = {
                 'name': None,
                 'postcond': (
@@ -1154,7 +1156,10 @@ public enum NodeType implements ParSerable {
                 is_lr = v['name'] in lr_prod and not is_lr_forwarding
                 if is_lr and verbose:
                     print 'LR: %s::%s' % (prod['name'], v['name'])
-                if prod_matches_empty:
+                if (prod_matches_empty
+                    # JavaDocComment matches ignorable tokens so does not
+                    # participate in Lookahead
+                    or prod['name'] == 'JavaDocComment'):
                     la = 'null'
                 else:
                     la = 'Lookahead1.of(%s)' % (', '.join([

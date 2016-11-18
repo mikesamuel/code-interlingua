@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.format;
 
+import java.util.Arrays;
+
 import org.junit.Test;
 
 import com.mikesamuel.cil.ast.NodeType;
@@ -55,6 +57,32 @@ public final class CStyleGrossStructurerTest extends TestCase {
        NodeType.ArrayInitializer);
   }
 
+  @Test
+  public static void testCommentIndentation() {
+    assertFormattedJava(
+        ""
+        + "{\n"
+        + "  /**\n"
+        + "   * Foo\n"
+        + "   * Bar\n"
+        + "   */\n"
+        + "  Foo.bar.baz.boo.far.faz(argument,\n"
+        + "      argument);\n"
+        + "}",
+
+        "{",
+
+        ""
+        + "/**\n"
+        + " * Foo\n"
+        + " * Bar\n"
+        + " */",
+
+        "Foo", ".", "bar", ".", "baz", ".", "boo", ".", "far", ".", "faz",
+        "(", "argument", ",", "argument", ")", ";",
+        "}");
+  }
+
   private void assertReformattedJava(String want, String input)
   throws Exception {
     assertReformattedJava(want, input, NodeType.CompilationUnit);
@@ -79,6 +107,19 @@ public final class CStyleGrossStructurerTest extends TestCase {
       default:
         fail(result.synopsis.name());
     }
+  }
+
+  private static void assertFormattedJava(String want, String... tokens) {
+    Formatter<Chain<NodeVariant>> formatter =
+        Java8Formatters.createFormatter();
+     formatter.setSoftColumnLimit(40);
+     for (String token : tokens) {
+       formatter.token(token);
+     }
+     FormattedSource code = formatter.format();
+     assertEquals(
+         Arrays.toString(tokens),
+         want, code.code);
   }
 
 }

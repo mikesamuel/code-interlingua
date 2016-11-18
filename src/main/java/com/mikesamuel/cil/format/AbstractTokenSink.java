@@ -38,8 +38,11 @@ public abstract class AbstractTokenSink implements TokenSink {
   /**
    * Called internally to manage the underlying buffer.
    * Should increment charInFile by content.length().
+   *
+   * @param adjustedContent after {@link MultilineAdjust}.
    */
-  protected abstract void appendTokenContent(String content);
+  protected abstract void appendTokenContent(
+      String content, String adjustedContent);
   /**
    * Called internally to manage the underlying buffer.
    * Should increment charInFile by count.
@@ -47,23 +50,72 @@ public abstract class AbstractTokenSink implements TokenSink {
   protected abstract void appendSpaceChars(char ch, int count);
 
   @Override
-  public void append(String tok) {
+  public void append(String tok, MultilineAdjust multilineAdjust) {
     Preconditions.checkState(
         tok.length() > 0 && tok.charAt(0) > 0x20,
         "Space should not be treated as tokens");
     this.prepareForToken();
     int startIndex = charInFile();
-    appendTokenContent(tok);
-    for (int i = 0, n = tok.length(); i < n; ++i) {
-      char c = tok.charAt(i);
+    String adjustedToken = adjustToken(tok, multilineAdjust);
+    appendTokenContent(tok, adjustedToken);
+    for (int i = 0, n = adjustedToken.length(); i < n; ++i) {
+      char c = adjustedToken.charAt(i);
       if (c == '\n' || c == '\r') {
         ++line;
-        if (c == '\r' && i + 1 < n && tok.charAt(i + 1) == '\n') {
+        if (c == '\r' && i + 1 < n && adjustedToken.charAt(i + 1) == '\n') {
           ++i;
         }
         startOfLine = startIndex + i + 1;
       }
     }
+  }
+
+  protected String adjustToken(String token, MultilineAdjust adj) {
+    switch (adj) {
+      case AS_IS:
+        return token;
+      case INDENT:
+        int n = token.length();
+        int indent = this.indentation();
+        StringBuilder adjusted = null;
+        int i = 0, lineStart = 0;
+        while (true) {
+          int lineEnd = -1;
+          if (i == n) {
+            if (lineStart == 0) { return token; }
+            lineEnd = n;
+          } else {
+            char ch = token.charAt(i);
+            if (ch == '\r' || ch == '\n') {
+              lineEnd = i + 1;
+              if (ch == '\r' && i + 1 < n && '\n' == token.charAt(lineEnd)) {
+                lineEnd = i + 2;
+              }
+            }
+          }
+          if (lineEnd < 0) {
+            ++i;
+          } else {
+            if (adjusted == null) {
+              adjusted = new StringBuilder(n * 2);
+            }
+            adjusted.ensureCapacity(
+                adjusted.length() + lineEnd - lineStart + indent);
+            if (lineStart != 0) {
+              for (int j = indent; --j >= 0;) {
+                adjusted.append(' ');
+              }
+            }
+            adjusted.append(token, lineStart, lineEnd);
+            lineStart = lineEnd;
+            i = lineEnd;
+            if (lineEnd == n) {
+              return adjusted.toString();
+            }
+          }
+        }
+    }
+    throw new AssertionError(adj);
   }
 
   @Override

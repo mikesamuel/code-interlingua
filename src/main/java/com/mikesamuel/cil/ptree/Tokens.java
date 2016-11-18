@@ -6,11 +6,25 @@ import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
+import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.TokenStrings;
+import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.Ignorables;
+import com.mikesamuel.cil.parser.LeftRecursion;
+import com.mikesamuel.cil.parser.MatchErrorReceiver;
+import com.mikesamuel.cil.parser.MatchState;
+import com.mikesamuel.cil.parser.ParSer;
+import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
+import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SerialErrorReceiver;
+import com.mikesamuel.cil.parser.SerialState;
 
 /**
  * Defines lexical structures.
@@ -363,4 +377,107 @@ public final class Tokens {
       "\"(?:'|" + CHAR_NO_QUOTES + ")*\"",
       "\"...\"");
 
+  /**
+   * Looks back to find JavaDoc comments on the input.
+   */
+  @SuppressWarnings("synthetic-access")
+  public static final ParSer JAVA_DOC_COMMENT = new JavaDocLookback();
+
+  /**
+   * True if the given content is a valid Java block comment.
+   *
+   * @param s post <code>&bsol;uXXXX</code> decoding.
+   */
+  public static boolean isBlockComment(String s) {
+    return s.startsWith("/*") && s.indexOf("*/", 2) == s.length() - 2;
+  }
+
+  private static final class JavaDocLookback extends ParSer {
+
+    @Override
+    public ParseResult parse(
+        ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
+      // Lookback on the queue for the last token parsed.
+      // The end of that token to the current index are ignorable tokens.
+      // Scan those for Javadoc comments.
+
+      int lastTokenEnd = 0;
+      for (Chain<MatchEvent> c = state.output; c != null; c = c.prev) {
+        MatchEvent e = c.x;
+        int nc = e.nCharsConsumed();
+        if (nc != 0) {
+          lastTokenEnd = e.getContentIndex() + nc;
+          break;
+        }
+      }
+
+      if (lastTokenEnd < state.index) {
+        // We can't scan left from state.index because we need to distinguish
+        // cases like
+        //      //  /** This is a line comment not a javadoc comment */
+        //      /*  /** This is a non-javadoc comment */
+        JavaDocCommentRecognizer r = new JavaDocCommentRecognizer();
+        int scanEnd = Ignorables.scanPastIgnorablesFrom(
+            state.input.content, lastTokenEnd, r);
+        Preconditions.checkState(scanEnd == state.index);
+        if (r.rightmostJavadocCommentContent != null) {
+          return ParseResult.success(
+              state.appendOutput(
+                  MatchEvent.ignorable(
+                      r.rightmostJavadocCommentContent,
+                      r.rightmostJavadocCommentIndex)),
+              // We looked back, we did not write back.
+              ParseResult.NO_WRITE_BACK_RESTRICTION,
+              ImmutableList.of());
+        }
+      }
+
+      return ParseResult.failure();
+    }
+
+    @Override
+    public Optional<SerialState> unparse(
+        SerialState state, SerialErrorReceiver err) {
+      // Don't require the ignorable, but step past it if it's present.
+      SerialState afterComment = state;
+      if (state.index < state.structure.size()) {
+        MatchEvent e = state.structure.get(state.index);
+        if (e instanceof MatchEvent.Ignorable) {
+          afterComment = state.advanceWithCopy();
+        }
+      }
+
+      return Optional.of(afterComment);
+    }
+
+    @Override
+    public Optional<MatchState> match(
+        MatchState state, MatchErrorReceiver err) {
+      MatchState afterComment = state;
+      if (state.index < state.events.size()) {
+        MatchEvent e = state.events.get(state.index);
+        if (e instanceof MatchEvent.Ignorable) {
+          afterComment = state.advance();
+        }
+      }
+      return Optional.of(afterComment);
+    }
+
+    static final class JavaDocCommentRecognizer
+    implements Ignorables.CommentReceiver {
+      int rightmostJavadocCommentIndex;
+      String rightmostJavadocCommentContent;
+
+      @Override
+      public void comment(int startIndex, String content) {
+        if (content.startsWith("/**")) {
+          Preconditions.checkState(
+              rightmostJavadocCommentContent == null
+              || startIndex > rightmostJavadocCommentIndex);
+          rightmostJavadocCommentContent = content;
+          rightmostJavadocCommentIndex = startIndex;
+        }
+      }
+    }
+  }
 }

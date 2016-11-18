@@ -228,6 +228,8 @@ StringLiteral:
      builtin
 NullLiteral:
      "null"
+JavaDocComment:
+     builtin
 //JavaLetter:
 //     any Unicode character that is a "Java letter"
 //JavaLetterOrDigit:
@@ -392,7 +394,7 @@ ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
 NormalClassDeclaration:
-     {ClassModifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
+     [JavaDocComment] {ClassModifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
      "public"
@@ -426,7 +428,7 @@ ClassMemberDeclaration:
      InterfaceDeclaration
      ";"
 FieldDeclaration:
-     {FieldModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
+     [JavaDocComment] {FieldModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
      Annotation
      "public"
@@ -472,7 +474,7 @@ UnannArrayType:
      UnannClassOrInterfaceType Dims
      UnannTypeVariable Dims
 MethodDeclaration:
-     {MethodModifier} MethodHeader MethodBody
+     [JavaDocComment] {MethodModifier} MethodHeader MethodBody (@name=Declaration)
 MethodModifier:
      Annotation
      "public"
@@ -523,7 +525,7 @@ InstanceInitializer:
 StaticInitializer:
      "static" Block
 ConstructorDeclaration:
-     {ConstructorModifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
+     [JavaDocComment] {ConstructorModifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
 ConstructorModifier:
      Annotation
      "public"
@@ -538,7 +540,7 @@ ExplicitConstructorInvocation:
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
 EnumDeclaration:
-     {ClassModifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
+     [JavaDocComment] {ClassModifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
 EnumBody:
      "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
 EnumConstantList:
@@ -556,7 +558,7 @@ InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
 NormalInterfaceDeclaration:
-     {InterfaceModifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
+     [JavaDocComment] {InterfaceModifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
 InterfaceModifier:
      Annotation
      "public"
@@ -576,14 +578,14 @@ InterfaceMemberDeclaration:
      InterfaceDeclaration
      ";"
 ConstantDeclaration:
-     {ConstantModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
+     [JavaDocComment] {ConstantModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 ConstantModifier:
      Annotation
      "public"
      "static"
      "final"
 InterfaceMethodDeclaration:
-     {InterfaceMethodModifier} MethodHeader MethodBody (@name=Declaration)
+     [JavaDocComment] {InterfaceMethodModifier} MethodHeader MethodBody (@name=Declaration)
 InterfaceMethodModifier:
      Annotation
      "public"
@@ -592,7 +594,7 @@ InterfaceMethodModifier:
      "static"
      "strictfp"
 AnnotationTypeDeclaration:
-     {InterfaceModifier} "@" "interface" SimpleTypeName AnnotationTypeBody (@name=Declaration)
+     [JavaDocComment] {InterfaceModifier} "@" "interface" SimpleTypeName AnnotationTypeBody (@name=Declaration)
 AnnotationTypeBody:
      "{" {AnnotationTypeMemberDeclaration} "}"
 AnnotationTypeMemberDeclaration:
@@ -602,7 +604,7 @@ AnnotationTypeMemberDeclaration:
      InterfaceDeclaration
      ";"
 AnnotationTypeElementDeclaration:
-     {AnnotationTypeElementModifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
+     [JavaDocComment] {AnnotationTypeElementModifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
 AnnotationTypeElementModifier:
      Annotation
      "public"

@@ -84,9 +84,12 @@ public class Formatter<C> {
     for (int i = 0, n = tokenIndices.size(); i < n; ++i) {
       int tokIdx = tokenIndices.get(i);
       DecoratedToken<C> tok = tokenList.get(i);
-      Preconditions.checkState(
-          code.regionMatches(tokIdx, tok.content, 0, tok.content.length()),
-          tok.content);
+      // TODO: Disabled because we re-indent javadoc comments.
+      // This is a useful check though, so we should do something like it.
+      // Maybe a first and last character same check.
+      //Preconditions.checkState(
+      //    code.regionMatches(tokIdx, tok.content, 0, tok.content.length()),
+      //    tok.content);
 
       if (tok.pos != null) {
         entries.add(new PositionMapping.Entry(

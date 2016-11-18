@@ -10,6 +10,8 @@ import junit.framework.TestCase;
 @SuppressWarnings("javadoc")
 public final class InputTest extends TestCase {
 
+  // TODO: Move this to IgnorablesTest.
+
   @Test
   public static void testTokenBreaks() {
     String code = Joiner.on('\n').join(
