@@ -71,24 +71,10 @@ final class Lookahead extends PTParSer {
     return Kind.LA;
   }
 
-  static final MatchEvent LOOKAHEAD_START = new MatchEvent() {
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
-    }
-
-    @Override
-    public final String toString() {
-      return "lookahead";
-    }
-  };
-
   @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
-    ParseResult result = body.getParSer().parse(
-        state.appendOutput(LOOKAHEAD_START), lr, err);
+    ParseResult result = body.getParSer().parse(state, lr, err);
     switch (result.synopsis) {
       case FAILURE:
         switch (valence) {
