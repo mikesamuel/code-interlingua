@@ -44,7 +44,7 @@ public abstract class BaseNode {
   }
 
   /** The source position.  Non-normative. */
-  public @Nullable SourcePosition getSourcePosition() {
+  public final @Nullable SourcePosition getSourcePosition() {
     return sourcePosition;
   }
 
