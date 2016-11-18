@@ -36,6 +36,14 @@ final class Java8TokenClassifier {
       case '0': case '1': case '2': case '3': case '4': case '5': case '6':
       case '7': case '8': case '9':
         return Classification.NUMBER_LITERAL;
+      case '/':
+        if (token.length() > 1) {
+          switch (token.charAt(1)) {
+            case '/': return Classification.LINE_COMMENT;
+            case '*': return Classification.BLOCK_COMMENT;
+          }
+        }
+        return Classification.PUNCTUATION;
     }
     if (Character.isJavaIdentifierStart(cp0)) {
       return Classification.IDENTIFIER_CHARS;
@@ -49,5 +57,7 @@ final class Java8TokenClassifier {
     NUMBER_LITERAL,
     STRING_LITERAL,
     PUNCTUATION,
+    LINE_COMMENT,
+    BLOCK_COMMENT,
   }
 }

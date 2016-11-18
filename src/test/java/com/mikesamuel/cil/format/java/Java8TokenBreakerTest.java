@@ -81,6 +81,18 @@ public final class Java8TokenBreakerTest extends TestCase {
   }
 
   @Test
+  public static void testCommentDelimiterAmbiguity() {
+    assertSpacedTokens(false, "/ *", "/", "*");
+    assertSpacedTokens(false, "/ *", "/", "*");
+    assertSpacedTokens(false, "/ **", "/", "*", "*");
+    assertSpacedTokens(false, "/ /**foo*/", "/", "/**foo*/");
+    assertSpacedTokens(false, "/ //foo", "/", "//foo");
+    assertEquals(
+        TokenBreak.MUST,
+        new Java8TokenBreaker().lineBetween("//foo", null, "x", null));
+  }
+
+  @Test
   public static void testConventions() {
     assertSpacedTokens(
         true, "if (x == y) { return; }",

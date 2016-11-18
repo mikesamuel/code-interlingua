@@ -52,6 +52,17 @@ implements TokenBreaker<Chain<NodeVariant>> {
           || !Tokens.punctuationSuffixes(extended).isEmpty()) {
         return TokenBreak.MUST;
       }
+      if (extended.contains("//") || extended.contains("/*")) {
+        return TokenBreak.MUST;
+      }
+    }
+
+    if (lc == Classification.PUNCTUATION
+        && "/".equals(left)
+        && (rc == Classification.BLOCK_COMMENT
+            || rc == Classification.LINE_COMMENT)) {
+      // Avoid "/" and "/*" from becoming a line comment.
+      return TokenBreak.MUST;
     }
 
     if (lc == Classification.PUNCTUATION) {
@@ -160,6 +171,9 @@ implements TokenBreaker<Chain<NodeVariant>> {
   public TokenBreak lineBetween(
       String left,  @Nullable Chain<NodeVariant> leftStack,
       String right, @Nullable Chain<NodeVariant> rightStack) {
+    if (left.startsWith("//")) {
+      return TokenBreak.MUST;
+    }
     switch (left) {
       case "{":
         if (!right.equals("}")) {
