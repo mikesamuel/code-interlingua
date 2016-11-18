@@ -1,14 +1,12 @@
 package com.mikesamuel.cil.format;
 
 import java.util.List;
-import java.util.Map;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 
 /**
  * A gross structure handler that is suitable for C-like languages whose
@@ -138,19 +136,12 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
         block.setOrientation(Orientation.ONE_LINE);
       }
 
-      Map<GrossStructure, Orientation> bestOrientations =
-          Maps.newIdentityHashMap();
-      int bestLineCount = Integer.MAX_VALUE;
-
-      opt_loop:
       while (true) {
         PositioningTokenSink pts = new PositioningTokenSink();
-        boolean pass;
         try {
           root.appendTokens(pts, softColumnLimit);
-          pass = true;
         } catch (@SuppressWarnings("unused") OneLineFailure f) {
-          pass = false;
+          continue;
         }
 
         if (DEBUG) {
@@ -163,42 +154,9 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
                       return b.getOrientation();
                     }
                   }));
-          System.err.println("\tpass=" + pass);
         }
 
-        if (pass) {
-          int lineCount = pts.lineNumber();
-          if (DEBUG) {
-            System.err.println(
-                "\tlineCount=" + lineCount
-                + ", bestLineCount=" + bestLineCount);
-          }
-          if (lineCount <= bestLineCount) {
-            for (int i = 0, n = blocks.size(); i < n; ++i) {
-              BlockGrossStructure b = blocks.get(i);
-              bestOrientations.put(b, b.getOrientation());
-            }
-            bestLineCount = lineCount;
-          }
-        }
-
-
-        // This is doing an increment where the orientations are
-        // a sequence of binary digits.
-        for (int i = blocks.size(); --i >= 0;) {
-          if (blocks.get(i).flipOrientation() == Orientation.ONE_LINE) {
-            // We flipped a zero to a 1 in our left-ward walk, so we're done
-            // propagating the carry.
-            continue opt_loop;
-          }
-        }
-        // If control reaches here, then we overflowed so we're done.
         break;
-      }
-
-      for (BlockGrossStructure block : blocks) {
-        block.discardCachedOptimizationState();
-        block.setOrientation(bestOrientations.get(block));
       }
     }
 
@@ -352,6 +310,7 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
         sink.prepareForToken();
         if (sink.column() + content.length() > softColumnLimit
             && getOrientation() == Orientation.ONE_LINE) {
+          parent.setOrientation(Orientation.MULTILINE);
           @SuppressWarnings("synthetic-access")
           RuntimeException nonLocalTransfer = ONE_LINE_FAILURE;
           throw nonLocalTransfer;
@@ -371,16 +330,6 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
     }
 
     static final class BlockGrossStructure extends AbstractGrossStructure {
-      /**
-       * During optimization, the position after appending tokens.
-       * Else null.
-       */
-      private PositioningTokenSink positionAfter;
-      /**
-       * An extra bit of state to make sure positionAfter != null means
-       * that it is a valid cache of the operation being performed.
-       */
-      private int cacheSoftColumnLimit;
       /**
        * Set speculatively during optimization to find the combination that
        * minimizes the line count.
@@ -403,57 +352,21 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
 
       @Override
       public void appendTokens(TokenSink sink, int softColumnLimit) {
-        // We might skip some children if we're doing optimization and have
-        // some cached state.
-        int startIndex = 0;
-
-        // Take into account cached optimization state where possible.
-        if (sink instanceof PositioningTokenSink) {
-          if (positionAfter != null
-              && cacheSoftColumnLimit == softColumnLimit) {
-            ((PositioningTokenSink) sink).resetTo(positionAfter);
-            return;
-          }
-          // Look from the right for a child with a valid cache and resume
-          // from there.
-          for (int i = children.size(); --i >= 0;) {
-            AbstractGrossStructure child = children.get(i);
-            if (child instanceof BlockGrossStructure) {
-              BlockGrossStructure blockChild = (BlockGrossStructure) child;
-              if (blockChild.positionAfter != null
-                  && softColumnLimit == blockChild.cacheSoftColumnLimit) {
-                startIndex = i + 1;
-                ((PositioningTokenSink) sink).resetTo(blockChild.positionAfter);
-                break;
-              }
-            }
-          }
-        }
-
         // Indent as necessary.
-        boolean alreadyIndented = startIndex != 0;
         boolean dedentAfter = false;
         if (indent != 0) {
-          if (!alreadyIndented) {
-            sink.indentBy(indent);
-          }
+          sink.indentBy(indent);
           dedentAfter = true;
         }
 
         // Apply children.
-        for (int i = startIndex, n = children.size(); i < n; ++i) {
-          children.get(i).appendTokens(sink, softColumnLimit);
+        for (AbstractGrossStructure child : children) {
+          child.appendTokens(sink, softColumnLimit);
         }
 
         // Dedent as necessary.
         if (dedentAfter) {
           sink.dedent();
-        }
-
-        if (sink instanceof PositioningTokenSink) {
-          this.positionAfter = new PositioningTokenSink(
-              (PositioningTokenSink) sink);
-          this.cacheSoftColumnLimit = softColumnLimit;
         }
       }
 
@@ -464,26 +377,7 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
 
       void setOrientation(Orientation newOrientation) {
         Preconditions.checkNotNull(newOrientation);
-        if (orientation != newOrientation) {
-          this.orientation = newOrientation;
-          if (this.positionAfter != null) {
-            for (BlockGrossStructure b = this; b != null; b = b.parent) {
-              b.positionAfter = null;
-            }
-          }
-        }
-      }
-
-      Orientation flipOrientation() {
-        Orientation old = orientation;
-        setOrientation(
-            orientation == Orientation.MULTILINE
-            ? Orientation.ONE_LINE : Orientation.MULTILINE);
-        return old;
-      }
-
-      void discardCachedOptimizationState() {
-        this.positionAfter = null;
+        this.orientation = newOrientation;
       }
 
       void addAllBlocks(List<? super BlockGrossStructure> blocks) {
@@ -508,10 +402,6 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
      */
     private static final class PositioningTokenSink extends AbstractTokenSink {
       private int charInFile;
-
-      PositioningTokenSink(PositioningTokenSink original) {
-        super(original);
-      }
 
       PositioningTokenSink() {
         super();

@@ -280,24 +280,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
       Debug.dumpEvents(verified.events);
     }
 
-    StringBuilder sb = new StringBuilder();
-    // TODO: Use Unparse.format
-    for (MatchEvent e : verified.events) {
-      String content = null;
-      if (e instanceof MatchEvent.Token) {
-        content = ((MatchEvent.Token) e).content;
-      } else if (e instanceof MatchEvent.Content) {
-        content = ((MatchEvent.Content) e).content;
-      }
-      if (content != null) {
-        if (sb.length() != 0) {
-          sb.append(' ');
-        }
-        sb.append(content);
-      }
-    }
-
-    Input input = input(sb.toString());
+    Input input = input(Unparse.format(verified).code);
     LatestParseErrorReceiver reparseErr = new LatestParseErrorReceiver();
     ParseResult reparse = parSer.parse(
         new ParseState(input), new LeftRecursion(), reparseErr);
