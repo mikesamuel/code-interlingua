@@ -4,7 +4,6 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -14,8 +13,7 @@ import com.mikesamuel.cil.parser.SourcePosition;
  */
 public class Formatter<C> {
   /** Used to figure out how to break tokens into lines and indent the lines. */
-  public final Function<? super ImmutableList<DecoratedToken<C>>,
-                        ? extends GrossStructure> grossStructurer;
+  public final Layout<C> layout;
   private final ImmutableList.Builder<DecoratedToken<C>> tokens =
       ImmutableList.builder();
   private SourcePosition sourcePosition;
@@ -23,10 +21,8 @@ public class Formatter<C> {
   private int softColumnLimit = 80;
 
   /** */
-  public Formatter(
-      Function<? super ImmutableList<DecoratedToken<C>>,
-               ? extends GrossStructure> grossStructurer) {
-    this.grossStructurer = grossStructurer;
+  public Formatter(Layout<C> layout) {
+    this.layout = layout;
   }
 
   /**
@@ -77,7 +73,7 @@ public class Formatter<C> {
   public FormattedSource format() {
     StringBuilderTokenSink sink = new StringBuilderTokenSink();
     ImmutableList<DecoratedToken<C>> tokenList = tokens.build();
-    GrossStructure root = grossStructurer.apply(tokenList);
+    GrossStructure root = layout.layout(tokenList, softColumnLimit);
     root.appendTokens(sink, softColumnLimit);
     String code = sink.getCode();
 

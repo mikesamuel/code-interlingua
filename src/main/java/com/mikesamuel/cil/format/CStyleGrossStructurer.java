@@ -6,6 +6,7 @@ import java.util.Map;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -14,9 +15,7 @@ import com.google.common.collect.Maps;
  * gross structure is based on bracketed blocks like <code>{...}</code>
  * and <code>(...)</code>.
  */
-public class CStyleGrossStructurer<C>
-implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
-                    GrossStructure>{
+public class CStyleGrossStructurer<C> implements Layout<C> {
 
   final TokenBreaker<C> tokenBreaker;
 
@@ -28,11 +27,15 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
   private static final boolean DEBUG = false;
 
   @Override
-  public GrossStructure apply(
-      ImmutableList<Formatter.DecoratedToken<C>> tokens) {
-    @SuppressWarnings("synthetic-access")
-    Layout layout = new Layout();
+  public GrossStructure layout(
+      Iterable<? extends Formatter.DecoratedToken<C>> tokens,
+      int softColumnLimit) {
+    return layout(ImmutableList.copyOf(tokens), softColumnLimit);
+  }
 
+  GrossStructure layout(
+      ImmutableList<Formatter.DecoratedToken<C>> tokens,
+      int softColumnLimit) {
     List<Layout.AbstractGrossStructure> structure = Lists.newArrayList();
     Formatter.DecoratedToken<C> last = null;
     Layout.Break lastBreak = null;
@@ -62,12 +65,12 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
       last = token;
     }
 
-    Layout.BlockGrossStructure root = layout.nest(structure);
+    Layout.BlockGrossStructure root = Layout.nest(structure);
     if (DEBUG) {
       System.err.println("structure=" + structure);
       System.err.println("root     =" + root);
     }
-    Layout.optimize(root);
+    Layout.optimize(root, softColumnLimit);
     return root;
   }
 
@@ -81,16 +84,16 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
    * the overall line count.
    */
   private static final class Layout {
-    BlockGrossStructure nest(List<AbstractGrossStructure> gs) {
+    static BlockGrossStructure nest(List<AbstractGrossStructure> gs) {
       ImmutableList.Builder<AbstractGrossStructure> children =
           ImmutableList.builder();
       for (int end = 0; end < gs.size();) {
         end = nest(gs, end, gs.size(), children);
       }
-      return new BlockGrossStructure(children.build());
+      return new BlockGrossStructure(0, children.build());
     }
 
-    private int nest(
+    private static int nest(
         List<AbstractGrossStructure> gs, int left, int right,
         ImmutableList.Builder<AbstractGrossStructure> children) {
       for (int i = left; i < right; ++i) {
@@ -98,20 +101,23 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
         if (g instanceof OneToken) {
           OneToken t = (OneToken) g;
           if (t.content.length() == 1) {
-            switch (t.content.charAt(0)) {
+            char ch0 = t.content.charAt(0);
+            switch (ch0) {
               case '(': case '[': case '{':
+                int indent = ch0 == '(' ? 4 : 2;
                 ImmutableList.Builder<AbstractGrossStructure> nested =
                     ImmutableList.builder();
-                nested.add(t);
-                i = nest(gs, i + 1, right, nested)
-                    - 1  // Undo increment on continue.
-                    ;
-                children.add(new BlockGrossStructure(nested.build()));
+                int end = nest(gs, i + 1, right, nested);
+                children.add(t);  // Open bracket.
+                children.add(new BlockGrossStructure(indent, nested.build()));
+                if (end < right) {
+                  children.add(gs.get(end));  // Close bracket.
+                }
+                i = end;
                 continue;
               case '}': case ']': case ')':
                 // Return control to parent to handle siblings.
-                children.add(g);
-                return i + 1;
+                return i;
             }
           }
         }
@@ -124,7 +130,7 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
      * Pick the best ONE_LINE or MULTILINE orientations given the blocks
      * reachable from root.
      */
-    static void optimize(BlockGrossStructure root) {
+    static void optimize(BlockGrossStructure root, int softColumnLimit) {
       List<BlockGrossStructure> blocks = Lists.newArrayList();
       root.addAllBlocks(blocks);
       for (int i = 0, n = blocks.size(); i < n; ++i) {
@@ -141,19 +147,41 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
         PositioningTokenSink pts = new PositioningTokenSink();
         boolean pass;
         try {
+          root.appendTokens(pts, softColumnLimit);
           pass = true;
         } catch (@SuppressWarnings("unused") OneLineFailure f) {
           pass = false;
         }
 
-        int lineCount = pts.lineNumber();
-        if (pass && lineCount <= bestLineCount) {
-          for (int i = 0, n = blocks.size(); i < n; ++i) {
-            BlockGrossStructure b = blocks.get(i);
-            bestOrientations.put(b, b.getOrientation());
-          }
-          bestLineCount = lineCount;
+        if (DEBUG) {
+          System.err.println(
+              "Orientations: "
+              + Iterables.transform(
+                  blocks, new Function<BlockGrossStructure, Orientation>() {
+                    @Override
+                    public Orientation apply(BlockGrossStructure b) {
+                      return b.getOrientation();
+                    }
+                  }));
+          System.err.println("\tpass=" + pass);
         }
+
+        if (pass) {
+          int lineCount = pts.lineNumber();
+          if (DEBUG) {
+            System.err.println(
+                "\tlineCount=" + lineCount
+                + ", bestLineCount=" + bestLineCount);
+          }
+          if (lineCount <= bestLineCount) {
+            for (int i = 0, n = blocks.size(); i < n; ++i) {
+              BlockGrossStructure b = blocks.get(i);
+              bestOrientations.put(b, b.getOrientation());
+            }
+            bestLineCount = lineCount;
+          }
+        }
+
 
         // This is doing an increment where the orientations are
         // a sequence of binary digits.
@@ -360,31 +388,17 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
       private Orientation orientation = Orientation.ONE_LINE;
 
       final ImmutableList<AbstractGrossStructure> children;
-      private final char bracketKind;
+      private final int indent;
 
-      BlockGrossStructure(ImmutableList<AbstractGrossStructure> children) {
+      BlockGrossStructure(
+          int indent,
+          ImmutableList<AbstractGrossStructure> children) {
+        this.indent = indent;
         this.children = children;
         for (AbstractGrossStructure child : children) {
           Preconditions.checkState(child.parent == null);
           child.parent = this;
         }
-        char bracketKindChar = '\0';
-        if (!this.children.isEmpty()) {
-          AbstractGrossStructure child0 = children.get(0);
-          if (child0 instanceof OneToken) {
-            OneToken tok0 = (OneToken) child0;
-            if (tok0.content.length() == 1) {
-              bracketKindChar = tok0.content.charAt(0);
-              switch (bracketKindChar) {
-                case '(': case '[': case '{':
-                  break;
-                default:
-                  bracketKindChar = '\0';
-              }
-            }
-          }
-        }
-        this.bracketKind = bracketKindChar;
       }
 
       @Override
@@ -419,15 +433,11 @@ implements Function<ImmutableList<Formatter.DecoratedToken<C>>,
         // Indent as necessary.
         boolean alreadyIndented = startIndex != 0;
         boolean dedentAfter = false;
-        switch (bracketKind) {
-          case '(': case '[':
-            if (!alreadyIndented) { sink.indentBy(4); }
-            dedentAfter = true;
-            break;
-          case '{':
-            if (!alreadyIndented) { sink.indentBy(2); }
-            dedentAfter = true;
-            break;
+        if (indent != 0) {
+          if (!alreadyIndented) {
+            sink.indentBy(indent);
+          }
+          dedentAfter = true;
         }
 
         // Apply children.
