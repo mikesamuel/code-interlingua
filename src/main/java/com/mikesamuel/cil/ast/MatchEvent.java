@@ -38,19 +38,34 @@ public abstract class MatchEvent {
   }
 
   /**
-   * Fired for leaf nodes.
+   * An event fired when a prefix of the input matches a lexical token whose
+   * content is semantically significant.
+   * <p>
+   * These events correspond to the content of leaf nodes in the AST.
    */
   public static Content content(String s, int index) {
     return new Content(s, index);
   }
 
   /**
-   * Generated during parse for tokens matched so that our LR detection can
-   * determine whether content has been consumed since a push of a variant.
+   * An event fired when a prefix of the input matches a literal string in the
+   * grammar.
+   * <p>
+   * Since the string appears directly in the grammar, its content is not
+   * semantically significant and serves only to control which variant was
+   * token.
    */
   public static Token token(String s, int index) {
     return new Token(s, index);
   }
+
+  /**
+   * Text that matches an ignorable token like a JavaDoc comment.
+   */
+  public static Ignorable ignorable(String s, int index) {
+    return new Ignorable(s, index);
+  }
+
 
   /**
    * An ephemeral event that indicates that we are starting to look for a
@@ -97,8 +112,19 @@ public abstract class MatchEvent {
    * True iff non-ignorable tokens were consumed to produce this event, thus
    * limiting LR search.
    */
-  public abstract int nCharsConsumed();
+  public final int nCharsConsumed() { return getContent().length(); }
 
+  /** If this consumes characters, the content consumed. */
+  @SuppressWarnings("static-method")  // Overridable
+  public String getContent() {
+    return "";
+  }
+
+  /** The index of the content in the input or -1 if there is no content. */
+  @SuppressWarnings("static-method")  // Overridable
+  public int getContentIndex() {
+    return -1;
+  }
 
   /**
    * An event that happens when we leave a node after visiting its content and
@@ -123,11 +149,6 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public int nCharsConsumed() {
-      return 0;
-    }
-
-    @Override
     public boolean equals(Object o) {
       return o != null && this.getClass() == o.getClass();
     }
@@ -147,11 +168,6 @@ public abstract class MatchEvent {
 
     Push(NodeVariant variant) {
       this.variant = variant;
-    }
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
     }
 
     @Override
@@ -205,8 +221,13 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public int nCharsConsumed() {
-      return content.length();
+    public String getContent() {
+      return content;
+    }
+
+    @Override
+    public int getContentIndex() {
+      return index;
     }
 
     @Override
@@ -260,8 +281,13 @@ public abstract class MatchEvent {
     }
 
     @Override
-    public int nCharsConsumed() {
-      return content.length();
+    public String getContent() {
+      return content;
+    }
+
+    @Override
+    public int getContentIndex() {
+      return index;
     }
 
     @Override
@@ -301,6 +327,57 @@ public abstract class MatchEvent {
   }
 
   /**
+   * Text that matches an ignorable token like a JavaDoc comment.
+   */
+  public static final class Ignorable extends MatchEvent {
+    /** The ignorable text. */
+    public final String ignorableContent;
+    /** Character index into the input of the start of the content. */
+    public final int index;
+
+    Ignorable(String content, int index) {
+      this.ignorableContent = content;
+      this.index = index;
+    }
+
+    @Override
+    public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result
+          + ((ignorableContent == null) ? 0 : ignorableContent.hashCode());
+      return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (obj == null) {
+        return false;
+      }
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      Ignorable other = (Ignorable) obj;
+      if (ignorableContent == null) {
+        if (other.ignorableContent != null) {
+          return false;
+        }
+      } else if (!ignorableContent.equals(other.ignorableContent)) {
+        return false;
+      }
+      return true;
+    }
+
+    @Override
+    public String toString() {
+      return "[`" + ignorableContent + "`]";
+    }
+  }
+
+  /**
    * An ephemeral event that indicates that what follows is a repetition of a
    * suffix that is used to grow the seed.
    */
@@ -314,11 +391,6 @@ public abstract class MatchEvent {
     @Override
     public String toString() {
       return "LRStart";
-    }
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
     }
   }
 
@@ -339,11 +411,6 @@ public abstract class MatchEvent {
     @Override
     public String toString() {
       return "(LREnd " + nodeType + ")";
-    }
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
     }
 
     @Override
@@ -386,11 +453,6 @@ public abstract class MatchEvent {
 
     SourcePositionMark(SourcePosition pos) {
       this.pos = pos;
-    }
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
     }
 
     @Override
@@ -441,11 +503,6 @@ public abstract class MatchEvent {
 
     DelayedCheck(Predicate<Unparse.Suffix> p) {
       this.p = p;
-    }
-
-    @Override
-    public int nCharsConsumed() {
-      return 0;
     }
 
     @Override
