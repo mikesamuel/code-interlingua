@@ -10,6 +10,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.mikesamuel.cil.ast.Debug;
 import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.MatchEvent.Push;
 import com.mikesamuel.cil.ast.NodeType;
@@ -124,28 +125,6 @@ final class Reference extends PTParSer {
   @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
-    initLazy();
-
-    ParseCacheEntry cachedParse = state.input.ratPack.getCachedParse(
-        nodeType, state.index);
-    if (cachedParse.wasTried()) {
-      if (cachedParse.passed()) {
-        if (DEBUG) {
-          System.err.println(indent() + "Using cached success for " + nodeType);
-        }
-        return ParseResult.success(
-            cachedParse.apply(state),
-            ParseResult.NO_WRITE_BACK_RESTRICTION, ImmutableSet.of());
-      } else {
-        if (DEBUG) {
-          System.err.println(indent() + "Using cached failure for " + nodeType);
-        }
-        return ParseResult.failure();
-      }
-    }
-
-    Profile.count(nodeType);
-
     LeftRecursion.Stage stage = lr.stageForProductionAt(nodeType, state.index);
     switch (stage) {
       case GROWING:
@@ -170,6 +149,31 @@ final class Reference extends PTParSer {
         }
         return ParseResult.failure(Sets.immutableEnumSet(nodeType));
     }
+
+    ParseCacheEntry cachedParse = state.input.ratPack.getCachedParse(
+        nodeType, state.index);
+    if (cachedParse.wasTried()) {
+      if (cachedParse.passed()) {
+        if (DEBUG) {
+          System.err.println(
+              indent() + "Using cached success for " + nodeType
+              + " @ " + state.index);
+        }
+        return ParseResult.success(
+            cachedParse.apply(state),
+            ParseResult.NO_WRITE_BACK_RESTRICTION, ImmutableSet.of());
+      } else {
+        if (DEBUG) {
+          System.err.println(
+              indent() + "Using cached failure for " + nodeType
+              + " @ " + state.index);
+        }
+        return ParseResult.failure();
+      }
+    }
+
+    Profile.count(nodeType);
+
 
     if (DEBUG) {
       System.err.println(indent() + "Entered " + nodeType + " @ " + state.index);
@@ -308,7 +312,7 @@ final class Reference extends PTParSer {
     if (DEBUG) { indent(1); }
 
     try {
-      for (NodeVariant variant : variants) {
+      for (NodeVariant variant : getVariants()) {
         if (stage == Stage.SEEDING) {
           //Lookahead1 la1 = variant.getLookahead1();
           //if (!(la1 == null || la1.canFollow(state))) {
@@ -441,7 +445,7 @@ final class Reference extends PTParSer {
 
   private static final class LRRewriter {
     private final MatchEvent.LREnd toPushback;
-    private final List<MatchEvent> pushback = Lists.newArrayList();
+    private final List<List<MatchEvent>> pushback = Lists.newArrayList();
     private int popDepth;
 
     LRRewriter(NodeType nodeType) {
@@ -453,19 +457,16 @@ final class Reference extends PTParSer {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "before rewriteLR " + toPushback);
-        dumpEvents(indent, out);
+        Debug.dumpEvents(indent, Chain.forwardIterable(out), System.err);
       }
-      List<MatchEvent.Pop> pops = Lists.newArrayList();
       Chain<MatchEvent> withPushbackAndPops = pushback(out);
-      for (MatchEvent pop : pops) {
-        withPushbackAndPops = Chain.append(withPushbackAndPops, pop);
-      }
       Preconditions.checkState(pushback.isEmpty());
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "after rewriteLR " + toPushback);
-        dumpEvents(indent, withPushbackAndPops);
+        Debug.dumpEvents(
+            indent, Chain.forwardIterable(withPushbackAndPops), System.err);
       }
       return withPushbackAndPops;
     }
@@ -498,8 +499,13 @@ final class Reference extends PTParSer {
           Preconditions.checkState(
               toPushback.nodeType == push.variant.getNodeType());
           pushedBack = out.prev;
-          for (MatchEvent pb : Lists.reverse(pushback)) {
-            pushedBack = Chain.append(pushedBack, pb);
+          if (DEBUG) {
+            System.err.println(indent() + "Pushback = " + pushback);
+          }
+          for (List<MatchEvent> onePb : pushback) {
+            for (MatchEvent pb : Lists.reverse(onePb)) {
+              pushedBack = Chain.append(pushedBack, pb);
+            }
           }
           pushback.clear();
           pushedBack = Chain.append(pushedBack, e);
@@ -510,6 +516,8 @@ final class Reference extends PTParSer {
         int pushCount = 0;
         int popCount = 0;
 
+        List<MatchEvent> onePb = Lists.newArrayList();
+        pushback.add(onePb);
         pushedBack = null;
         boolean foundStart = false;
         for (Chain<MatchEvent> c = out.prev; c != null; c = c.prev) {
@@ -522,10 +530,10 @@ final class Reference extends PTParSer {
             foundStart = true;
             break;
           } else if (ce instanceof MatchEvent.Pop) {
-            pushback.add(ce);
+            onePb.add(ce);
             ++popCount;
           } else if (ce instanceof MatchEvent.Push) {
-            pushback.add(ce);
+            onePb.add(ce);
             ++pushCount;
           } else {
             throw new AssertionError("Non push/pop on path to LR invocation");
@@ -536,27 +544,6 @@ final class Reference extends PTParSer {
         pushedBack = Chain.append(pushback(out.prev), e);
       }
       return pushedBack;
-    }
-  }
-
-  private static void dumpEvents(String indent, Chain<MatchEvent> events) {
-    StringBuilder sb = new StringBuilder(indent).append(". ");
-    int pushDepth = 0;
-    for (MatchEvent e : Chain.forwardIterable(events)) {
-      if (e instanceof MatchEvent.Pop) {
-        if (pushDepth > 0) {
-          --pushDepth;
-          sb.setLength(sb.length() - 2);
-        }
-      }
-      int len = sb.length();
-      sb.append(e);
-      System.err.println(sb);
-      sb.setLength(len);
-      if (e instanceof MatchEvent.Push) {
-        ++pushDepth;
-        sb.append(". ");
-      }
     }
   }
 }
