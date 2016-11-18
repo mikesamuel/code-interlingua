@@ -36,11 +36,6 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
   }
 
   @Test
-  public void testMatchEvent() throws IOException {
-    sanityCheckSourceFile("/com/mikesamuel/cil/ast/MatchEvent.java");
-  }
-
-  @Test
   public void testThemAll() throws Exception {
     for (String line : Resources.readLines(
             Resources.getResource(getClass(), "/all-sources.txt"),

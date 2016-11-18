@@ -3,7 +3,7 @@ package com.mikesamuel.cil.ptree;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;

@@ -1,9 +1,9 @@
 package com.mikesamuel.cil.parser;
 
 import com.google.common.base.Optional;
-import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.event.MatchEvent;
 
 /** Provides parsing and serializing for AST nodes. */
 public abstract class ParSer implements ParSerable {

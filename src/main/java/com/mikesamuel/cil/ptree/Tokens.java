@@ -12,8 +12,8 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
-import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.TokenStrings;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Ignorables;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -421,10 +421,21 @@ public final class Tokens {
             state.input.content, lastTokenEnd, r);
         Preconditions.checkState(scanEnd == state.index);
         if (r.rightmostJavadocCommentContent != null) {
+          int nLeadingWhitespace = 0;
+          for (int i = r.rightmostJavadocCommentIndex; --i >= lastTokenEnd;) {
+            char ch = state.input.content.charAt(i);
+            if (ch == ' ' || ch == '\t') {
+              ++nLeadingWhitespace;
+            } else {
+              break;
+            }
+          }
           return ParseResult.success(
               state.appendOutput(
                   MatchEvent.ignorable(
-                      r.rightmostJavadocCommentContent,
+                      stripLeadingWhitespace(
+                          r.rightmostJavadocCommentContent,
+                          nLeadingWhitespace),
                       r.rightmostJavadocCommentIndex)),
               // We looked back, we did not write back.
               ParseResult.NO_WRITE_BACK_RESTRICTION,
@@ -478,6 +489,34 @@ public final class Tokens {
           rightmostJavadocCommentIndex = startIndex;
         }
       }
+    }
+
+    private static String stripLeadingWhitespace(
+        String multilineToken, int maxSpaceToStrip) {
+      StringBuilder sb = null;
+      int n = multilineToken.length();
+      int pos = 0;
+      for (int i = 0; i < n; ++i) {
+        char ch = multilineToken.charAt(i);
+        if (ch == '\n' || ch == '\r') {
+          if (ch == '\r' && i + 1 < n && '\n' == multilineToken.charAt(i + 1)) {
+            ++i;
+          }
+          if (sb == null) { sb = new StringBuilder(); }
+          sb.append(multilineToken, pos, i + 1);
+          pos = i + 1;
+          for (int j = 0; j < maxSpaceToStrip && pos < n; ++j, ++pos) {
+            ch = multilineToken.charAt(pos);
+            if (ch != ' ' && ch != '\t') {
+              break;
+            }
+          }
+        }
+      }
+      return pos == 0
+          ? multilineToken
+          : Preconditions.checkNotNull(sb).append(
+              multilineToken, pos, n).toString();
     }
   }
 }

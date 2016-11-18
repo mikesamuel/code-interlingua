@@ -1,5 +1,10 @@
 package com.mikesamuel.cil.ptree;
 
+import static com.mikesamuel.cil.event.MatchEvent.content;
+import static com.mikesamuel.cil.event.MatchEvent.pop;
+import static com.mikesamuel.cil.event.MatchEvent.push;
+import static com.mikesamuel.cil.event.MatchEvent.token;
+
 import org.junit.Test;
 
 import com.mikesamuel.cil.ast.AbstractParSerTestCase;
@@ -18,11 +23,6 @@ import com.mikesamuel.cil.ast.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
-
-import static com.mikesamuel.cil.ast.MatchEvent.content;
-import static com.mikesamuel.cil.ast.MatchEvent.pop;
-import static com.mikesamuel.cil.ast.MatchEvent.push;
-import static com.mikesamuel.cil.ast.MatchEvent.token;
 
 @SuppressWarnings("javadoc")
 public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {

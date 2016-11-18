@@ -6,9 +6,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.mikesamuel.cil.ast.JavaDocCommentNode;
-import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.format.Formatter;
 import com.mikesamuel.cil.format.java.Java8Formatters;
@@ -58,8 +57,7 @@ public final class Unparse {
         if (nv != 0) {
           MatchEvent last = verifiedTokens.get(nv - 1);
           if (last instanceof MatchEvent.Push
-              && (((MatchEvent.Push) last).variant
-                  == JavaDocCommentNode.Variant.Builtin)) {
+              && ((MatchEvent.Push) last).variant.isIgnorable()) {
             MatchEvent.Ignorable ign = (MatchEvent.Ignorable) e;
             String commentContent = ign.ignorableContent;
             if (Tokens.isBlockComment(commentContent)) {

@@ -3,9 +3,9 @@ package com.mikesamuel.cil.format.java;
 import org.junit.Test;
 
 import com.google.common.base.Preconditions;
-import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.format.TokenBreak;
 import com.mikesamuel.cil.format.TokenBreaker;
 import com.mikesamuel.cil.format.java.Java8TokenBreaker;

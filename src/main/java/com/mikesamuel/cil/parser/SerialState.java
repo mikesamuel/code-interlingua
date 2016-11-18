@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent;
 
 /**
  * The state of an unparsing operation.

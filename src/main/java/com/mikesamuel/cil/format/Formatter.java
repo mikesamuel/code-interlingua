@@ -87,6 +87,10 @@ public class Formatter<C> {
       // TODO: Disabled because we re-indent javadoc comments.
       // This is a useful check though, so we should do something like it.
       // Maybe a first and last character same check.
+      // Alternatively, maybe tag Tokens with their event kind :
+      // (token, content, ignorable) and skip the check on ignorable tokens.
+      // Alternatively, reenable the check for tokens that contain no embedded
+      // newlines.
       //Preconditions.checkState(
       //    code.regionMatches(tokIdx, tok.content, 0, tok.content.length()),
       //    tok.content);

@@ -2,6 +2,7 @@ package com.mikesamuel.cil.ast;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -47,7 +48,7 @@ public interface NodeVariant extends ParSerable {
 
   /**
    * True iff the variant is anonymous meaning that parsing using it should not
-   * result in {@linkplain MatchEvent.Push push}/{@linkplain MatchEvent.Pop pop}
+   * result in {@linkplain MatchEvent#push push}/{@linkplain MatchEvent#pop pop}
    * events.
    */
   default boolean isAnon() {
@@ -59,5 +60,12 @@ public interface NodeVariant extends ParSerable {
    */
   default Predicate<Chain<MatchEvent>> getPostcond() {
     return Predicates.alwaysTrue();
+  }
+
+  /**
+   * True if the content has no semantic value.
+   */
+  default boolean isIgnorable() {
+    return false;
   }
 }

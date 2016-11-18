@@ -1,6 +1,8 @@
 package com.mikesamuel.cil.ast;
 
 import com.google.common.base.Predicate;
+import com.mikesamuel.cil.event.Debug;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.Chain;
 
 /**

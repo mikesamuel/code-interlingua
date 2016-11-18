@@ -1124,7 +1124,8 @@ public enum NodeType implements ParSerable {
                 'name': None,
                 'postcond': (
                     'Predicate<Chain<MatchEvent>>',
-                    ('com.mikesamuel.cil.parser.Chain',
+                    ('com.mikesamuel.cil.event.MatchEvent',
+                     'com.mikesamuel.cil.parser.Chain',
                      'com.google.common.base.Predicate'),
                     lambda x: x
                 ),

@@ -4,9 +4,9 @@ import java.util.BitSet;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
-import com.mikesamuel.cil.ast.Debug;
-import com.mikesamuel.cil.ast.MatchEvent;
-import com.mikesamuel.cil.ast.MatchEvent.Push;
+import com.mikesamuel.cil.event.Debug;
+import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;

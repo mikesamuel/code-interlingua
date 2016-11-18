@@ -7,7 +7,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent;
 
 /**
  * State of a parse.

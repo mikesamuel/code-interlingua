@@ -229,7 +229,7 @@ StringLiteral:
 NullLiteral:
      "null"
 JavaDocComment:
-     builtin
+     builtin @ignorable
 //JavaLetter:
 //     any Unicode character that is a "Java letter"
 //JavaLetterOrDigit:

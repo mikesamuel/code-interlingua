@@ -1,13 +1,13 @@
 package com.mikesamuel.cil.ast;
 
+import static com.mikesamuel.cil.event.MatchEvent.content;
+import static com.mikesamuel.cil.event.MatchEvent.pop;
+import static com.mikesamuel.cil.event.MatchEvent.push;
+import static com.mikesamuel.cil.event.MatchEvent.token;
+
 import org.junit.Test;
 
 import com.mikesamuel.cil.ptree.PTree;
-
-import static com.mikesamuel.cil.ast.MatchEvent.content;
-import static com.mikesamuel.cil.ast.MatchEvent.pop;
-import static com.mikesamuel.cil.ast.MatchEvent.push;
-import static com.mikesamuel.cil.ast.MatchEvent.token;
 
 @SuppressWarnings("javadoc")
 public final class PrimaryNodeTest extends AbstractParSerTestCase {

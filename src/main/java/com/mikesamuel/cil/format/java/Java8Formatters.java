@@ -1,7 +1,7 @@
 package com.mikesamuel.cil.format.java;
 
-import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.format.CStyleGrossStructurer;
 import com.mikesamuel.cil.format.Formatter;
 import com.mikesamuel.cil.parser.Chain;

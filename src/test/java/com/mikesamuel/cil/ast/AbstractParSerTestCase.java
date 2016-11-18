@@ -18,7 +18,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.MatchEvent.Push;
+import com.mikesamuel.cil.event.Debug;
+import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -318,7 +320,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
         BaseNode reparsedRoot = Trees.of(
             reparseState.input.lineStarts,
             Chain.forwardIterable(reparseState.output));
-        assertEquals(root, reparsedRoot);
+        if (!root.equals(reparsedRoot)) {
+          assertEquals(root.toString(), reparsedRoot.toString());
+          assertEquals(root, reparsedRoot);
+        }
         return;
     }
     throw new AssertionError(reparse.synopsis);

@@ -6,6 +6,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LineStarts;
 import com.mikesamuel.cil.parser.ParSer;
@@ -21,18 +22,19 @@ public final class Trees {
 
   /**
    * @param events a sequence of events with at least one
-   *     {@linkplain MatchEvent.Push push} event.
+   *     {@linkplain MatchEvent#push push} event.
    *     There must be a 1:1 correspondence between pushes and
-   *     {@linkplain MatchEvent.Pop pop}s.
+   *     {@linkplain MatchEvent#pop pop}s.
    *     The pop that corresponds to a push must be after it in the sequence.
    *     Every push/pop pair must be entirely within a particular other push/pop
    *     pair, before it, or after it.
-   *     There must be no push/pop/{@linkplain MatchEvent.Content content}
+   *     There must be no push/pop/{@linkplain MatchEvent#content content}
    *     events before the first push or after
    *     its corresponding pop.
-   *     There must be no LR {@linkplain MatchEvent.LRStart start} or
-   *     {@linkplain MatchEvent.LREnd end} events on the sequence.
-   *     {@linkplain MatchEvent.Token token} events are ignored except when
+   *     There must be no LR
+   *     {@linkplain MatchEvent#leftRecursionSuffixStart start} or
+   *     {@linkplain MatchEvent#leftRecursionSuffixEnd end} events in events.
+   *     {@linkplain MatchEvent#token token} events are ignored except when
    *     computing source positions and may appear anywhere.
    *
    */
@@ -134,8 +136,7 @@ public final class Trees {
           MatchEvent.Ignorable ign = (MatchEvent.Ignorable) e;
           pos = new SourcePosition(
               starts, ign.index, ign.index + ign.ignorableContent.length());
-          if (variant == JavaDocCommentNode.Variant.Builtin
-              && ign.ignorableContent.startsWith("/**")) {
+          if (variant.isIgnorable()) {
             // Treat the comment as content.
             tier.content = ign.ignorableContent;
             tier.contentPosition = pos;
@@ -203,9 +204,9 @@ public final class Trees {
       int startIndex = node.getSourcePosition().startCharInFile();
       afterContent = Chain.append(
           beforeContent,
-          variant != JavaDocCommentNode.Variant.Builtin
-          ? MatchEvent.content(value, startIndex)
-          : MatchEvent.ignorable(value, startIndex));
+          variant.isIgnorable()
+          ? MatchEvent.ignorable(value, startIndex)
+          : MatchEvent.content(value, startIndex));
     } else {
       afterContent = beforeContent;
       for (BaseNode child : children) {

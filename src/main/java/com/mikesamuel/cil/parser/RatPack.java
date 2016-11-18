@@ -8,8 +8,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.MatchEvent;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.event.MatchEvent;
 
 /**
  * Memoizes partial parses by mapping (NodeType, indexIntoContent) to

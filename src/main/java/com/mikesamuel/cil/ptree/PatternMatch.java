@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;

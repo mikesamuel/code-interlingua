@@ -1,8 +1,11 @@
 package com.mikesamuel.cil.ast;
 
+import static com.mikesamuel.cil.event.MatchEvent.pop;
+import static com.mikesamuel.cil.event.MatchEvent.push;
+
 import org.junit.Test;
-import static com.mikesamuel.cil.ast.MatchEvent.pop;
-import static com.mikesamuel.cil.ast.MatchEvent.push;
+
+import com.mikesamuel.cil.event.MatchEvent;
 
 @SuppressWarnings("javadoc")
 public final class StatementNodeTest extends AbstractParSerTestCase {

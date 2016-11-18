@@ -1,7 +1,9 @@
-package com.mikesamuel.cil.ast;
+package com.mikesamuel.cil.event;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
+import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.parser.Unparse;
 

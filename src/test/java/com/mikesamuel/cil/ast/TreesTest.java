@@ -3,6 +3,7 @@ package com.mikesamuel.cil.ast;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.event.MatchEvent;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LineStarts;
 

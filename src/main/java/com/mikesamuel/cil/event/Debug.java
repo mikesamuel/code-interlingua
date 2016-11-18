@@ -1,4 +1,4 @@
-package com.mikesamuel.cil.ast;
+package com.mikesamuel.cil.event;
 
 import java.io.PrintStream;
 

@@ -125,8 +125,10 @@ public abstract class BaseNode {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((children == null) ? 0 : children.hashCode());
-    result = prime * result
-        + ((literalValue == null) ? 0 : literalValue.hashCode());
+    if (!variant.isIgnorable()) {
+      result = prime * result
+          + ((literalValue == null) ? 0 : literalValue.hashCode());
+    }
     result = prime * result + ((variant == null) ? 0 : variant.hashCode());
     return result;
   }
@@ -150,19 +152,21 @@ public abstract class BaseNode {
     } else if (!children.equals(other.children)) {
       return false;
     }
-    if (literalValue == null) {
-      if (other.literalValue != null) {
-        return false;
-      }
-    } else if (!literalValue.equals(other.literalValue)) {
-      return false;
-    }
     if (variant == null) {
       if (other.variant != null) {
         return false;
       }
     } else if (!variant.equals(other.variant)) {
       return false;
+    }
+    if (!variant.isIgnorable()) {
+      if (literalValue == null) {
+        if (other.literalValue != null) {
+          return false;
+        }
+      } else if (!literalValue.equals(other.literalValue)) {
+        return false;
+      }
     }
     return true;
   }

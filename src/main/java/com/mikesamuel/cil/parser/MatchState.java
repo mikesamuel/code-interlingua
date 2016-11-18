@@ -3,7 +3,7 @@ package com.mikesamuel.cil.parser;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.MatchEvent;
+import com.mikesamuel.cil.event.MatchEvent;
 
 /**
  * A sequence of events that describe the structure of a parse tree.
