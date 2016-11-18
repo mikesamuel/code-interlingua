@@ -41,6 +41,7 @@
         <version>1.4.0</version>
         <executions>
           <execution>
+            <!-- Derive .java files from the JLS gramamr -->
             <id>Process Grammar</id>
             <!-- We want to run this before compilation -->
             <phase>generate-sources</phase>
@@ -56,6 +57,27 @@
                 <argument>--outdir</argument>
                 <argument>${project.build.directory}/generated-sources/parse-helpers</argument>
                 <argument>${project.build.resources[0].directory}/jls-19.txt</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>List source files</id>
+            <!-- Generate list of source files used by SourceParsingSanityTest
+                 before tests run -->
+            <phase>generate-test-resources</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <workingDirectory>${project.basedir}</workingDirectory>
+              <outputFile>${project.build.directory}/test-classes/all-sources.txt</outputFile>
+              <executable>find</executable>
+              <arguments>
+                <argument>${project.build.sourceDirectory}</argument>
+                <argument>${project.build.testSourceDirectory}</argument>
+                <argument>${project.build.directory}/generated-sources/parse-helpers</argument>
+                <argument>-name</argument> <argument>*.java</argument>
+                <argument>-type</argument> <argument>f</argument>
               </arguments>
             </configuration>
           </execution>
