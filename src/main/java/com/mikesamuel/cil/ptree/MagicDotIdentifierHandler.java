@@ -4,9 +4,9 @@ import java.util.BitSet;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.MatchEvent;
-import com.mikesamuel.cil.event.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -54,46 +54,61 @@ final class MagicDotIdentifierHandler extends Concatenation {
 
     // If there is not a pop that completes a variant we can borrow from then we
     // can early out.
+    borrow_loop:
     for (Chain<MatchEvent> c = state.output; c != null; c = c.prev) {
       MatchEvent e = c.x;
       tailInReverse = Chain.append(tailInReverse, e);
-      if (e instanceof MatchEvent.Pop) {
-        if (sawText) {
-          int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
-          textAfterPop.set(popIndex);
-        }
-        ++popDepth;
-      } else if (e instanceof MatchEvent.Push) {
-        // We allow things to go negative.
-        --popDepth;
-        MatchEvent.Push push = (Push) e;
-        if (push.variant == ContextFreeNameNode.Variant.Name) {
-          int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
-          if (!textAfterPop.get(popIndex)) {
-            if (c.prev != null && c.prev.x instanceof MatchEvent.Token) {
-              MatchEvent.Token prevTok = (MatchEvent.Token) c.prev.x;
-              if (".".equals(prevTok.content)) {
-                ParseState borrowState = borrow(
-                    state, c.prev.prev, prevTok.index, tailInReverse);
-                ParseResult borrowResult = super.parse(borrowState, lr, err);
-                switch (borrowResult.synopsis) {
-                  case FAILURE:
-                    return failure;
-                  case SUCCESS:
-                    return ParseResult.success(
-                        borrowResult.next(),
-                        prevTok.index,
-                        ParseResult.union(
-                            failure.lrExclusionsTriggered,
-                            borrowResult.lrExclusionsTriggered));
+      switch (e.getKind()) {
+        case POP:
+          if (sawText) {
+            int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
+            textAfterPop.set(popIndex);
+          }
+          ++popDepth;
+          break;
+        case PUSH:
+          // We allow things to go negative.
+          --popDepth;
+          NodeVariant pushVariant = e.getNodeVariant();
+          if (pushVariant == ContextFreeNameNode.Variant.Name) {
+            int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
+            if (!textAfterPop.get(popIndex)) {
+              if (c.prev != null
+                  && c.prev.x.getKind() == MatchEvent.Kind.TOKEN) {
+                MatchEvent prevTok = c.prev.x;
+                if (".".equals(prevTok.getContent())) {
+                  ParseState borrowState = borrow(
+                      state, c.prev.prev, prevTok.getContentIndex(),
+                      tailInReverse);
+                  ParseResult borrowResult = super.parse(borrowState, lr, err);
+                  switch (borrowResult.synopsis) {
+                    case FAILURE:
+                      return failure;
+                    case SUCCESS:
+                      return ParseResult.success(
+                          borrowResult.next(),
+                          prevTok.getContentIndex(),
+                          ParseResult.union(
+                              failure.lrExclusionsTriggered,
+                              borrowResult.lrExclusionsTriggered));
+                  }
                 }
               }
             }
+            break borrow_loop;
           }
           break;
-        }
-      } else if (e.nCharsConsumed() != 0) {
-        sawText = true;
+        case CONTENT:
+        case DELAYED_CHECK:
+        case IGNORABLE:
+        case LR_END:
+        case LR_START:
+        case POSITION_MARK:
+        case TOKEN:
+          if (e.nCharsConsumed() != 0) {
+            sawText = true;
+          }
+          break;
       }
     }
     return failure;
@@ -112,13 +127,24 @@ final class MagicDotIdentifierHandler extends Concatenation {
         outputWithoutLastIdentifierOrDot = Chain.append(
             outputWithoutLastIdentifierOrDot, e);
       }
-      if (e instanceof MatchEvent.Push) {
-        ++pushDepth;
-      } else if (e instanceof MatchEvent.Pop) {
-        --pushDepth;
-        if (pushDepth == 0) {
-          skippedOverContextFreeName = true;
-        }
+      switch (e.getKind()) {
+        case CONTENT:
+        case DELAYED_CHECK:
+        case IGNORABLE:
+        case LR_END:
+        case LR_START:
+        case POSITION_MARK:
+        case TOKEN:
+          break;
+        case POP:
+          --pushDepth;
+          if (pushDepth == 0) {
+            skippedOverContextFreeName = true;
+          }
+          break;
+        case PUSH:
+          ++pushDepth;
+          break;
       }
     }
 

@@ -44,43 +44,50 @@ public final class Unparse {
     StringBuilder sb = new StringBuilder();
     List<MatchEvent> verifiedTokens = Lists.newArrayList();
     for (MatchEvent e : unverified) {
-      if (e.nCharsConsumed() != 0) {
-        sb.append(e.getContent());
-        // Add the space here instead of before the token so that indices added
-        // below always correspond to the beginning of a token or the end of
-        // input.
-        sb.append(' ');
+      switch (e.getKind()) {
+        case TOKEN: case CONTENT:
+          sb.append(e.getContent());
+          // Add the space here instead of before the token so that indices added
+          // below always correspond to the beginning of a token or the end of
+          // input.
+          sb.append(' ');
 
-        verifiedTokens.add(e);
-      } else if (e instanceof MatchEvent.Ignorable) {
-        int nv = verifiedTokens.size();
-        if (nv != 0) {
-          MatchEvent last = verifiedTokens.get(nv - 1);
-          if (last instanceof MatchEvent.Push
-              && ((MatchEvent.Push) last).variant.isIgnorable()) {
-            MatchEvent.Ignorable ign = (MatchEvent.Ignorable) e;
-            String commentContent = ign.ignorableContent;
-            if (Tokens.isBlockComment(commentContent)) {
-              sb.append(commentContent).append(' ');
-              verifiedTokens.add(e);
+          verifiedTokens.add(e);
+          break;
+        case IGNORABLE:
+          int nv = verifiedTokens.size();
+          if (nv != 0) {
+            MatchEvent last = verifiedTokens.get(nv - 1);
+            if (last.getKind() == MatchEvent.Kind.PUSH
+                && last.getNodeVariant().isIgnorable()) {
+              String commentContent = e.getContent();
+              if (Tokens.isBlockComment(commentContent)) {
+                sb.append(commentContent).append(' ');
+                verifiedTokens.add(e);
+              }
             }
           }
-        }
-      } else if (e instanceof MatchEvent.DelayedCheck) {
-        delayedAndIndices.add(e);
-        delayedAndIndices.add(sb.length());
-      } else if (e instanceof MatchEvent.SourcePositionMark) {
-        int n = verifiedTokens.size();
-        if (n != 0
-            && verifiedTokens.get(n - 1)
-               instanceof MatchEvent.SourcePositionMark) {
-          verifiedTokens.set(n - 1, e);
-        } else {
+          break;
+        case DELAYED_CHECK:
+          delayedAndIndices.add(e);
+          delayedAndIndices.add(sb.length());
+          break;
+        case POSITION_MARK:
+          int n = verifiedTokens.size();
+          if (n != 0
+              && (verifiedTokens.get(n - 1).getKind()
+                  == MatchEvent.Kind.POSITION_MARK)) {
+            verifiedTokens.set(n - 1, e);
+          } else {
+            verifiedTokens.add(e);
+          }
+          break;
+        case PUSH: case POP:
           verifiedTokens.add(e);
-        }
-      } else if (e instanceof MatchEvent.Push
-                 || e instanceof MatchEvent.Pop) {
-        verifiedTokens.add(e);
+          break;
+        case LR_END:
+        case LR_START:
+          throw new AssertionError(e.toString());
       }
     }
 
@@ -88,8 +95,8 @@ public final class Unparse {
     final ParseState ps = new ParseState(inp);
 
     for (int i = 0, n = delayedAndIndices.size(); i < n; i += 2) {
-      Predicate<Suffix> p =
-          ((MatchEvent.DelayedCheck) delayedAndIndices.get(i)).p;
+      Predicate<Suffix> p = ((MatchEvent) delayedAndIndices.get(i))
+          .getDelayedCheck();
       final int index = (Integer) delayedAndIndices.get(i + 1);
       Suffix s = new Suffix() {
 
@@ -128,19 +135,26 @@ public final class Unparse {
       Verified v, Formatter<Chain<NodeVariant>> f) {
     Chain<NodeVariant> contextStack = null;
     for (MatchEvent e : v.events) {
-      if (e.nCharsConsumed() != 0) {
-        f.token(e.getContent());
-      } else if (e instanceof MatchEvent.Ignorable) {
-        f.token(((MatchEvent.Ignorable) e).ignorableContent);
-      } else if (e instanceof MatchEvent.SourcePositionMark) {
-        f.sourcePosition(((MatchEvent.SourcePositionMark) e).pos);
-      } else if (e instanceof MatchEvent.Push) {
-        contextStack = Chain.append(
-            contextStack, ((MatchEvent.Push) e).variant);
-        f.context(contextStack);
-      } else if (e instanceof MatchEvent.Pop) {
-        contextStack = Preconditions.checkNotNull(contextStack).prev;
-        f.context(contextStack);
+      switch (e.getKind()) {
+        case CONTENT: case TOKEN:
+        case IGNORABLE:
+          f.token(e.getContent());
+          break;
+        case POSITION_MARK:
+          f.sourcePosition(e.getSourcePosition());
+          break;
+        case PUSH:
+          contextStack = Chain.append(contextStack, e.getNodeVariant());
+          f.context(contextStack);
+          break;
+        case POP:
+          contextStack = Preconditions.checkNotNull(contextStack).prev;
+          f.context(contextStack);
+          break;
+        case DELAYED_CHECK:
+        case LR_END:
+        case LR_START:
+          throw new AssertionError(e.toString());
       }
     }
 

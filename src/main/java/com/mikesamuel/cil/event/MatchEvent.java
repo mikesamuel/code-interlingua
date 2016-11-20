@@ -17,6 +17,34 @@ import com.mikesamuel.cil.parser.Unparse;
 public abstract class MatchEvent {
 
   /**
+   * An enum that can be used to switch on the kind of event and which provides
+   * field access to encourage event handling patterns that make explicit which
+   * kinds of events are being handled in the default case, and so that adding
+   * a new kind of event flags code that has not been updated.
+   */
+  public enum Kind {
+    /** @see {MatchEvent#content} */
+    CONTENT,
+    /** @see {MatchEvent#delayedCheck} */
+    DELAYED_CHECK,
+    /** @see {MatchEvent#ignorable} */
+    IGNORABLE,
+    /** @see {MatchEvent#leftRecursionSuffixEnd} */
+    LR_END,
+    /** @see {MatchEvent#leftRecursionSuffixStart} */
+    LR_START,
+    /** @see {MatchEvent#pop} */
+    POP,
+    /** @see {MatchEvent#positionMark} */
+    POSITION_MARK,
+    /** @see {MatchEvent#push} */
+    PUSH,
+    /** @see {MatchEvent#token} */
+    TOKEN,
+  }
+
+
+  /**
    * An event fired on entering a node before visiting its content or children.
    */
   public static Push push(NodeVariant v) {
@@ -73,8 +101,8 @@ public abstract class MatchEvent {
    * An ephemeral event that indicates that we are starting to look for a
    * left-recursive call so that we can grow a seed.
    * There should be all/only pushes and pops between an
-   * {@link LRStart} and the {@link LREnd} that brackets it, which can
-   * be pushed back to before the start of the seed.
+   * {@link #leftRecursionSuffixStart} and the {@link #leftRecursionSuffixEnd}
+   * that brackets it, which can be pushed back to before the start of the seed.
    */
   public static LRStart leftRecursionSuffixStart() {
     return LRStart.INSTANCE;
@@ -82,7 +110,7 @@ public abstract class MatchEvent {
 
   /**
    * An ephemeral event that indicates that the corresponding preceding
-   * {@link LRStart} is finished.
+   * {@link #leftRecursionSuffixStart} is finished.
    */
   public static LREnd leftRecursionSuffixEnd(NodeType nodeType) {
     return new LREnd(nodeType);
@@ -110,6 +138,9 @@ public abstract class MatchEvent {
     return new DelayedCheck(suffixCheck);
   }
 
+  /** Allows switching on events. */
+  public abstract Kind getKind();
+
   /**
    * True iff non-ignorable tokens were consumed to produce this event, thus
    * limiting LR search.
@@ -128,11 +159,31 @@ public abstract class MatchEvent {
     return -1;
   }
 
+  /** For {@link Kind#POSITION_MARK} */
+  public SourcePosition getSourcePosition() {
+    throw new UnsupportedOperationException(getKind().name());
+  }
+
+  /** For {@link Kind#PUSH} */
+  public NodeVariant getNodeVariant() {
+    throw new UnsupportedOperationException(getKind().name());
+  }
+
+  /** For {@link Kind#PUSH} and {@link Kind#LR_END} */
+  public NodeType getNodeType() {
+    throw new UnsupportedOperationException(getKind().name());
+  }
+
+  /** For {@link Kind#DELAYED_CHECK} */
+  public Predicate<Unparse.Suffix> getDelayedCheck() {
+    throw new UnsupportedOperationException(getKind().name());
+  }
+
   /**
    * An event that happens when we leave a node after visiting its content and
    * children.
    */
-  public static final class Pop extends MatchEvent {
+  static final class Pop extends MatchEvent {
     /**
      * The variant popped if known.
      * This is non-normative, but useful for debugging.
@@ -159,17 +210,37 @@ public abstract class MatchEvent {
     public int hashCode() {
       return getClass().hashCode();
     }
+
+    @Override
+    public Kind getKind() {
+      return Kind.POP;
+    }
   }
 
   /**
    * An event fired on entering a node before visiting its content or children.
    */
-  public static final class Push extends MatchEvent {
+  static final class Push extends MatchEvent {
     /** Variant of the node entered. */
     public final NodeVariant variant;
 
     Push(NodeVariant variant) {
       this.variant = variant;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.PUSH;
+    }
+
+    @Override
+    public NodeVariant getNodeVariant() {
+      return variant;
+    }
+
+    @Override
+    public NodeType getNodeType() {
+      return variant.getNodeType();
     }
 
     @Override
@@ -211,7 +282,7 @@ public abstract class MatchEvent {
   /**
    * Fired for leaf nodes.
    */
-  public static final class Content extends MatchEvent {
+  static final class Content extends MatchEvent {
     /** The leaf value. */
     public final String content;
     /** Character index into the input of the start of the token. */
@@ -220,6 +291,11 @@ public abstract class MatchEvent {
     Content(String content, int index) {
       this.content = content;
       this.index = index;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.CONTENT;
     }
 
     @Override
@@ -271,7 +347,7 @@ public abstract class MatchEvent {
   /**
    * Added for tokens that do not contribute directly to tree content.
    */
-  public static final class Token extends MatchEvent {
+  static final class Token extends MatchEvent {
     /** The token text. */
     public final String content;
     /** Character index into the input of the start of the token. */
@@ -280,6 +356,11 @@ public abstract class MatchEvent {
     Token(String content, int index) {
       this.content = content;
       this.index = index;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.TOKEN;
     }
 
     @Override
@@ -331,7 +412,7 @@ public abstract class MatchEvent {
   /**
    * Text that matches an ignorable token like a JavaDoc comment.
    */
-  public static final class Ignorable extends MatchEvent {
+  static final class Ignorable extends MatchEvent {
     /** The ignorable text. */
     public final String ignorableContent;
     /** Character index into the input of the start of the content. */
@@ -340,6 +421,21 @@ public abstract class MatchEvent {
     Ignorable(String content, int index) {
       this.ignorableContent = content;
       this.index = index;
+    }
+
+    @Override
+    public String getContent() {
+      return ignorableContent;
+    }
+
+    @Override
+    public int getContentIndex() {
+      return index;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.IGNORABLE;
     }
 
     @Override
@@ -383,11 +479,16 @@ public abstract class MatchEvent {
    * An ephemeral event that indicates that what follows is a repetition of a
    * suffix that is used to grow the seed.
    */
-  public static final class LRStart extends MatchEvent {
+  static final class LRStart extends MatchEvent {
     static final LRStart INSTANCE = new LRStart();
 
     private LRStart() {
       // singleton
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.LR_START;
     }
 
     @Override
@@ -398,9 +499,9 @@ public abstract class MatchEvent {
 
   /**
    * An ephemeral event that indicates that the corresponding preceding
-   * {@link LRStart} is finished.
+   * {@link #leftRecursionSuffixStart} is finished.
    */
-  public static final class LREnd extends MatchEvent {
+  static final class LREnd extends MatchEvent {
     /**
      * The production that was reached left-recursively.
      */
@@ -408,6 +509,16 @@ public abstract class MatchEvent {
 
     LREnd(NodeType nodeType) {
       this.nodeType = nodeType;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.LR_END;
+    }
+
+    @Override
+    public NodeType getNodeType() {
+      return nodeType;
     }
 
     @Override
@@ -449,12 +560,22 @@ public abstract class MatchEvent {
    * generated code so that debuggers may reverse the mapping when presenting
    * error messages.
    */
-  public static final class SourcePositionMark extends MatchEvent {
+  static final class SourcePositionMark extends MatchEvent {
     /** Best guess at the source position before the start of the next token. */
     public final SourcePosition pos;
 
     SourcePositionMark(SourcePosition pos) {
       this.pos = pos;
+    }
+
+    @Override
+    public SourcePosition getSourcePosition() {
+      return pos;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.POSITION_MARK;
     }
 
     @Override
@@ -499,12 +620,22 @@ public abstract class MatchEvent {
    * Lookaheads leave no events during parse, so during unparse, we delay
    * checking the lookahead until the following content is available.
    */
-  public static final class DelayedCheck extends MatchEvent {
+  static final class DelayedCheck extends MatchEvent {
     /** Can be applied to the sub-list of events following the delayed check. */
     public final Predicate<Unparse.Suffix> p;
 
     DelayedCheck(Predicate<Unparse.Suffix> p) {
       this.p = p;
+    }
+
+    @Override
+    public Kind getKind() {
+      return Kind.DELAYED_CHECK;
+    }
+
+    @Override
+    public Predicate<Unparse.Suffix> getDelayedCheck() {
+      return p;
     }
 
     @Override

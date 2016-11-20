@@ -20,7 +20,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.MatchEvent;
-import com.mikesamuel.cil.event.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -154,30 +153,41 @@ public abstract class AbstractParSerTestCase extends TestCase {
       case SUCCESS:
         StringBuilder tokensOnOutput = new StringBuilder();
         ParseState afterParse = result.next();
-        List<MatchEvent.Push> firstPushes = Lists.newArrayList();
+        List<NodeVariant> firstPushVariants = Lists.newArrayList();
         boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
         for (MatchEvent e : Chain.forwardIterable(afterParse.output)) {
-          if (e instanceof MatchEvent.Push) {
-            ++stackDepth;
-            if (!sawNonPush) {
-              firstPushes.add((MatchEvent.Push) e);
-            }
-          } else {
+          MatchEvent.Kind kind = e.getKind();
+          if (kind != MatchEvent.Kind.PUSH) {
             sawNonPush = true;
-            if (e instanceof MatchEvent.Pop) {
+          }
+          switch (kind) {
+            case PUSH:
+              ++stackDepth;
+              if (!sawNonPush) {
+                firstPushVariants.add(e.getNodeVariant());
+              }
+              break;
+            case POP:  // TODO: default
               if (stackDepth == 0) {
                 fail(
                     "Parsing `" + input.content
                     + "`, depth goes negative after `" + tokensOnOutput + "`");
               }
               --stackDepth;
-            } else if (e instanceof MatchEvent.Token) {
-              tokensOnOutput.append(((MatchEvent.Token) e).content);
-            } else if (e instanceof MatchEvent.Content) {
-              tokensOnOutput.append(((MatchEvent.Content) e).content);
-            }
+              break;
+            case CONTENT: case TOKEN:
+              tokensOnOutput.append(e.getContent());
+              break;
+            case IGNORABLE:
+            case POSITION_MARK:
+              break;
+            case DELAYED_CHECK:
+            case LR_END:
+            case LR_START:
+              fail("Unprocessed event " + e);
+              break;
           }
         }
 
@@ -187,10 +197,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
             start.input.lineStarts,
             Chain.forwardIterable(afterParse.output));
 
-        if (firstPushes.isEmpty()) {
+        if (firstPushVariants.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
-          assertEquals(input.content, variant, firstPushes.get(0).variant);
+          assertEquals(input.content, variant, firstPushVariants.get(0));
           if (!variant.isAnon()) {
             assertEquals(variant, node.getVariant());
           }
@@ -215,23 +225,33 @@ public abstract class AbstractParSerTestCase extends TestCase {
     BitSet included = new BitSet();  // Per depth, whether to include the pop
     ImmutableList.Builder<MatchEvent> b = ImmutableList.builder();
     for (MatchEvent e : events) {
-      if (e instanceof MatchEvent.Push) {
-        MatchEvent.Push push = (Push) e;
-        boolean pushRelevant = !push.variant.isAnon()
-            && relevant.contains(push.variant.getNodeType());
-        included.set(depth, pushRelevant);
-        if (pushRelevant) {
+      switch (e.getKind()) {
+        case CONTENT:
+        case DELAYED_CHECK:
+        case IGNORABLE:
+        case LR_END:
+        case LR_START:
+        case POSITION_MARK:
+        case TOKEN:
           b.add(e);
-        }
-        ++depth;
-      } else if (e instanceof MatchEvent.Pop) {
-        Preconditions.checkState(depth >= 0);
-        --depth;
-        if (included.get(depth)) {
-          b.add(e);
-        }
-      } else {
-        b.add(e);
+          break;
+        case POP:
+          Preconditions.checkState(depth >= 0);
+          --depth;
+          if (included.get(depth)) {
+            b.add(e);
+          }
+          break;
+        case PUSH:
+          NodeVariant pushVariant = e.getNodeVariant();
+          boolean pushRelevant = !pushVariant.isAnon()
+              && relevant.contains(pushVariant.getNodeType());
+          included.set(depth, pushRelevant);
+          if (pushRelevant) {
+            b.add(e);
+          }
+          ++depth;
+          break;
       }
     }
     Preconditions.checkState(depth == 0);
@@ -301,7 +321,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
                       @Override
                       public boolean apply(MatchEvent e) {
-                        return !(e instanceof MatchEvent.SourcePositionMark);
+                        return e.getKind() != MatchEvent.Kind.POSITION_MARK;
                       }
                     }));
         ImmutableList<MatchEvent> afterParseEvents =

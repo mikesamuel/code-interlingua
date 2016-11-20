@@ -36,26 +36,37 @@ final class Postconds {
             "Checking postcondition " + variant + " at depth " + depth);
         Debug.dumpEvents(Chain.forwardIterable(output));
       }
-      if (output == null || !(output.x instanceof MatchEvent.Pop)) {
+      if (output == null || output.x.getKind() != MatchEvent.Kind.POP) {
         return false;
       }
       int popDepth = 0;
+      event_loop:
       for (Chain<MatchEvent> c = output; c != null; c = c.prev) {
         MatchEvent e = c.x;
-        if (e instanceof MatchEvent.Pop) {
-          ++popDepth;
-        } else if (e instanceof MatchEvent.Push) {
-          --popDepth;
-          MatchEvent.Push push = (MatchEvent.Push) e;
-          if (DEBUG) {
-            System.err.println("Found " + push + " at depth " + popDepth);
-          }
-          if (popDepth == depth) {
-            return push.variant == variant;
-          }
-          if (popDepth == 0) {
+        switch (e.getKind()) {
+          case POP:
+            ++popDepth;
             break;
-          }
+          case PUSH:
+            --popDepth;
+            if (DEBUG) {
+              System.err.println("Found " + e + " at depth " + popDepth);
+            }
+            if (popDepth == depth) {
+              return e.getNodeVariant() == variant;
+            }
+            if (popDepth == 0) {
+              break event_loop;
+            }
+            break;
+          case CONTENT:
+          case DELAYED_CHECK:
+          case IGNORABLE:
+          case LR_END:
+          case LR_START:
+          case POSITION_MARK:
+          case TOKEN:
+            break;
         }
       }
       return false;

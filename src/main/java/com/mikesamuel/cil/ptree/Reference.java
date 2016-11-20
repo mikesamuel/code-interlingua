@@ -14,7 +14,6 @@ import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.MatchEvent;
-import com.mikesamuel.cil.event.MatchEvent.Push;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
@@ -330,8 +329,8 @@ final class Reference extends PTParSer {
               continue;
             case SUCCESS:
               ParseState afterBody = result.next();
-              MatchEvent.Pop pop = DEBUG
-                  ? MatchEvent.pop(variant) : MatchEvent.pop();
+              MatchEvent pop =
+                  DEBUG ? MatchEvent.pop(variant) : MatchEvent.pop();
               ParseState afterVariant = afterBody.appendOutput(pop);
               Predicate<Chain<MatchEvent>> postcond = variant.getPostcond();
               if (postcond.apply(afterVariant.output)) {
@@ -364,40 +363,51 @@ final class Reference extends PTParSer {
     // Try handling non-anon variants first.
     if (!state.isEmpty()) {
       MatchEvent e = state.structure.get(state.index);
-      if (e instanceof MatchEvent.Push) {
-        MatchEvent.Push push = (Push) e;
-        NodeVariant variant = push.variant;
-        if (variant.getNodeType() == nodeType) {
-          if (DEBUG_UP) {
-            System.err.println(indent() + ". Found same variant " + variant);
-          }
-          // Commit to handling non-anon variant.
-          Optional<SerialState> afterContentOpt;
-          if (DEBUG_UP) { indent(1); }
-          try {
-            afterContentOpt = variant.getParSer().unparse(
-                state.advanceWithCopy(), err);
-          } finally {
-            if (DEBUG_UP) { indent(-1); }
-          }
-          if (afterContentOpt.isPresent()) {
-            SerialState afterContent = afterContentOpt.get();
-            if (!afterContent.isEmpty() &&
-                afterContent.structure.get(afterContent.index)
-                instanceof MatchEvent.Pop) {
-              if (DEBUG_UP) {
-                System.err.println(
-                    indent() + "Same variant " + variant + " passed");
-              }
-              return Optional.of(afterContent.advanceWithCopy());
+      switch (e.getKind()) {
+        case PUSH:
+          NodeVariant variant = e.getNodeVariant();
+          if (variant.getNodeType() == nodeType) {
+            if (DEBUG_UP) {
+              System.err.println(indent() + ". Found same variant " + variant);
             }
+            // Commit to handling non-anon variant.
+            Optional<SerialState> afterContentOpt;
+            if (DEBUG_UP) { indent(1); }
+            try {
+              afterContentOpt = variant.getParSer().unparse(
+                  state.advanceWithCopy(), err);
+            } finally {
+              if (DEBUG_UP) { indent(-1); }
+            }
+            if (afterContentOpt.isPresent()) {
+              SerialState afterContent = afterContentOpt.get();
+              if (!afterContent.isEmpty() &&
+                  afterContent.structure.get(afterContent.index).getKind()
+                  == MatchEvent.Kind.POP) {
+                if (DEBUG_UP) {
+                  System.err.println(
+                      indent() + "Same variant " + variant + " passed");
+                }
+                return Optional.of(afterContent.advanceWithCopy());
+              }
+            }
+            if (DEBUG_UP) {
+              System.err.println(
+                  indent() + "Same variant " + variant + " failed");
+            }
+            return Optional.absent();
           }
-          if (DEBUG_UP) {
-            System.err.println(
-                indent() + "Same variant " + variant + " failed");
-          }
+          break;
+        case CONTENT:
+        case IGNORABLE:
+        case POP:
+        case POSITION_MARK:
+        case TOKEN:
           return Optional.absent();
-        }
+        case DELAYED_CHECK:
+        case LR_END:
+        case LR_START:
+          throw new AssertionError(e.getKind());
       }
     }
 
@@ -444,7 +454,7 @@ final class Reference extends PTParSer {
 
 
   private static final class LRRewriter {
-    private final MatchEvent.LREnd toPushback;
+    private final MatchEvent toPushback;
     private final List<List<MatchEvent>> pushback = Lists.newArrayList();
     private int popDepth;
 
@@ -487,61 +497,83 @@ final class Reference extends PTParSer {
 
       MatchEvent e = out.x;
 
-      Chain<MatchEvent> pushedBack;
-      if (e instanceof MatchEvent.Pop) {
-        ++popDepth;
-        pushedBack = Chain.append(pushback(out.prev), e);
-      } else if (e instanceof MatchEvent.Push) {
-        MatchEvent.Push push = (MatchEvent.Push) e;
-        Preconditions.checkState(popDepth != 0);  // pop required above.
-        --popDepth;
-        if (popDepth == 0) {
-          Preconditions.checkState(
-              toPushback.nodeType == push.variant.getNodeType());
-          pushedBack = out.prev;
-          if (DEBUG) {
-            System.err.println(indent() + "Pushback = " + pushback);
-          }
-          for (List<MatchEvent> onePb : pushback) {
-            for (MatchEvent pb : Lists.reverse(onePb)) {
-              pushedBack = Chain.append(pushedBack, pb);
-            }
-          }
-          pushback.clear();
-          pushedBack = Chain.append(pushedBack, e);
-        } else {
+      Chain<MatchEvent> pushedBack = null;
+      switch (e.getKind()) {
+        case POP:
+          ++popDepth;
           pushedBack = Chain.append(pushback(out.prev), e);
-        }
-      } else if (toPushback.equals(e)) {
-        int pushCount = 0;
-        int popCount = 0;
-
-        List<MatchEvent> onePb = Lists.newArrayList();
-        pushback.add(onePb);
-        pushedBack = null;
-        boolean foundStart = false;
-        for (Chain<MatchEvent> c = out.prev; c != null; c = c.prev) {
-          MatchEvent ce = c.x;
-          if (ce instanceof MatchEvent.LRStart) {
-            Preconditions.checkState(pushCount >= popCount);
-            popDepth += popCount - pushCount;
-            Preconditions.checkState(popDepth >= 0);
-            pushedBack = pushback(c.prev);
-            foundStart = true;
-            break;
-          } else if (ce instanceof MatchEvent.Pop) {
-            onePb.add(ce);
-            ++popCount;
-          } else if (ce instanceof MatchEvent.Push) {
-            onePb.add(ce);
-            ++pushCount;
+          break;
+        case PUSH:
+          Preconditions.checkState(popDepth != 0);  // pop required above.
+          --popDepth;
+          if (popDepth == 0) {
+            Preconditions.checkState(
+                toPushback.getNodeType() == e.getNodeType());
+            pushedBack = out.prev;
+            if (DEBUG) {
+              System.err.println(indent() + "Pushback = " + pushback);
+            }
+            for (List<MatchEvent> onePb : pushback) {
+              for (MatchEvent pb : Lists.reverse(onePb)) {
+                pushedBack = Chain.append(pushedBack, pb);
+              }
+            }
+            pushback.clear();
+            pushedBack = Chain.append(pushedBack, e);
           } else {
-            throw new AssertionError("Non push/pop on path to LR invocation");
+            pushedBack = Chain.append(pushback(out.prev), e);
           }
-        }
-        Preconditions.checkState(foundStart);
-      } else {
-        pushedBack = Chain.append(pushback(out.prev), e);
+          break;
+        case LR_END:
+          if (e.equals(toPushback)) {
+            int pushCount = 0;
+            int popCount = 0;
+
+            List<MatchEvent> onePb = Lists.newArrayList();
+            pushback.add(onePb);
+            boolean foundStart = false;
+            pb_loop:
+            for (Chain<MatchEvent> c = out.prev; c != null; c = c.prev) {
+              MatchEvent ce = c.x;
+              switch (ce.getKind()) {
+                case LR_START:
+                  Preconditions.checkState(pushCount >= popCount);
+                  popDepth += popCount - pushCount;
+                  Preconditions.checkState(popDepth >= 0);
+                  pushedBack = pushback(c.prev);
+                  foundStart = true;
+                  break pb_loop;
+                case POP:
+                  onePb.add(ce);
+                  ++popCount;
+                  continue;
+                case PUSH:
+                  onePb.add(ce);
+                  ++pushCount;
+                  continue;
+                case CONTENT:
+                case DELAYED_CHECK:
+                case IGNORABLE:
+                case LR_END:
+                case POSITION_MARK:
+                case TOKEN:
+                  break;
+              }
+              throw new AssertionError(
+                  "Non push/pop on path to LR invocation " + ce);
+            }
+            Preconditions.checkState(foundStart);
+            break;
+          }
+          //$FALL-THROUGH$
+        case CONTENT:
+        case DELAYED_CHECK:
+        case IGNORABLE:
+        case LR_START:
+        case POSITION_MARK:
+        case TOKEN:
+          pushedBack = Chain.append(pushback(out.prev), e);
+          break;
       }
       return pushedBack;
     }

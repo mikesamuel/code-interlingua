@@ -45,7 +45,7 @@ public final class SerialState {
          outputAfterCopyOver = Chain.append(outputAfterCopyOver, e),
          ++indexAfterCopyOver) {
       e = structure.get(indexAfterCopyOver);
-      if (!(e instanceof MatchEvent.SourcePositionMark)) {
+      if (e.getKind() != MatchEvent.Kind.POSITION_MARK) {
         break;
       }
     }

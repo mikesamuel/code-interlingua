@@ -41,22 +41,33 @@ public final class RatPack {
       NodeType nodeType,
       Chain<MatchEvent> output) {
     Preconditions.checkArgument(
-        output !=  null && output.x instanceof MatchEvent.Pop);
+        output !=  null && output.x.getKind() == MatchEvent.Kind.POP);
 
     int popCount = 0;
+    cache_loop:
     for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
       MatchEvent e = o.x;
-      if (e instanceof MatchEvent.Pop) {
-        ++popCount;
-      } else if (e instanceof MatchEvent.Push) {
-        // popCount should not go negative (module underflow) because of the
-        // argument check above.
-        --popCount;
-        if (popCount == 0) {
-          Preconditions.checkState(
-              nodeType.equals(((MatchEvent.Push) e).variant.getNodeType()));
+      switch (e.getKind()) {
+        case POP:
+          ++popCount;
           break;
-        }
+        case PUSH:
+          // popCount should not go negative (module underflow) because of the
+          // argument check above.
+          --popCount;
+          if (popCount == 0) {
+            Preconditions.checkState(nodeType.equals(e.getNodeType()));
+            break cache_loop;
+          }
+          break;
+        case CONTENT:
+        case DELAYED_CHECK:
+        case IGNORABLE:
+        case LR_END:
+        case LR_START:
+        case POSITION_MARK:
+        case TOKEN:
+          break;
       }
     }
     Preconditions.checkState(popCount == 0);
@@ -221,21 +232,31 @@ public final class RatPack {
       // Consume inputs as we see tokens and content events.
       {
         int popCount = 0;
+        apply_loop:
         for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
           MatchEvent e = o.x;
           resultReverse = Chain.append(resultReverse, e);
-          if (e instanceof MatchEvent.Pop) {
-            ++popCount;
-          } else if (e instanceof MatchEvent.Push) {
-            // popCount should not go negative (module underflow) because of the
-            // argument check above.
-            --popCount;
-            if (popCount == 0) {
-              Preconditions.checkState(
-                  nodeType
-                  == ((MatchEvent.Push) e).variant.getNodeType());
+          switch (e.getKind()) {
+            case POP:
+              ++popCount;
               break;
-            }
+            case PUSH:
+              // popCount should not go negative (module underflow) because of the
+              // argument check above.
+              --popCount;
+              if (popCount == 0) {
+                Preconditions.checkState(nodeType == e.getNodeType());
+                break apply_loop;
+              }
+              break;
+            case CONTENT:
+            case DELAYED_CHECK:
+            case IGNORABLE:
+            case LR_END:
+            case LR_START:
+            case POSITION_MARK:
+            case TOKEN:
+              break;
           }
         }
       }

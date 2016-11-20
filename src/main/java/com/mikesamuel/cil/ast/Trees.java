@@ -72,82 +72,90 @@ public final class Trees {
     Tier tier = new Tier();
 
     ImmutableList.Builder<BaseNode> nodes = null;
+    event_loop:
     while (events.hasNext()) {
       MatchEvent e = events.next();
-      if (e instanceof MatchEvent.Pop) {
-        tier.sawPop = true;
-        break;
-      } else if (e instanceof MatchEvent.Push) {
-        MatchEvent.Push push = (MatchEvent.Push) e;
-        Tier nodeContent = buildTier(push.variant, starts, events);
-        if (!nodeContent.sawPop) {
-          Preconditions.checkState(!events.hasNext());
-          throw new IllegalArgumentException("No pop corresponding to " + push);
-        }
-        if (nodes == null) {
-          nodes = ImmutableList.builder();
-        }
-        if (push.variant.isAnon()) {
-          Preconditions.checkState(nodeContent.nodes.size() == 1);
-          nodes.addAll(nodeContent.nodes);
-        } else {
-          BaseNode.Builder<?, ?> nodeBuilder = push.variant.nodeBuilder();
-          if (nodeContent.content != null) {
-            Preconditions.checkState(nodeContent.nodes.isEmpty());
-            nodeBuilder.leaf(nodeContent.content);
+      switch (e.getKind()) {
+        case POP:
+          tier.sawPop = true;
+          break event_loop;
+        case PUSH:
+          NodeVariant pushVariant = e.getNodeVariant();
+          Tier nodeContent = buildTier(pushVariant, starts, events);
+          if (!nodeContent.sawPop) {
+            Preconditions.checkState(!events.hasNext());
+            throw new IllegalArgumentException("No pop corresponding to " + e);
+          }
+          if (nodes == null) {
+            nodes = ImmutableList.builder();
+          }
+          if (pushVariant.isAnon()) {
+            Preconditions.checkState(nodeContent.nodes.size() == 1);
+            nodes.addAll(nodeContent.nodes);
           } else {
-            for (BaseNode child : nodeContent.nodes) {
-            nodeBuilder.add(child);
+            BaseNode.Builder<?, ?> nodeBuilder = pushVariant.nodeBuilder();
+            if (nodeContent.content != null) {
+              Preconditions.checkState(nodeContent.nodes.isEmpty());
+              nodeBuilder.leaf(nodeContent.content);
+            } else {
+              for (BaseNode child : nodeContent.nodes) {
+                nodeBuilder.add(child);
+              }
             }
+            BaseNode node = nodeBuilder.build();
+            if (nodeContent.content != null) {
+              node.setSourcePosition(nodeContent.contentPosition);
+            } else if (nodeContent.startPosition != null) {
+              node.setSourcePosition(SourcePosition.spanning(
+                  nodeContent.startPosition, nodeContent.lastPosition));
+            }
+            nodes.add(node);
           }
-          BaseNode node = nodeBuilder.build();
-          if (nodeContent.content != null) {
-            node.setSourcePosition(nodeContent.contentPosition);
-          } else if (nodeContent.startPosition != null) {
-            node.setSourcePosition(SourcePosition.spanning(
-                nodeContent.startPosition, nodeContent.lastPosition));
+          if (tier.startPosition == null) {
+            tier.startPosition = nodeContent.startPosition;
           }
-          nodes.add(node);
-        }
-        if (tier.startPosition == null) {
-          tier.startPosition = nodeContent.startPosition;
-        }
-        if (nodeContent.lastPosition != null) {
-          tier.lastPosition = nodeContent.lastPosition;
-        }
-      } else {
-        SourcePosition pos;
-        if (e instanceof MatchEvent.Content) {
-          MatchEvent.Content c = (MatchEvent.Content) e;
+          if (nodeContent.lastPosition != null) {
+            tier.lastPosition = nodeContent.lastPosition;
+          }
+          break;
+        case CONTENT: {
           if (tier.content != null) {
             throw new IllegalArgumentException(
                 "Duplicate content `" + tier.content
-                + "` and `" + c.content + "`");
+                + "` and `" + e.getContent() + "`");
           }
-          tier.content = c.content;
-          pos = new SourcePosition(
-              starts, c.index, c.index + c.nCharsConsumed());
+          tier.content = e.getContent();
+          SourcePosition pos = new SourcePosition(
+              starts, e.getContentIndex(),
+              e.getContentIndex() + e.nCharsConsumed());
           tier.contentPosition = pos;
-        } else if (e instanceof MatchEvent.Token) {
-          MatchEvent.Token t = (MatchEvent.Token) e;
-          pos = new SourcePosition(
-              starts, t.index, t.index + t.nCharsConsumed());
-        } else if (e instanceof MatchEvent.Ignorable) {
-          MatchEvent.Ignorable ign = (MatchEvent.Ignorable) e;
-          pos = new SourcePosition(
-              starts, ign.index, ign.index + ign.ignorableContent.length());
+          tier.updatePosition(pos);
+          break;
+        }
+        case TOKEN: {
+          SourcePosition pos = new SourcePosition(
+              starts, e.getContentIndex(),
+              e.getContentIndex() + e.nCharsConsumed());
+          tier.updatePosition(pos);
+          break;
+        }
+        case IGNORABLE: {
+          SourcePosition pos = new SourcePosition(
+              starts, e.getContentIndex(),
+              e.getContentIndex() + e.getContent().length());
           if (variant.isIgnorable()) {
             // Treat the comment as content.
-            tier.content = ign.ignorableContent;
+            tier.content = e.getContent();
             tier.contentPosition = pos;
           }
-        } else {
+          tier.updatePosition(pos);
+          break;
+        }
+        case DELAYED_CHECK:
+        case LR_END:
+        case LR_START:
+        case POSITION_MARK:
           throw new IllegalArgumentException("Unexpected event " + e);
-        }
-        if (tier.startPosition == null) {
-          tier.startPosition = pos.start();
-        }
-        tier.lastPosition = pos.end();
       }
     }
 
@@ -169,6 +177,14 @@ public final class Trees {
     String content = null;
     SourcePosition contentPosition;
     boolean sawPop;
+
+
+    void updatePosition(SourcePosition pos) {
+      if (startPosition == null) {
+        startPosition = pos.start();
+      }
+      lastPosition = pos.end();
+    }
   }
 
 
@@ -231,8 +247,8 @@ public final class Trees {
         MatchEvent e = c.x;
         if (e.nCharsConsumed() != 0) {
           break;
-        } else if (e instanceof MatchEvent.SourcePositionMark) {
-          last = ((MatchEvent.SourcePositionMark) e).pos;
+        } else if (e.getKind() == MatchEvent.Kind.POSITION_MARK) {
+          last = e.getSourcePosition();
           break;
         }
       }

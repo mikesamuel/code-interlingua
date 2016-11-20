@@ -453,7 +453,7 @@ public final class Tokens {
       SerialState afterComment = state;
       if (state.index < state.structure.size()) {
         MatchEvent e = state.structure.get(state.index);
-        if (e instanceof MatchEvent.Ignorable) {
+        if (e.getKind() == MatchEvent.Kind.IGNORABLE) {
           afterComment = state.advanceWithCopy();
         }
       }
@@ -467,7 +467,7 @@ public final class Tokens {
       MatchState afterComment = state;
       if (state.index < state.events.size()) {
         MatchEvent e = state.events.get(state.index);
-        if (e instanceof MatchEvent.Ignorable) {
+        if (e.getKind() == MatchEvent.Kind.IGNORABLE) {
           afterComment = state.advance();
         }
       }

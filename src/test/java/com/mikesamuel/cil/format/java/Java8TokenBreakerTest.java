@@ -146,38 +146,44 @@ public final class Java8TokenBreakerTest extends TestCase {
     Chain<NodeVariant> lastStack = null;
     Chain<NodeVariant> stack = null;
     for (MatchEvent e : Chain.forwardIterable(result.next().output)) {
-      String tok = null;
-      if (e instanceof MatchEvent.Content) {
-        tok = ((MatchEvent.Content) e).content;
-      } else if (e instanceof MatchEvent.Token) {
-        tok = ((MatchEvent.Token) e).content;
-      } else if (e instanceof MatchEvent.Pop) {
-        Preconditions.checkNotNull(stack);
-        stack = stack.prev;
-      } else if (e instanceof MatchEvent.Push) {
-        stack = Chain.append(stack, ((MatchEvent.Push) e).variant);
-      }
-      if (tok != null) {
-        if (lastTok != null) {
-          TokenBreak b = tokenBreaker.breakBetween(
-              lastTok, lastStack, tok, stack);
-          switch (b) {
-            case SHOULD:
-              if (includeShould) {
+      switch (e.getKind()) {
+        case CONTENT:
+        case TOKEN:
+          String tok = e.getContent();
+          if (lastTok != null) {
+            TokenBreak b = tokenBreaker.breakBetween(
+                lastTok, lastStack, tok, stack);
+            switch (b) {
+              case SHOULD:
+                if (includeShould) {
+                  sb.append(" ");
+                }
+                break;
+              case MAY:
+              case SHOULD_NOT:
+                break;
+              case MUST:
                 sb.append(" ");
-              }
-              break;
-            case MAY:
-            case SHOULD_NOT:
-              break;
-            case MUST:
-              sb.append(" ");
-              break;
+                break;
+            }
           }
-        }
-        sb.append(tok);
-        lastTok = tok;
-        lastStack = stack;
+          sb.append(tok);
+          lastTok = tok;
+          lastStack = stack;
+          break;
+        case POP:
+          Preconditions.checkNotNull(stack);
+          stack = stack.prev;
+          break;
+        case PUSH:
+          stack = Chain.append(stack, e.getNodeVariant());
+          break;
+        case DELAYED_CHECK:
+        case IGNORABLE:
+        case LR_END:
+        case LR_START:
+        case POSITION_MARK:
+          break;
       }
     }
     assertEquals(expected, sb.toString());
