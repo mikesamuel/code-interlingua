@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ptree;
 
+import javax.annotation.Nonnull;
+
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -126,7 +128,7 @@ final class Lookahead extends PTParSer {
     }
 
     @Override
-    public boolean apply(Unparse.Suffix suffix) {
+    public boolean apply(@Nonnull Unparse.Suffix suffix) {
       ParseResult result = getLookahead().parse(
           suffix.asParseState(), new LeftRecursion(),
           ParseErrorReceiver.DEV_NULL);

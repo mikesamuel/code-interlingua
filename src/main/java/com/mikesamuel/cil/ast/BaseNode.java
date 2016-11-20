@@ -129,7 +129,7 @@ public abstract class BaseNode {
       result = prime * result
           + ((literalValue == null) ? 0 : literalValue.hashCode());
     }
-    result = prime * result + ((variant == null) ? 0 : variant.hashCode());
+    result = prime * result + variant.hashCode();
     return result;
   }
 
@@ -152,11 +152,7 @@ public abstract class BaseNode {
     } else if (!children.equals(other.children)) {
       return false;
     }
-    if (variant == null) {
-      if (other.variant != null) {
-        return false;
-      }
-    } else if (!variant.equals(other.variant)) {
+    if (!variant.equals(other.variant)) {
       return false;
     }
     if (!variant.isIgnorable()) {

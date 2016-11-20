@@ -200,7 +200,7 @@ public final class Trees {
    * @see ParSer#unparse
    */
   public static Chain<Event> startUnparse(
-      Chain<Event> beforeNode, BaseNode node) {
+      @Nullable Chain<Event> beforeNode, BaseNode node) {
 
     String value = node.getValue();
     ImmutableList<? extends BaseNode> children = node.getChildren();

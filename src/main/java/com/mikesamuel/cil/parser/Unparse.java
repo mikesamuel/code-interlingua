@@ -2,6 +2,8 @@ package com.mikesamuel.cil.parser;
 
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -191,7 +193,8 @@ public final class Unparse {
     private static final long serialVersionUID = 1L;
 
     /** */
-    public UnparseVerificationException(String message, Throwable cause) {
+    public UnparseVerificationException(
+        @Nullable String message, @Nullable Throwable cause) {
       super(message, cause);
     }
   }

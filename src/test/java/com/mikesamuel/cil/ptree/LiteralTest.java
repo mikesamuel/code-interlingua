@@ -8,6 +8,7 @@ import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSer;
+import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 
@@ -21,7 +22,7 @@ public final class LiteralTest extends TestCase {
     ParSer lit = Literal.of("===", false, 1, 1, 1);
     ParseState ps = new ParseState(Input.fromCharSequence(getName(), " === "));
     LeftRecursion lr = new LeftRecursion();
-    ParseResult result = lit.parse(ps, lr, null);
+    ParseResult result = lit.parse(ps, lr, ParseErrorReceiver.DEV_NULL);
     assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);
     ParseState after = result.next();
     assertEquals(
