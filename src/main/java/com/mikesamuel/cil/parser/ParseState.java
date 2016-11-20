@@ -18,7 +18,7 @@ public final class ParseState {
   /** The position of the parse cursor in the index. */
   public final int index;
   /** The output which can be replayed for a tree builder. */
-  public final @Nullable Chain<Event> output;
+  public final @Nullable SList<Event> output;
 
   /** A parse state at the beginning of input with no output. */
   public ParseState(Input input) {
@@ -26,7 +26,7 @@ public final class ParseState {
   }
 
   private ParseState(
-      Input input, int index, @Nullable Chain<Event> output) {
+      Input input, int index, @Nullable SList<Event> output) {
     Preconditions.checkState(0 <= index && index <= input.content.length());
     this.input = input;
     this.index = index;
@@ -56,13 +56,13 @@ public final class ParseState {
 
   /** A state like this but with the given event appended. */
   public ParseState appendOutput(Event e) {
-    return withOutput(Chain.append(output, e));
+    return withOutput(SList.append(output, e));
   }
 
   /**
    * A state like this but with the given output.
    */
-  public ParseState withOutput(Chain<Event> newOutput) {
+  public ParseState withOutput(SList<Event> newOutput) {
     ParseState ps = new ParseState(input, index, newOutput);
     return ps;
   }

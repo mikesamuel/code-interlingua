@@ -134,8 +134,8 @@ public final class Unparse {
    * input source position -> output source position mapping.
    */
   public static FormattedSource format(
-      Verified v, Formatter<Chain<NodeVariant>> f) {
-    Chain<NodeVariant> contextStack = null;
+      Verified v, Formatter<SList<NodeVariant>> f) {
+    SList<NodeVariant> contextStack = null;
     for (Event e : v.events) {
       switch (e.getKind()) {
         case CONTENT: case TOKEN:
@@ -146,7 +146,7 @@ public final class Unparse {
           f.sourcePosition(e.getSourcePosition());
           break;
         case PUSH:
-          contextStack = Chain.append(contextStack, e.getNodeVariant());
+          contextStack = SList.append(contextStack, e.getNodeVariant());
           f.context(contextStack);
           break;
         case POP:

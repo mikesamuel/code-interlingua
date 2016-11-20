@@ -19,7 +19,7 @@ public final class SerialState {
    * {@code structure.subList(0, index)} but augmented with missing tokens and
    * other events.
    */
-  public final @Nullable Chain<Event> output;
+  public final @Nullable SList<Event> output;
 
   /** */
   public SerialState(Iterable<? extends Event> structure) {
@@ -29,7 +29,7 @@ public final class SerialState {
   /** */
   public SerialState(
       ImmutableList<Event> structure, int index,
-      @Nullable Chain<Event> output) {
+      @Nullable SList<Event> output) {
     Preconditions.checkArgument(0 <= index && index <= structure.size());
     this.structure = structure;
 
@@ -37,12 +37,12 @@ public final class SerialState {
     // This greatly simplifies ParSer implementations that check the event at
     // the cursor and advance it by 1.
     int indexAfterCopyOver = index;
-    Chain<Event> outputAfterCopyOver = output;
+    SList<Event> outputAfterCopyOver = output;
 
     int n = structure.size();
     for (Event e;
         indexAfterCopyOver < n;
-         outputAfterCopyOver = Chain.append(outputAfterCopyOver, e),
+         outputAfterCopyOver = SList.append(outputAfterCopyOver, e),
          ++indexAfterCopyOver) {
       e = structure.get(indexAfterCopyOver);
       if (e.getKind() != Event.Kind.POSITION_MARK) {
@@ -56,7 +56,7 @@ public final class SerialState {
 
   /** A state with the given output appended. */
   public SerialState append(Event event) {
-    return new SerialState(structure, index, Chain.append(output, event));
+    return new SerialState(structure, index, SList.append(output, event));
   }
 
   /**
@@ -101,6 +101,6 @@ public final class SerialState {
    */
   public SerialState advanceWithCopy() {
     return new SerialState(
-        structure, index + 1, Chain.append(output, structure.get(index)));
+        structure, index + 1, SList.append(output, structure.get(index)));
   }
 }

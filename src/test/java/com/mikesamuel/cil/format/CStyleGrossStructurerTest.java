@@ -7,7 +7,7 @@ import org.junit.Test;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.format.java.Java8Formatters;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -96,10 +96,10 @@ public final class CStyleGrossStructurerTest extends TestCase {
         ParseErrorReceiver.DEV_NULL);
     switch (result.synopsis) {
       case SUCCESS:
-        Formatter<Chain<NodeVariant>> formatter =
+        Formatter<SList<NodeVariant>> formatter =
            Java8Formatters.createFormatter();
         formatter.setSoftColumnLimit(40);
-        Unparse.Verified v = Unparse.verify(Chain.forwardIterable(
+        Unparse.Verified v = Unparse.verify(SList.forwardIterable(
             result.next().output));
         FormattedSource code = Unparse.format(v, formatter);
         assertEquals(input, want, code.code);
@@ -110,7 +110,7 @@ public final class CStyleGrossStructurerTest extends TestCase {
   }
 
   private static void assertFormattedJava(String want, String... tokens) {
-    Formatter<Chain<NodeVariant>> formatter =
+    Formatter<SList<NodeVariant>> formatter =
         Java8Formatters.createFormatter();
      formatter.setSoftColumnLimit(40);
      for (String token : tokens) {

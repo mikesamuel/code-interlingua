@@ -9,7 +9,7 @@ import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.TokenBreak;
 import com.mikesamuel.cil.format.TokenBreaker;
 import com.mikesamuel.cil.format.java.Java8TokenBreaker;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
@@ -143,9 +143,9 @@ public final class Java8TokenBreakerTest extends TestCase {
 
     StringBuilder sb = new StringBuilder();
     String lastTok = null;
-    Chain<NodeVariant> lastStack = null;
-    Chain<NodeVariant> stack = null;
-    for (Event e : Chain.forwardIterable(result.next().output)) {
+    SList<NodeVariant> lastStack = null;
+    SList<NodeVariant> stack = null;
+    for (Event e : SList.forwardIterable(result.next().output)) {
       switch (e.getKind()) {
         case CONTENT:
         case TOKEN:
@@ -176,7 +176,7 @@ public final class Java8TokenBreakerTest extends TestCase {
           stack = stack.prev;
           break;
         case PUSH:
-          stack = Chain.append(stack, e.getNodeVariant());
+          stack = SList.append(stack, e.getNodeVariant());
           break;
         case DELAYED_CHECK:
         case IGNORABLE:

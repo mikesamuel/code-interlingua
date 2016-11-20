@@ -4,7 +4,7 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSer;
@@ -27,7 +27,7 @@ public final class LiteralTest extends TestCase {
     ParseState after = result.next();
     assertEquals(
         ImmutableList.of(Event.token("===", -1)),
-        ImmutableList.copyOf(Chain.forwardIterable(after.output)));
+        ImmutableList.copyOf(SList.forwardIterable(after.output)));
     assertEquals(5, after.index);  // No more tokens
     assertEquals("", after.input.content.substring(after.index));
   }

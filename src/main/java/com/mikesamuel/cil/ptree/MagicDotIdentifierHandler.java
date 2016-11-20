@@ -7,7 +7,7 @@ import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
@@ -42,7 +42,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
 
     if (DEBUG) {
       System.err.println("Magic happening");
-      Debug.dumpEvents(Chain.forwardIterable(state.output));
+      Debug.dumpEvents(SList.forwardIterable(state.output));
     }
 
     // Look for push(ContextFreeNameNode...)
@@ -50,14 +50,14 @@ final class MagicDotIdentifierHandler extends Concatenation {
     BitSet textAfterPop = new BitSet();
     int popDepth = 0;
     boolean sawText = false;
-    Chain<Event> tailInReverse = null;
+    SList<Event> tailInReverse = null;
 
     // If there is not a pop that completes a variant we can borrow from then we
     // can early out.
     borrow_loop:
-    for (Chain<Event> c = state.output; c != null; c = c.prev) {
+    for (SList<Event> c = state.output; c != null; c = c.prev) {
       Event e = c.x;
-      tailInReverse = Chain.append(tailInReverse, e);
+      tailInReverse = SList.append(tailInReverse, e);
       switch (e.getKind()) {
         case POP:
           if (sawText) {
@@ -115,16 +115,16 @@ final class MagicDotIdentifierHandler extends Concatenation {
   }
 
   private static ParseState borrow(
-      ParseState state, Chain<Event> beforeDot, int dotIndex,
-      Chain<Event> contextFreeNamePushAndAfterInReverse) {
-    Chain<Event> outputWithoutLastIdentifierOrDot = beforeDot;
+      ParseState state, SList<Event> beforeDot, int dotIndex,
+      SList<Event> contextFreeNamePushAndAfterInReverse) {
+    SList<Event> outputWithoutLastIdentifierOrDot = beforeDot;
     int pushDepth = 0;
     boolean skippedOverContextFreeName = false;
-    for (Chain<Event> c = contextFreeNamePushAndAfterInReverse; c != null;
+    for (SList<Event> c = contextFreeNamePushAndAfterInReverse; c != null;
          c = c.prev) {
       Event e = c.x;
       if (skippedOverContextFreeName) {
-        outputWithoutLastIdentifierOrDot = Chain.append(
+        outputWithoutLastIdentifierOrDot = SList.append(
             outputWithoutLastIdentifierOrDot, e);
       }
       switch (e.getKind()) {

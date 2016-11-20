@@ -4,7 +4,7 @@ import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.CStyleGrossStructurer;
 import com.mikesamuel.cil.format.Formatter;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 
 /**
  * A formatter for a stream of tokens in the Java 8 language.
@@ -20,7 +20,7 @@ public final class Java8Formatters {
   /**
    * A formatter for Java 8.
    */
-  public static Formatter<Chain<NodeVariant>> createFormatter() {
+  public static Formatter<SList<NodeVariant>> createFormatter() {
     return new Formatter<>(new CStyleGrossStructurer<>(
         new Java8TokenBreaker()));
   }

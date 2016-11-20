@@ -14,7 +14,7 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.TokenStrings;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Ignorables;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
@@ -402,7 +402,7 @@ public final class Tokens {
       // Scan those for Javadoc comments.
 
       int lastTokenEnd = 0;
-      for (Chain<Event> c = state.output; c != null; c = c.prev) {
+      for (SList<Event> c = state.output; c != null; c = c.prev) {
         Event e = c.x;
         int nc = e.nCharsConsumed();
         if (nc != 0) {

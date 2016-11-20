@@ -3,7 +3,7 @@ package com.mikesamuel.cil.ast;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.ParSerable;
 
@@ -58,7 +58,7 @@ public interface NodeVariant extends ParSerable {
   /**
    * A post-condition that is applied to the output after parsing is completed.
    */
-  default Predicate<Chain<Event>> getPostcond() {
+  default Predicate<SList<Event>> getPostcond() {
     return Predicates.alwaysTrue();
   }
 

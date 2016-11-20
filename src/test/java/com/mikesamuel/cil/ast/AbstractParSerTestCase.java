@@ -20,7 +20,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSer;
@@ -78,7 +78,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         ImmutableList<Event> want = ImmutableList.copyOf(expected);
         ImmutableList<Event> got = filterEvents(
             relevant,
-            Chain.forwardIterable(afterParse.output));
+            SList.forwardIterable(afterParse.output));
         if (!want.equals(got)) {
           assertEquals(
               content,
@@ -157,7 +157,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
-        for (Event e : Chain.forwardIterable(afterParse.output)) {
+        for (Event e : SList.forwardIterable(afterParse.output)) {
           Event.Kind kind = e.getKind();
           if (kind != Event.Kind.PUSH) {
             sawNonPush = true;
@@ -195,7 +195,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         // well-formedness checks fail.
         BaseNode node = Trees.of(
             start.input.lineStarts,
-            Chain.forwardIterable(afterParse.output));
+            SList.forwardIterable(afterParse.output));
 
         if (firstPushVariants.isEmpty()) {
           fail("Variant never pushed");
@@ -265,13 +265,13 @@ public abstract class AbstractParSerTestCase extends TestCase {
       ParSer parSer, ParseState afterParse, ImmutableSet<Fuzz> fuzzSet) {
     BaseNode root = Trees.of(
         afterParse.input.lineStarts,
-        Chain.forwardIterable(afterParse.output));
+        SList.forwardIterable(afterParse.output));
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("root=" + root);
     }
 
     ImmutableList<Event> structure = ImmutableList.copyOf(
-        Chain.forwardIterable(Trees.startUnparse(null, root)));
+        SList.forwardIterable(Trees.startUnparse(null, root)));
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("\nstructure\n=======");
       Debug.dumpEvents(structure);
@@ -286,13 +286,13 @@ public abstract class AbstractParSerTestCase extends TestCase {
     }
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("afterRoot\n=========");
-      Debug.dumpEvents(Chain.forwardIterable(afterRoot.get().output));
+      Debug.dumpEvents(SList.forwardIterable(afterRoot.get().output));
     }
 
     Unparse.Verified verified;
     try {
       verified = Unparse.verify(
-          Chain.forwardIterable(afterRoot.get().output));
+          SList.forwardIterable(afterRoot.get().output));
     } catch (Unparse.UnparseVerificationException ex) {
       throw (AssertionFailedError)
          new AssertionFailedError(getName()).initCause(ex);
@@ -316,7 +316,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         ImmutableList<Event> reparsedEvents =
             ImmutableList.copyOf(
                 Iterables.filter(
-                    Chain.forwardIterable(reparseState.output),
+                    SList.forwardIterable(reparseState.output),
                     new Predicate<Event>() {
 
                       @Override
@@ -325,7 +325,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
                       }
                     }));
         ImmutableList<Event> afterParseEvents =
-            ImmutableList.copyOf(Chain.forwardIterable(afterParse.output));
+            ImmutableList.copyOf(SList.forwardIterable(afterParse.output));
         if (!fuzzSet.contains(Fuzz.IMPLIED_TOKENS)) {
           // TODO: Do comparison when IMPLIED_TOKENS is present and ignore
           // differences based on transformations like s/\(\)//, s/,\}/\}/
@@ -339,7 +339,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
         BaseNode reparsedRoot = Trees.of(
             reparseState.input.lineStarts,
-            Chain.forwardIterable(reparseState.output));
+            SList.forwardIterable(reparseState.output));
         if (!root.equals(reparsedRoot)) {
           assertEquals(root.toString(), reparsedRoot.toString());
           assertEquals(root, reparsedRoot);
@@ -360,7 +360,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
       case SUCCESS:
         ParseState afterParse = result.next();
         ImmutableList<Event> got =
-            ImmutableList.copyOf(Chain.forwardIterable(afterParse.output));
+            ImmutableList.copyOf(SList.forwardIterable(afterParse.output));
         fail(ps + " matched `" + content + "`: " + got);
         return;
       case FAILURE:

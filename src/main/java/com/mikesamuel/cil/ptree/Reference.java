@@ -14,7 +14,7 @@ import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
@@ -101,10 +101,10 @@ final class Reference extends PTParSer {
   // END HACK
 
   private static ImmutableList<Event> lastOutputSeen = ImmutableList.of();
-  private static String dumpOutput(Chain<Event> out) {
+  private static String dumpOutput(SList<Event> out) {
     ImmutableList<Event> lastList = lastOutputSeen;
     ImmutableList<Event> outList = ImmutableList.copyOf(
-        Chain.forwardIterable(out));
+        SList.forwardIterable(out));
     lastOutputSeen = outList;
     if (!lastList.isEmpty() && outList.size() >= lastList.size()
         && outList.subList(0, lastList.size()).equals(lastList)) {
@@ -206,7 +206,7 @@ final class Reference extends PTParSer {
         if (false) {
           System.err.println(
               indent() + ". . output="
-              + ImmutableList.copyOf(Chain.forwardIterable(afterSeed.output)));
+              + ImmutableList.copyOf(SList.forwardIterable(afterSeed.output)));
         }
       }
 
@@ -332,7 +332,7 @@ final class Reference extends PTParSer {
               Event pop =
                   DEBUG ? Event.pop(variant) : Event.pop();
               ParseState afterVariant = afterBody.appendOutput(pop);
-              Predicate<Chain<Event>> postcond = variant.getPostcond();
+              Predicate<SList<Event>> postcond = variant.getPostcond();
               if (postcond.apply(afterVariant.output)) {
                 return ParseResult.success(
                     afterVariant,
@@ -462,21 +462,21 @@ final class Reference extends PTParSer {
       this.toPushback = Event.leftRecursionSuffixEnd(nodeType);
     }
 
-    Chain<Event> rewrite(Chain<Event> out) {
+    SList<Event> rewrite(SList<Event> out) {
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "before rewriteLR " + toPushback);
-        Debug.dumpEvents(indent, Chain.forwardIterable(out), System.err);
+        Debug.dumpEvents(indent, SList.forwardIterable(out), System.err);
       }
-      Chain<Event> withPushbackAndPops = pushback(out);
+      SList<Event> withPushbackAndPops = pushback(out);
       Preconditions.checkState(pushback.isEmpty());
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "after rewriteLR " + toPushback);
         Debug.dumpEvents(
-            indent, Chain.forwardIterable(withPushbackAndPops), System.err);
+            indent, SList.forwardIterable(withPushbackAndPops), System.err);
       }
       return withPushbackAndPops;
     }
@@ -485,7 +485,7 @@ final class Reference extends PTParSer {
      * Scan until we find the push of the seed and distribute pushes and pops
      * from LRSuffix events.
      */
-    private Chain<Event> pushback(Chain<Event> out) {
+    private SList<Event> pushback(SList<Event> out) {
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
@@ -497,11 +497,11 @@ final class Reference extends PTParSer {
 
       Event e = out.x;
 
-      Chain<Event> pushedBack = null;
+      SList<Event> pushedBack = null;
       switch (e.getKind()) {
         case POP:
           ++popDepth;
-          pushedBack = Chain.append(pushback(out.prev), e);
+          pushedBack = SList.append(pushback(out.prev), e);
           break;
         case PUSH:
           Preconditions.checkState(popDepth != 0);  // pop required above.
@@ -515,13 +515,13 @@ final class Reference extends PTParSer {
             }
             for (List<Event> onePb : pushback) {
               for (Event pb : Lists.reverse(onePb)) {
-                pushedBack = Chain.append(pushedBack, pb);
+                pushedBack = SList.append(pushedBack, pb);
               }
             }
             pushback.clear();
-            pushedBack = Chain.append(pushedBack, e);
+            pushedBack = SList.append(pushedBack, e);
           } else {
-            pushedBack = Chain.append(pushback(out.prev), e);
+            pushedBack = SList.append(pushback(out.prev), e);
           }
           break;
         case LR_END:
@@ -533,7 +533,7 @@ final class Reference extends PTParSer {
             pushback.add(onePb);
             boolean foundStart = false;
             pb_loop:
-            for (Chain<Event> c = out.prev; c != null; c = c.prev) {
+            for (SList<Event> c = out.prev; c != null; c = c.prev) {
               Event ce = c.x;
               switch (ce.getKind()) {
                 case LR_START:
@@ -572,7 +572,7 @@ final class Reference extends PTParSer {
         case LR_START:
         case POSITION_MARK:
         case TOKEN:
-          pushedBack = Chain.append(pushback(out.prev), e);
+          pushedBack = SList.append(pushback(out.prev), e);
           break;
       }
       return pushedBack;

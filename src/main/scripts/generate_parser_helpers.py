@@ -1123,9 +1123,9 @@ public enum NodeType implements ParSerable {
             annot_converters = {
                 'name': None,
                 'postcond': (
-                    'Predicate<Chain<MatchEvent>>',
-                    ('com.mikesamuel.cil.event.MatchEvent',
-                     'com.mikesamuel.cil.parser.Chain',
+                    'Predicate<SList<Event>>',
+                    ('com.mikesamuel.cil.event.Event',
+                     'com.mikesamuel.cil.parser.SList',
                      'com.google.common.base.Predicate'),
                     lambda x: x
                 ),

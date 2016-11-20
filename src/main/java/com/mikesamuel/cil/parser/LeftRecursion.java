@@ -16,18 +16,18 @@ import com.mikesamuel.cil.ast.NodeVariant;
 public final class LeftRecursion {
   /**
    * The productions on the stack and the input cursor indices at which they
-   * were entered with greater indices earlier in the chain.
+   * were entered with greater indices earlier in the list.
    */
-  private final EnumMap<NodeType, Chain<PositionAndStage>> onStack =
+  private final EnumMap<NodeType, SList<PositionAndStage>> onStack =
       new EnumMap<>(NodeType.class);
-  private Chain<NodeVariant> variantStack;
+  private SList<NodeVariant> variantStack;
 
   /**
    * True if there is a variant with the given node type on the stack.
    */
   public Stage stageForProductionAt(NodeType nodeType, int index) {
-    Chain<PositionAndStage> sps = onStack.get(nodeType);
-    for (Chain<PositionAndStage> c = sps ; c != null; c = c.prev) {
+    SList<PositionAndStage> sps = onStack.get(nodeType);
+    for (SList<PositionAndStage> c = sps ; c != null; c = c.prev) {
       if (c.x.index == index) {
         return c.x.stage;
       }
@@ -40,11 +40,11 @@ public final class LeftRecursion {
    * The variant from the most recent entry of the given production.
    */
   public Optional<ImmutableList<NodeVariant>> getStackFrom(NodeType nodeType) {
-    Chain<NodeVariant> stackFrom = null;
-    for (Chain<NodeVariant> c = variantStack; c != null; c = c.prev) {
-      stackFrom = Chain.append(stackFrom, c.x);
+    SList<NodeVariant> stackFrom = null;
+    for (SList<NodeVariant> c = variantStack; c != null; c = c.prev) {
+      stackFrom = SList.append(stackFrom, c.x);
       if (c.x.getNodeType() == nodeType) {
-        return Optional.of(ImmutableList.copyOf(Chain.reverseIterable(stackFrom)));
+        return Optional.of(ImmutableList.copyOf(SList.reverseIterable(stackFrom)));
       }
     }
     return Optional.absent();
@@ -67,12 +67,12 @@ public final class LeftRecursion {
 
     final PositionAndStage ps = new PositionAndStage(index, stage);
     {
-      Chain<PositionAndStage> c = onStack.get(nodeType);
+      SList<PositionAndStage> c = onStack.get(nodeType);
       Preconditions.checkState(c == null || c.x.index < index);
-      onStack.put(nodeType, Chain.append(c, ps));
+      onStack.put(nodeType, SList.append(c, ps));
     }
 
-    variantStack = Chain.append(variantStack, variant);
+    variantStack = SList.append(variantStack, variant);
 
     return new VariantScope() {
 
@@ -82,7 +82,7 @@ public final class LeftRecursion {
         Preconditions.checkState(variantStack.x == variant);
 
         {
-          Chain<PositionAndStage> c = onStack.get(nodeType);
+          SList<PositionAndStage> c = onStack.get(nodeType);
           Preconditions.checkState(c != null && c.x == ps);
           onStack.put(nodeType, c.prev);
         }

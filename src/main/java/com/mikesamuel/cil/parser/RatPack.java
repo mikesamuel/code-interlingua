@@ -33,19 +33,18 @@ public final class RatPack {
   }
 
   /**
-   * @param output An output event chain after parsing a production that starts
+   * @param output An output event list after parsing a production that starts
    *     at index.
    */
   public void cacheSuccess(
       int indexBeforeParse, int indexAfterParse,
-      NodeType nodeType,
-      Chain<Event> output) {
+      NodeType nodeType, SList<Event> output) {
     Preconditions.checkArgument(
         output !=  null && output.x.getKind() == Event.Kind.POP);
 
     int popCount = 0;
     cache_loop:
-    for (Chain<? extends Event> o = output; o != null; o = o.prev) {
+    for (SList<? extends Event> o = output; o != null; o = o.prev) {
       Event e = o.x;
       switch (e.getKind()) {
         case POP:
@@ -205,10 +204,10 @@ public final class RatPack {
   static final class ParseSuccess implements ParseCacheEntry {
     final NodeType nodeType;
     final int indexAfterParse;
-    final Chain<Event> output;
+    final SList<Event> output;
 
     ParseSuccess(
-        NodeType nodeType, int indexAfterParse, Chain<Event> output) {
+        NodeType nodeType, int indexAfterParse, SList<Event> output) {
       this.nodeType = nodeType;
       this.indexAfterParse = indexAfterParse;
       this.output = output;
@@ -228,14 +227,14 @@ public final class RatPack {
     public ParseState apply(ParseState state)
     throws UnsupportedOperationException{
       // Snip off the part of the parse that relates to the last event
-      Chain<Event> resultReverse = null;
+      SList<Event> resultReverse = null;
       // Consume inputs as we see tokens and content events.
       {
         int popCount = 0;
         apply_loop:
-        for (Chain<? extends Event> o = output; o != null; o = o.prev) {
+        for (SList<? extends Event> o = output; o != null; o = o.prev) {
           Event e = o.x;
-          resultReverse = Chain.append(resultReverse, e);
+          resultReverse = SList.append(resultReverse, e);
           switch (e.getKind()) {
             case POP:
               ++popCount;
@@ -261,10 +260,10 @@ public final class RatPack {
         }
       }
 
-      Chain<Event> beforeParse = state.output;
-      Chain<Event> afterParse = beforeParse;
-      for (Chain<? extends Event> r = resultReverse; r != null; r = r.prev) {
-        afterParse = Chain.append(afterParse, r.x);
+      SList<Event> beforeParse = state.output;
+      SList<Event> afterParse = beforeParse;
+      for (SList<? extends Event> r = resultReverse; r != null; r = r.prev) {
+        afterParse = SList.append(afterParse, r.x);
       }
       return state.withOutput(afterParse).withIndex(indexAfterParse);
     }
@@ -279,7 +278,7 @@ public final class RatPack {
           new ParseState(Input.fromCharSequence("empty", sb)));
 
       return "ParseSuccess("
-          + ImmutableList.copyOf(Chain.forwardIterable(state.output))
+          + ImmutableList.copyOf(SList.forwardIterable(state.output))
           + ", index<-" + state.index + ")";
     }
   }

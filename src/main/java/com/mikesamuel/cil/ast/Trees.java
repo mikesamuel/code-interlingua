@@ -7,7 +7,7 @@ import javax.annotation.Nullable;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.LineStarts;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -199,26 +199,26 @@ public final class Trees {
    *
    * @see ParSer#unparse
    */
-  public static Chain<Event> startUnparse(
-      @Nullable Chain<Event> beforeNode, BaseNode node) {
+  public static SList<Event> startUnparse(
+      @Nullable SList<Event> beforeNode, BaseNode node) {
 
     String value = node.getValue();
     ImmutableList<? extends BaseNode> children = node.getChildren();
 
 
     SourcePosition pos = node.getSourcePosition();
-    Chain<Event> beforeContent = maybeAppendPos(
+    SList<Event> beforeContent = maybeAppendPos(
         beforeNode, pos != null ? pos.start() : null);
 
     NodeVariant variant = node.getVariant();
-    beforeContent = Chain.append(
+    beforeContent = SList.append(
         beforeContent, Event.push(node.getVariant()));
 
-    Chain<Event> afterContent;
+    SList<Event> afterContent;
     if (value != null) {
       Preconditions.checkState(children.isEmpty());
       int startIndex = node.getSourcePosition().startCharInFile();
-      afterContent = Chain.append(
+      afterContent = SList.append(
           beforeContent,
           variant.isIgnorable()
           ? Event.ignorable(value, startIndex)
@@ -226,12 +226,12 @@ public final class Trees {
     } else {
       afterContent = beforeContent;
       for (BaseNode child : children) {
-        Chain<Event> afterChild = startUnparse(afterContent, child);
+        SList<Event> afterChild = startUnparse(afterContent, child);
         afterContent = afterChild;
       }
     }
 
-    Chain<Event> afterNode = Chain.append(afterContent, Event.pop());
+    SList<Event> afterNode = SList.append(afterContent, Event.pop());
     if (pos != null) {
       afterNode = maybeAppendPos(afterNode, pos.end());
     }
@@ -239,11 +239,11 @@ public final class Trees {
     return afterNode;
   }
 
-  private static Chain<Event> maybeAppendPos(
-      Chain<Event> beforePos, SourcePosition pos) {
+  private static SList<Event> maybeAppendPos(
+      SList<Event> beforePos, SourcePosition pos) {
     if (pos != null) {
       SourcePosition last = null;
-      for (Chain<Event> c = beforePos; c != null; c = c.prev) {
+      for (SList<Event> c = beforePos; c != null; c = c.prev) {
         Event e = c.x;
         if (e.nCharsConsumed() != 0) {
           break;
@@ -253,7 +253,7 @@ public final class Trees {
         }
       }
       if (last == null || !pos.equals(last)) {
-        return Chain.append(
+        return SList.append(
             beforePos, Event.positionMark(pos));
       }
     }

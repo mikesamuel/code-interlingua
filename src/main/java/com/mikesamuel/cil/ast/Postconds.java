@@ -3,7 +3,7 @@ package com.mikesamuel.cil.ast;
 import com.google.common.base.Predicate;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.Chain;
+import com.mikesamuel.cil.parser.SList;
 
 /**
  * Postconditions are applied after parsing a variant.
@@ -20,7 +20,7 @@ final class Postconds {
   /**
    * Checks that the last node at a specified depth has a specified variant.
    */
-  private static final class Postcond implements Predicate<Chain<Event>> {
+  private static final class Postcond implements Predicate<SList<Event>> {
     final int depth;
     final NodeVariant variant;
 
@@ -30,18 +30,18 @@ final class Postconds {
     }
 
     @Override
-    public boolean apply(Chain<Event> output) {
+    public boolean apply(SList<Event> output) {
       if (DEBUG) {
         System.err.println(
             "Checking postcondition " + variant + " at depth " + depth);
-        Debug.dumpEvents(Chain.forwardIterable(output));
+        Debug.dumpEvents(SList.forwardIterable(output));
       }
       if (output == null || output.x.getKind() != Event.Kind.POP) {
         return false;
       }
       int popDepth = 0;
       event_loop:
-      for (Chain<Event> c = output; c != null; c = c.prev) {
+      for (SList<Event> c = output; c != null; c = c.prev) {
         Event e = c.x;
         switch (e.getKind()) {
           case POP:
