@@ -5,31 +5,31 @@ import javax.annotation.Nullable;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 
 /**
  * The state of an unparsing operation.
  */
 public final class SerialState {
   /** Events that describe the structure of the parse tree to serialize. */
-  public final ImmutableList<MatchEvent> structure;
+  public final ImmutableList<Event> structure;
   /** Cursor into {@link #structure}. */
   public final int index;
   /**
    * {@code structure.subList(0, index)} but augmented with missing tokens and
    * other events.
    */
-  public final @Nullable Chain<MatchEvent> output;
+  public final @Nullable Chain<Event> output;
 
   /** */
-  public SerialState(Iterable<? extends MatchEvent> structure) {
+  public SerialState(Iterable<? extends Event> structure) {
     this(ImmutableList.copyOf(structure), 0, null);
   }
 
   /** */
   public SerialState(
-      ImmutableList<MatchEvent> structure, int index,
-      @Nullable Chain<MatchEvent> output) {
+      ImmutableList<Event> structure, int index,
+      @Nullable Chain<Event> output) {
     Preconditions.checkArgument(0 <= index && index <= structure.size());
     this.structure = structure;
 
@@ -37,15 +37,15 @@ public final class SerialState {
     // This greatly simplifies ParSer implementations that check the event at
     // the cursor and advance it by 1.
     int indexAfterCopyOver = index;
-    Chain<MatchEvent> outputAfterCopyOver = output;
+    Chain<Event> outputAfterCopyOver = output;
 
     int n = structure.size();
-    for (MatchEvent e;
+    for (Event e;
         indexAfterCopyOver < n;
          outputAfterCopyOver = Chain.append(outputAfterCopyOver, e),
          ++indexAfterCopyOver) {
       e = structure.get(indexAfterCopyOver);
-      if (e.getKind() != MatchEvent.Kind.POSITION_MARK) {
+      if (e.getKind() != Event.Kind.POSITION_MARK) {
         break;
       }
     }
@@ -55,7 +55,7 @@ public final class SerialState {
   }
 
   /** A state with the given output appended. */
-  public SerialState append(MatchEvent event) {
+  public SerialState append(Event event) {
     return new SerialState(structure, index, Chain.append(output, event));
   }
 
@@ -66,12 +66,12 @@ public final class SerialState {
    * @param err receives an error message when absent is returned.
    */
   public Optional<SerialState> expectEvent(
-      MatchEvent wanted, SerialErrorReceiver err) {
+      Event wanted, SerialErrorReceiver err) {
     String message;
     if (index == structure.size()) {
       message = "Expected " + wanted + " but no events left";
     } else {
-      MatchEvent e = structure.get(index);
+      Event e = structure.get(index);
       if (e.equals(wanted)) {
         return Optional.of(advance());
       }

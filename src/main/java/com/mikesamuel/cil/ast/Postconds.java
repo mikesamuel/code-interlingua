@@ -2,7 +2,7 @@ package com.mikesamuel.cil.ast;
 
 import com.google.common.base.Predicate;
 import com.mikesamuel.cil.event.Debug;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Chain;
 
 /**
@@ -20,7 +20,7 @@ final class Postconds {
   /**
    * Checks that the last node at a specified depth has a specified variant.
    */
-  private static final class Postcond implements Predicate<Chain<MatchEvent>> {
+  private static final class Postcond implements Predicate<Chain<Event>> {
     final int depth;
     final NodeVariant variant;
 
@@ -30,19 +30,19 @@ final class Postconds {
     }
 
     @Override
-    public boolean apply(Chain<MatchEvent> output) {
+    public boolean apply(Chain<Event> output) {
       if (DEBUG) {
         System.err.println(
             "Checking postcondition " + variant + " at depth " + depth);
         Debug.dumpEvents(Chain.forwardIterable(output));
       }
-      if (output == null || output.x.getKind() != MatchEvent.Kind.POP) {
+      if (output == null || output.x.getKind() != Event.Kind.POP) {
         return false;
       }
       int popDepth = 0;
       event_loop:
-      for (Chain<MatchEvent> c = output; c != null; c = c.prev) {
-        MatchEvent e = c.x;
+      for (Chain<Event> c = output; c != null; c = c.prev) {
+        Event e = c.x;
         switch (e.getKind()) {
           case POP:
             ++popDepth;

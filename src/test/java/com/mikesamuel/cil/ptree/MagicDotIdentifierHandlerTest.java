@@ -1,9 +1,9 @@
 package com.mikesamuel.cil.ptree;
 
-import static com.mikesamuel.cil.event.MatchEvent.content;
-import static com.mikesamuel.cil.event.MatchEvent.pop;
-import static com.mikesamuel.cil.event.MatchEvent.push;
-import static com.mikesamuel.cil.event.MatchEvent.token;
+import static com.mikesamuel.cil.event.Event.content;
+import static com.mikesamuel.cil.event.Event.pop;
+import static com.mikesamuel.cil.event.Event.push;
+import static com.mikesamuel.cil.event.Event.token;
 
 import org.junit.Test;
 

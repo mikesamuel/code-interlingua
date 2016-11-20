@@ -3,18 +3,18 @@ package com.mikesamuel.cil.parser;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 
 /**
  * A sequence of events that describe the structure of a parse tree.
  */
 public final class MatchState {
   /** The event stream to match. */
-  public final ImmutableList<MatchEvent> events;
+  public final ImmutableList<Event> events;
   /** The cursor of the current event in {@link #events}. */
   public final int index;
 
-  MatchState(ImmutableList<MatchEvent> events, int index) {
+  MatchState(ImmutableList<Event> events, int index) {
     Preconditions.checkArgument(0 <= index && index <= events.size());
     this.events = events;
     this.index = index;
@@ -32,12 +32,12 @@ public final class MatchState {
    * @param err receives an error message when absent is returned.
    */
   public Optional<MatchState> expectEvent(
-      MatchEvent wanted, MatchErrorReceiver err) {
+      Event wanted, MatchErrorReceiver err) {
     String message;
     if (index == events.size()) {
       message = "Expected " + wanted + " but no events left";
     } else {
-      MatchEvent e = events.get(index);
+      Event e = events.get(index);
       if (e.equals(wanted)) {
         return Optional.of(advance());
       }

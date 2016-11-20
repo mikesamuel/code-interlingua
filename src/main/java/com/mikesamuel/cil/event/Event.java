@@ -14,7 +14,7 @@ import com.mikesamuel.cil.parser.Unparse;
  * parser during a parse and should not be seen by the tree-builder or emitted
  * by a tree flattener.
  */
-public abstract class MatchEvent {
+public abstract class Event {
 
   /**
    * An enum that can be used to switch on the kind of event and which provides
@@ -23,23 +23,23 @@ public abstract class MatchEvent {
    * a new kind of event flags code that has not been updated.
    */
   public enum Kind {
-    /** @see {MatchEvent#content} */
+    /** @see {Event#content} */
     CONTENT,
-    /** @see {MatchEvent#delayedCheck} */
+    /** @see {Event#delayedCheck} */
     DELAYED_CHECK,
-    /** @see {MatchEvent#ignorable} */
+    /** @see {Event#ignorable} */
     IGNORABLE,
-    /** @see {MatchEvent#leftRecursionSuffixEnd} */
+    /** @see {Event#leftRecursionSuffixEnd} */
     LR_END,
-    /** @see {MatchEvent#leftRecursionSuffixStart} */
+    /** @see {Event#leftRecursionSuffixStart} */
     LR_START,
-    /** @see {MatchEvent#pop} */
+    /** @see {Event#pop} */
     POP,
-    /** @see {MatchEvent#positionMark} */
+    /** @see {Event#positionMark} */
     POSITION_MARK,
-    /** @see {MatchEvent#push} */
+    /** @see {Event#push} */
     PUSH,
-    /** @see {MatchEvent#token} */
+    /** @see {Event#token} */
     TOKEN,
   }
 
@@ -183,7 +183,7 @@ public abstract class MatchEvent {
    * An event that happens when we leave a node after visiting its content and
    * children.
    */
-  static final class Pop extends MatchEvent {
+  static final class Pop extends Event {
     /**
      * The variant popped if known.
      * This is non-normative, but useful for debugging.
@@ -220,7 +220,7 @@ public abstract class MatchEvent {
   /**
    * An event fired on entering a node before visiting its content or children.
    */
-  static final class Push extends MatchEvent {
+  static final class Push extends Event {
     /** Variant of the node entered. */
     public final NodeVariant variant;
 
@@ -282,7 +282,7 @@ public abstract class MatchEvent {
   /**
    * Fired for leaf nodes.
    */
-  static final class Content extends MatchEvent {
+  static final class Content extends Event {
     /** The leaf value. */
     public final String content;
     /** Character index into the input of the start of the token. */
@@ -347,7 +347,7 @@ public abstract class MatchEvent {
   /**
    * Added for tokens that do not contribute directly to tree content.
    */
-  static final class Token extends MatchEvent {
+  static final class Token extends Event {
     /** The token text. */
     public final String content;
     /** Character index into the input of the start of the token. */
@@ -412,7 +412,7 @@ public abstract class MatchEvent {
   /**
    * Text that matches an ignorable token like a JavaDoc comment.
    */
-  static final class Ignorable extends MatchEvent {
+  static final class Ignorable extends Event {
     /** The ignorable text. */
     public final String ignorableContent;
     /** Character index into the input of the start of the content. */
@@ -479,7 +479,7 @@ public abstract class MatchEvent {
    * An ephemeral event that indicates that what follows is a repetition of a
    * suffix that is used to grow the seed.
    */
-  static final class LRStart extends MatchEvent {
+  static final class LRStart extends Event {
     static final LRStart INSTANCE = new LRStart();
 
     private LRStart() {
@@ -501,7 +501,7 @@ public abstract class MatchEvent {
    * An ephemeral event that indicates that the corresponding preceding
    * {@link #leftRecursionSuffixStart} is finished.
    */
-  static final class LREnd extends MatchEvent {
+  static final class LREnd extends Event {
     /**
      * The production that was reached left-recursively.
      */
@@ -560,7 +560,7 @@ public abstract class MatchEvent {
    * generated code so that debuggers may reverse the mapping when presenting
    * error messages.
    */
-  static final class SourcePositionMark extends MatchEvent {
+  static final class SourcePositionMark extends Event {
     /** Best guess at the source position before the start of the next token. */
     public final SourcePosition pos;
 
@@ -620,7 +620,7 @@ public abstract class MatchEvent {
    * Lookaheads leave no events during parse, so during unparse, we delay
    * checking the lookahead until the following content is available.
    */
-  static final class DelayedCheck extends MatchEvent {
+  static final class DelayedCheck extends Event {
     /** Can be applied to the sub-list of events following the delayed check. */
     public final Predicate<Unparse.Suffix> p;
 

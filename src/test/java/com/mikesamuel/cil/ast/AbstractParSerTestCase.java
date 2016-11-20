@@ -19,7 +19,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.event.Debug;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -59,7 +59,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
   protected void assertParsePasses(
       ParSerable ps,
-      String content, MatchEvent... expected) {
+      String content, Event... expected) {
     assertParsePasses(ps, EnumSet.allOf(NodeType.class), content, expected);
   }
 
@@ -67,7 +67,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   protected void assertParsePasses(
       ParSerable ps,
       Set<NodeType> relevant,
-      String content, MatchEvent... expected) {
+      String content, Event... expected) {
     ParseState state = parseState(content);
     LeftRecursion lr = new LeftRecursion();
     ParSer parSer = ps.getParSer();
@@ -75,8 +75,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
     switch (result.synopsis) {
       case SUCCESS:
         ParseState afterParse = result.next();
-        ImmutableList<MatchEvent> want = ImmutableList.copyOf(expected);
-        ImmutableList<MatchEvent> got = filterEvents(
+        ImmutableList<Event> want = ImmutableList.copyOf(expected);
+        ImmutableList<Event> got = filterEvents(
             relevant,
             Chain.forwardIterable(afterParse.output));
         if (!want.equals(got)) {
@@ -157,9 +157,9 @@ public abstract class AbstractParSerTestCase extends TestCase {
         boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
-        for (MatchEvent e : Chain.forwardIterable(afterParse.output)) {
-          MatchEvent.Kind kind = e.getKind();
-          if (kind != MatchEvent.Kind.PUSH) {
+        for (Event e : Chain.forwardIterable(afterParse.output)) {
+          Event.Kind kind = e.getKind();
+          if (kind != Event.Kind.PUSH) {
             sawNonPush = true;
           }
           switch (kind) {
@@ -218,13 +218,13 @@ public abstract class AbstractParSerTestCase extends TestCase {
     throw new AssertionError(result.synopsis);
   }
 
-  protected static ImmutableList<MatchEvent> filterEvents(
+  protected static ImmutableList<Event> filterEvents(
       Set<? super NodeType> relevant,
-      Iterable<? extends MatchEvent> events) {
+      Iterable<? extends Event> events) {
     int depth = 0;
     BitSet included = new BitSet();  // Per depth, whether to include the pop
-    ImmutableList.Builder<MatchEvent> b = ImmutableList.builder();
-    for (MatchEvent e : events) {
+    ImmutableList.Builder<Event> b = ImmutableList.builder();
+    for (Event e : events) {
       switch (e.getKind()) {
         case CONTENT:
         case DELAYED_CHECK:
@@ -270,7 +270,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
       System.err.println("root=" + root);
     }
 
-    ImmutableList<MatchEvent> structure = ImmutableList.copyOf(
+    ImmutableList<Event> structure = ImmutableList.copyOf(
         Chain.forwardIterable(Trees.startUnparse(null, root)));
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("\nstructure\n=======");
@@ -313,18 +313,18 @@ public abstract class AbstractParSerTestCase extends TestCase {
         break;
       case SUCCESS:
         ParseState reparseState = reparse.next();
-        ImmutableList<MatchEvent> reparsedEvents =
+        ImmutableList<Event> reparsedEvents =
             ImmutableList.copyOf(
                 Iterables.filter(
                     Chain.forwardIterable(reparseState.output),
-                    new Predicate<MatchEvent>() {
+                    new Predicate<Event>() {
 
                       @Override
-                      public boolean apply(MatchEvent e) {
-                        return e.getKind() != MatchEvent.Kind.POSITION_MARK;
+                      public boolean apply(Event e) {
+                        return e.getKind() != Event.Kind.POSITION_MARK;
                       }
                     }));
-        ImmutableList<MatchEvent> afterParseEvents =
+        ImmutableList<Event> afterParseEvents =
             ImmutableList.copyOf(Chain.forwardIterable(afterParse.output));
         if (!fuzzSet.contains(Fuzz.IMPLIED_TOKENS)) {
           // TODO: Do comparison when IMPLIED_TOKENS is present and ignore
@@ -359,7 +359,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
     switch (result.synopsis) {
       case SUCCESS:
         ParseState afterParse = result.next();
-        ImmutableList<MatchEvent> got =
+        ImmutableList<Event> got =
             ImmutableList.copyOf(Chain.forwardIterable(afterParse.output));
         fail(ps + " matched `" + content + "`: " + got);
         return;

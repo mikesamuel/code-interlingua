@@ -6,7 +6,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LineStarts;
 import com.mikesamuel.cil.parser.ParSer;
@@ -22,26 +22,26 @@ public final class Trees {
 
   /**
    * @param events a sequence of events with at least one
-   *     {@linkplain MatchEvent#push push} event.
+   *     {@linkplain Event#push push} event.
    *     There must be a 1:1 correspondence between pushes and
-   *     {@linkplain MatchEvent#pop pop}s.
+   *     {@linkplain Event#pop pop}s.
    *     The pop that corresponds to a push must be after it in the sequence.
    *     Every push/pop pair must be entirely within a particular other push/pop
    *     pair, before it, or after it.
-   *     There must be no push/pop/{@linkplain MatchEvent#content content}
+   *     There must be no push/pop/{@linkplain Event#content content}
    *     events before the first push or after
    *     its corresponding pop.
    *     There must be no LR
-   *     {@linkplain MatchEvent#leftRecursionSuffixStart start} or
-   *     {@linkplain MatchEvent#leftRecursionSuffixEnd end} events in events.
-   *     {@linkplain MatchEvent#token token} events are ignored except when
+   *     {@linkplain Event#leftRecursionSuffixStart start} or
+   *     {@linkplain Event#leftRecursionSuffixEnd end} events in events.
+   *     {@linkplain Event#token token} events are ignored except when
    *     computing source positions and may appear anywhere.
    *
    */
   public static BaseNode of(
       LineStarts starts,
-      Iterable<? extends MatchEvent> events) {
-    Iterator<? extends MatchEvent> it = events.iterator();
+      Iterable<? extends Event> events) {
+    Iterator<? extends Event> it = events.iterator();
 
     Tier root = buildTier(null, starts, it);
 
@@ -67,14 +67,14 @@ public final class Trees {
   private static Tier buildTier(
       @Nullable NodeVariant variant,
       LineStarts starts,
-      Iterator<? extends MatchEvent> events) {
+      Iterator<? extends Event> events) {
     @SuppressWarnings("synthetic-access")
     Tier tier = new Tier();
 
     ImmutableList.Builder<BaseNode> nodes = null;
     event_loop:
     while (events.hasNext()) {
-      MatchEvent e = events.next();
+      Event e = events.next();
       switch (e.getKind()) {
         case POP:
           tier.sawPop = true;
@@ -192,46 +192,46 @@ public final class Trees {
    * A series of events that describes the tree structure, but which is missing
    * some of the information necessary to serialize the tree.
    *
-   * @return A series of MatchEvent which contains all necessary events except
-   *     for {@link MatchEvent#token} and
-   *     {@link MatchEvent#push}/{@link MatchEvent#pop} for
+   * @return A series of events which contains all necessary events except
+   *     for {@link Event#token} and
+   *     {@link Event#push}/{@link Event#pop} for
    *     {@link NodeVariant#isAnon @anon} variants.
    *
    * @see ParSer#unparse
    */
-  public static Chain<MatchEvent> startUnparse(
-      Chain<MatchEvent> beforeNode, BaseNode node) {
+  public static Chain<Event> startUnparse(
+      Chain<Event> beforeNode, BaseNode node) {
 
     String value = node.getValue();
     ImmutableList<? extends BaseNode> children = node.getChildren();
 
 
     SourcePosition pos = node.getSourcePosition();
-    Chain<MatchEvent> beforeContent = maybeAppendPos(
+    Chain<Event> beforeContent = maybeAppendPos(
         beforeNode, pos != null ? pos.start() : null);
 
     NodeVariant variant = node.getVariant();
     beforeContent = Chain.append(
-        beforeContent, MatchEvent.push(node.getVariant()));
+        beforeContent, Event.push(node.getVariant()));
 
-    Chain<MatchEvent> afterContent;
+    Chain<Event> afterContent;
     if (value != null) {
       Preconditions.checkState(children.isEmpty());
       int startIndex = node.getSourcePosition().startCharInFile();
       afterContent = Chain.append(
           beforeContent,
           variant.isIgnorable()
-          ? MatchEvent.ignorable(value, startIndex)
-          : MatchEvent.content(value, startIndex));
+          ? Event.ignorable(value, startIndex)
+          : Event.content(value, startIndex));
     } else {
       afterContent = beforeContent;
       for (BaseNode child : children) {
-        Chain<MatchEvent> afterChild = startUnparse(afterContent, child);
+        Chain<Event> afterChild = startUnparse(afterContent, child);
         afterContent = afterChild;
       }
     }
 
-    Chain<MatchEvent> afterNode = Chain.append(afterContent, MatchEvent.pop());
+    Chain<Event> afterNode = Chain.append(afterContent, Event.pop());
     if (pos != null) {
       afterNode = maybeAppendPos(afterNode, pos.end());
     }
@@ -239,22 +239,22 @@ public final class Trees {
     return afterNode;
   }
 
-  private static Chain<MatchEvent> maybeAppendPos(
-      Chain<MatchEvent> beforePos, SourcePosition pos) {
+  private static Chain<Event> maybeAppendPos(
+      Chain<Event> beforePos, SourcePosition pos) {
     if (pos != null) {
       SourcePosition last = null;
-      for (Chain<MatchEvent> c = beforePos; c != null; c = c.prev) {
-        MatchEvent e = c.x;
+      for (Chain<Event> c = beforePos; c != null; c = c.prev) {
+        Event e = c.x;
         if (e.nCharsConsumed() != 0) {
           break;
-        } else if (e.getKind() == MatchEvent.Kind.POSITION_MARK) {
+        } else if (e.getKind() == Event.Kind.POSITION_MARK) {
           last = e.getSourcePosition();
           break;
         }
       }
       if (last == null || !pos.equals(last)) {
         return Chain.append(
-            beforePos, MatchEvent.positionMark(pos));
+            beforePos, Event.positionMark(pos));
       }
     }
     return beforePos;

@@ -7,7 +7,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.format.Formatter;
 import com.mikesamuel.cil.format.java.Java8Formatters;
@@ -19,7 +19,7 @@ import com.mikesamuel.cil.ptree.Tokens;
  * <p>
  * This happens in several phases.
  * <ol>
- *   <li>Run {@link MatchEvent#delayedCheck}s.
+ *   <li>Run {@link Event#delayedCheck}s.
  *   <li>Extract token events and format them.
  * </ol>
  * <p>
@@ -34,16 +34,16 @@ public final class Unparse {
 
   /**
    * @param unverified the full unparsed output with
-   *     {@link MatchEvent#delayedCheck}s.
+   *     {@link Event#delayedCheck}s.
    * @return the verified output which consists only of position and
    *     token/content events.
    */
-  public static Verified verify(Iterable<? extends MatchEvent> unverified)
+  public static Verified verify(Iterable<? extends Event> unverified)
   throws UnparseVerificationException {
     List<Object> delayedAndIndices = Lists.newArrayList();
     StringBuilder sb = new StringBuilder();
-    List<MatchEvent> verifiedTokens = Lists.newArrayList();
-    for (MatchEvent e : unverified) {
+    List<Event> verifiedTokens = Lists.newArrayList();
+    for (Event e : unverified) {
       switch (e.getKind()) {
         case TOKEN: case CONTENT:
           sb.append(e.getContent());
@@ -57,8 +57,8 @@ public final class Unparse {
         case IGNORABLE:
           int nv = verifiedTokens.size();
           if (nv != 0) {
-            MatchEvent last = verifiedTokens.get(nv - 1);
-            if (last.getKind() == MatchEvent.Kind.PUSH
+            Event last = verifiedTokens.get(nv - 1);
+            if (last.getKind() == Event.Kind.PUSH
                 && last.getNodeVariant().isIgnorable()) {
               String commentContent = e.getContent();
               if (Tokens.isBlockComment(commentContent)) {
@@ -76,7 +76,7 @@ public final class Unparse {
           int n = verifiedTokens.size();
           if (n != 0
               && (verifiedTokens.get(n - 1).getKind()
-                  == MatchEvent.Kind.POSITION_MARK)) {
+                  == Event.Kind.POSITION_MARK)) {
             verifiedTokens.set(n - 1, e);
           } else {
             verifiedTokens.add(e);
@@ -95,7 +95,7 @@ public final class Unparse {
     final ParseState ps = new ParseState(inp);
 
     for (int i = 0, n = delayedAndIndices.size(); i < n; i += 2) {
-      Predicate<Suffix> p = ((MatchEvent) delayedAndIndices.get(i))
+      Predicate<Suffix> p = ((Event) delayedAndIndices.get(i))
           .getDelayedCheck();
       final int index = (Integer) delayedAndIndices.get(i + 1);
       Suffix s = new Suffix() {
@@ -134,7 +134,7 @@ public final class Unparse {
   public static FormattedSource format(
       Verified v, Formatter<Chain<NodeVariant>> f) {
     Chain<NodeVariant> contextStack = null;
-    for (MatchEvent e : v.events) {
+    for (Event e : v.events) {
       switch (e.getKind()) {
         case CONTENT: case TOKEN:
         case IGNORABLE:
@@ -167,9 +167,9 @@ public final class Unparse {
    */
   public static final class Verified {
     /** Position, token, and content events. */
-    public final ImmutableList<MatchEvent> events;
+    public final ImmutableList<Event> events;
 
-    private Verified(ImmutableList<MatchEvent> events) {
+    private Verified(ImmutableList<Event> events) {
       this.events = events;
     }
   }

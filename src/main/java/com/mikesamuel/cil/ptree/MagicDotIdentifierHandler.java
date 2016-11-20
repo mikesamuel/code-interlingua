@@ -6,7 +6,7 @@ import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Debug;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
@@ -50,13 +50,13 @@ final class MagicDotIdentifierHandler extends Concatenation {
     BitSet textAfterPop = new BitSet();
     int popDepth = 0;
     boolean sawText = false;
-    Chain<MatchEvent> tailInReverse = null;
+    Chain<Event> tailInReverse = null;
 
     // If there is not a pop that completes a variant we can borrow from then we
     // can early out.
     borrow_loop:
-    for (Chain<MatchEvent> c = state.output; c != null; c = c.prev) {
-      MatchEvent e = c.x;
+    for (Chain<Event> c = state.output; c != null; c = c.prev) {
+      Event e = c.x;
       tailInReverse = Chain.append(tailInReverse, e);
       switch (e.getKind()) {
         case POP:
@@ -74,8 +74,8 @@ final class MagicDotIdentifierHandler extends Concatenation {
             int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
             if (!textAfterPop.get(popIndex)) {
               if (c.prev != null
-                  && c.prev.x.getKind() == MatchEvent.Kind.TOKEN) {
-                MatchEvent prevTok = c.prev.x;
+                  && c.prev.x.getKind() == Event.Kind.TOKEN) {
+                Event prevTok = c.prev.x;
                 if (".".equals(prevTok.getContent())) {
                   ParseState borrowState = borrow(
                       state, c.prev.prev, prevTok.getContentIndex(),
@@ -115,14 +115,14 @@ final class MagicDotIdentifierHandler extends Concatenation {
   }
 
   private static ParseState borrow(
-      ParseState state, Chain<MatchEvent> beforeDot, int dotIndex,
-      Chain<MatchEvent> contextFreeNamePushAndAfterInReverse) {
-    Chain<MatchEvent> outputWithoutLastIdentifierOrDot = beforeDot;
+      ParseState state, Chain<Event> beforeDot, int dotIndex,
+      Chain<Event> contextFreeNamePushAndAfterInReverse) {
+    Chain<Event> outputWithoutLastIdentifierOrDot = beforeDot;
     int pushDepth = 0;
     boolean skippedOverContextFreeName = false;
-    for (Chain<MatchEvent> c = contextFreeNamePushAndAfterInReverse; c != null;
+    for (Chain<Event> c = contextFreeNamePushAndAfterInReverse; c != null;
          c = c.prev) {
-      MatchEvent e = c.x;
+      Event e = c.x;
       if (skippedOverContextFreeName) {
         outputWithoutLastIdentifierOrDot = Chain.append(
             outputWithoutLastIdentifierOrDot, e);

@@ -3,7 +3,7 @@ package com.mikesamuel.cil.parser;
 import com.google.common.base.Optional;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.Trees;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 
 /** Provides parsing and serializing for AST nodes. */
 public abstract class ParSer implements ParSerable {
@@ -40,7 +40,7 @@ public abstract class ParSer implements ParSerable {
 
   /**
    * Given a stream of events that describe a flattened tree, fleshes out the
-   * stream of events by inserting {@link MatchEvent#token} events and events
+   * stream of events by inserting {@link Event#token} events and events
    * for {@linkplain NodeVariant#isAnon anon} variants.
    */
   public abstract Optional<SerialState> unparse(

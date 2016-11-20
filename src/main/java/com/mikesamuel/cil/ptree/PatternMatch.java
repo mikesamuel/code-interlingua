@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -31,7 +31,7 @@ final class PatternMatch extends PTParSer {
     Matcher m = state.matcherAtStart(p);
     if (m.find()) {
       Preconditions.checkState(m.start() == state.index);
-      MatchEvent content = MatchEvent.content(m.group(), state.index);
+      Event content = Event.content(m.group(), state.index);
       ParseState stateAfter = state.advance(m.end() - m.start())
           .appendOutput(content);
       return ParseResult.success(
@@ -68,8 +68,8 @@ final class PatternMatch extends PTParSer {
       err.error(state, "Expected content event but found end-of-input");
       return Optional.absent();
     }
-    MatchEvent e = state.structure.get(state.index);
-    if (e.getKind() == MatchEvent.Kind.CONTENT) {
+    Event e = state.structure.get(state.index);
+    if (e.getKind() == Event.Kind.CONTENT) {
       String content = e.getContent();
       if (p.matcher(content).matches()) {
         return Optional.of(state.advanceWithCopy());
@@ -91,8 +91,8 @@ final class PatternMatch extends PTParSer {
       err.error(state, "Expected content event but found end-of-input");
       return Optional.absent();
     }
-    MatchEvent e = state.events.get(state.index);
-    if (e.getKind() == MatchEvent.Kind.CONTENT) {
+    Event e = state.events.get(state.index);
+    if (e.getKind() == Event.Kind.CONTENT) {
       String content = e.getContent();
       if (p.matcher(content).matches()) {
         return Optional.of(state.advance());

@@ -3,7 +3,7 @@ package com.mikesamuel.cil.ptree;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -104,7 +104,7 @@ final class Lookahead extends PTParSer {
   public Optional<SerialState> unparse(
       SerialState serialState, SerialErrorReceiver err) {
     DoubleCheckPredicate p = new DoubleCheckPredicate();
-    return Optional.of(serialState.append(MatchEvent.delayedCheck(p)));
+    return Optional.of(serialState.append(Event.delayedCheck(p)));
   }
 
   @Override

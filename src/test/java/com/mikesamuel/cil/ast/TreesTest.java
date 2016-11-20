@@ -3,7 +3,7 @@ package com.mikesamuel.cil.ast;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LineStarts;
 
@@ -18,9 +18,9 @@ public final class TreesTest extends TestCase {
         .lineStarts;
 
     BaseNode got = Trees.of(starts, ImmutableList.of(
-        MatchEvent.push(IdentifierNode.Variant.Builtin),
-        MatchEvent.content("foo", 2),
-        MatchEvent.pop()));
+        Event.push(IdentifierNode.Variant.Builtin),
+        Event.content("foo", 2),
+        Event.pop()));
 
     IdentifierNode want =
         IdentifierNode.builder(IdentifierNode.Variant.Builtin)
@@ -41,26 +41,26 @@ public final class TreesTest extends TestCase {
     LineStarts starts = Input.fromCharSequence("test-file", "  int[][].class")
         .lineStarts;
     BaseNode got = Trees.of(starts, ImmutableList.of(
-        MatchEvent.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
+        Event.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
 
-        MatchEvent.push(NumericTypeNode.Variant.IntegralType),
-        MatchEvent.push(IntegralTypeNode.Variant.Int),
-        MatchEvent.token("int", 2),
-        MatchEvent.pop(),
-        MatchEvent.pop(),
+        Event.push(NumericTypeNode.Variant.IntegralType),
+        Event.push(IntegralTypeNode.Variant.Int),
+        Event.token("int", 2),
+        Event.pop(),
+        Event.pop(),
 
-        MatchEvent.push(DimNode.Variant.LsRs),
-        MatchEvent.token("[", 5),
-        MatchEvent.token("]", 6),
-        MatchEvent.pop(),
-        MatchEvent.push(DimNode.Variant.LsRs),
-        MatchEvent.token("[", 7),
-        MatchEvent.token("]", 8),
-        MatchEvent.pop(),
+        Event.push(DimNode.Variant.LsRs),
+        Event.token("[", 5),
+        Event.token("]", 6),
+        Event.pop(),
+        Event.push(DimNode.Variant.LsRs),
+        Event.token("[", 7),
+        Event.token("]", 8),
+        Event.pop(),
 
-        MatchEvent.token(".", 9),
-        MatchEvent.token("class", 10),
-        MatchEvent.pop()
+        Event.token(".", 9),
+        Event.token("class", 10),
+        Event.pop()
         ));
 
     BaseNode want = ClassLiteralNode.builder(

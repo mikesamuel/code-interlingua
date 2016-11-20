@@ -1,21 +1,21 @@
 package com.mikesamuel.cil.ast;
 
-import static com.mikesamuel.cil.event.MatchEvent.pop;
-import static com.mikesamuel.cil.event.MatchEvent.push;
+import static com.mikesamuel.cil.event.Event.pop;
+import static com.mikesamuel.cil.event.Event.push;
 
 import org.junit.Test;
 
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 
 @SuppressWarnings("javadoc")
 public final class StatementNodeTest extends AbstractParSerTestCase {
 
-  private static MatchEvent token(String s) {
-    return MatchEvent.token(s, -1);
+  private static Event token(String s) {
+    return Event.token(s, -1);
   }
 
-  private static MatchEvent content(String s) {
-    return MatchEvent.content(s, -1);
+  private static Event content(String s) {
+    return Event.content(s, -1);
   }
 
   @Test

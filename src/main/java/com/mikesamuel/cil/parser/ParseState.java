@@ -7,7 +7,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 
 /**
  * State of a parse.
@@ -18,7 +18,7 @@ public final class ParseState {
   /** The position of the parse cursor in the index. */
   public final int index;
   /** The output which can be replayed for a tree builder. */
-  public final @Nullable Chain<MatchEvent> output;
+  public final @Nullable Chain<Event> output;
 
   /** A parse state at the beginning of input with no output. */
   public ParseState(Input input) {
@@ -26,7 +26,7 @@ public final class ParseState {
   }
 
   private ParseState(
-      Input input, int index, @Nullable Chain<MatchEvent> output) {
+      Input input, int index, @Nullable Chain<Event> output) {
     Preconditions.checkState(0 <= index && index <= input.content.length());
     this.input = input;
     this.index = index;
@@ -55,14 +55,14 @@ public final class ParseState {
   }
 
   /** A state like this but with the given event appended. */
-  public ParseState appendOutput(MatchEvent e) {
+  public ParseState appendOutput(Event e) {
     return withOutput(Chain.append(output, e));
   }
 
   /**
    * A state like this but with the given output.
    */
-  public ParseState withOutput(Chain<MatchEvent> newOutput) {
+  public ParseState withOutput(Chain<Event> newOutput) {
     ParseState ps = new ParseState(input, index, newOutput);
     return ps;
   }

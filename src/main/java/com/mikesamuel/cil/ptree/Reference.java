@@ -13,7 +13,7 @@ import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.event.Debug;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
@@ -100,10 +100,10 @@ final class Reference extends PTParSer {
   }
   // END HACK
 
-  private static ImmutableList<MatchEvent> lastOutputSeen = ImmutableList.of();
-  private static String dumpOutput(Chain<MatchEvent> out) {
-    ImmutableList<MatchEvent> lastList = lastOutputSeen;
-    ImmutableList<MatchEvent> outList = ImmutableList.copyOf(
+  private static ImmutableList<Event> lastOutputSeen = ImmutableList.of();
+  private static String dumpOutput(Chain<Event> out) {
+    ImmutableList<Event> lastList = lastOutputSeen;
+    ImmutableList<Event> outList = ImmutableList.copyOf(
         Chain.forwardIterable(out));
     lastOutputSeen = outList;
     if (!lastList.isEmpty() && outList.size() >= lastList.size()
@@ -112,7 +112,7 @@ final class Reference extends PTParSer {
         return null;
       }
       StringBuilder sb = new StringBuilder("[...");
-      for (MatchEvent e
+      for (Event e
            : outList.subList(lastList.size(), outList.size())) {
         sb.append(", ").append(e);
       }
@@ -132,7 +132,7 @@ final class Reference extends PTParSer {
               indent() + "Found LR Growing " + nodeType + " @ " + state.index);
         }
         return ParseResult.success(
-            state.appendOutput(MatchEvent.leftRecursionSuffixEnd(nodeType)),
+            state.appendOutput(Event.leftRecursionSuffixEnd(nodeType)),
             ParseResult.NO_WRITE_BACK_RESTRICTION,
             // Checked to make sure that the growing does not accidentally take
             // a non-left recursing path.
@@ -215,7 +215,7 @@ final class Reference extends PTParSer {
       grow_the_seed:
       while (true) {
         ParseResult growResult = parseVariants(
-            grown.appendOutput(MatchEvent.leftRecursionSuffixStart()),
+            grown.appendOutput(Event.leftRecursionSuffixStart()),
             lr, err, LeftRecursion.Stage.GROWING,
             allExclusionsTriggered);
         allExclusionsTriggered.addAll(growResult.lrExclusionsTriggered);
@@ -321,7 +321,7 @@ final class Reference extends PTParSer {
 
         try (LeftRecursion.VariantScope scope = lr.enter(
                  variant, state.index, stage)) {
-          ParseState beforeBody = state.appendOutput(MatchEvent.push(variant));
+          ParseState beforeBody = state.appendOutput(Event.push(variant));
           ParseResult result = variant.getParSer().parse(beforeBody, lr, err);
           switch (result.synopsis) {
             case FAILURE:
@@ -329,10 +329,10 @@ final class Reference extends PTParSer {
               continue;
             case SUCCESS:
               ParseState afterBody = result.next();
-              MatchEvent pop =
-                  DEBUG ? MatchEvent.pop(variant) : MatchEvent.pop();
+              Event pop =
+                  DEBUG ? Event.pop(variant) : Event.pop();
               ParseState afterVariant = afterBody.appendOutput(pop);
-              Predicate<Chain<MatchEvent>> postcond = variant.getPostcond();
+              Predicate<Chain<Event>> postcond = variant.getPostcond();
               if (postcond.apply(afterVariant.output)) {
                 return ParseResult.success(
                     afterVariant,
@@ -362,7 +362,7 @@ final class Reference extends PTParSer {
 
     // Try handling non-anon variants first.
     if (!state.isEmpty()) {
-      MatchEvent e = state.structure.get(state.index);
+      Event e = state.structure.get(state.index);
       switch (e.getKind()) {
         case PUSH:
           NodeVariant variant = e.getNodeVariant();
@@ -383,7 +383,7 @@ final class Reference extends PTParSer {
               SerialState afterContent = afterContentOpt.get();
               if (!afterContent.isEmpty() &&
                   afterContent.structure.get(afterContent.index).getKind()
-                  == MatchEvent.Kind.POP) {
+                  == Event.Kind.POP) {
                 if (DEBUG_UP) {
                   System.err.println(
                       indent() + "Same variant " + variant + " passed");
@@ -417,7 +417,7 @@ final class Reference extends PTParSer {
         continue;
       }
 
-      SerialState beforeContent = state.append(MatchEvent.push(v));
+      SerialState beforeContent = state.append(Event.push(v));
       if (DEBUG_UP) {
         System.err.println(indent() + ". Trying anon variant " + v);
       }
@@ -433,7 +433,7 @@ final class Reference extends PTParSer {
         if (DEBUG_UP) {
           System.err.println(indent() + "Anon variant " + v + " passed");
         }
-        return Optional.of(afterContentOpt.get().append(MatchEvent.pop()));
+        return Optional.of(afterContentOpt.get().append(Event.pop()));
       }
       if (DEBUG_UP) {
         System.err.println(indent() + "Anon variant " + v + " failed");
@@ -454,22 +454,22 @@ final class Reference extends PTParSer {
 
 
   private static final class LRRewriter {
-    private final MatchEvent toPushback;
-    private final List<List<MatchEvent>> pushback = Lists.newArrayList();
+    private final Event toPushback;
+    private final List<List<Event>> pushback = Lists.newArrayList();
     private int popDepth;
 
     LRRewriter(NodeType nodeType) {
-      this.toPushback = MatchEvent.leftRecursionSuffixEnd(nodeType);
+      this.toPushback = Event.leftRecursionSuffixEnd(nodeType);
     }
 
-    Chain<MatchEvent> rewrite(Chain<MatchEvent> out) {
+    Chain<Event> rewrite(Chain<Event> out) {
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "before rewriteLR " + toPushback);
         Debug.dumpEvents(indent, Chain.forwardIterable(out), System.err);
       }
-      Chain<MatchEvent> withPushbackAndPops = pushback(out);
+      Chain<Event> withPushbackAndPops = pushback(out);
       Preconditions.checkState(pushback.isEmpty());
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
@@ -485,7 +485,7 @@ final class Reference extends PTParSer {
      * Scan until we find the push of the seed and distribute pushes and pops
      * from LRSuffix events.
      */
-    private Chain<MatchEvent> pushback(Chain<MatchEvent> out) {
+    private Chain<Event> pushback(Chain<Event> out) {
       if (DEBUG_LR) {
         @SuppressWarnings("synthetic-access")
         String indent = indent();
@@ -495,9 +495,9 @@ final class Reference extends PTParSer {
       }
       Preconditions.checkNotNull(out);
 
-      MatchEvent e = out.x;
+      Event e = out.x;
 
-      Chain<MatchEvent> pushedBack = null;
+      Chain<Event> pushedBack = null;
       switch (e.getKind()) {
         case POP:
           ++popDepth;
@@ -513,8 +513,8 @@ final class Reference extends PTParSer {
             if (DEBUG) {
               System.err.println(indent() + "Pushback = " + pushback);
             }
-            for (List<MatchEvent> onePb : pushback) {
-              for (MatchEvent pb : Lists.reverse(onePb)) {
+            for (List<Event> onePb : pushback) {
+              for (Event pb : Lists.reverse(onePb)) {
                 pushedBack = Chain.append(pushedBack, pb);
               }
             }
@@ -529,12 +529,12 @@ final class Reference extends PTParSer {
             int pushCount = 0;
             int popCount = 0;
 
-            List<MatchEvent> onePb = Lists.newArrayList();
+            List<Event> onePb = Lists.newArrayList();
             pushback.add(onePb);
             boolean foundStart = false;
             pb_loop:
-            for (Chain<MatchEvent> c = out.prev; c != null; c = c.prev) {
-              MatchEvent ce = c.x;
+            for (Chain<Event> c = out.prev; c != null; c = c.prev) {
+              Event ce = c.x;
               switch (ce.getKind()) {
                 case LR_START:
                   Preconditions.checkState(pushCount >= popCount);

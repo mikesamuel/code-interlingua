@@ -9,12 +9,12 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 
 /**
  * Memoizes partial parses by mapping (NodeType, indexIntoContent) to
- * a ParseState with that index whose output ends with a {@link MatchEvent#pop}
- * of a {@link MatchEvent#push} of that NodeType, so that the events from
+ * a ParseState with that index whose output ends with a {@link Event#pop}
+ * of a {@link Event#push} of that NodeType, so that the events from
  * parsing that production at that index can be reused.
  */
 public final class RatPack {
@@ -39,14 +39,14 @@ public final class RatPack {
   public void cacheSuccess(
       int indexBeforeParse, int indexAfterParse,
       NodeType nodeType,
-      Chain<MatchEvent> output) {
+      Chain<Event> output) {
     Preconditions.checkArgument(
-        output !=  null && output.x.getKind() == MatchEvent.Kind.POP);
+        output !=  null && output.x.getKind() == Event.Kind.POP);
 
     int popCount = 0;
     cache_loop:
-    for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
-      MatchEvent e = o.x;
+    for (Chain<? extends Event> o = output; o != null; o = o.prev) {
+      Event e = o.x;
       switch (e.getKind()) {
         case POP:
           ++popCount;
@@ -205,10 +205,10 @@ public final class RatPack {
   static final class ParseSuccess implements ParseCacheEntry {
     final NodeType nodeType;
     final int indexAfterParse;
-    final Chain<MatchEvent> output;
+    final Chain<Event> output;
 
     ParseSuccess(
-        NodeType nodeType, int indexAfterParse, Chain<MatchEvent> output) {
+        NodeType nodeType, int indexAfterParse, Chain<Event> output) {
       this.nodeType = nodeType;
       this.indexAfterParse = indexAfterParse;
       this.output = output;
@@ -228,13 +228,13 @@ public final class RatPack {
     public ParseState apply(ParseState state)
     throws UnsupportedOperationException{
       // Snip off the part of the parse that relates to the last event
-      Chain<MatchEvent> resultReverse = null;
+      Chain<Event> resultReverse = null;
       // Consume inputs as we see tokens and content events.
       {
         int popCount = 0;
         apply_loop:
-        for (Chain<? extends MatchEvent> o = output; o != null; o = o.prev) {
-          MatchEvent e = o.x;
+        for (Chain<? extends Event> o = output; o != null; o = o.prev) {
+          Event e = o.x;
           resultReverse = Chain.append(resultReverse, e);
           switch (e.getKind()) {
             case POP:
@@ -261,9 +261,9 @@ public final class RatPack {
         }
       }
 
-      Chain<MatchEvent> beforeParse = state.output;
-      Chain<MatchEvent> afterParse = beforeParse;
-      for (Chain<? extends MatchEvent> r = resultReverse; r != null; r = r.prev) {
+      Chain<Event> beforeParse = state.output;
+      Chain<Event> afterParse = beforeParse;
+      for (Chain<? extends Event> r = resultReverse; r != null; r = r.prev) {
         afterParse = Chain.append(afterParse, r.x);
       }
       return state.withOutput(afterParse).withIndex(indexAfterParse);

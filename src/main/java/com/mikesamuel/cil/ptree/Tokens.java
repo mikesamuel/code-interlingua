@@ -13,7 +13,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.TokenStrings;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Chain;
 import com.mikesamuel.cil.parser.Ignorables;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -402,8 +402,8 @@ public final class Tokens {
       // Scan those for Javadoc comments.
 
       int lastTokenEnd = 0;
-      for (Chain<MatchEvent> c = state.output; c != null; c = c.prev) {
-        MatchEvent e = c.x;
+      for (Chain<Event> c = state.output; c != null; c = c.prev) {
+        Event e = c.x;
         int nc = e.nCharsConsumed();
         if (nc != 0) {
           lastTokenEnd = e.getContentIndex() + nc;
@@ -432,7 +432,7 @@ public final class Tokens {
           }
           return ParseResult.success(
               state.appendOutput(
-                  MatchEvent.ignorable(
+                  Event.ignorable(
                       stripLeadingWhitespace(
                           r.rightmostJavadocCommentContent,
                           nLeadingWhitespace),
@@ -452,8 +452,8 @@ public final class Tokens {
       // Don't require the ignorable, but step past it if it's present.
       SerialState afterComment = state;
       if (state.index < state.structure.size()) {
-        MatchEvent e = state.structure.get(state.index);
-        if (e.getKind() == MatchEvent.Kind.IGNORABLE) {
+        Event e = state.structure.get(state.index);
+        if (e.getKind() == Event.Kind.IGNORABLE) {
           afterComment = state.advanceWithCopy();
         }
       }
@@ -466,8 +466,8 @@ public final class Tokens {
         MatchState state, MatchErrorReceiver err) {
       MatchState afterComment = state;
       if (state.index < state.events.size()) {
-        MatchEvent e = state.events.get(state.index);
-        if (e.getKind() == MatchEvent.Kind.IGNORABLE) {
+        Event e = state.events.get(state.index);
+        if (e.getKind() == Event.Kind.IGNORABLE) {
           afterComment = state.advance();
         }
       }

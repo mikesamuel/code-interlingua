@@ -7,7 +7,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSet;
-import com.mikesamuel.cil.event.MatchEvent;
+import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -64,7 +64,7 @@ final class Literal extends PTParSer {
       return ParseResult.success(
           (state
               .advance(text.length())
-              .appendOutput(MatchEvent.token(text, state.index))),
+              .appendOutput(Event.token(text, state.index))),
           ParseResult.NO_WRITE_BACK_RESTRICTION,
           ImmutableSet.of());
     }
@@ -75,13 +75,13 @@ final class Literal extends PTParSer {
   @Override
   public Optional<SerialState> unparse(
       SerialState state, SerialErrorReceiver err) {
-    return Optional.of(state.append(MatchEvent.token(text, -1)));
+    return Optional.of(state.append(Event.token(text, -1)));
   }
 
   @Override
   public Optional<MatchState> match(
       MatchState state, MatchErrorReceiver err) {
-    return state.expectEvent(MatchEvent.content(this.text, -1), err);
+    return state.expectEvent(Event.content(this.text, -1), err);
   }
 
   @Override
