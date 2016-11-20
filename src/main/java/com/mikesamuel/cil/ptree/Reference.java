@@ -121,6 +121,7 @@ final class Reference extends PTParSer {
     return outList.toString();
   }
 
+  @SuppressWarnings("unused")
   @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
@@ -271,16 +272,6 @@ final class Reference extends PTParSer {
       case FAILURE:
         RatPack.ParseCacheEntry e = state.input.ratPack.getCachedParse(
             nodeType, state.index);
-        if (false && e.wasTried() && e.passed()) {
-          // TODO: Is this necessary?
-          // If so, our ratpack should be a growable map not an evicting cache.
-          System.err.println(
-              indent() + "Passing " + nodeType
-              + " @ " + state.index + " due to cached result");
-          return ParseResult.success(
-              e.apply(state), ParseResult.NO_WRITE_BACK_RESTRICTION,
-              allExclusionsTriggered);
-        }
         if (canCache) {
           state.input.ratPack.cacheFailure(state.index, nodeType);
         }
@@ -464,7 +455,6 @@ final class Reference extends PTParSer {
 
     SList<Event> rewrite(SList<Event> out) {
       if (DEBUG_LR) {
-        @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "before rewriteLR " + toPushback);
         Debug.dumpEvents(indent, SList.forwardIterable(out), System.err);
@@ -472,7 +462,6 @@ final class Reference extends PTParSer {
       SList<Event> withPushbackAndPops = pushback(out);
       Preconditions.checkState(pushback.isEmpty());
       if (DEBUG_LR) {
-        @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(indent + "after rewriteLR " + toPushback);
         Debug.dumpEvents(
@@ -487,7 +476,6 @@ final class Reference extends PTParSer {
      */
     private SList<Event> pushback(SList<Event> out) {
       if (DEBUG_LR) {
-        @SuppressWarnings("synthetic-access")
         String indent = indent();
         System.err.println(
             indent + "pushback(" + (out != null ? "...," + out.x : "<null>")
