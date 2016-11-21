@@ -29,7 +29,7 @@ public final class LiteralTest extends TestCase {
         ImmutableList.of(Event.token("===", -1)),
         ImmutableList.copyOf(SList.forwardIterable(after.output)));
     assertEquals(5, after.index);  // No more tokens
-    assertEquals("", after.input.content.substring(after.index));
+    assertEquals("", after.input.content.subSequence(after.index).toString());
   }
 
 }

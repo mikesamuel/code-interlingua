@@ -2,6 +2,7 @@ package com.mikesamuel.cil.ast;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -165,5 +166,48 @@ public abstract class BaseNode {
       }
     }
     return true;
+  }
+
+  /**
+   * A diagnostic string describing the structure of the tree.
+   *
+   * @param prefix a string to place to the left on each line.
+   *     Can be used to indent.
+   * @param decorator called for each node to return a string that is displayed
+   *     to the right on the same line.  A return value of null means no
+   *     decoration to display.
+   */
+  public String toAsciiArt(
+      String prefix, Function<? super BaseNode, ? extends String> decorator) {
+    StringBuilder out = new StringBuilder();
+    StringBuilder indentation = new StringBuilder();
+    indentation.append(prefix);
+    appendAsciiArt(indentation, out, decorator);
+    return out.toString();
+  }
+
+  private void appendAsciiArt(
+      StringBuilder prefix, StringBuilder out,
+      Function<? super BaseNode, ? extends String> decorator) {
+    out.append(prefix);
+    appendNodeHeader(out);
+    String decoration = decorator.apply(this);
+    if (decoration != null) {
+      out.append(" : ").append(decoration);
+    }
+    int prefixLength = prefix.length();
+    prefix.append("  ");
+    for (BaseNode child : children) {
+      out.append('\n');
+      child.appendAsciiArt(prefix, out, decorator);
+    }
+    prefix.setLength(prefixLength);
+  }
+
+  private void appendNodeHeader(StringBuilder out) {
+    out.append(variant);
+    if (literalValue != null) {
+      out.append(' ').append(literalValue);
+    }
   }
 }

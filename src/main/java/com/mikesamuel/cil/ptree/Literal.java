@@ -117,7 +117,7 @@ final class Literal extends PTParSer {
     }
 
     @Override
-    public boolean isHazard(String input, int start, int end) {
+    public boolean isHazard(CharSequence input, int start, int end) {
       if (p != null) {
         Matcher m = p.matcher(input);
         m.region(end, input.length());
@@ -135,9 +135,9 @@ final class Literal extends PTParSer {
     static final WordMergeGuard INSTANCE = new WordMergeGuard();
 
     @Override
-    public boolean isHazard(String content, int start, int end) {
+    public boolean isHazard(CharSequence content, int start, int end) {
       if (end < content.length()) {
-        int cp = content.codePointAt(end);
+        int cp = Character.codePointAt(content, end);
         if (Character.isJavaIdentifierPart(cp)) {
           return true;
         }

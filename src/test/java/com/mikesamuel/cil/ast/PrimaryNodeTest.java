@@ -36,6 +36,36 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
   }
 
   @Test
+  public final void testPreLexPassForUnicodeEscapes() {
+    assertParsePasses(
+        PTree.complete(NodeType.Primary),
+        "\"\\u0022",
+        push(ExpressionAtomNode.Variant.Literal),
+        push(LiteralNode.Variant.StringLiteral),
+        push(StringLiteralNode.Variant.Builtin),
+        content("\"\"", -1),
+        pop(),
+        pop(),
+        pop()
+        );
+    assertParseFails(
+        PTree.complete(NodeType.Primary),
+        "\"\\u0022\""  // \u0022 terminates string early.
+        );
+    assertParsePasses(
+        PTree.complete(NodeType.Primary),
+        "// Line Comment\\u000a1",
+        push(ExpressionAtomNode.Variant.Literal),
+        push(LiteralNode.Variant.IntegerLiteral),
+        push(IntegerLiteralNode.Variant.Builtin),
+        content("1", -1),
+        pop(),
+        pop(),
+        pop()
+        );
+  }
+
+  @Test
   public final void testStringLiteral() {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
@@ -115,6 +145,17 @@ public final class PrimaryNodeTest extends AbstractParSerTestCase {
     assertParsePasses(
         PTree.complete(NodeType.Primary),
         "'\"'",
+        push(ExpressionAtomNode.Variant.Literal),
+        push(LiteralNode.Variant.CharacterLiteral),
+        push(CharacterLiteralNode.Variant.Builtin),
+        content("'\"'", -1),
+        pop(),
+        pop(),
+        pop()
+        );
+    assertParsePasses(
+        PTree.complete(NodeType.Primary),
+        "'\\u0022'",
         push(ExpressionAtomNode.Variant.Literal),
         push(LiteralNode.Variant.CharacterLiteral),
         push(CharacterLiteralNode.Variant.Builtin),

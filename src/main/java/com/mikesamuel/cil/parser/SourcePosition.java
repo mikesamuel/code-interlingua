@@ -97,10 +97,10 @@ public final class SourcePosition {
     sb.append(getSource())
         .append(":")
         .append(startLineInFile)
-        .append(":")
+        .append("+")
         .append(startCharInLine);
     if (startLineInFile != endLineInFile) {
-      sb.append(" - ").append(endLineInFile).append(':').append(endCharInLine);
+      sb.append(" - ").append(endLineInFile).append('+').append(endCharInLine);
     } else if (startCharInLine != endCharInLine) {
       sb.append('-').append(endCharInLine);
     }

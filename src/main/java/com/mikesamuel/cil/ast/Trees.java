@@ -8,7 +8,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
-import com.mikesamuel.cil.parser.LineStarts;
+import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.SourcePosition;
 
@@ -18,6 +18,13 @@ import com.mikesamuel.cil.parser.SourcePosition;
 public final class Trees {
   private Trees() {
     // Not instantiable
+  }
+
+  /**
+   * @see #of(Input, Iterable)
+   */
+  public static BaseNode of(Input input, SList<Event> events) {
+    return of(input, SList.forwardIterable(events));
   }
 
   /**
@@ -39,11 +46,10 @@ public final class Trees {
    *
    */
   public static BaseNode of(
-      LineStarts starts,
-      Iterable<? extends Event> events) {
+      Input input, Iterable<? extends Event> events) {
     Iterator<? extends Event> it = events.iterator();
 
-    Tier root = buildTier(null, starts, it);
+    Tier root = buildTier(null, input, it);
 
     if (root.content != null) {
       throw new IllegalArgumentException(
@@ -66,8 +72,7 @@ public final class Trees {
 
   private static Tier buildTier(
       @Nullable NodeVariant variant,
-      LineStarts starts,
-      Iterator<? extends Event> events) {
+      Input input, Iterator<? extends Event> events) {
     @SuppressWarnings("synthetic-access")
     Tier tier = new Tier();
 
@@ -81,7 +86,7 @@ public final class Trees {
           break event_loop;
         case PUSH:
           NodeVariant pushVariant = e.getNodeVariant();
-          Tier nodeContent = buildTier(pushVariant, starts, events);
+          Tier nodeContent = buildTier(pushVariant, input, events);
           if (!nodeContent.sawPop) {
             Preconditions.checkState(!events.hasNext());
             throw new IllegalArgumentException("No pop corresponding to " + e);
@@ -125,24 +130,21 @@ public final class Trees {
                 + "` and `" + e.getContent() + "`");
           }
           tier.content = e.getContent();
-          SourcePosition pos = new SourcePosition(
-              starts, e.getContentIndex(),
-              e.getContentIndex() + e.nCharsConsumed());
+          SourcePosition pos = makeSourcePosition(
+              e.getContentIndex(), e.nCharsConsumed(), input);
           tier.contentPosition = pos;
           tier.updatePosition(pos);
           break;
         }
         case TOKEN: {
-          SourcePosition pos = new SourcePosition(
-              starts, e.getContentIndex(),
-              e.getContentIndex() + e.nCharsConsumed());
+          SourcePosition pos = makeSourcePosition(
+              e.getContentIndex(), e.nCharsConsumed(), input);
           tier.updatePosition(pos);
           break;
         }
         case IGNORABLE: {
-          SourcePosition pos = new SourcePosition(
-              starts, e.getContentIndex(),
-              e.getContentIndex() + e.getContent().length());
+          SourcePosition pos = makeSourcePosition(
+              e.getContentIndex(), e.getContent().length(), input);
           if (variant.isIgnorable()) {
             // Treat the comment as content.
             tier.content = e.getContent();
@@ -168,6 +170,15 @@ public final class Trees {
     }
 
     return tier;
+  }
+
+  private static SourcePosition makeSourcePosition(
+      int decodedStartIndex, int nDecodedChars, Input input) {
+    int decodedEndIndex = decodedStartIndex + nDecodedChars;
+    int encodedStartIndex = input.content.indexInEncoded(decodedStartIndex);
+    int encodedEndIndex = input.content.indexInEncoded(decodedEndIndex);
+    return new SourcePosition(
+        input.lineStarts, encodedStartIndex, encodedEndIndex);
   }
 
   private static final class Tier {

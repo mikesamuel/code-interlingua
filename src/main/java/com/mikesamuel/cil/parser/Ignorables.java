@@ -13,14 +13,15 @@ public final class Ignorables {
    * The index after any ignorable tokens like spaces and comments.
    *
    * @param content the string to scan.
-   * @param startIndex the start of input or an index just past the end of a token.
+   * @param startIndex the start of input or an index just past the end of a
+   *      token.
    * @param commentReceiver if not null, called for each comment
    *      encountered in left-to-right order.
-   * @return the index of the first character after start that is not part of an ignorable
-   *      token
+   * @return the index of the first character after start that is not part of an
+   *      ignorable token
    */
   public static int scanPastIgnorablesFrom(
-      String content,
+      CharSequence content,
       int startIndex, @Nullable CommentReceiver commentReceiver) {
     int idx;
     int n = content.length();
@@ -41,7 +42,8 @@ public final class Ignorables {
               }
             }
             if (commentReceiver != null) {
-              commentReceiver.comment(idx, content.substring(idx, commentEnd));
+              commentReceiver.comment(
+                  idx, content.subSequence(idx, commentEnd).toString());
             }
             idx = commentEnd - 1;  // Adjust for increment above
             continue;
@@ -54,7 +56,7 @@ public final class Ignorables {
                   commentEnd += 2;  // Step past */
                   if (commentReceiver != null) {
                     commentReceiver.comment(
-                        idx, content.substring(idx, commentEnd));
+                        idx, content.subSequence(idx, commentEnd).toString());
                   }
                   idx = commentEnd - 1;  // Adjust for incement above.
                   continue ign_loop;

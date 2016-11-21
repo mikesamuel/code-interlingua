@@ -176,8 +176,10 @@ final class Reference extends PTParSer {
 
 
     if (DEBUG) {
-      System.err.println(indent() + "Entered " + nodeType + " @ " + state.index);
-      String din = dumpInput(state.input.content.substring(state.index));
+      System.err.println(
+          indent() + "Entered " + nodeType + " @ " + state.index);
+      String din = dumpInput(
+          state.input.content.subSequence(state.index).toString());
       if (din != null) {
         System.err.println(indent() + ". . input=`" + din + "`");
       }
@@ -203,7 +205,7 @@ final class Reference extends PTParSer {
         System.err.println(
             indent() + "AfterSeed " + nodeType
             + "\n" + indent() + ". . input=`"
-            + afterSeed.input.content.substring(afterSeed.index) + "`");
+            + afterSeed.input.content.subSequence(afterSeed.index) + "`");
         if (false) {
           System.err.println(
               indent() + ". . output="

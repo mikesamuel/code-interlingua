@@ -193,20 +193,19 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
         // Trees.of will throw an IllegalArgumentException if its
         // well-formedness checks fail.
-        BaseNode node = Trees.of(
-            start.input.lineStarts,
-            SList.forwardIterable(afterParse.output));
+        BaseNode node = Trees.of(start.input, afterParse.output);
 
         if (firstPushVariants.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
-          assertEquals(input.content, variant, firstPushVariants.get(0));
+          assertEquals(input.content.toString(), variant, firstPushVariants.get(0));
           if (!variant.isAnon()) {
             assertEquals(variant, node.getVariant());
           }
         }
         assertEquals(
-            input.content, allTokenText.toString(), tokensOnOutput.toString());
+            input.content.toString(),
+            allTokenText.toString(), tokensOnOutput.toString());
         doubleCheck(parSer, afterParse, fuzzSet);
         return;
       case FAILURE:
@@ -263,9 +262,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
   protected void doubleCheck(
       ParSer parSer, ParseState afterParse, ImmutableSet<Fuzz> fuzzSet) {
-    BaseNode root = Trees.of(
-        afterParse.input.lineStarts,
-        SList.forwardIterable(afterParse.output));
+    BaseNode root = Trees.of(afterParse.input, afterParse.output);
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("root=" + root);
     }
@@ -338,8 +335,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         }
 
         BaseNode reparsedRoot = Trees.of(
-            reparseState.input.lineStarts,
-            SList.forwardIterable(reparseState.output));
+            reparseState.input, reparseState.output);
         if (!root.equals(reparsedRoot)) {
           assertEquals(root.toString(), reparsedRoot.toString());
           assertEquals(root, reparsedRoot);

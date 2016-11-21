@@ -11,5 +11,5 @@ public interface TokenMergeGuard {
    * True iff there is a marge hazard following the token
    * {@code content.substring(start, end)} in content.
    */
-  boolean isHazard(String content, int start, int end);
+  boolean isHazard(CharSequence content, int start, int end);
 }

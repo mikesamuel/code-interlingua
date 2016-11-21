@@ -1,11 +1,20 @@
 package com.mikesamuel.cil.ast;
 
+import javax.annotation.Nonnull;
+
 import org.junit.Test;
 
+import com.google.common.base.Function;
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Input;
-import com.mikesamuel.cil.parser.LineStarts;
+import com.mikesamuel.cil.parser.LeftRecursion;
+import com.mikesamuel.cil.parser.ParseErrorReceiver;
+import com.mikesamuel.cil.parser.ParseResult;
+import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 import junit.framework.TestCase;
 
@@ -14,10 +23,9 @@ public final class TreesTest extends TestCase {
 
   @Test
   public static void testTreesOfIdentifier() {
-    LineStarts starts = (Input.fromCharSequence("test-file", "  foo"))
-        .lineStarts;
+    Input input = Input.fromCharSequence("test-file", "  foo");
 
-    BaseNode got = Trees.of(starts, ImmutableList.of(
+    BaseNode got = Trees.of(input, ImmutableList.of(
         Event.push(IdentifierNode.Variant.Builtin),
         Event.content("foo", 2),
         Event.pop()));
@@ -38,9 +46,8 @@ public final class TreesTest extends TestCase {
 
   @Test
   public static void testTreesOfWithInnerNodes() {
-    LineStarts starts = Input.fromCharSequence("test-file", "  int[][].class")
-        .lineStarts;
-    BaseNode got = Trees.of(starts, ImmutableList.of(
+    Input input = Input.fromCharSequence("test-file", "  int[][].class");
+    BaseNode got = Trees.of(input, ImmutableList.of(
         Event.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
 
         Event.push(NumericTypeNode.Variant.IntegralType),
@@ -79,5 +86,66 @@ public final class TreesTest extends TestCase {
 
     assertEquals(got.toString(), want.toString());
     assertEquals(got, want);
+  }
+
+  @Test
+  public static final void testSourcePositions() {
+    // The unicode escape introduces an index difference between
+    // the character indices in the code and the character indices in the
+    // decoded string.
+
+    String code = "/** In \\u2124 */\npublic final double x;";
+    // CharInFile             1111111 111222222222233333333334
+    //             01234567 890123456 789012345678901234567890
+    //
+    // Line       1111111111111111111 22222222222222222222222
+    //
+    // CharInLine            11111111          11111111112222
+    //            012345678 901234567 12345678901234567890123
+
+    String golden = Joiner.on('\n').join(
+        "FieldDeclaration.Declaration : test:1+1 - 2+23",
+        "  JavaDocComment.Builtin /** In \u2124 */ : test:1+1-17",
+        "  FieldModifier.Public : test:2+1-7",
+        "  FieldModifier.Final : test:2+8-13",
+        "  UnannType.UnannPrimitiveType : test:2+14-20",
+        "    UnannPrimitiveType.NumericType : test:2+14-20",
+        "      NumericType.FloatingPointType : test:2+14-20",
+        "        FloatingPointType.Double : test:2+14-20",
+        "  VariableDeclaratorList.VariableDeclaratorComVariableDeclarator : test:2+21-22",
+        "    VariableDeclarator.VariableDeclaratorIdEqVariableInitializer : test:2+21-22",
+        "      VariableDeclaratorId.IdentifierDims : test:2+21-22",
+        "        Identifier.Builtin x : test:2+21-22"
+        );
+
+
+    Input inp = Input.fromCharSequence("test", code);
+    ParseState start = new ParseState(inp);
+
+    ParseResult result = NodeType.FieldDeclaration.getParSer().parse(
+        start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
+    BaseNode root = null;
+    switch (result.synopsis) {
+      case FAILURE:
+        fail("Parse failed");
+        break;
+      case SUCCESS:
+        root = Trees.of(start.input, result.next().output);
+        break;
+    }
+    Preconditions.checkNotNull(root);
+    assertEquals(
+        golden,
+        root.toAsciiArt(
+            "", new Function<BaseNode, String>() {
+              @Override
+              public String apply(@Nonnull BaseNode node) {
+                SourcePosition pos = node.getSourcePosition();
+                if (pos != null) {
+                  return pos.toString();
+                }
+                return null;
+              }
+            }));
   }
 }

@@ -90,7 +90,7 @@ public final class ParseState {
    */
   public boolean startsWith(
       String text, Optional<TokenMergeGuard> hazardDetector) {
-    if (input.content.regionMatches(index, text, 0, text.length())) {
+    if (regionMatches(input.content, index, text, 0, text.length())) {
       if (!hazardDetector.isPresent()) {
         return true;
       }
@@ -115,15 +115,26 @@ public final class ParseState {
 
   @Override
   public String toString() {
-    String content = input.content;
-    String inputFragment;
+    CharSequence content = input.content;
+    CharSequence inputFragment;
     int fragmentEnd = index + 10;
     if (fragmentEnd >= content.length()) {
-      inputFragment = content.substring(
+      inputFragment = content.subSequence(
           index, Math.min(fragmentEnd, content.length()));
     } else {
-      inputFragment = content.substring(index, fragmentEnd) + "...";
+      inputFragment = content.subSequence(index, fragmentEnd) + "...";
     }
     return "(ParseState index=" + index + ", input=`" + inputFragment + "`)";
+  }
+
+  private static boolean regionMatches(
+      CharSequence a, int ai, CharSequence b, int bi, int n) {
+    if (ai + n > a.length() || bi + n > b.length()) { return false; }
+    for (int i = ai, j = bi, k = n; --k >= 0; ++i, ++j) {
+      if (a.charAt(i) != b.charAt(j)) {
+        return false;
+      }
+    }
+    return true;
   }
 }

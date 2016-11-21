@@ -65,7 +65,7 @@ public final class InputTest extends TestCase {
           gotBuilder.add("!" + token);
           token.setLength(0);
         }
-        gotBuilder.add("#" + input.content.substring(parsed, idx));
+        gotBuilder.add("#" + input.content.subSequence(parsed, idx));
         end = idx;
       } else {
         token.append(input.content.charAt(idx));

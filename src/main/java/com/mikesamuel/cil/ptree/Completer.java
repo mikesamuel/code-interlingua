@@ -31,10 +31,10 @@ final class Completer extends ParSer {
         if (nextState.isEmpty()) {
           return result;
         }
-        String unparsed =
-            nextState.input.content.substring(nextState.index);
+        CharSequence unparsed =
+            nextState.input.content.subSequence(nextState.index);
         if (unparsed.length() > 10) {
-          unparsed = unparsed.substring(0, 10) + "...";
+          unparsed = unparsed.subSequence(0, 10) + "...";
         }
         err.error(nextState, "Unparsed input `" + unparsed + "`");
         return ParseResult.failure();

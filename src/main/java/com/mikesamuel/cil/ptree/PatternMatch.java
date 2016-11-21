@@ -43,14 +43,14 @@ final class PatternMatch extends PTParSer {
       } else {
         int snippetIndex = state.index;
         int snippetEnd = snippetIndex + 10;
-        String content = state.input.content;
+        CharSequence content = state.input.content;
         int contentEnd = content.length();
         boolean needsEllipsis = contentEnd > snippetEnd;
         if (!needsEllipsis) {
           snippetEnd = contentEnd;
         }
         message = "Expected Literal but found `"
-            + (content.substring(snippetIndex, snippetEnd)
+            + (content.subSequence(snippetIndex, snippetEnd).toString()
                 .replace("\\", "\\\\")
                 .replace("\r", "\\r")
                 .replace("\n", "\\n"))

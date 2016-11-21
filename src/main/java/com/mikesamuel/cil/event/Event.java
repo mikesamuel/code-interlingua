@@ -153,7 +153,11 @@ public abstract class Event {
     return "";
   }
 
-  /** The index of the content in the input or -1 if there is no content. */
+  /**
+   * The index of the content in the input or -1 if there is no content.
+   * This is the index into the decoded content, so the index after
+   * <code>&#x5c;uXXXX</code> sequences have been decoded.
+   */
   @SuppressWarnings("static-method")  // Overridable
   public int getContentIndex() {
     return -1;

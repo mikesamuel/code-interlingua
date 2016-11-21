@@ -11,7 +11,7 @@ public final class Input {
   /**
    * The content to parse.
    */
-  public final String content;
+  public final DecodedContent content;
   /**
    * The line-level structure of the source file.
    */
@@ -28,8 +28,9 @@ public final class Input {
    * @throws IOException if there is a failure reading input.
    */
   public Input(String source, CharSource input) throws IOException {
-    this.content = input.read();
-    this.lineStarts = new LineStarts(source, content);
+    String encodedContent = input.read();
+    this.content = new DecodedContent(encodedContent);
+    this.lineStarts = new LineStarts(source, encodedContent);
   }
 
 
