@@ -169,10 +169,15 @@ A variant is a sequence of
     !!PositiveLookahead
 ```
 
-A variants body can be followed by annotations
+A variant's body can be followed by annotations
 ```
-    (@name=Name)
-    @anon
+    variant1 (@name=Name)
+    variant2 @anon
+```
+
+as can a production's name thus
+```
+NonTerminal: (@name=Name) @anon
 ```
 
 (@name=Name) specifies an explicit name for the variant.
@@ -206,6 +211,18 @@ judicious use of @anon cuts out all the *Expression.*Expression variant
 inner nodes which must have exactly one child which is itself a *Expression
 inner node.
 
+@ignorable means the content matched are ignorable comment or whitespace tokens.
+
+@nonstandard means that the content matched is not part of the java language, and
+is an extension only used when a special flag is supplied to the parser.
+
+(@postcond=Ident) means that parsing should only pass if the named member of
+the Postconditions class passes when given the ParseState after the body is
+parsed.
+
+@nointerp means the production should not be allowed to contain template
+interpolations when parsed in non-standard mode.
+
 */
 
 
@@ -228,7 +245,7 @@ StringLiteral:
      builtin
 NullLiteral:
      "null"
-JavaDocComment:
+JavaDocComment: @nointerp
      builtin @ignorable
 //JavaLetter:
 //     any Unicode character that is a "Java letter"
@@ -285,9 +302,9 @@ ArrayType:
 // This Dim production does not appear in the grammar, but including it here
 // means that the presence of optional or repeated "[]" pairs results in an
 // AST node.
-Dim:
+Dim: @nointerp
      "[" "]"
-Dims:
+Dims: @nointerp
      {Annotation} Dim {{Annotation} Dim}
 TypeParameter:
      {TypeParameterModifier} Identifier [TypeBound]
@@ -296,9 +313,9 @@ TypeParameterModifier:
 TypeBound:
      "extends" ClassOrInterfaceType {AdditionalBound}
      "extends" TypeVariable
-AdditionalBound:
+AdditionalBound: @nointerp
      "&" InterfaceType
-TypeArguments:
+TypeArguments: @nointerp
      "<" TypeArgumentList ">"
 TypeArgumentList:
      TypeArgument {"," TypeArgument}
@@ -310,6 +327,14 @@ Wildcard:
 WildcardBounds:
      "extends" ReferenceType
      "super" ReferenceType
+// Actually defined under classes in JLS 19.
+// I rewrote them to delegate with a lookahead.
+// That way we don't have largely duplicative
+// node types for the annotatable and unannotated equivalents.
+UnannType:
+     !"@" Type
+UnannClassType:
+     !"@" ClassType
 
 // Names
 (chapter=Name)
@@ -336,9 +361,7 @@ ExpressionName:
      AmbiguousName "." Identifier
      Identifier
 PackageName:
-     !"@" ContextFreeNames
-     PackageName "." Identifier
-     Identifier
+     Identifier {"." Identifier}
 AmbiguousName:
      !"@" ContextFreeNames
      AmbiguousName "." Identifier
@@ -367,7 +390,7 @@ CompilationUnit:
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
      // TODO: Why is the package name here not left-associative as it is under the names chapter?
-     {PackageModifier} "package" Identifier {"." Identifier} ";" (@name=Declaration)
+     {PackageModifier} "package" PackageName ";" (@name=Declaration)
 PackageModifier:
      Annotation
 ImportDeclaration:
@@ -447,32 +470,6 @@ VariableDeclaratorId:
 VariableInitializer:
      Expression
      ArrayInitializer
-UnannType:
-     UnannReferenceType
-     UnannPrimitiveType
-UnannPrimitiveType:
-     NumericType
-     "boolean"
-UnannReferenceType:
-     UnannArrayType
-     UnannClassOrInterfaceType
-     UnannTypeVariable
-UnannClassOrInterfaceType:
-     ContextFreeNames
-     UnannClassType
-     UnannInterfaceType
-UnannClassType:
-     !"@" ContextFreeNames
-     Identifier [TypeArguments]
-     UnannClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
-UnannInterfaceType:
-     UnannClassType
-UnannTypeVariable:
-     Identifier
-UnannArrayType:
-     UnannPrimitiveType Dims
-     UnannClassOrInterfaceType Dims
-     UnannTypeVariable Dims
 MethodDeclaration:
      [JavaDocComment] {MethodModifier} MethodHeader MethodBody (@name=Declaration)
 MethodModifier:
@@ -692,15 +689,18 @@ AssertStatement:
 SwitchStatement:
      "switch" "(" Expression ")" SwitchBlock
 SwitchBlock:
-     "{" {SwitchBlockStatementGroup} {SwitchLabel} "}"
+     "{" {SwitchBlockStatementGroup} "}"
 SwitchBlockStatementGroup:
-     SwitchLabels BlockStatements
+     SwitchLabels [BlockStatements]
 SwitchLabels:
      SwitchLabel {SwitchLabel}
 SwitchLabel:
-     "case" ConstantExpression ":"
-     "case" EnumConstantName ":"
+     "case" CaseValue ":"
      "default" ":"
+CaseValue:
+     Identifier !!":" (@name=Ambiguous)  // Foo could be a constant reference or an enum name
+     EnumConstantName
+     ConstantExpression
 EnumConstantName:
      FieldName
 WhileStatement:
@@ -934,11 +934,41 @@ LeftHandSideExpression:
      LeftHandSide @anon
      "(" LeftHandSideExpression ")"
 CastExpression:
-     "(" PrimitiveType ")" UnaryExpression (@name=Primitive)
-     "(" ReferenceType {AdditionalBound} ")" !AmbiguousBinaryUnaryOperator UnaryExpression (@name=Reference)
-     "(" ReferenceType {AdditionalBound} ")" LambdaExpression (@name=Lambda)
+     "(" ConfirmCast ")" LambdaExpression (@name=Lambda)
+     "(" Cast ")" !AmbiguousBinaryUnaryOperator UnaryExpression (@name=Expression)
+Cast:
+     ConfirmCast @anon
+     ConvertCast @anon
+ConfirmCast:
+     ReferenceType {AdditionalBound}
+ConvertCast:
+     PrimitiveType
 AmbiguousBinaryUnaryOperator:
      "+"
      "-"
 ConstantExpression:
      Expression
+
+
+// Special handling for AST templates.
+// This is not part of the Java grammar, but instead defines productions that are
+// solely used when parsing AST templates.
+(chapter=Template)
+TemplateDirectives: @nonstandard
+    "<%" TemplateDirective "%>" {"<%" TemplateDirective "%>"}                  (@name=TemplateDirectives)
+TemplateInterpolation: @nonstandard
+    "<%" !TemplateDirective TemplateComprehension "%>"                         (@name=Interpolation)
+TemplateDirective: @nonstandard
+    "let" Identifier ["=" Expression] {"," Identifier ["=" Expression]} [";"]  (@name=Vars)
+    "template" Identifier ":" Identifier "{"                                   (@name=TemplateStart)
+    "if" "(" Expression ")" "{"                                                (@name=IfStart)
+    "} else" ["if" "(" Expression ")"] "{"                                     (@name=Else)
+    "for" "(" Identifier ":" Expression ")" "{"                                (@name=LoopStart)
+    "{"                                                                        (@name=BlockStart)
+    "}"                                                                        (@name=End)
+TemplateComprehension: @nonstandard
+    Expression {"," Expression} [TemplateLoop] [TemplateCondition]
+TemplateLoop: @nonstandard
+    "for" Identifier "in" TemplateComprehension
+TemplateCondition: @nonstandard
+    "if" Expression

@@ -16,6 +16,7 @@ import com.mikesamuel.cil.ast.MethodInvocationNode;
 import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageDeclarationNode;
+import com.mikesamuel.cil.ast.PackageNameNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
@@ -74,16 +75,18 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
         /**/push(PackageDeclarationNode.Variant.Declaration),
         /*..*/token("package", -1),
         // Actually n-ary for no apparent reason so should not trigger.
-        /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("com", -1),
-        /*..*/pop(),
-        /*..*/token(".", -1),
-        /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("foo", -1),
-        /*..*/pop(),
-        /*..*/token(".", -1),
-        /*..*/push(IdentifierNode.Variant.Builtin),
-        /*....*/content("bar", -1),
+        /*..*/push(PackageNameNode.Variant.IdentifierDotIdentifier),
+        /*....*/push(IdentifierNode.Variant.Builtin),
+        /*......*/content("com", -1),
+        /*....*/pop(),
+        /*....*/token(".", -1),
+        /*....*/push(IdentifierNode.Variant.Builtin),
+        /*......*/content("foo", -1),
+        /*....*/pop(),
+        /*....*/token(".", -1),
+        /*....*/push(IdentifierNode.Variant.Builtin),
+        /*......*/content("bar", -1),
+        /*....*/pop(),
         /*..*/pop(),
         /*..*/token(";", -1),
         /**/pop());

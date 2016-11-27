@@ -6,6 +6,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
@@ -99,12 +100,34 @@ public final class Trees {
             nodes.addAll(nodeContent.nodes);
           } else {
             BaseNode.Builder<?, ?> nodeBuilder = pushVariant.nodeBuilder();
-            if (nodeContent.content != null) {
-              Preconditions.checkState(nodeContent.nodes.isEmpty());
-              nodeBuilder.leaf(nodeContent.content);
+            if (nodeBuilder instanceof BaseNode.LeafBuilder<?, ?>) {
+              if (nodeContent.content != null) {
+                Preconditions.checkState(nodeContent.nodes.isEmpty());
+                ((BaseNode.LeafBuilder<?, ?>) nodeBuilder)
+                    .leaf(nodeContent.content);
+              } else {
+                throw new IllegalArgumentException(
+                    "Leaf node " + nodeBuilder.getVariant()
+                    + " parsed from " + tier.startPosition
+                    + " is missing content");
+              }
+              if (!nodeContent.nodes.isEmpty()) {
+                throw new IllegalArgumentException(
+                    "Leaf node " + nodeBuilder.getVariant()
+                    + " parsed from " + tier.startPosition
+                    + " should not have children");
+              }
             } else {
+              BaseNode.InnerBuilder<?, ?> innerBuilder =
+                  (InnerBuilder<?, ?>) nodeBuilder;
               for (BaseNode child : nodeContent.nodes) {
-                nodeBuilder.add(child);
+                innerBuilder.add(child);
+              }
+              if (nodeContent.content != null) {
+                throw new IllegalArgumentException(
+                    "Inner node " + nodeBuilder.getVariant()
+                    + " parsed from " + tier.contentPosition
+                    + " should not have content");
               }
             }
             BaseNode node = nodeBuilder.build();
@@ -174,11 +197,8 @@ public final class Trees {
 
   private static SourcePosition makeSourcePosition(
       int decodedStartIndex, int nDecodedChars, Input input) {
-    int decodedEndIndex = decodedStartIndex + nDecodedChars;
-    int encodedStartIndex = input.content.indexInEncoded(decodedStartIndex);
-    int encodedEndIndex = input.content.indexInEncoded(decodedEndIndex);
-    return new SourcePosition(
-        input.lineStarts, encodedStartIndex, encodedEndIndex);
+    return input.getSourcePosition(
+        decodedStartIndex, decodedStartIndex + nDecodedChars);
   }
 
   private static final class Tier {

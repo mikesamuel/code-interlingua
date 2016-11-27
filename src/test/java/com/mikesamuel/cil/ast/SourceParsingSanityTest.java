@@ -46,9 +46,10 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
       parseSanityCheck(
           CompilationUnitNode.Variant
           .PackageDeclarationImportDeclarationTypeDeclaration,
-          new Input(
-              source.getPath(),
-              Files.asCharSource(source, Charsets.UTF_8)),
+          Input.builder()
+              .source(source.getPath())
+              .code(Files.asCharSource(source, Charsets.UTF_8))
+              .build(),
           Fuzz.IMPLIED_TOKENS);
       long t1 = System.nanoTime();
       System.err.println(
@@ -70,9 +71,10 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
     parseSanityCheck(
         CompilationUnitNode.Variant
         .PackageDeclarationImportDeclarationTypeDeclaration,
-        new Input(
-            sourceFileRelPath,
-            Resources.asCharSource(resUrl, Charsets.UTF_8)),
+        Input.builder()
+            .source(sourceFileRelPath)
+            .code(Resources.asCharSource(resUrl, Charsets.UTF_8))
+            .build(),
         Fuzz.IMPLIED_TOKENS);
   }
 }

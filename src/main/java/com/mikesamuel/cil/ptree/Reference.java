@@ -11,7 +11,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.TemplateInterpolationNode;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
@@ -124,16 +126,16 @@ final class Reference extends PTParSer {
   @SuppressWarnings("unused")
   @Override
   public ParseResult parse(
-      ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
-    LeftRecursion.Stage stage = lr.stageForProductionAt(nodeType, state.index);
+      ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
+    LeftRecursion.Stage stage = lr.stageForProductionAt(nodeType, start.index);
     switch (stage) {
       case GROWING:
         if (DEBUG) {
           System.err.println(
-              indent() + "Found LR Growing " + nodeType + " @ " + state.index);
+              indent() + "Found LR Growing " + nodeType + " @ " + start.index);
         }
         return ParseResult.success(
-            state.appendOutput(Event.leftRecursionSuffixEnd(nodeType)),
+            start.appendOutput(Event.leftRecursionSuffixEnd(nodeType)),
             ParseResult.NO_WRITE_BACK_RESTRICTION,
             // Checked to make sure that the growing does not accidentally take
             // a non-left recursing path.
@@ -145,28 +147,28 @@ final class Reference extends PTParSer {
         // Do not cache this failure since it is not a foregone conclusion.
         if (DEBUG) {
           System.err.println(
-              indent() + "Found LR seeding " + nodeType + " @ " + state.index);
+              indent() + "Found LR seeding " + nodeType + " @ " + start.index);
         }
         return ParseResult.failure(Sets.immutableEnumSet(nodeType));
     }
 
-    ParseCacheEntry cachedParse = state.input.ratPack.getCachedParse(
-        nodeType, state.index);
+    ParseCacheEntry cachedParse = start.input.ratPack.getCachedParse(
+        nodeType, start.index);
     if (cachedParse.wasTried()) {
       if (cachedParse.passed()) {
         if (DEBUG) {
           System.err.println(
               indent() + "Using cached success for " + nodeType
-              + " @ " + state.index);
+              + " @ " + start.index);
         }
         return ParseResult.success(
-            cachedParse.apply(state),
+            cachedParse.apply(start),
             ParseResult.NO_WRITE_BACK_RESTRICTION, ImmutableSet.of());
       } else {
         if (DEBUG) {
           System.err.println(
               indent() + "Using cached failure for " + nodeType
-              + " @ " + state.index);
+              + " @ " + start.index);
         }
         return ParseResult.failure();
       }
@@ -174,6 +176,8 @@ final class Reference extends PTParSer {
 
     Profile.count(nodeType);
 
+    ParseState state = start;
+    state = maybeParseTemplateDirectives(stage, state, err);
 
     if (DEBUG) {
       System.err.println(
@@ -240,7 +244,16 @@ final class Reference extends PTParSer {
               // no progress made.
               break grow_the_seed;
             }
-            Preconditions.checkState(next.index > grown.index);
+            if (next.index <= grown.index) {
+              if (true) {
+                break grow_the_seed;
+              } else {
+                throw new IllegalStateException(
+                    "Grew backwards " + nodeType + " from "
+                        + grown.input.getSourcePosition(grown.index)
+                        + " to " + next.input.getSourcePosition(next.index));
+              }
+            }
             grown = next;
             continue;
         }
@@ -293,6 +306,7 @@ final class Reference extends PTParSer {
               indent() + "Pass " + nodeType + " @ " + state.index
               + " -> " + next.index);
         }
+        next = maybeParseTemplateDirectives(stage, next, err);
         return ParseResult.success(next, writeBack, allExclusionsTriggered);
     }
     throw new AssertionError(result.synopsis);
@@ -322,8 +336,7 @@ final class Reference extends PTParSer {
               continue;
             case SUCCESS:
               ParseState afterBody = result.next();
-              Event pop =
-                  DEBUG ? Event.pop(variant) : Event.pop();
+              Event pop = DEBUG ? Event.pop(variant) : Event.pop();
               ParseState afterVariant = afterBody.appendOutput(pop);
               Predicate<SList<Event>> postcond = variant.getPostcond();
               if (postcond.apply(afterVariant.output)) {
@@ -338,6 +351,24 @@ final class Reference extends PTParSer {
           throw new AssertionError(result.synopsis);
         }
       }
+
+      if (stage != Stage.GROWING && shouldHandleTemplatePart(state)
+          && !NodeTypeTables.NOINTERP.contains(nodeType)) {
+        // Try parsing a template element.
+        ParseResult nonStandardResult =
+            NodeType.TemplateInterpolation.getParSer()
+            .parse(state, new LeftRecursion(), err);
+        switch (nonStandardResult.synopsis) {
+          case FAILURE: break;
+          case SUCCESS:
+            failureExclusionsTriggered.addAll(
+                nonStandardResult.lrExclusionsTriggered);
+            return ParseResult.success(
+                nonStandardResult.next(),
+                nonStandardResult.writeBack,
+                failureExclusionsTriggered);
+        }
+      }
     } finally {
       if (DEBUG) { indent(-1); }
     }
@@ -345,13 +376,43 @@ final class Reference extends PTParSer {
     return ParseResult.failure();
   }
 
+  private boolean shouldHandleTemplatePart(ParseState state) {
+    return state.input.allowNonStandardProductions
+        && state.startsWith("<%", Optional.absent())
+        && !NodeTypeTables.NONSTANDARD.contains(nodeType);
+  }
+
+  private ParseState maybeParseTemplateDirectives(
+      Stage stage, ParseState state, ParseErrorReceiver err) {
+    if (stage == Stage.NOT_ON_STACK && shouldHandleTemplatePart(state)) {
+      // Handle directives at the front.
+      ParseResult result = NodeType.TemplateDirectives.getParSer()
+          .parse(state, new LeftRecursion(), err);
+      switch (result.synopsis) {
+        case FAILURE:
+          return state;
+        case SUCCESS:
+          Preconditions.checkState(
+              result.writeBack == ParseResult.NO_WRITE_BACK_RESTRICTION);
+          Preconditions.checkState(
+              result.lrExclusionsTriggered.isEmpty());
+          return result.next();
+      }
+      throw new AssertionError(result.synopsis);
+    }
+    return state;
+  }
+
   @Override
   public Optional<SerialState> unparse(
-      SerialState state, SerialErrorReceiver err) {
+      SerialState start, SerialErrorReceiver err) {
     initLazy();
     if (DEBUG_UP) {
       System.err.println(indent() + "Unparse " + nodeType);
     }
+
+    SerialState state = start;
+    state = unparseTemplateDirectives(state, err);
 
     // Try handling non-anon variants first.
     if (!state.isEmpty()) {
@@ -359,7 +420,8 @@ final class Reference extends PTParSer {
       switch (e.getKind()) {
         case PUSH:
           NodeVariant variant = e.getNodeVariant();
-          if (variant.getNodeType() == nodeType) {
+          if (variant.getNodeType() == nodeType
+              || variant == TemplateInterpolationNode.Variant.Interpolation) {
             if (DEBUG_UP) {
               System.err.println(indent() + ". Found same variant " + variant);
             }
@@ -381,7 +443,9 @@ final class Reference extends PTParSer {
                   System.err.println(
                       indent() + "Same variant " + variant + " passed");
                 }
-                return Optional.of(afterContent.advanceWithCopy());
+                return Optional.of(
+                    unparseTemplateDirectives(
+                        afterContent.advanceWithCopy(), err));
               }
             }
             if (DEBUG_UP) {
@@ -426,7 +490,9 @@ final class Reference extends PTParSer {
         if (DEBUG_UP) {
           System.err.println(indent() + "Anon variant " + v + " passed");
         }
-        return Optional.of(afterContentOpt.get().append(Event.pop()));
+        return Optional.of(
+            unparseTemplateDirectives(
+                afterContentOpt.get().append(Event.pop()), err));
       }
       if (DEBUG_UP) {
         System.err.println(indent() + "Anon variant " + v + " failed");
@@ -436,6 +502,30 @@ final class Reference extends PTParSer {
       System.err.println(indent() + "Reference " + nodeType + " failed");
     }
     return Optional.absent();
+  }
+
+  private SerialState unparseTemplateDirectives(
+      SerialState start, SerialErrorReceiver err) {
+    if (NodeTypeTables.NONSTANDARD.contains(nodeType)) {
+      return start;
+    }
+    if (!start.isEmpty()) {
+      Event e = start.structure.get(start.index);
+      if (e.getKind() == Event.Kind.PUSH
+          && e.getNodeType() == NodeType.TemplateDirectives) {
+        Optional<SerialState> result = e.getNodeVariant().getParSer().unparse(
+            start.advanceWithCopy(), err);
+        if (result.isPresent()) {
+          SerialState resultState = result.get();
+          if (!resultState.isEmpty()
+              && resultState.structure.get(resultState.index).getKind()
+                 == Event.Kind.POP) {
+            return resultState.advanceWithCopy();
+          }
+        }
+      }
+    }
+    return start;
   }
 
   @Override
@@ -500,7 +590,7 @@ final class Reference extends PTParSer {
             Preconditions.checkState(
                 toPushback.getNodeType() == e.getNodeType());
             pushedBack = out.prev;
-            if (DEBUG) {
+            if (DEBUG_LR) {
               System.err.println(indent() + "Pushback = " + pushback);
             }
             for (List<Event> onePb : pushback) {

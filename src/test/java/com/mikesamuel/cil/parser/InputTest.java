@@ -53,7 +53,7 @@ public final class InputTest extends TestCase {
 
     ImmutableList.Builder<String> gotBuilder = ImmutableList.builder();
 
-    Input input = Input.fromCharSequence("test", code);
+    Input input = Input.builder().code(code).build();
     StringBuilder token = new StringBuilder();
     int parsed = 0;
     int limit = input.content.length();

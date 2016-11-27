@@ -90,7 +90,7 @@ public final class CStyleGrossStructurerTest extends TestCase {
 
   private void assertReformattedJava(String want, String input, ParSerable ps)
   throws Exception {
-    Input inp = Input.fromCharSequence(getName(), input);
+    Input inp = Input.builder().source(getName()).code(input).build();
     ParseResult result = PTree.complete(ps).getParSer().parse(
         new ParseState(inp), new LeftRecursion(),
         ParseErrorReceiver.DEV_NULL);

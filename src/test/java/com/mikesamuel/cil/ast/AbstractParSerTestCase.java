@@ -9,6 +9,7 @@ import java.util.Set;
 import org.junit.After;
 import org.junit.Before;
 
+import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
@@ -32,6 +33,7 @@ import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
 import com.mikesamuel.cil.parser.Unparse;
 import com.mikesamuel.cil.ptree.PTree;
+import com.mikesamuel.cil.template.Templates;
 
 import junit.framework.AssertionFailedError;
 import junit.framework.TestCase;
@@ -68,6 +70,57 @@ public abstract class AbstractParSerTestCase extends TestCase {
       ParSerable ps,
       Set<NodeType> relevant,
       String content, Event... expected) {
+    assertParsePasses(
+        ps, content,
+        new Predicate<ParseState>() {
+
+          @Override
+          public boolean apply(ParseState afterParse) {
+            ImmutableList<Event> want = ImmutableList.copyOf(expected);
+            ImmutableList<Event> got = filterEvents(
+                relevant,
+                Templates.generalize(
+                    afterParse.input,
+                    SList.forwardIterable(afterParse.output)));
+            if (!want.equals(got)) {
+              assertEquals(
+                  content,
+                  Joiner.on("\n").join(want),
+                  Joiner.on("\n").join(got));
+              fail();
+              return false;
+            }
+            return true;
+          }
+
+        });
+  }
+
+  protected void assertParseTree(
+      ParSerable ps, String content, String... expectedTreeAscii) {
+    assertParsePasses(
+        ps, content,
+        new Predicate<ParseState>() {
+
+          @Override
+          public boolean apply(ParseState afterParse) {
+            BaseNode root = Trees.of(
+                afterParse.input,
+                Templates.generalize(
+                    afterParse.input,
+                    SList.forwardIterable(afterParse.output)));
+            String want = Joiner.on('\n').join(expectedTreeAscii);
+            String got = root.toAsciiArt("", Functions.constant(null));
+            assertEquals(want, got);
+            return want.equals(got);
+          }
+
+        });
+  }
+
+  protected void assertParsePasses(
+      ParSerable ps,
+      String content, Predicate<ParseState> check) {
     ParseState state = parseState(content);
     LeftRecursion lr = new LeftRecursion();
     ParSer parSer = ps.getParSer();
@@ -75,17 +128,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
     switch (result.synopsis) {
       case SUCCESS:
         ParseState afterParse = result.next();
-        ImmutableList<Event> want = ImmutableList.copyOf(expected);
-        ImmutableList<Event> got = filterEvents(
-            relevant,
-            SList.forwardIterable(afterParse.output));
-        if (!want.equals(got)) {
-          assertEquals(
-              content,
-              Joiner.on("\n").join(want),
-              Joiner.on("\n").join(got));
-          fail();
-        }
+        assertTrue(check.apply(afterParse));
         doubleCheck(parSer, afterParse, ImmutableSet.of());
         return;
       case FAILURE:
@@ -157,7 +200,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
         boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
-        for (Event e : SList.forwardIterable(afterParse.output)) {
+        ImmutableList<Event> events = Templates.generalize(
+            afterParse.input,
+            SList.forwardIterable(afterParse.output));
+        for (Event e : events) {
           Event.Kind kind = e.getKind();
           if (kind != Event.Kind.PUSH) {
             sawNonPush = true;
@@ -370,7 +416,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected Input input(String content) {
-    return Input.fromCharSequence(getName(), content);
+    return Input.builder().source(getName()).code(content).build();
   }
 
   static final class LatestParseErrorReceiver implements ParseErrorReceiver {

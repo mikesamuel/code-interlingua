@@ -83,40 +83,64 @@ public abstract class BaseNode {
   public static abstract
   class Builder<N extends BaseNode, V extends NodeVariant> {
     private final V newNodeVariant;
-    private final ImmutableList.Builder<BaseNode> newNodeChildren =
-        ImmutableList.builder();
-    private Optional<String> newLiteralValue = Optional.absent();
 
     protected Builder(V variant) {
-      this.newNodeVariant = variant;
+      this.newNodeVariant = Preconditions.checkNotNull(variant);
     }
 
     protected V getVariant() {
       return newNodeVariant;
     }
 
+    /** Builds a complete node. */
+    public abstract N build();
+  }
+
+  /**
+   * A builder for inner nodes.
+   */
+  public static abstract
+  class InnerBuilder<N extends BaseNode, V extends NodeVariant>
+  extends Builder<N, V> {
+    private final ImmutableList.Builder<BaseNode> newNodeChildren =
+        ImmutableList.builder();
+
+    protected InnerBuilder(V variant) {
+      super(variant);
+    }
+
     protected ImmutableList<BaseNode> getChildren() {
       return newNodeChildren.build();
+    }
+
+    /** Adds a child node. */
+    public InnerBuilder<N, V> add(BaseNode child) {
+      this.newNodeChildren.add(child);
+      return this;
+    }
+  }
+
+  /**
+   * A builder for inner nodes.
+   */
+  public static abstract
+  class LeafBuilder<N extends BaseNode, V extends NodeVariant>
+  extends Builder<N, V> {
+    private Optional<String> newLiteralValue = Optional.absent();
+
+    protected LeafBuilder(V variant) {
+      super(variant);
     }
 
     protected String getLiteralValue() {
       return newLiteralValue.orNull();
     }
 
-    /** Adds a child node. */
-    public Builder<N, V> add(BaseNode child) {
-      this.newNodeChildren.add(child);
-      return this;
-    }
-
     /** Specifies the value. */
-    public Builder<N, V> leaf(String leafLiteralValue) {
+    public LeafBuilder<N, V> leaf(String leafLiteralValue) {
       this.newLiteralValue = Optional.of(leafLiteralValue);
       return this;
     }
-
-    /** Builds a complete node. */
-    public abstract N build();
   }
 
 

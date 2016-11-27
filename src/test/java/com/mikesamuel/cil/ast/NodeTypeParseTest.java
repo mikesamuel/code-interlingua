@@ -690,9 +690,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPackageNamePackageNameDotIdentifier() {
     parseSanityCheck(
-        PackageNameNode.Variant.PackageNameDotIdentifier,
-        "foo.bar.baz",
-        Fuzz.SAME_VARIANT  // Context free names
+        PackageNameNode.Variant.IdentifierDotIdentifier,
+        "foo.bar.baz"
         );
   }
 
@@ -702,9 +701,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testPackageNameIdentifier() {
     parseSanityCheck(
-        PackageNameNode.Variant.Identifier,
-        "com",
-        Fuzz.SAME_VARIANT  // Context free names
+        PackageNameNode.Variant.IdentifierDotIdentifier,
+        "com"
         );
   }
 
@@ -1343,7 +1341,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannTypeUnannPrimitiveType() {
     parseSanityCheck(
-        UnannTypeNode.Variant.UnannPrimitiveType,
+        UnannTypeNode.Variant.NotAtType,
         "short"
         );
   }
@@ -1354,7 +1352,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannTypeUnannReferenceType() {
     parseSanityCheck(
-        UnannTypeNode.Variant.UnannReferenceType,
+        UnannTypeNode.Variant.NotAtType,
         "Object"
         );
   }
@@ -1365,7 +1363,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannPrimitiveTypeNumericType() {
     parseSanityCheck(
-        UnannPrimitiveTypeNode.Variant.NumericType,
+        UnannTypeNode.Variant.NotAtType,
         "short"
         );
   }
@@ -1376,7 +1374,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannPrimitiveTypeBoolean() {
     parseSanityCheck(
-        UnannPrimitiveTypeNode.Variant.Boolean,
+        UnannTypeNode.Variant.NotAtType,
         "boolean"
         );
   }
@@ -1387,7 +1385,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannReferenceTypeUnannClassOrInterfaceType() {
     parseSanityCheck(
-        UnannReferenceTypeNode.Variant.UnannClassOrInterfaceType,
+        UnannTypeNode.Variant.NotAtType,
         "Object"
         );
   }
@@ -1398,10 +1396,9 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannReferenceTypeUnannTypeVariable() {
     parseSanityCheck(
-        UnannReferenceTypeNode.Variant.UnannTypeVariable,
-        "ELEMENT",
-        // Cannot lexically distinguish type varaibles from ClassOrInterfaceType
-        Fuzz.SAME_VARIANT
+        UnannTypeNode.Variant.NotAtType,
+        "ELEMENT"
+        // Cannot lexically distinguish type variables from ClassOrInterfaceType
         );
   }
 
@@ -1411,7 +1408,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannReferenceTypeUnannArrayType() {
     parseSanityCheck(
-        UnannReferenceTypeNode.Variant.UnannArrayType,
+        UnannTypeNode.Variant.NotAtType,
         "double[][]"
         );
   }
@@ -1422,9 +1419,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassOrInterfaceTypeUnannClassType() {
     parseSanityCheck(
-        UnannClassOrInterfaceTypeNode.Variant.UnannClassType,
-        "Foo",
-        Fuzz.SAME_VARIANT
+        UnannTypeNode.Variant.NotAtType,
+        "Foo"
         );
   }
 
@@ -1434,7 +1430,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassOrInterfaceTypeUnannInterfaceType() {
     parseSanityCheck(
-        UnannClassOrInterfaceTypeNode.Variant.UnannInterfaceType,
+        UnannClassTypeNode.Variant.NotAtClassType,
         "Bar<B>",
         // Cannot lexically distinguish Class types from interface types.
         Fuzz.SAME_VARIANT
@@ -1447,7 +1443,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassTypeIdentifierTypeArguments() {
     parseSanityCheck(
-        UnannClassTypeNode.Variant.NotAtContextFreeNames,
+        UnannClassTypeNode.Variant.NotAtClassType,
         "List<String>"
         );
   }
@@ -1458,7 +1454,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassTypeUnannClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
-        UnannClassTypeNode.Variant.UnannClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments,
+        UnannClassTypeNode.Variant.NotAtClassType,
         "ImmutableList.@Awesome Builder<T>",
         Fuzz.SAME_VARIANT  // Context free names
         );
@@ -1470,7 +1466,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannInterfaceTypeUnannClassType() {
     parseSanityCheck(
-        UnannInterfaceTypeNode.Variant.UnannClassType,
+        UnannTypeNode.Variant.NotAtType,
         "Object"
         );
   }
@@ -1481,7 +1477,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannTypeVariableIdentifier() {
     parseSanityCheck(
-        UnannTypeVariableNode.Variant.Identifier,
+        UnannTypeNode.Variant.NotAtType,
         "TYP"
         );
   }
@@ -1492,7 +1488,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannArrayTypeUnannPrimitiveTypeDims() {
     parseSanityCheck(
-        UnannArrayTypeNode.Variant.UnannPrimitiveTypeDims,
+        UnannTypeNode.Variant.NotAtType,
         "boolean[]"
         );
   }
@@ -1503,7 +1499,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannArrayTypeUnannClassOrInterfaceTypeDims() {
     parseSanityCheck(
-        UnannArrayTypeNode.Variant.UnannClassOrInterfaceTypeDims,
+        UnannTypeNode.Variant.NotAtType,
         "Object[][]"
         );
   }
@@ -1514,11 +1510,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannArrayTypeUnannTypeVariableDims() {
     parseSanityCheck(
-        UnannArrayTypeNode.Variant.UnannTypeVariableDims,
-        "TYP[][][]",
-        // Cannot lexically distinguish type variable from
-        // ClassOrInterfaceType
-        Fuzz.SAME_VARIANT
+        UnannTypeNode.Variant.NotAtType,
+        "TYP[][][]"
         );
   }
 
@@ -3216,7 +3209,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testSwitchBlockLcSwitchBlockStatementGroupSwitchLabelRc() {
     parseSanityCheck(
-        SwitchBlockNode.Variant.LcSwitchBlockStatementGroupSwitchLabelRc,
+        SwitchBlockNode.Variant.LcSwitchBlockStatementGroupRc,
         "{ default: d(); break outer; case 1: case 2: case 3: c(); }"
         );
   }
@@ -3249,7 +3242,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testSwitchLabelCaseConstantExpressionCln() {
     parseSanityCheck(
-        SwitchLabelNode.Variant.CaseConstantExpressionCln,
+        SwitchLabelNode.Variant.CaseCaseValueCln,
         "case '\\n':"
         );
   }
@@ -3260,10 +3253,9 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testSwitchLabelCaseEnumConstantNameCln() {
     parseSanityCheck(
-        SwitchLabelNode.Variant.CaseEnumConstantNameCln,
-        "case Foo:",
-        // Can't lexically distinguish ConstantExpression from EnumName
-        Fuzz.SAME_VARIANT
+        SwitchLabelNode.Variant.CaseCaseValueCln,
+        // Lexically ambiguous between CaseConstant and ConstantExpression
+        "case Foo:"
         );
   }
 
@@ -4987,7 +4979,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testCastExpressionLpPrimitiveTypeRpUnaryExpression() {
     parseSanityCheck(
-        CastExpressionNode.Variant.Primitive,
+        CastExpressionNode.Variant.Expression,
         "(int) str.charAt(i)"
         );
   }
@@ -4998,7 +4990,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testCastExpressionLpReferenceTypeAdditionalBoundRpUnaryExpressionNotPlusMinus() {
     parseSanityCheck(
-        CastExpressionNode.Variant.Reference,
+        CastExpressionNode.Variant.Expression,
         "(Object[]) myArr.clone()"
         );
   }

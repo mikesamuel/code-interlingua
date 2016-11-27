@@ -20,7 +20,8 @@ public final class LiteralTest extends TestCase {
   @Test
   public final void testParse() {
     ParSer lit = Literal.of("===", false, 1, 1, 1);
-    ParseState ps = new ParseState(Input.fromCharSequence(getName(), " === "));
+    Input input = Input.builder().source(getName()).code(" === ").build();
+    ParseState ps = new ParseState(input);
     LeftRecursion lr = new LeftRecursion();
     ParseResult result = lit.parse(ps, lr, ParseErrorReceiver.DEV_NULL);
     assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);

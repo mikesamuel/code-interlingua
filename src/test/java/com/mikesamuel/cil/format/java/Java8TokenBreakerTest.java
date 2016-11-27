@@ -134,7 +134,7 @@ public final class Java8TokenBreakerTest extends TestCase {
   private void assertParsedSpacedTokens(
       boolean includeShould, String expected, String content,
       NodeType startProduction) {
-    Input inp = Input.fromCharSequence(getName(), content);
+    Input inp = Input.builder().source(getName()).code(content).build();
     ParseState start = new ParseState(inp);
     ParseResult result = startProduction.getParSer().parse(
         start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);

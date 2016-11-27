@@ -93,7 +93,7 @@ public final class Unparse {
       }
     }
 
-    Input inp = Input.fromCharSequence("UnparseVerifier", sb);
+    Input inp = Input.builder().source("UnparseVerifier").code(sb).build();
     final ParseState ps = new ParseState(inp);
 
     for (int i = 0, n = delayedAndIndices.size(); i < n; i += 2) {

@@ -14,11 +14,11 @@ public final class ParseStateTest extends TestCase {
 
   private static void assertIndexAfterIgnorables(String content, int idxNext) {
     ParseState ps0 = new ParseState(
-        Input.fromCharSequence("test", content));
+        Input.builder().source("test").code(content).build());
     assertEquals(content, idxNext, ps0.index);
 
     ParseState ps1 = new ParseState(
-        Input.fromCharSequence("test", "xyz" + content));
+        Input.builder().source("test").code("xyz" + content).build());
     assertEquals(content, idxNext + 3, ps1.advance(3).index);
   }
 
@@ -45,7 +45,7 @@ public final class ParseStateTest extends TestCase {
 
   @Test
   public static void testStartsWith() {
-    ParseState ps = new ParseState(Input.fromCharSequence("test", "foo"));
+    ParseState ps = new ParseState(Input.builder().code("foo").build());
     assertTrue(ps.startsWith("f", Optional.absent()));
     assertFalse(ps.startsWith("F", Optional.absent()));
     assertTrue(ps.startsWith("fo", Optional.absent()));
@@ -56,7 +56,7 @@ public final class ParseStateTest extends TestCase {
 
   @Test
   public static void testMatcherAt() {
-    ParseState ps = new ParseState(Input.fromCharSequence("test", "foo"));
+    ParseState ps = new ParseState(Input.builder().code("foo").build());
 
     Matcher mfoo = ps.matcherAtStart(Pattern.compile("^foo"));
     assertTrue(mfoo.find());

@@ -55,7 +55,12 @@ public final class RatPack {
           // argument check above.
           --popCount;
           if (popCount == 0) {
-            Preconditions.checkState(nodeType.equals(e.getNodeType()));
+            NodeType eNodeType = e.getNodeType();
+            Preconditions.checkState(
+                // A template element can substitute for any other node type.
+                eNodeType == nodeType
+                || eNodeType == NodeType.TemplateInterpolation
+                || eNodeType == NodeType.TemplateDirectives);
             break cache_loop;
           }
           break;
@@ -275,7 +280,7 @@ public final class RatPack {
         sb.append(sb);
       }
       ParseState state = apply(
-          new ParseState(Input.fromCharSequence("empty", sb)));
+          new ParseState(Input.builder().source("empty").code(sb).build()));
 
       return "ParseSuccess("
           + ImmutableList.copyOf(SList.forwardIterable(state.output))

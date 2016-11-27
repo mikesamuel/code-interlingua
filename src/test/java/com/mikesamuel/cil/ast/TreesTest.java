@@ -23,7 +23,7 @@ public final class TreesTest extends TestCase {
 
   @Test
   public static void testTreesOfIdentifier() {
-    Input input = Input.fromCharSequence("test-file", "  foo");
+    Input input = Input.builder().source("test-file").code("  foo").build();
 
     BaseNode got = Trees.of(input, ImmutableList.of(
         Event.push(IdentifierNode.Variant.Builtin),
@@ -46,7 +46,7 @@ public final class TreesTest extends TestCase {
 
   @Test
   public static void testTreesOfWithInnerNodes() {
-    Input input = Input.fromCharSequence("test-file", "  int[][].class");
+    Input input = Input.builder().code("  int[][].class").build();
     BaseNode got = Trees.of(input, ImmutableList.of(
         Event.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
 
@@ -108,10 +108,11 @@ public final class TreesTest extends TestCase {
         "  JavaDocComment.Builtin /** In \u2124 */ : test:1+1-17",
         "  FieldModifier.Public : test:2+1-7",
         "  FieldModifier.Final : test:2+8-13",
-        "  UnannType.UnannPrimitiveType : test:2+14-20",
-        "    UnannPrimitiveType.NumericType : test:2+14-20",
-        "      NumericType.FloatingPointType : test:2+14-20",
-        "        FloatingPointType.Double : test:2+14-20",
+        "  UnannType.NotAtType : test:2+14-20",
+        "    Type.PrimitiveType : test:2+14-20",
+        "      PrimitiveType.AnnotationNumericType : test:2+14-20",
+        "        NumericType.FloatingPointType : test:2+14-20",
+        "          FloatingPointType.Double : test:2+14-20",
         "  VariableDeclaratorList.VariableDeclaratorComVariableDeclarator : test:2+21-22",
         "    VariableDeclarator.VariableDeclaratorIdEqVariableInitializer : test:2+21-22",
         "      VariableDeclaratorId.IdentifierDims : test:2+21-22",
@@ -119,8 +120,8 @@ public final class TreesTest extends TestCase {
         );
 
 
-    Input inp = Input.fromCharSequence("test", code);
-    ParseState start = new ParseState(inp);
+    Input input = Input.builder().source("test").code(code).build();
+    ParseState start = new ParseState(input);
 
     ParseResult result = NodeType.FieldDeclaration.getParSer().parse(
         start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
@@ -137,7 +138,8 @@ public final class TreesTest extends TestCase {
     assertEquals(
         golden,
         root.toAsciiArt(
-            "", new Function<BaseNode, String>() {
+            "",
+            new Function<BaseNode, String>() {
               @Override
               public String apply(@Nonnull BaseNode node) {
                 SourcePosition pos = node.getSourcePosition();

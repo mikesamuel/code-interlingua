@@ -12,7 +12,7 @@ public class Lookahead1Test extends TestCase {
     Lookahead1 la1 = Lookahead1.of(
         "!", "\"", "'", ".0-9", "0-9", "@", "\\(", "\\+", "\\-",
         "\\p{javaJavaIdentifierStart}", "~");
-    Input input = Input.fromCharSequence(getName(), ".");
+    Input input = Input.builder().source(getName()).code(".").build();
     assertTrue(la1.canFollow(new ParseState(input)));
   }
 

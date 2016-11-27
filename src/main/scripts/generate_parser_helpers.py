@@ -201,7 +201,7 @@ def process_grammar(
     """
 
     generator = _java_str_lit(os.path.relpath(__file__))
-    line_number, column_number, char_count = 0, 0, 0
+    line_number, column_number, char_count = 1, 1, 0
 
     # Split into (token_text, position)
     tokens = []
@@ -212,7 +212,7 @@ def process_grammar(
                 continue
             if token_text_part[0] in ('\n', '\r'):
                 line_number += 1
-                column_number = 0
+                column_number = 1
             else:
                 column_number += len(token_text_part)
         char_count += len(token_text)
@@ -237,11 +237,13 @@ def process_grammar(
 
     def starts_line((_, pos)):
         (_, column, _) = pos
-        return column == 0
+        return column == 1
     def has_text((text, _), match):
         return text == match
     def is_ident(tok):
         return _classify_token(tok) == _TOK_IDENT
+    def same_line((a_text, (a_ln, a_co, a_ch)), (b_text, (b_ln, b_co, b_ch))):
+        return a_ln == b_ln
 
     # We start by splitting based on gross-structure and progress to fine
     # structure so that given an input like
@@ -302,18 +304,22 @@ def process_grammar(
             items.append(item)
         return items
 
-    all_lits = set()
+    all_standard_lits = set()
 
-    def make_ptree(toks):
+    def make_ptree(is_standard, toks):
         """
         Matches bracket operators to group the right-hand-side of a
         grammar production variant into a recursive-expression form.
+
+        is_standard : True iff this is part of the Java grammar proper.
+               Not a non-standard extension like the template grammar.
         """
         def make_node(toks, i):
             tok = toks[i]
             classification = _classify_token(tok)
             if classification == _TOK_STRING:
-                all_lits.add(tok[0])
+                if is_standard:
+                    all_standard_lits.add(tok[0])
                 return ({ 'name': 'lit', 'pleaf': tok }, i + 1)
             if classification == _TOK_IDENT:
                 return ({ 'name': 'ref', 'pleaf': tok }, i + 1)
@@ -363,7 +369,7 @@ def process_grammar(
     def line_of((_, pos)):
         ln, _, _ = pos
         return ln
-    def variant_maker():
+    def variant_maker(prod_name, is_standard):
         names_used = set()
         def get_variant_name(toks, annots):
             name_from_annotation = None
@@ -415,7 +421,7 @@ def process_grammar(
         def maybe_make_variant(toks, s, e):
             if e == len(toks) or line_of(toks[s]) != line_of(toks[e]):
                 sub_toks = toks[s:e]
-                ptree, index_after = make_ptree(sub_toks)
+                ptree, index_after = make_ptree(is_standard, sub_toks)
                 annots = sub_toks[index_after:]
                 assert all(_is_annotation(annot_text) for annot_text, annot_pos in annots), repr(annots)
                 name = get_variant_name(sub_toks, annots)
@@ -434,18 +440,32 @@ def process_grammar(
             and is_ident(toks[i])
             and has_text(toks[i+1], ':')):
             return toks[i][0]
-        return None
-    def maybe_make_prod(toks, s, e):
-        if e > s:
-            if e == len(toks) or get_prod_name(toks, e) is not None:
-                name = get_prod_name(toks, s)
-                sub_toks = name is not None and toks[s + 2:e] or toks[s:e]
-                return {
-                    'name': name or 'Unknown',
-                    'toks': sub_toks,
-                    'variants': split_at(sub_toks, variant_maker())
+    def prod_maker(chapter_name):
+        def maybe_make_prod(toks, s, e):
+            if e > s:
+                if e == len(toks) or get_prod_name(toks, e) is not None:
+                    name = get_prod_name(toks, s)
+                    if name is None:
+                        ln, co, ch = toks[s][1]
+                        print 'No name at %d:%d' % (ln, co)
+                    sub_toks = name is not None and toks[s + 2:e] or toks[s:e]
+                    annots = ()
+                    if name is not None:
+                        name_tok = toks[s]
+                        for i in xrange(0, len(sub_toks)):
+                            if not same_line(name_tok, sub_toks[i]):
+                                annots = tuple(sub_toks[:i])
+                                sub_toks = sub_toks[i:]
+                                break
+                    is_standard = all(x[0] != '@nonstandard' for x in annots)
+                    return {
+                        'name': name or 'Unknown',
+                        'toks': sub_toks,
+                        'variants': split_at(sub_toks, variant_maker(name, is_standard)),
+                        'annots': annots,
                     }
-        return None
+            return None
+        return maybe_make_prod
 
     def get_chapter_name(toks, i):
         if (i + 4 < len(toks)
@@ -464,7 +484,7 @@ def process_grammar(
                 return {
                     'name': name or 'Unknown',
                     'toks': sub_toks,
-                    'prods': split_at(sub_toks, maybe_make_prod)
+                    'prods': split_at(sub_toks, prod_maker(name))
                     }
         return None
 
@@ -660,6 +680,13 @@ public enum NodeType implements ParSerable {
             }
 
         known = {}
+
+        # Make sure lookahead includes '<' for productions annotated with
+        # '@interp'.
+        def lookahead_to_template(c, p):
+            if any(x[0].startswith('@interp=') for x in p['annots']):
+                known[p['name']] = set(['<'])
+        for_each_prod(lookahead_to_template)
 
         if verbose:
             print "la_toks_all"
@@ -1108,15 +1135,31 @@ public enum NodeType implements ParSerable {
         node_class_name = '%sNode' % prod['name']
         if source_file_exists('%s.java' % node_class_name):
             return
+        variants = prod['variants']
+
+        extra_imports = set((
+            'com.mikesamuel.cil.parser.Lookahead1',
+            'com.mikesamuel.cil.parser.ParSer',
+            'com.mikesamuel.cil.parser.ParSerable',
+            'com.mikesamuel.cil.ptree.PTree',
+        ))
+
+        is_inner_node = not (len(variants) == 1 and variants[0]['name'] == 'Builtin')
+
+        if is_inner_node:
+            ctor_formals = 'Iterable<? extends BaseNode> children'
+            builder_kind = 'Inner'
+            builder_actuals = 'getChildren()'
+            super_ctor_actuals = 'children, null'
+        else:
+            ctor_formals = 'String literalValue'
+            builder_kind = 'Leaf'
+            builder_actuals = 'getLiteralValue()'
+            super_ctor_actuals = 'ImmutableList.of(), literalValue'
+            extra_imports.add('com.google.common.collect.ImmutableList')
 
         def create_variant_members():
             variant_code = []
-            extra_imports = set((
-                'com.mikesamuel.cil.parser.Lookahead1',
-                'com.mikesamuel.cil.parser.ParSer',
-                'com.mikesamuel.cil.parser.ParSerable',
-                'com.mikesamuel.cil.ptree.PTree',
-            ))
             lr_prod = left_recursion[prod['name']]
             is_lr_forwarding = True
             prod_matches_empty = prod['name'] in empty_matching
@@ -1134,7 +1177,7 @@ public enum NodeType implements ParSerable {
             # Treat LR productions that just forward to other
             # productions, so have no seed of their own as not
             # really LR.
-            for v in prod['variants']:
+            for v in variants:
                 if v['name'] in lr_prod:
                     vptree = v['ptree']
                     if len(vptree) == 1 and vptree[0]['name'] == 'ref':
@@ -1148,7 +1191,7 @@ public enum NodeType implements ParSerable {
                 break
             if is_lr_forwarding and verbose:
                 print 'LR FORWARDING: %s' % prod['name']
-            for v in prod['variants']:
+            for v in variants:
                 ptree_builder, v_extra_imports = ptree_to_java_builder(
                     prod,
                     { 'name': None, 'ptree': v['ptree'] },
@@ -1212,9 +1255,10 @@ public enum NodeType implements ParSerable {
                             overridden_methods
                             and '{\n%s    }' % '\n'.join(overridden_methods) or ''),
                     })
-            return ('\n'.join(variant_code)), extra_imports
+            return ('\n'.join(variant_code))
 
-        variant_members, extra_imports = create_variant_members()
+        variant_members = create_variant_members()
+
         extra_import_stmts = ''.join(
             ['import %s;\n' % imp for imp in sorted(extra_imports)])
 
@@ -1235,19 +1279,19 @@ package %(package)s;
 public final class %(node_class_name)s extends %(base_node_class)s {
 
   private %(node_class_name)s(
-      Variant v, Iterable<? extends BaseNode> children, String literalValue) {
-    super(v, children, literalValue);
+      Variant v, %(ctor_formals)s) {
+    super(v, %(super_ctor_actuals)s);
   }
 
   /** Mutable builder type. */
-  static BaseNode.Builder<%(node_class_name)s, Variant>
+  static BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant>
   builder(Variant v) {
-    return new BaseNode.Builder<%(node_class_name)s, Variant>(v) {
+    return new BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant>(v) {
       @Override
       @SuppressWarnings("synthetic-access")
       public %(node_class_name)s build() {
         return new %(node_class_name)s(
-            getVariant(), getChildren(), getLiteralValue());
+            getVariant(), %(builder_actuals)s);
       }
     };
   }
@@ -1285,7 +1329,7 @@ public final class %(node_class_name)s extends %(base_node_class)s {
     public Lookahead1 getLookahead1() { return lookahead1; }
 
     @Override
-    public %(node_class_name)s.Builder<%(node_class_name)s, Variant> nodeBuilder() {
+    public %(node_class_name)s.%(builder_kind)sBuilder<%(node_class_name)s, Variant> nodeBuilder() {
       return %(node_class_name)s.builder(this);
     }
 
@@ -1304,6 +1348,10 @@ public final class %(node_class_name)s extends %(base_node_class)s {
     'name': prod['name'],
     'base_node_class': 'Base%sNode' % chapter['name'],
     'variant_members': variant_members,
+    'ctor_formals': ctor_formals,
+    'super_ctor_actuals': super_ctor_actuals,
+    'builder_kind': builder_kind,
+    'builder_actuals': builder_actuals,
     })
 
     for_each_prod(write_node_class_for_production)
@@ -1311,7 +1359,7 @@ public final class %(node_class_name)s extends %(base_node_class)s {
     def write_literal_tokens():
         keywords = []
         punctuation = []
-        for lit in all_lits:
+        for lit in all_standard_lits:
             content = lit[1:-1]
             if 'a' <= content[0] and content[0] <= 'z':
                 keywords.append(content)
@@ -1394,13 +1442,15 @@ public final class IdentifierWrappers {
     // Provides static API
   }
 
-  // We key off the classes instead of the node types to avoid class-initialization cycles.
+  // We key off the classes instead of the node types to avoid
+  // class-initialization cycles.
   private static final ImmutableSet<NodeType> IDENT_WRAPPERS =
       Sets.immutableEnumSet(EnumSet.of(
 %(wrappers)s));
 
   /**
-   * True iff the given nodetype has a single variant that simply delegate to Identifier.
+   * True iff the given nodetype has a single variant that simply delegate to
+   * Identifier.
    */
   public static boolean isIdentifierWrapper(NodeType nodeType) {
     return IDENT_WRAPPERS.contains(nodeType);
@@ -1413,6 +1463,169 @@ public final class IdentifierWrappers {
 })
 
     write_identifier_wrappers()
+
+    def write_prod_annotations():
+        """
+        Variant annotations are stored with the variant via method overrides.
+        Since there is one big enum for all node types, it's more efficient to
+        store them in EnumMap tables instead of creating a class per node type.
+
+        This is mostly for Template handling, which is a largely separable
+        concern from the Java grammar.
+        """
+        tables = {}  # Maps annot name to prod_name to values
+
+        value_types = {
+            'InterpGroup': ('NodeType', ()),
+            'Interp': ('LeftRecursion.Stage', ('com.mikesamuel.cil.parser.LeftRecursion',)),
+            }
+
+        def fill_tables(c, p):
+            for annot_tok in p['annots']:
+                (annot, (ln, co, ci)) = annot_tok
+                if not _is_annotation(annot):
+                    raise Exception('Bad annotation %r for %s' % (repr(annot), p['name']))
+
+                if annot.startswith('(@'):
+                    annot_name, value = annot[2:-1].split('=')
+                else:
+                    annot_name = annot[1:]
+                    value = 'true'
+                annot_name = '%s%s' % (annot_name[0].upper(), annot_name[1:])
+                table = tables.get(annot_name)
+                if table is None:
+                    table = {}
+                    tables[annot_name] = table
+                table[p['name']] = value
+        for_each_prod(fill_tables)
+
+        imports = set()
+        table_defs = []
+        for (table_name, prod_to_value) in tables.iteritems():
+            annot_name = '%s%s' % (table_name[0].lower(), table_name[1:])
+            is_set = tuple(set(prod_to_value.itervalues())) == ('true',)
+            if is_set:
+                imports.add('com.google.common.collect.ImmutableSet')
+                imports.add('com.google.common.collect.Sets')
+                imports.add('java.util.EnumSet')
+                table_defs.append(
+                    '''
+  /** Productions annotated with <code>&#64;%(annot_name)s</code> */
+  public static final ImmutableSet<NodeType> %(table_name_uc)s = Sets.immutableEnumSet(
+      EnumSet.of(%(members)s));
+''' % {
+    'annot_name': annot_name,
+    'table_name': table_name,
+    'table_name_uc': _camel_to_underscores(table_name),
+    'members': ', '.join(['NodeType.%s' % pn for pn in sorted(prod_to_value.keys())]),
+    })
+            else:
+                imports.add('com.google.common.collect.ImmutableMap')
+                imports.add('com.google.common.collect.Maps')
+                imports.add('java.util.EnumMap')
+                value_type, value_type_imports = value_types.get(table_name, (table_name, ()))
+                imports.update(value_type_imports)
+                puts = []
+                for (key, value) in prod_to_value.iteritems():
+                    puts.append(
+                        '    m.put(NodeType.%(key)s, %(value_type)s.%(value)s);' %
+                        {
+                            'key': key,
+                            'value': value,
+                            'value_type': value_type,
+                        })
+                table_defs.append(
+                    '''
+  /** Maps productions based on <code>&#64;%(annot_name)s</code> annotations. */
+  public static final ImmutableMap<NodeType, %(value_type)s> %(table_name_uc)s;
+  static {
+    EnumMap<NodeType, %(value_type)s> m = new EnumMap<>(NodeType.class);
+%(puts)s
+    %(table_name_uc)s = Maps.immutableEnumMap(m);
+  }
+''' % {
+    'annot_name': annot_name,
+    'table_name': table_name,
+    'table_name_uc': _camel_to_underscores(table_name),
+    'value_type': value_type,
+    'puts': '\n'.join(puts),
+    })
+
+
+        import_stmts = '\n'.join(['import %s;' % cl for cl in sorted(imports)])
+
+        if not table_defs:
+            return
+
+        emit_java_file(
+            'NodeTypeTables',
+            '''
+package %(package)s;
+
+%(import_stmts)s
+
+/**
+ * The set of productions which just decorate {@link NodeType#Identifier}.
+ */
+public final class NodeTypeTables {
+
+%(table_defs)s
+
+}
+''' % {
+    'package': _JAVA_PACKAGE,
+    'generator': generator,
+    'import_stmts': import_stmts,
+    'table_defs': ''.join(table_defs),
+})
+
+    write_prod_annotations()
+
+    if verbose:
+        # Dump the "Public API" of each chapter -- those productions that are
+        # referenced from other chapters.  Does not include "CompilationUnit"
+        def dump_cross_chapter_uses():
+            prods_by_chapter = {}
+            def bc(c, p):
+                prods_by_chapter[p['name']] = c['name']
+            for_each_prod(bc)
+
+            callees_by_pn = {}
+            def ptree_walker(c, caller):
+                caller_pn = caller['name']
+                callees = set()
+                def walk_ptree(pt):
+                    if 'pleaf' in pt:
+                        if pt['name'] == 'ref':
+                            callee_pn = pt['pleaf'][0]
+                            callees.add(callee_pn)
+                    else:
+                        for child in pt['ptree']:
+                            walk_ptree(child)
+                for variant in caller['variants']:
+                    walk_ptree({ 'name': '()', 'ptree': variant['ptree'] })
+                callees_by_pn[caller_pn] = callees
+            for_each_prod(ptree_walker)
+            print repr(callees_by_pn)
+
+            called_cross_chapter = {}
+            for caller_pn, callees in callees_by_pn.iteritems():
+                caller_cn = prods_by_chapter[caller_pn]
+                for callee_pn in callees:
+                    if callee_pn == 'builtin': continue
+                    callee_cn = prods_by_chapter[callee_pn]
+                    if caller_cn != callee_cn:
+                        s = called_cross_chapter.get(callee_cn)
+                        if s is None:
+                            s = set()
+                            called_cross_chapter[callee_cn] = s
+                        s.add(callee_pn)
+
+            for cn, api in sorted(called_cross_chapter.items()):
+                print 'Chapter %s exposes [%s]' % (cn, ', '.join(sorted(api)))
+
+        dump_cross_chapter_uses()
+
 
 if __name__ == '__main__':
     import argparse
