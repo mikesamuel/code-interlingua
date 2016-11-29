@@ -1,12 +1,18 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.ImportDeclarationNode;
 
 /**
@@ -38,32 +44,68 @@ public interface TypeNameResolver {
 
                   @Override
                   public ImmutableList<Name> load(String name) {
-                    ImmutableList.Builder<Name> names = ImmutableList.builder();
-                    StringBuilder nameBuffer = new StringBuilder(name);
-                    int outerClassLimit = name.length();
-                    while (outerClassLimit >= 0) {
-                      String binaryName = nameBuffer.toString();
-                      Class<?> clazz = null;
-                      try {
-                        clazz = cl.loadClass(binaryName);
-                      } catch (@SuppressWarnings("unused")
-                               ClassNotFoundException ex) {
-                        // Fine.  Keep looking.
-                      }
-                      if (clazz != null) {
-                        @SuppressWarnings("synthetic-access")
-                        Name className = nameForClass(clazz);
-                        names.add(className);
-                      }
+                    List<Class<?>> classes = new ArrayList<>();
+                    findClasses(name, classes);
+                    return ImmutableList.copyOf(
+                        Lists.transform(
+                            classes,
+                            new Function<Class<?>, Name>() {
+                              @SuppressWarnings("synthetic-access")
+                              @Override
+                              public Name apply(Class<?> c) {
+                                return nameForClass(c);
+                              }
+                            }));
+                  }
 
-                      int dot = name.lastIndexOf('.', outerClassLimit - 1);
-                      if (dot < 0) {
-                        break;
-                      }
-                      outerClassLimit = dot < 0 ? 0 : dot;
-                      nameBuffer.setCharAt(dot, '$');
+                  @SuppressWarnings("synthetic-access")
+                  private void findClasses(
+                      String name, List<Class<?>> classes) {
+                    Class<?> clazz = null;
+                    try {
+                      clazz = cl.loadClass(name);
+                    } catch (@SuppressWarnings("unused")
+                             ClassNotFoundException ex) {
+                      // Fine.  Keep looking.
                     }
-                    return names.build();
+                    if (clazz != null) {
+                      classes.add(clazz);
+                    }
+                    int startOuter = classes.size();
+                    int lastDot = name.lastIndexOf('.');
+                    if (lastDot >= 0) {
+                      // Consider the case where the name after lastDot refers
+                      // to an inner class name.
+                      // If name is "foo.Bar.Baz" we could convert it to a
+                      // binary name "foo.Bar$Baz" and use the classloader
+                      // but that will not handle the difference between
+                      // fully qualified names and canonical names.
+                      // Both of the following are valid
+                      //     java.util.Map.Entry<K, V> e;  // NOT CANONICAL
+                      //     java.util.HashMap.Entry<K, V> e;  // CANONICAL
+                      findClasses(name.substring(0, lastDot), classes);
+                      int endOuter = classes.size();
+                      if (endOuter != startOuter) {
+                        Set<Class<?>> interfacesSeen = new HashSet<>();
+                        String innerName = name.substring(lastDot + 1);
+                        for (int i = startOuter; i < endOuter; ++i) {
+                          Class<?> outer = classes.get(i);
+                          int startInner = classes.size();
+                          interfacesSeen.clear();
+                          findInnerClasses(
+                              outer, classes, interfacesSeen);
+                          int endInner = classes.size();
+                          for (int j = startInner; j < endInner; ++j) {
+                            Class<?> inner = classes.get(j);
+                            if (innerName.equals(inner.getSimpleName())) {
+                              classes.add(inner);
+                            }
+                          }
+                          classes.subList(startInner, endInner).clear();
+                        }
+                        classes.subList(startOuter, endOuter).clear();
+                      }
+                    }
                   }
                 });
 
@@ -110,6 +152,19 @@ public interface TypeNameResolver {
         parent = pkg;
       }
       return parent.child(simpleName, Name.Type.CLASS);
+    }
+
+    private static void findInnerClasses(
+        Class<?> cl, List<Class<?>> classes, Set<Class<?>> interfacesSeen) {
+      // getClasses does not include classes from implemented interfaces.
+      for (Class<?> c : cl.getClasses()) {
+        classes.add(c);
+      }
+      for (Class<?> iface : cl.getInterfaces()) {
+        if (interfacesSeen.add(iface)) {
+          findInnerClasses(iface, classes, interfacesSeen);
+        }
+      }
     }
   }
 }

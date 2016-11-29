@@ -36,7 +36,7 @@ public final class TypeNameResolverTest extends TestCase {
             .child("Map", Type.CLASS)
             .child("Entry", Type.CLASS)
             ),
-        ImmutableList.copyOf(r.lookupTypeName("java.util.Map$Entry")));
+        ImmutableList.copyOf(r.lookupTypeName("java.util.Map.Entry")));
     assertEquals(
         ImmutableList.of(
             Name.DEFAULT_PACKAGE
@@ -46,16 +46,7 @@ public final class TypeNameResolverTest extends TestCase {
             .child("Entry", Type.CLASS)
             ),
         // Inner class referred to via outer type's super type.
-        ImmutableList.copyOf(r.lookupTypeName("java.util.HashMap$Entry")));
-    assertEquals(
-        ImmutableList.of(
-            Name.DEFAULT_PACKAGE
-            .child("java", Type.PACKAGE)
-            .child("util", Type.PACKAGE)
-            .child("Map", Type.CLASS)
-            .child("Entry", Type.CLASS)
-            ),
-        ImmutableList.copyOf(r.lookupTypeName("java.util.Map.Entry")));
+        ImmutableList.copyOf(r.lookupTypeName("java.util.HashMap.Entry")));
     assertEquals(
         ImmutableList.of(
             Name.DEFAULT_PACKAGE
