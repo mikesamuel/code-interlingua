@@ -1,8 +1,9 @@
-package com.mikesamuel.cil.ast.passes;
+package com.mikesamuel.cil.ast.meta;
 
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
+import com.mikesamuel.cil.ast.traits.CallableDeclaration;
 
 /**
  * A name that can represent anything referred to by a name production.
@@ -12,14 +13,25 @@ public final class Name {
    * The preceding elements in the name if any.
    * In a disambiguated name, this will only be null for a local variable,
    * type parameter, or the default package.
+   * <p>
+   * In an ambiguous name, it may be null to indicate that we don't know which
+   * tree (default package, imported package, inherited scope, current scope)
+   * is the name rooted in,
    */
   public final @Nullable Name parent;
   /**
    * The item referred to.
-   * Null indicates the lack of an identifier, as in the default package and in
-   * the name of an anonymous class.
+   * Empty indicates the lack of an identifier and is only used for the default
+   * package.  Anonymous classes are assigned ordinal names early on.
    */
-  public final @Nullable String identifier;
+  public final String identifier;
+  /**
+   * Among overloadable referents, a descriptor which statically specifies the
+   * overloadable.
+   * <p>
+   * See {@link CallableDeclaration#getMethodDescriptor caveat}.
+   */
+  public final @Nullable String descriptor;
   /** The type of thing to which identifier refers. */
   public final Type type;
 
@@ -28,41 +40,65 @@ public final class Name {
    * The name for the package used in compilation units that contain no package
    * declaration.
    */
-  public static final Name DEFAULT_PACKAGE = new Name(null, null, Type.PACKAGE);
+  public static final Name DEFAULT_PACKAGE = new Name(
+      null, "", null, Type.PACKAGE);
 
   private Name(
-      @Nullable Name parent, @Nullable String identifier, @Nullable Type type) {
+      @Nullable Name parent, String identifier,
+      @Nullable String descriptor, @Nullable Type type) {
     Preconditions.checkArgument(type != null);
     // Packages cannot have non-package parents.
     Preconditions.checkArgument(
         type != Type.PACKAGE || parent == null
         || parent.type == Type.PACKAGE || parent.type == Type.AMBIGUOUS);
+    // Only the default package does not have a parent.
+    Preconditions.checkArgument(
+        type != Type.PACKAGE || (parent == null) == (identifier.length() == 0));
     // Classes can only have class or package parents.
     Preconditions.checkArgument(
         type != Type.CLASS
         || parent == null || parent.type == Type.PACKAGE
         || parent.type == Type.CLASS || parent.type == Type.AMBIGUOUS);
-    // Methods cannot have children.
-    Preconditions.checkArgument(parent == null || parent.type != Type.METHOD);
-    // Locals and type parameters must have a null parent.
+    // Locals must have a null parent.
+    Preconditions.checkArgument(parent == null || type != Type.LOCAL);
+    // Only the default package can be identifierless.
     Preconditions.checkArgument(
-        parent == null || !(type == Type.TYPE_PARAMETER || type == Type.LOCAL));
-    // Only the default package and anonymous classes can be identifierless.
+        identifier.length() != 0 || (type == Type.PACKAGE && parent == null));
+    // Only methods have descriptors.  JLS defines field descriptors but they
+    // are not involved in reference resolution.
     Preconditions.checkArgument(
-        identifier != null || (type == Type.PACKAGE && parent == null)
-        || type == Type.CLASS);
+        descriptor == null ||
+        (type == Type.METHOD && descriptor.startsWith("(")));
 
     this.parent = parent;
-    this.identifier = identifier;
-    this.type = type;
+    this.identifier = Preconditions.checkNotNull(identifier);
+    this.descriptor = descriptor;
+    this.type = Preconditions.checkNotNull(type);
   }
 
   /**
    * Constructs a Name with this as the parent name.
    */
-  public Name child(@Nullable String childIdentifier, Type childType) {
-    return new Name(this, childIdentifier, childType);
+  public Name child(String childIdentifier, Type childType) {
+    return new Name(this, childIdentifier, null, childType);
   }
+
+  /**
+   * Constructs a method name with this as the parent name.
+   */
+  public Name method(String methodName, @Nullable String methodDescriptor) {
+    return new Name(this, methodName, methodDescriptor, Type.METHOD);
+  }
+
+  /**
+   * Name which can represent an unambiguous local variable or
+   * type parameter name, an ambiguous field or method reference,
+   * or an unqualified class name.
+   */
+  public static Name root(String childIdentifier, Type childType) {
+    return new Name(null, childIdentifier, null, childType);
+  }
+
 
 
   /**
@@ -91,6 +127,7 @@ public final class Name {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((identifier == null) ? 0 : identifier.hashCode());
+    result = prime * result + ((descriptor == null) ? 0 : descriptor.hashCode());
     result = prime * result + ((parent == null) ? 0 : parent.hashCode());
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
@@ -109,6 +146,9 @@ public final class Name {
       return false;
     }
     Name other = (Name) obj;
+    if (type != other.type) {
+      return false;
+    }
     if (identifier == null) {
       if (other.identifier != null) {
         return false;
@@ -116,14 +156,18 @@ public final class Name {
     } else if (!identifier.equals(other.identifier)) {
       return false;
     }
+    if (descriptor == null) {
+      if (other.descriptor != null) {
+        return false;
+      }
+    } else if (!descriptor.equals(other.descriptor)) {
+      return false;
+    }
     if (parent == null) {
       if (other.parent != null) {
         return false;
       }
     } else if (!parent.equals(other.parent)) {
-      return false;
-    }
-    if (type != other.type) {
       return false;
     }
     return true;
@@ -208,14 +252,12 @@ public final class Name {
     switch (type) {
       case AMBIGUOUS:
         if (parent != null) {
-          before = "?";
+          before = "\ufe56";
         }
         break;
       case CLASS:
         if (parent.type == Type.CLASS) {
           before = "$";
-        } else {
-          before = "/";
         }
         break;
       case FIELD:
@@ -227,12 +269,10 @@ public final class Name {
         if (parent != null) {
           before = ".";
         }
-        after = "()";
+        after = descriptor != null ? descriptor : "()";
         break;
       case PACKAGE:
-        if (parent != null || identifier != null) {
-          before = "/";
-        }
+        after = "/";
         break;
       case TYPE_PARAMETER:
         before = "<";
@@ -248,5 +288,18 @@ public final class Name {
     if (after != null) {
       sb.append(after);
     }
+  }
+
+  /**
+   * Assuming this name represents a type, the containing type if any.
+   */
+  public Name getOuterType() {
+    if (type != Type.CLASS) { return null; }
+    Name ancestor;
+    for (ancestor = parent; ancestor != null && ancestor.type == Type.METHOD;
+        ancestor = ancestor.parent) {
+      // Just skipping method containers to find a class container.
+    }
+    return ancestor != null && ancestor.type == Type.CLASS ? ancestor : null;
   }
 }
