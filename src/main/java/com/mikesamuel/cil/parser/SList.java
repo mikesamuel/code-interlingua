@@ -6,6 +6,7 @@ import java.util.NoSuchElementException;
 import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 
 /** A singly-linked list built in reverse. */
 public final class SList<T> {
@@ -41,6 +42,11 @@ public final class SList<T> {
             return next;
           }
         };
+      }
+
+      @Override
+      public String toString() {
+        return Iterables.toString(this);
       }
     };
   }
