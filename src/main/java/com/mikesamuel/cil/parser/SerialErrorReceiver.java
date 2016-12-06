@@ -9,6 +9,18 @@ package com.mikesamuel.cil.parser;
  * indicative of the underlying cause.
  */
 public interface SerialErrorReceiver {
+
   /** Called when an attempt to serialize a particular variant fails. */
   void error(SerialState state, String message);
+
+  /** Silently ignores error reports. */
+  public static final SerialErrorReceiver DEV_NULL = new SerialErrorReceiver() {
+
+    @Override
+    public void error(SerialState state, String message) {
+      // Drop silently.
+    }
+
+  };
+
 }
