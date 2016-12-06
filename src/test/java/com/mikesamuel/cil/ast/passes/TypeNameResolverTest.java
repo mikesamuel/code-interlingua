@@ -1,25 +1,61 @@
 package com.mikesamuel.cil.ast.passes;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.passes.Name.Type;
+import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.Name.Type;
 
 import junit.framework.TestCase;
 
 @SuppressWarnings("javadoc")
 public final class TypeNameResolverTest extends TestCase {
+  TypeNameResolver r;
 
-  @Test
-  public void testForClassLoader() {
+  @Before
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     ClassLoader cl = getClass().getClassLoader();
     if (cl == null) {
       cl = ClassLoader.getSystemClassLoader();
     }
-    TypeNameResolver r = TypeNameResolver.Resolvers.forClassLoader(cl);
+    TypeInfoResolver tir = TypeInfoResolver.Resolvers.forClassLoader(cl);
+    r = TypeNameResolver.Resolvers.canonicalizer(tir);
+  }
+
+  @After
+  @Override
+  public void tearDown() throws Exception {
+    r = null;
+    super.tearDown();
+  }
+
+  private static Name ambiguousName(String qualifiedName) {
+    Name ambiguousName = Name.DEFAULT_PACKAGE;
+    for (String part : qualifiedName.split("[.]")) {
+      ambiguousName = ambiguousName.child(part, Type.AMBIGUOUS);
+    }
+    return ambiguousName;
+  }
+
+  private ImmutableList<Name> lookupTypeName(String qualifiedName) {
+    Name ambiguousName = ambiguousName(qualifiedName);
+    return ImmutableList.copyOf(r.lookupTypeName(ambiguousName));
+  }
+
+
+  @Test
+  public void testNoSuchType() {
     assertEquals(
         ImmutableList.of(),
-        ImmutableList.copyOf(r.lookupTypeName("java.bogus.NoSuchType")));
+        lookupTypeName("java.bogus.NoSuchType"));
+  }
+
+  @Test
+  public void testSimpleType() {
     assertEquals(
         ImmutableList.of(
             Name.DEFAULT_PACKAGE
@@ -27,7 +63,11 @@ public final class TypeNameResolverTest extends TestCase {
             .child("lang", Type.PACKAGE)
             .child("Object", Type.CLASS)
             ),
-        ImmutableList.copyOf(r.lookupTypeName("java.lang.Object")));
+        lookupTypeName("java.lang.Object"));
+  }
+
+  @Test
+  public void testCanonicalInnerClass() {
     assertEquals(
         ImmutableList.of(
             Name.DEFAULT_PACKAGE
@@ -36,7 +76,11 @@ public final class TypeNameResolverTest extends TestCase {
             .child("Map", Type.CLASS)
             .child("Entry", Type.CLASS)
             ),
-        ImmutableList.copyOf(r.lookupTypeName("java.util.Map.Entry")));
+        lookupTypeName("java.util.Map.Entry"));
+  }
+
+  @Test
+  public void testNoncanonicalInnerClass() {
     assertEquals(
         ImmutableList.of(
             Name.DEFAULT_PACKAGE
@@ -46,7 +90,11 @@ public final class TypeNameResolverTest extends TestCase {
             .child("Entry", Type.CLASS)
             ),
         // Inner class referred to via outer type's super type.
-        ImmutableList.copyOf(r.lookupTypeName("java.util.HashMap.Entry")));
+        lookupTypeName("java.util.HashMap.Entry"));
+  }
+
+  @Test
+  public void testAnonymousEnumConstant() {
     assertEquals(
         ImmutableList.of(
             Name.DEFAULT_PACKAGE
@@ -59,9 +107,73 @@ public final class TypeNameResolverTest extends TestCase {
             .child("E", Type.CLASS)
             .child("1", Type.CLASS)
             ),
-        ImmutableList.copyOf(
-            r.lookupTypeName(
-                "com.mikesamuel.cil.ast.passes.TypeNameResolverTest$E$1")));
+        lookupTypeName(
+            "com.mikesamuel.cil.ast.passes.TypeNameResolverTest.E.1"));
+  }
+
+  @Test
+  public static void testDisambiguateAll() {
+    assertEquals(
+        ImmutableList.of(
+            Name.DEFAULT_PACKAGE
+            .child("java", Type.PACKAGE)
+            .child("lang", Type.PACKAGE)
+            .child("Object", Type.CLASS),
+
+            Name.DEFAULT_PACKAGE
+            .child("java", Type.PACKAGE)
+            .child("lang", Type.CLASS)
+            .child("Object", Type.CLASS),
+
+            Name.DEFAULT_PACKAGE
+            .child("java", Type.CLASS)
+            .child("lang", Type.CLASS)
+            .child("Object", Type.CLASS)
+            ),
+        TypeNameResolver.Resolvers.disambiguateClasses(
+            ambiguousName("java.lang.Object"),
+            true, false));
+  }
+
+  @Test
+  public static void testDisambiguateOuterOnly() {
+    assertEquals(
+        ImmutableList.of(
+            Name.DEFAULT_PACKAGE
+            .child("java", Type.CLASS),
+
+            Name.DEFAULT_PACKAGE
+            .child("java", Type.PACKAGE)
+            .child("lang", Type.CLASS),
+
+            Name.DEFAULT_PACKAGE
+            .child("java", Type.PACKAGE)
+            .child("lang", Type.PACKAGE)
+            .child("Object", Type.CLASS)
+            ),
+        TypeNameResolver.Resolvers.disambiguateClasses(
+            ambiguousName("java.lang.Object"),
+            false, true));
+  }
+
+  @Test
+  public void testAmbiguousInnerClasses() {
+    assertEquals(
+        ImmutableList.of(
+            Name.DEFAULT_PACKAGE
+            .child("com", Type.PACKAGE)
+            .child("mikesamuel", Type.PACKAGE)
+            .child("cil", Type.PACKAGE)
+            .child("ast", Type.PACKAGE)
+            .child("passes", Type.PACKAGE)
+            .child("TypeNameResolverTest", Type.CLASS)
+            .child("Sub", Type.CLASS)
+            .child("I", Type.CLASS)
+            // I in Base is masked.
+            ),
+        lookupTypeName(Sub.class.getCanonicalName() + ".I"));
+    // TODO: Should I in Base be masked if Sub is private and we are not in
+    // the scope of TypeNameResolverTest?
   }
 
 
@@ -76,6 +188,19 @@ public final class TypeNameResolverTest extends TestCase {
 
     public void foo() {
       // Default
+    }
+  }
+
+
+  static class Base {
+    interface I {
+      // Reflected over by test code
+    }
+  }
+
+  static class Sub extends Base {
+    interface I {
+      // Reflected over by test code
     }
   }
 }
