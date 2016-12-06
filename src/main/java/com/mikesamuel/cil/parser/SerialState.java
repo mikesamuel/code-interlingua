@@ -103,4 +103,26 @@ public final class SerialState {
     return new SerialState(
         structure, index + 1, SList.append(output, structure.get(index)));
   }
+
+  /**
+   * The state after any ignorable tokens at the head have been copied to the
+   * output.
+   */
+  public SerialState shiftIgnorablesToOutput() {
+    int indexAfterIgnorables = index;
+    SList<Event> outputWithIgnorables = output;
+    for (int n = structure.size(); indexAfterIgnorables < n;
+        ++indexAfterIgnorables) {
+      Event e = structure.get(indexAfterIgnorables);
+      if (e.getKind() != Event.Kind.IGNORABLE) {
+        break;
+      }
+      outputWithIgnorables = SList.append(outputWithIgnorables, e);
+    }
+    if (index == indexAfterIgnorables) {
+      return this;
+    }
+    return new SerialState(
+        structure, indexAfterIgnorables, outputWithIgnorables);
+  }
 }

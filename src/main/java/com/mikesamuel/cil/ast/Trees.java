@@ -9,6 +9,7 @@ import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
+import com.mikesamuel.cil.parser.Ignorables;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -231,15 +232,22 @@ public final class Trees {
    * @see ParSer#unparse
    */
   public static SList<Event> startUnparse(
-      @Nullable SList<Event> beforeNode, BaseNode node) {
+      @Nullable SList<Event> beforeNode, BaseNode node,
+      @Nullable Decorator decorator) {
+
 
     String value = node.getValue();
     ImmutableList<? extends BaseNode> children = node.getChildren();
 
-
     SourcePosition pos = node.getSourcePosition();
     SList<Event> beforeContent = maybeAppendPos(
         beforeNode, pos != null ? pos.start() : null);
+
+    String decoration = decorator != null ? decorator.decorate(node) : null;
+    if (decoration != null) {
+      beforeContent = SList.append(
+          beforeContent, Event.ignorable(decoration, -1));
+    }
 
     NodeVariant variant = node.getVariant();
     beforeContent = SList.append(
@@ -257,7 +265,7 @@ public final class Trees {
     } else {
       afterContent = beforeContent;
       for (BaseNode child : children) {
-        SList<Event> afterChild = startUnparse(afterContent, child);
+        SList<Event> afterChild = startUnparse(afterContent, child, decorator);
         afterContent = afterChild;
       }
     }
@@ -289,5 +297,20 @@ public final class Trees {
       }
     }
     return beforePos;
+  }
+
+
+  /**
+   * Can be used to add comments to the output event stream.
+   */
+  public interface Decorator {
+    /**
+     * A comment to place before node if any.
+     *
+     * @return null for no decoration or a well-formed comment token
+     *   as defined by {@link Ignorables}.
+     * @see Java8Comments
+     */
+    public @Nullable String decorate(BaseNode node);
   }
 }

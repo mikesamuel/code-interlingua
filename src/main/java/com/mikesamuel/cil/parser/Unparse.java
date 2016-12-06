@@ -13,7 +13,6 @@ import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.format.Formatter;
 import com.mikesamuel.cil.format.java.Java8Formatters;
-import com.mikesamuel.cil.ptree.Tokens;
 
 /**
  * Allows converting the output of an {@link ParSer#unparse} operations to
@@ -57,17 +56,11 @@ public final class Unparse {
           verifiedTokens.add(e);
           break;
         case IGNORABLE:
-          int nv = verifiedTokens.size();
-          if (nv != 0) {
-            Event last = verifiedTokens.get(nv - 1);
-            if (last.getKind() == Event.Kind.PUSH
-                && last.getNodeVariant().isIgnorable()) {
-              String commentContent = e.getContent();
-              if (Tokens.isBlockComment(commentContent)) {
-                sb.append(commentContent).append(' ');
-                verifiedTokens.add(e);
-              }
-            }
+          String commentContent = e.getContent();
+          if (commentContent.length() == Ignorables.scanPastIgnorablesFrom(
+                  commentContent, 0, null)) {
+            sb.append(commentContent).append(' ');
+            verifiedTokens.add(e);
           }
           break;
         case DELAYED_CHECK:

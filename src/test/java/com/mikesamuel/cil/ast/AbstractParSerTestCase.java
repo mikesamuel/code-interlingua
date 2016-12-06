@@ -314,7 +314,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
     }
 
     ImmutableList<Event> structure = ImmutableList.copyOf(
-        SList.forwardIterable(Trees.startUnparse(null, root)));
+        SList.forwardIterable(Trees.startUnparse(null, root, null)));
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("\nstructure\n=======");
       Debug.dumpEvents(structure);

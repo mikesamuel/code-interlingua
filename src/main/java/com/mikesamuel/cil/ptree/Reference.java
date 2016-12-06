@@ -411,8 +411,13 @@ final class Reference extends PTParSer {
       System.err.println(indent() + "Unparse " + nodeType);
     }
 
-    SerialState state = start;
+    // Trees.startUnparse with a decorator might have inserted a comment node.
+    SerialState state = start.shiftIgnorablesToOutput();
+    // There might be template directives at the start.
     state = unparseTemplateDirectives(state, err);
+    // There might be decorations after the template directive.
+    // TODO: maybe hide the handling of ignorable tokens from this class.
+    state = state.shiftIgnorablesToOutput();
 
     // Try handling non-anon variants first.
     if (!state.isEmpty()) {
