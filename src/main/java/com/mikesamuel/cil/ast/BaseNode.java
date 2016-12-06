@@ -5,6 +5,7 @@ import javax.annotation.Nullable;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.parser.SourcePosition;
 
@@ -34,9 +35,24 @@ public abstract class BaseNode {
     return variant;
   }
 
+  /** The production's node type. */
+  public final NodeType getNodeType() {
+    return getVariant().getNodeType();
+  }
+
   /** Child nodes. */
   public final ImmutableList<BaseNode> getChildren() {
     return children;
+  }
+
+  /** The first child with the given type or null. */
+  public @Nullable BaseNode firstChildWithType(NodeType nt) {
+    for (BaseNode child : children) {
+      if (child.getNodeType() == nt) {
+        return child;
+      }
+    }
+    return null;
   }
 
   /** The value if any. */
@@ -55,6 +71,29 @@ public abstract class BaseNode {
   public final void setSourcePosition(SourcePosition newSourcePosition) {
     this.sourcePosition = newSourcePosition;
   }
+
+  /**
+   * The content of descendant leaf nodes separated by the given string.
+   */
+  public String getTextContent(String separator) {
+    StringBuilder sb = new StringBuilder();
+    appendTextContent(sb, separator);
+    return sb.toString();
+  }
+
+  private void appendTextContent(StringBuilder sb, String sep) {
+    if (!Strings.isNullOrEmpty(literalValue)) {
+      if (sep != null && sb.length() != 0) {
+        sb.append(sep);
+      }
+      sb.append(literalValue);
+    } else {
+      for (BaseNode child : getChildren()) {
+        child.appendTextContent(sb, sep);
+      }
+    }
+  }
+
 
   @Override
   public final String toString() {
