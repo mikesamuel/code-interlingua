@@ -306,8 +306,8 @@ Dim: @nointerp
      "[" "]"
 Dims: @nointerp
      {Annotation} Dim {{Annotation} Dim}
-TypeParameter:
-     {TypeParameterModifier} Identifier [TypeBound]
+TypeParameter: (@trait=TypeDeclaration)
+     {!!TypeParameterModifier Modifier} Identifier [TypeBound] (@name=TypeParameter)
 TypeParameterModifier:
      Annotation
 TypeBound:
@@ -386,11 +386,11 @@ ContextFreeName:
 
 // Packages
 (chapter=Package)
-CompilationUnit:
+CompilationUnit: (@trait=TypeScope)
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
      // TODO: Why is the package name here not left-associative as it is under the names chapter?
-     {PackageModifier} "package" PackageName ";" (@name=Declaration)
+     {!!PackageModifier Modifier} "package" PackageName ";" (@name=Declaration)
 PackageModifier:
      Annotation
 ImportDeclaration:
@@ -416,8 +416,8 @@ TypeDeclaration:
 ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
-NormalClassDeclaration:
-     [JavaDocComment] {ClassModifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
+NormalClassDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope)
+     [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
      "public"
@@ -437,7 +437,7 @@ Superinterfaces:
      "implements" InterfaceTypeList
 InterfaceTypeList:
      InterfaceType {"," InterfaceType}
-ClassBody:
+ClassBody: (@trait=TypeScope)
      "{" {ClassBodyDeclaration} "}"
 ClassBodyDeclaration:
      ClassMemberDeclaration
@@ -451,7 +451,7 @@ ClassMemberDeclaration:
      InterfaceDeclaration
      ";"
 FieldDeclaration:
-     [JavaDocComment] {FieldModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
+     [JavaDocComment] {!!FieldModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
      Annotation
      "public"
@@ -470,8 +470,8 @@ VariableDeclaratorId:
 VariableInitializer:
      Expression
      ArrayInitializer
-MethodDeclaration:
-     [JavaDocComment] {MethodModifier} MethodHeader MethodBody (@name=Declaration)
+MethodDeclaration: (@trait=TypeParameterScope) (@trait=CallableDeclaration)
+     [JavaDocComment] {!!MethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
 MethodModifier:
      Annotation
      "public"
@@ -484,11 +484,10 @@ MethodModifier:
      "native"
      "strictfp"
 MethodHeader:
-     Result MethodDeclarator [Throws]
-     TypeParameters {Annotation} Result MethodDeclarator [Throws]
+     [TypeParameters {Annotation}] Result MethodDeclarator [Throws]
 Result:
-     UnannType
      "void"
+     UnannType
 MethodDeclarator:
      MethodName "(" [FormalParameterList] ")" [Dims]
 FormalParameterList:
@@ -498,12 +497,12 @@ FormalParameters:
      FormalParameter {"," FormalParameter}
      ReceiverParameter {"," FormalParameter}
 FormalParameter:
-     {VariableModifier} UnannType VariableDeclaratorId
+     {!!VariableModifier Modifier} UnannType VariableDeclaratorId (@name=Declaration)
 VariableModifier:
      Annotation
      "final"
 LastFormalParameter:
-     {VariableModifier} UnannType {Annotation} "..." VariableDeclaratorId
+     {!!VariableModifier Modifier} UnannType {Annotation} "..." VariableDeclaratorId  (@name=Variadic)
      FormalParameter
 ReceiverParameter:
      {Annotation} UnannType [SimpleTypeName "."] "this"
@@ -517,12 +516,12 @@ ExceptionType:
 MethodBody:
      Block
      ";"
-InstanceInitializer:
+InstanceInitializer: (@trait=CallableDeclaration)
      Block
-StaticInitializer:
+StaticInitializer: (@trait=CallableDeclaration)
      "static" Block
-ConstructorDeclaration:
-     [JavaDocComment] {ConstructorModifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
+ConstructorDeclaration: (@trait=TypeParameterScope) (@trait=CallableDeclaration)
+     [JavaDocComment] {!!ConstructorModifier Modifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
 ConstructorModifier:
      Annotation
      "public"
@@ -530,23 +529,23 @@ ConstructorModifier:
      "private"
 ConstructorDeclarator:
      [TypeParameters] SimpleTypeName "(" [FormalParameterList] ")"
-ConstructorBody:
+ConstructorBody: (@trait=TypeScopeNoForward)
      "{" [ExplicitConstructorInvocation] [BlockStatements] "}"
 ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-EnumDeclaration:
-     [JavaDocComment] {ClassModifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
+EnumDeclaration: (@trait=TypeDeclaration)
+     [JavaDocComment] {!!ClassModifier Modifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
 EnumBody:
      "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
 EnumConstantList:
      EnumConstant {"," EnumConstant}
-EnumConstant:
-     {EnumConstantModifier} FieldName ["(" [ArgumentList] ")"] [ClassBody]
+EnumConstant: (@trait=TypeDeclaration)
+     {!!EnumConstantModifier Modifier} FieldName ["(" [ArgumentList] ")"] [ClassBody] (@name=Declaration)
 EnumConstantModifier:
      Annotation
-EnumBodyDeclarations:
+EnumBodyDeclarations: (@trait=TypeScope)
      ";" {ClassBodyDeclaration}
 
 // Interfaces
@@ -554,8 +553,8 @@ EnumBodyDeclarations:
 InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
-NormalInterfaceDeclaration:
-     [JavaDocComment] {InterfaceModifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
+NormalInterfaceDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope)
+     [JavaDocComment] {!!InterfaceModifier Modifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
 InterfaceModifier:
      Annotation
      "public"
@@ -566,7 +565,7 @@ InterfaceModifier:
      "strictfp"
 ExtendsInterfaces:
      "extends" InterfaceTypeList
-InterfaceBody:
+InterfaceBody: (@trait=TypeScope)
      "{" {InterfaceMemberDeclaration} "}"
 InterfaceMemberDeclaration:
      ConstantDeclaration
@@ -575,14 +574,14 @@ InterfaceMemberDeclaration:
      InterfaceDeclaration
      ";"
 ConstantDeclaration:
-     [JavaDocComment] {ConstantModifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
+     [JavaDocComment] {!!ConstantModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 ConstantModifier:
      Annotation
      "public"
      "static"
      "final"
-InterfaceMethodDeclaration:
-     [JavaDocComment] {InterfaceMethodModifier} MethodHeader MethodBody (@name=Declaration)
+InterfaceMethodDeclaration: (@trait=TypeParameterScope) (@trait=CallableDeclaration)
+     [JavaDocComment] {!!InterfaceMethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
 InterfaceMethodModifier:
      Annotation
      "public"
@@ -590,9 +589,9 @@ InterfaceMethodModifier:
      "default"
      "static"
      "strictfp"
-AnnotationTypeDeclaration:
-     [JavaDocComment] {InterfaceModifier} "@" "interface" SimpleTypeName AnnotationTypeBody (@name=Declaration)
-AnnotationTypeBody:
+AnnotationTypeDeclaration: (@trait=TypeDeclaration)
+     [JavaDocComment] {!!InterfaceModifier Modifier} "@" "interface" SimpleTypeName AnnotationTypeBody (@name=Declaration)
+AnnotationTypeBody: (@trait=TypeScope)
      "{" {AnnotationTypeMemberDeclaration} "}"
 AnnotationTypeMemberDeclaration:
      AnnotationTypeElementDeclaration
@@ -601,7 +600,7 @@ AnnotationTypeMemberDeclaration:
      InterfaceDeclaration
      ";"
 AnnotationTypeElementDeclaration:
-     [JavaDocComment] {AnnotationTypeElementModifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
+     [JavaDocComment] {!!AnnotationTypeElementModifier Modifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
 AnnotationTypeElementModifier:
      Annotation
      "public"
@@ -612,6 +611,20 @@ Annotation:
      NormalAnnotation
      SingleElementAnnotation
      MarkerAnnotation
+Modifier:
+     "abstract"
+     "default"
+     "final"
+     "native"
+     "private"
+     "protected"
+     "public"
+     "static"
+     "strictfp"
+     "synchronized"
+     "transient"
+     "volatile"
+     Annotation
 NormalAnnotation:
      "@" TypeName "(" [ElementValuePairList] ")"
 ElementValuePairList:
@@ -640,7 +653,7 @@ VariableInitializerList:
 
 // Blocks and Statements
 (chapter=Statement)
-Block:
+Block:(@trait=TypeScopeNoForward)
      "{" [BlockStatements] "}"
 BlockStatements:
      BlockStatement {BlockStatement}
@@ -651,7 +664,7 @@ BlockStatement:
 LocalVariableDeclarationStatement:
      LocalVariableDeclaration ";"
 LocalVariableDeclaration:
-     {VariableModifier} UnannType VariableDeclaratorList (@name=Declaration)
+     {!!VariableModifier Modifier} UnannType VariableDeclaratorList (@name=Declaration)
 Statement:
      Block
      EmptyStatement
@@ -690,7 +703,7 @@ SwitchStatement:
      "switch" "(" Expression ")" SwitchBlock
 SwitchBlock:
      "{" {SwitchBlockStatementGroup} "}"
-SwitchBlockStatementGroup:
+SwitchBlockStatementGroup:(@trait=TypeScopeNoForward)
      SwitchLabels [BlockStatements]
 SwitchLabels:
      SwitchLabel {SwitchLabel}
@@ -720,7 +733,7 @@ ForUpdate:
 StatementExpressionList:
      StatementExpression {"," StatementExpression}
 EnhancedForStatement:
-     "for" "(" {VariableModifier} UnannType VariableDeclaratorId ":" Expression ")" Statement
+     "for" "(" {!!VariableModifier Modifier} UnannType VariableDeclaratorId ":" Expression ")" Statement (@name=EnhancedForStatement)
 BreakStatement:
      "break" [Label] ";"
 ContinueStatement:
@@ -740,7 +753,7 @@ Catches:
 CatchClause:
      "catch" "(" CatchFormalParameter ")" Block
 CatchFormalParameter:
-     {VariableModifier} CatchType VariableDeclaratorId
+     {!!VariableModifier Modifier} CatchType VariableDeclaratorId (@name=CatchFormalParameter)
 CatchType:
      UnannClassType {"|" ClassType}
 Finally:
@@ -752,7 +765,7 @@ ResourceSpecification:
 ResourceList:
      Resource {";" Resource}
 Resource:
-     {VariableModifier} UnannType VariableDeclaratorId "=" Expression
+     {!!VariableModifier Modifier} UnannType VariableDeclaratorId "=" Expression (@name=Resource)
 
 // Expressions
 (chapter=Expression)
@@ -810,7 +823,7 @@ ClassLiteral:
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-UnqualifiedClassInstanceCreationExpression:
+UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration)
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
      {Annotation} Identifier {"." {Annotation} Identifier} [TypeArgumentsOrDiamond]

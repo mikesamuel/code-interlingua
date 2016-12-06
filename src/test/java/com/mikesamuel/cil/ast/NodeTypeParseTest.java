@@ -474,7 +474,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testTypeParameterTypeParameterModifierIdentifierTypeBound() {
     parseSanityCheck(
-        TypeParameterNode.Variant.TypeParameterModifierIdentifierTypeBound,
+        TypeParameterNode.Variant.TypeParameter,
         "@Nullable Foo extends Bar"
         );
   }
@@ -1642,7 +1642,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testMethodHeaderResultMethodDeclaratorThrows() {
     parseSanityCheck(
-        MethodHeaderNode.Variant.ResultMethodDeclaratorThrows,
+        MethodHeaderNode.Variant.TypeParametersAnnotationResultMethodDeclaratorThrows,
         "int f(int n) throws java.lang.ArithmeticException"
         );
   }
@@ -1742,7 +1742,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testFormalParameterVariableModifierUnannTypeVariableDeclaratorId() {
     parseSanityCheck(
-        FormalParameterNode.Variant.VariableModifierUnannTypeVariableDeclaratorId,
+        FormalParameterNode.Variant.Declaration,
         "@GuardedBy(\"g\") List<? super T> output"
         );
   }
@@ -1775,7 +1775,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testLastFormalParameterVariableModifierUnannTypeAnnotationEllipVariableDeclaratorId() {
     parseSanityCheck(
-        LastFormalParameterNode.Variant.VariableModifierUnannTypeAnnotationEllipVariableDeclaratorId,
+        LastFormalParameterNode.Variant.Variadic,
         "final int... nums"
         );
   }
@@ -2070,7 +2070,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnumConstantEnumConstantModifierIdentifierArgumentsClassBody() {
     parseSanityCheck(
-        EnumConstantNode.Variant.EnumConstantModifierFieldNameLpArgumentListRpClassBody,
+        EnumConstantNode.Variant.Declaration,
         "@Deprecated Foo(42) { @Override int f(int x) { return -x; }\n}"
         );
   }
@@ -3431,7 +3431,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnhancedForStatementForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatement() {
     parseSanityCheck(
-        EnhancedForStatementNode.Variant.ForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatement,
+        EnhancedForStatementNode.Variant.EnhancedForStatement,
         "for (final T el : iterable) if (filter(el)) use(el);"
         );
   }
@@ -3442,7 +3442,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnhancedForStatementNoShortIfForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatementNoShortIf() {
     parseSanityCheck(
-        EnhancedForStatementNode.Variant.ForLpVariableModifierUnannTypeVariableDeclaratorIdClnExpressionRpStatement,
+        EnhancedForStatementNode.Variant.EnhancedForStatement,
         "for (final T el : iterable) { if (filter(el)) use(el); }"
         );
   }
@@ -3570,7 +3570,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testCatchFormalParameterVariableModifierCatchTypeVariableDeclaratorId() {
     parseSanityCheck(
-        CatchFormalParameterNode.Variant.VariableModifierCatchTypeVariableDeclaratorId,
+        CatchFormalParameterNode.Variant.CatchFormalParameter,
         "final IOException ex"
         );
   }
@@ -3638,7 +3638,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testResourceVariableModifierUnannTypeVariableDeclaratorIdEqExpression() {
     parseSanityCheck(
-        ResourceNode.Variant.VariableModifierUnannTypeVariableDeclaratorIdEqExpression,
+        ResourceNode.Variant.Resource,
         "final InputStream in = openInp()"
         );
   }

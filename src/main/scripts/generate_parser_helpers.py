@@ -4,7 +4,22 @@ import json
 import re
 
 
+
 _JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
+
+# Maps trait interfaces to metadata fields specified and imports required.
+_TRAITS = {
+    'CallableDeclaration': ((('String', 'methodDescriptor'),), ()),
+    'TypeDeclaration': (
+        (('TypeInfo', 'declaredTypeInfo'),),
+        ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
+    }
+
+_CUSTOM_NODE_CONTENT = {
+    'ConstructorDeclaration': ('  @Override public String getMethodName() { return "<init>"; }', ()),
+    'InstanceInitializer':    ('  @Override public String getMethodName() { return "<init>"; }', ()),
+    'StaticInitializer':      ('  @Override public String getMethodName() { return "<clinit>"; }', ()),
+    }
 
 _TOKEN_RE = re.compile(
     '|'.join([
@@ -76,6 +91,18 @@ def _classify_token((text, _)):
     return _TOK_OTHER
 
 
+# Short names for punctuation strings arranges as a Trie.
+# This is used to derive descriptive variant names.
+# The trie is represented as a map from punctuation strings to
+# values that are pairs (identifier, suffix_trie) where the
+# suffix tries match the characters after the key and are
+# either None or Maps with the same structure as the Trie.
+# A value which is a singleton tuple has an implicit None
+# suffix trie.
+# An identifier of None indicates that there is no name
+# corresponding to the concatenation of the keys though
+# the concatenation of the keys might be a prefix of a
+# larger punctuation string.
 _PUNC_TO_ALNUM = {
     '.': ('dot', {'.': (None, {'.': ('ellip',)})}),
     '[': ('ls',),
@@ -1259,6 +1286,42 @@ public enum NodeType implements ParSerable {
 
         variant_members = create_variant_members()
 
+        traits = []
+        for (annot_name, _) in prod['annots']:
+            if annot_name.startswith('(@trait='):
+                traits.append(annot_name[8:-1])
+
+        extra_code = []
+        custom_code, custom_code_imports = _CUSTOM_NODE_CONTENT.get(prod['name'], ('', ()))
+        extra_code.append(custom_code)
+        extra_imports.update(custom_code_imports)
+
+        for trait in traits:
+            extra_imports.add('%s.traits.%s' % (_JAVA_PACKAGE, trait))
+            trait_fields, trait_imports = _TRAITS.get(trait, ((), ()))
+            extra_imports.update(trait_imports)
+            for trait_type, trait_field in trait_fields:
+                extra_code.append(
+                    ('  private %(trait_type)s %(trait_field)s;\n'
+                     '\n'
+                     '  @Override\n'
+                     '  public final void set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
+                     '    this.%(trait_field)s = new%(utrait_field)s;\n'
+                     '  }\n'
+                     '\n'
+                     '  @Override\n'
+                     '  public final %(trait_type)s get%(utrait_field)s() {\n'
+                     '    return this.%(trait_field)s;\n'
+                     '  }\n')
+                    % {
+                        'trait_field': trait_field,
+                        'utrait_field': '%s%s' % (trait_field[0].upper(), trait_field[1:]),
+                        'trait_type': trait_type,
+                    })
+        trait_ifaces = ''
+        if traits:
+            trait_ifaces = '\nimplements %s' % (', '.join(traits))
+
         extra_import_stmts = ''.join(
             ['import %s;\n' % imp for imp in sorted(extra_imports)])
 
@@ -1276,13 +1339,14 @@ package %(package)s;
  * </pre>
  */
 @javax.annotation.Generated(%(generator)s)
-public final class %(node_class_name)s extends %(base_node_class)s {
+public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces)s {
 
   private %(node_class_name)s(
       Variant v, %(ctor_formals)s) {
     super(v, %(super_ctor_actuals)s);
   }
 
+%(extra_code)s
   /** Mutable builder type. */
   static BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant>
   builder(Variant v) {
@@ -1352,6 +1416,8 @@ public final class %(node_class_name)s extends %(base_node_class)s {
     'super_ctor_actuals': super_ctor_actuals,
     'builder_kind': builder_kind,
     'builder_actuals': builder_actuals,
+    'extra_code': '\n'.join(extra_code),
+    'trait_ifaces': trait_ifaces,
     })
 
     for_each_prod(write_node_class_for_production)
@@ -1377,6 +1443,7 @@ import com.google.common.collect.ImmutableSet;
 /**
  * All the tokens that appear literally in the grammar.
  */
+@javax.annotation.Generated(%(generator)s)
 public final class TokenStrings {
 
   private TokenStrings() {
@@ -1436,6 +1503,7 @@ import java.util.EnumSet;
 /**
  * The set of productions which just decorate {@link NodeType#Identifier}.
  */
+@javax.annotation.Generated(%(generator)s)
 public final class IdentifierWrappers {
 
   private IdentifierWrappers() {
@@ -1491,6 +1559,8 @@ public final class IdentifierWrappers {
                 else:
                     annot_name = annot[1:]
                     value = 'true'
+                if annot_name in ('trait',):
+                    continue
                 annot_name = '%s%s' % (annot_name[0].upper(), annot_name[1:])
                 table = tables.get(annot_name)
                 if table is None:
@@ -1567,6 +1637,7 @@ package %(package)s;
 /**
  * The set of productions which just decorate {@link NodeType#Identifier}.
  */
+@javax.annotation.Generated(%(generator)s)
 public final class NodeTypeTables {
 
 %(table_defs)s
@@ -1580,6 +1651,123 @@ public final class NodeTypeTables {
 })
 
     write_prod_annotations()
+
+    def write_visitor_classes():
+        def write_visitor(c):
+            cn = c['name']
+            class_name = '%sVisitor' % cn
+            node_type = 'Base%sNode' % cn
+
+            visit_methods = [
+                ('  protected @Nullable T\n'
+                 '  visit%(name)s(@Nullable T x, %(name)sNode node) {\n'
+                 '    return visitDefault(x, node);\n'
+                 '  }')
+                % p for p in c['prods']]
+            visit_cases = [
+                ('      case %(name)s:\n'
+                 '        return visit%(name)s(x, (%(name)sNode) node);')
+                % p for p in c['prods']]
+
+            emit_java_file(
+                class_name,
+            '''
+package %(package)s;
+
+import javax.annotation.Nullable;
+
+/**
+ * Allows taking some production-specific action for a %(class_name)s.
+ * <p>
+ * Unless overridden, each visit* method returns
+ * {@link %(class_name)s#visitDefault}.
+ */
+@javax.annotation.Generated(%(generator)s)
+public abstract class %(class_name)s<T> {
+
+  /**
+   * Dispatches node to the appropriate visit* method.
+   */
+  public @Nullable T visit(@Nullable T x, %(node_type)s node) {
+    NodeType nt = node.getVariant().getNodeType();
+    switch (nt) {
+%(visit_cases)s
+      default:
+        throw new AssertionError(nt);
+    }
+  }
+
+  /** Called by visit* methods that are not overridden to do otherwise. */
+  protected abstract @Nullable T
+  visitDefault(@Nullable T x, %(node_type)s node);
+
+%(visit_methods)s
+}
+''' % {
+    'package': _JAVA_PACKAGE,
+    'generator': generator,
+    'class_name': class_name,
+    'node_type': node_type,
+    'visit_methods': '\n\n'.join(visit_methods),
+    'visit_cases': '\n'.join(visit_cases),
+})
+        for_each_chapter(write_visitor)
+
+        visit_methods = [
+            ('  protected @Nullable T\n'
+             '  visit%(name)s(@Nullable T x, Base%(name)sNode node) {\n'
+             '    return visitDefault(x, node);\n'
+             '  }')
+            % c
+            for c in grammar]
+        visit_ifs = [
+            ('    if (node instanceof Base%(name)sNode) {\n'
+             '      return visit%(name)s(x, (Base%(name)sNode) node);\n'
+             '    }')
+            % c
+            for c in grammar]
+
+        emit_java_file(
+            'BaseNodeVisitor',
+            '''
+package %(package)s;
+
+import javax.annotation.Nullable;
+
+/**
+ * Allows taking some production-specific action for a %(class_name)s.
+ * <p>
+ * Unless overridden, each visit* method returns
+ * {@link %(class_name)s#visitDefault}.
+ */
+@javax.annotation.Generated(%(generator)s)
+public abstract class %(class_name)s<T> {
+
+  /**
+   * Dispatches node to the appropriate visit* method.
+   */
+  public @Nullable T visit(@Nullable T x, %(node_type)s node) {
+%(visit_ifs)s
+    throw new AssertionError(node.getClass());
+  }
+
+  /** Called by visit* methods that are not overridden to do otherwise. */
+  protected abstract @Nullable T
+  visitDefault(@Nullable T x, %(node_type)s node);
+
+%(visit_methods)s
+}
+''' % {
+    'package': _JAVA_PACKAGE,
+    'generator': generator,
+    'class_name': 'BaseNodeVisitor',
+    'node_type': 'BaseNode',
+    'visit_methods': '\n\n'.join(visit_methods),
+    'visit_ifs': '\n'.join(visit_ifs),
+})
+
+    write_visitor_classes()
+
 
     if verbose:
         # Dump the "Public API" of each chapter -- those productions that are
