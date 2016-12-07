@@ -54,11 +54,12 @@ public final class Name {
     // Only the default package does not have a parent.
     Preconditions.checkArgument(
         type != Type.PACKAGE || (parent == null) == (identifier.length() == 0));
-    // Classes can only have class or package parents.
+    // Classes can only have class, method, or package parents.
     Preconditions.checkArgument(
         type != Type.CLASS
         || parent == null || parent.type == Type.PACKAGE
-        || parent.type == Type.CLASS || parent.type == Type.AMBIGUOUS);
+        || parent.type == Type.CLASS || parent.type == Type.AMBIGUOUS
+        || parent.type == Type.METHOD);
     // Locals must have a null parent.
     Preconditions.checkArgument(parent == null || type != Type.LOCAL);
     // Only the default package can be identifierless.
@@ -256,7 +257,8 @@ public final class Name {
         }
         break;
       case CLASS:
-        if (parent.type == Type.CLASS) {
+        if (parent == null
+            || parent.type == Type.CLASS || parent.type == Type.METHOD) {
           before = "$";
         }
         break;

@@ -307,7 +307,7 @@ Dim: @nointerp
 Dims: @nointerp
      {Annotation} Dim {{Annotation} Dim}
 TypeParameter: (@trait=TypeDeclaration)
-     {!!TypeParameterModifier Modifier} Identifier [TypeBound] (@name=TypeParameter)
+     {!!TypeParameterModifier Modifier} SimpleTypeName [TypeBound] (@name=TypeParameter)
 TypeParameterModifier:
      Annotation
 TypeBound:

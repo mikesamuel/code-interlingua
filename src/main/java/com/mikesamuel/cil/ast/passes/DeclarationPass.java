@@ -21,15 +21,18 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
+import com.mikesamuel.cil.ast.AdditionalBoundNode;
 import com.mikesamuel.cil.ast.AnnotationNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.BasePackageNode;
+import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InterfaceTypeListNode;
 import com.mikesamuel.cil.ast.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.ModifierNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
+import com.mikesamuel.cil.ast.TypeVariableNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.Name.Type;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
@@ -336,24 +339,35 @@ class DeclarationPass implements AbstractPass<Void> {
           case Superclass:
           case ClassOrInterfaceTypeToInstantiate: {
             Name ambigName = toName(child, Type.AMBIGUOUS);
-            ImmutableList<Name> superTypeNames = ImmutableList.copyOf(
-                nameResolver.lookupTypeName(ambigName));
-            switch (superTypeNames.size()) {
-              case 0:
-                error(child, "Cannot resolve super type for " + typeName);
-                break;
-              case 1:
-                superTypeName = superTypeNames.get(0);
-                break;
-              default:
-                error(
-                    child,
-                    "Ambiguous super type for " + typeName + " : "
-                    + superTypeNames);
-                break;
-            }
+            superTypeName =
+                soleType(
+                    nameResolver.lookupTypeName(ambigName),
+                    child, "super type", typeName)
+                .or(superTypeName);
             break;
           }
+          case TypeBound:
+            for (BaseNode grandChild : child.getChildren()) {
+              if (grandChild instanceof ClassOrInterfaceTypeNode
+                  || grandChild instanceof TypeVariableNode) {
+                Name ambigName = toName(grandChild, Type.AMBIGUOUS);
+                Optional<Name> extendedTypeOpt =
+                    soleType(
+                        nameResolver.lookupTypeName(ambigName),
+                        child, "type bound", typeName);
+                superTypeName = extendedTypeOpt.or(superTypeName);
+              } else if (grandChild instanceof AdditionalBoundNode) {
+                Name ambigName = toName(grandChild, Type.AMBIGUOUS);
+                Optional<Name> additionalBoundOpt =
+                    soleType(
+                        nameResolver.lookupTypeName(ambigName),
+                        child, "additional bound", typeName);
+                if (additionalBoundOpt.isPresent()) {
+                  interfaceNames.add(additionalBoundOpt.get());
+                }
+              }
+            }
+            break;
           case Superinterfaces:
           case ExtendsInterfaces:
             InterfaceTypeListNode interfacesNode =
@@ -362,32 +376,21 @@ class DeclarationPass implements AbstractPass<Void> {
               InterfaceTypeNode interfaceType =
                   (InterfaceTypeNode) interfacesChild;
               Name ambigName = toName(interfaceType, Type.AMBIGUOUS);
-              ImmutableList<Name> interfaceTypeNames = ImmutableList.copyOf(
-                  nameResolver.lookupTypeName(ambigName));
-              switch (interfaceTypeNames.size()) {
-                case 0:
-                  error(
-                      interfaceType,
-                      "Could not resolve interface type " +
-                      ambigName.toDottedString() + " for " + typeName);
-                  break;
-                case 1:
-                  interfaceNames.add(interfaceTypeNames.get(0));
-                  break;
-                default:
-                  error(
-                      interfaceType,
-                      "Ambiguous interface type " +
-                      ambigName.toDottedString() + " for " + typeName
-                      + " : " + interfaceTypeNames);
-                  break;
+              Optional<Name> interfaceNameOpt =
+                  soleType(
+                      nameResolver.lookupTypeName(ambigName),
+                      child, "interface type", typeName);
+              if (interfaceNameOpt.isPresent()) {
+                interfaceNames.add(interfaceNameOpt.get());
               }
             }
             break;
           case TypeParameter:
             break;
           default:
-            Preconditions.checkState(child instanceof TypeScope);
+            Preconditions.checkState(
+                child instanceof TypeScope,
+                "%s in %s", child, node);
         }
       }
 
@@ -395,6 +398,7 @@ class DeclarationPass implements AbstractPass<Void> {
       switch (node.getNodeType()) {
         case NormalClassDeclaration:
         case NormalInterfaceDeclaration:
+        case TypeParameter:
           break;
         case AnnotationTypeDeclaration:
           interfaceNames.add(JAVA_LANG_ANNOTATION_ANNOTATION);
@@ -424,6 +428,25 @@ class DeclarationPass implements AbstractPass<Void> {
       if (DEBUG) {
         System.err.println("Resolved " + typeName);
       }
+    }
+
+    private Optional<Name> soleType(
+        Iterable<Name> results,
+        BaseNode source, String desc, Name declarationName) {
+      switch (Iterables.size(results)) {
+        case 0:
+          error(source, "Cannot resolve " + desc + " for " + declarationName);
+          break;
+        case 1:
+          return Optional.of(Iterables.getOnlyElement(results));
+        default:
+          error(
+              source,
+              "Ambiguous " + desc + " for " + declarationName + " : "
+              + Iterables.toString(results));
+          break;
+      }
+      return Optional.absent();
     }
   }
 
@@ -456,14 +479,14 @@ class DeclarationPass implements AbstractPass<Void> {
           this.currentPackage = toName(node, Type.PACKAGE);
           break;
         case SingleTypeImportDeclaration:
+          Name ambigName = toName(node, Type.AMBIGUOUS);
           ImmutableList<Name> importedTypes = ImmutableList.copyOf(
-              typeNameResolver.lookupTypeName(
-                  toName(node, Type.AMBIGUOUS)));
+              typeNameResolver.lookupTypeName(ambigName));
           switch (importedTypes.size()) {
             case 0:
               error(
                   node,
-                  "import of " + node.getTextContent(".")
+                  "import of " + ambigName.toDottedString()
                   + " does not resolve to a declared type");
               break;
             case 1:
@@ -472,7 +495,7 @@ class DeclarationPass implements AbstractPass<Void> {
             default:
               error(
                   node,
-                  "import of " + node.getTextContent(".")
+                  "import of " + ambigName.toDottedString()
                   + " is ambiguous: " + importedTypes);
           }
           break;

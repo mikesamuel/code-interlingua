@@ -174,13 +174,16 @@ public interface TypeNameResolver {
       }
 
       void disambiguate(Name ambigName) {
-        String ident = ambigName.identifier;
-        if (ambigName.parent == null) {
+        if (Name.DEFAULT_PACKAGE.equals(ambigName)) {
           unambiguous.add(Name.DEFAULT_PACKAGE);
           return;
+        }
+        if (ambigName.parent == null) {
+          unambiguous.add(Name.DEFAULT_PACKAGE);
         } else {
           disambiguate(ambigName.parent);
         }
+        String ident = ambigName.identifier;
         int parentStart = this.getParentStartIndex();
         int parentEnd = unambiguous.size();
         this.parentStartIndex = parentEnd;

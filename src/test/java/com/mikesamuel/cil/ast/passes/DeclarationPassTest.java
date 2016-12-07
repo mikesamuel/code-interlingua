@@ -2,7 +2,6 @@ package com.mikesamuel.cil.ast.passes;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Handler;
@@ -104,6 +103,37 @@ public class DeclarationPassTest extends TestCase {
     DeclarationPass dp = new DeclarationPass(logger);
     dp.run(cus);
 
+    {
+      List<String> unsatisfied = new ArrayList<>();
+      for (String expectedError : expectedErrors) {
+        Iterator<LogRecord> it = logRecords.iterator();
+        boolean found = false;
+        while (it.hasNext()) {
+          LogRecord r = it.next();
+          if (r.getMessage().contains(expectedError)) {
+            it.remove();
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          unsatisfied.add(expectedError);
+        }
+      }
+      if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
+        fail(
+            "Expected errors " + unsatisfied + "\ngot " +
+            Lists.transform(
+                logRecords,
+                new Function<LogRecord, String>() {
+                  @Override
+                  public String apply(LogRecord r) {
+                    return r.getMessage();
+                  }
+                }));
+      }
+    }
+
     StringBuilder sb = new StringBuilder();
     for (CompilationUnitNode cu : cus) {
       Iterable<Event> skeleton = SList.forwardIterable(
@@ -135,37 +165,6 @@ public class DeclarationPassTest extends TestCase {
     String want = sb.toString();
 
     assertEquals(want, got);
-
-    if (!logRecords.isEmpty()) {
-      List<String> unsatisfied = new ArrayList<>();
-      for (String expectedError : expectedErrors) {
-        Iterator<LogRecord> it = logRecords.iterator();
-        boolean found = false;
-        while (it.hasNext()) {
-          LogRecord r = it.next();
-          if (r.getMessage().contains(expectedError)) {
-            it.remove();
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          unsatisfied.add(expectedError);
-        }
-      }
-      if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
-        fail(
-            "Expected errors " + unsatisfied + "\ngot " +
-            Lists.transform(
-                logRecords,
-                new Function<LogRecord, String>() {
-                  @Override
-                  public String apply(LogRecord r) {
-                    return r.getMessage();
-                  }
-                }));
-      }
-    }
   }
 
   @Test
@@ -212,6 +211,8 @@ public class DeclarationPassTest extends TestCase {
             "package com.example;"
             + " // public /com/example/C extends /java/lang/Object",
             "public class C {}",
+          },
+          {
             "package com.example;"
             + " // public final /com/example/D extends /com/example/C",
             "public final class D extends C {}",
@@ -239,6 +240,8 @@ public class DeclarationPassTest extends TestCase {
             "package com.example;"
             + " // public final /com/example/D extends /com/example/C",
             "public final class D extends C {}",
+          },
+          {
             "package com.example;"
             + " // public /com/example/C extends /java/lang/Object",
             "public class C {}",
@@ -347,11 +350,52 @@ public class DeclarationPassTest extends TestCase {
 
   @Test
   public static void testAnonymousTypeInMethod() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "package foo;",
+            "import com.google.common.base.Supplier", ";",
+            "// /foo/C extends /java/lang/Object contains /foo/C.foo(1)$1",
+            "class C {",
+            "  public<// /foo/C.foo(1)<T> extends /java/lang/Object",
+            "  T> Supplier<T> foo(T x) {",
+            "    return",
+            "    // anonymous /foo/C.foo(1)$1"
+            + " extends /com/google/common/base/Supplier in /foo/C",
+            "    new Supplier<T> () { @Override public T get() { return x; } }",
+            "    ;",
+            "  }",
+            "}"
+          }
+        },
+        new String[][] {
+          {
+            "package foo;",
+            "import com.google.common.base.Supplier;",
+            "class C {",
+            "  public <T> Supplier<T> foo(T x) {",
+            "    return new Supplier<T>() {",
+            "      @Override public T get() { return x; }",
+            "    };",
+            "  }",
+            "}"
+          },
+        });
 
   }
 
   @Test
   public static void testAnonymousTypeInConstructor() throws Exception {
+
+  }
+
+  @Test
+  public static void testNamedTypeInMethod() throws Exception {
+
+  }
+
+  @Test
+  public static void testNamedTypeInConstructor() throws Exception {
 
   }
 

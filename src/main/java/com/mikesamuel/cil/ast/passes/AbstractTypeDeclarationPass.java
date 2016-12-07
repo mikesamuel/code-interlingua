@@ -79,7 +79,8 @@ abstract class AbstractTypeDeclarationPass<T> implements AbstractPass<T> {
         break;
       case TypeParameter:
         Name typeParameterName = outer.child(
-            n.firstChildWithType(NodeType.Identifier).getValue(),
+            n.firstChildWithType(NodeType.SimpleTypeName)
+             .firstChildWithType(NodeType.Identifier).getValue(),
             Name.Type.TYPE_PARAMETER);
         handleTypeDeclaration(s, (TypeDeclaration) n, typeParameterName, false);
         break;

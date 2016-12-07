@@ -114,6 +114,16 @@ implements TokenBreaker<SList<NodeVariant>> {
             return TokenBreak.SHOULD_NOT;
           }
           return TokenBreak.SHOULD;
+        case "<":
+          if (leftStack != null) {
+            switch (leftStack.x.getNodeType()) {
+              case TypeParameters: case TypeArguments:
+                return TokenBreak.SHOULD_NOT;
+              default:
+                break;
+            }
+          }
+          return TokenBreak.SHOULD;
         default:
           if (isBinaryOperator(left)) {
             return TokenBreak.SHOULD;
@@ -147,6 +157,16 @@ implements TokenBreaker<SList<NodeVariant>> {
             return TokenBreak.SHOULD;
           }
           break;
+        case "<": case ">":
+          if (rightStack != null) {
+            switch (rightStack.x.getNodeType()) {
+              case TypeParameters: case TypeArguments:
+                return TokenBreak.SHOULD_NOT;
+              default:
+                break;
+            }
+          }
+          return TokenBreak.SHOULD;
         default:
           if (isBinaryOperator(right)) {
             return TokenBreak.SHOULD;
