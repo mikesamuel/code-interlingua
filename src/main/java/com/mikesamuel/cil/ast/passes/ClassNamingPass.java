@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
@@ -55,7 +55,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
   @Override
   protected DeclarationsAndScopes getResult() {
-    Multimap<Name, Name> innerTypes = HashMultimap.create();
+    Multimap<Name, Name> innerTypes = ArrayListMultimap.create();
     for (Name declName : declaredTypes.keySet()) {
       Name outerTypeName = declName.getOuterType();
       if (outerTypeName != null) {
