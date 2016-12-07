@@ -388,7 +388,7 @@ class DeclarationPass implements AbstractPass<Void> {
               }
             }
             break;
-          case TypeParameter:
+          case TypeParameters:
             break;
           default:
             Preconditions.checkState(
