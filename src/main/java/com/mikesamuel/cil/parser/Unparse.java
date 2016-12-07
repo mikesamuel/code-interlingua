@@ -97,7 +97,11 @@ public final class Unparse {
 
         @Override
         public ParseState asParseState() {
-          return ps.withIndex(index);
+          // It's that index occurs before an ignorable token produced by a
+          // Trees.Decorator so advance index over any ignorable tokens.
+          int indexAfterIgnorables = Ignorables.scanPastIgnorablesFrom(
+              ps.input.content, index, null);
+          return ps.withIndex(indexAfterIgnorables);
         }
 
       };
