@@ -40,6 +40,8 @@ import com.mikesamuel.cil.parser.SourcePosition;
 class DeclarationPass implements AbstractPass<Void> {
   final Logger logger;
 
+  static final boolean DEBUG = false;
+
   DeclarationPass(Logger logger) {
     this.logger = logger;
   }
@@ -174,6 +176,12 @@ class DeclarationPass implements AbstractPass<Void> {
       if (resolver != null) {
         return resolver;
       }
+      if (DEBUG) {
+        System.err.println(
+            "Resolving scope " + ((BaseNode) scope).getSourcePosition() + " : "
+            + scope.getClass().getSimpleName());
+      }
+
       if (scope instanceof CompilationUnitNode) {
         resolver = resolverFor((CompilationUnitNode) scope);
       } else {
@@ -191,8 +199,9 @@ class DeclarationPass implements AbstractPass<Void> {
         for (UnresolvedTypeDeclaration typeInScope : scopeToDecls.get(scope)) {
           TypeInfo typeInfo = typeInScope.decl.getDeclaredTypeInfo();
           if (typeInfo.outerClass.isPresent()) {
+            Name outerClassName = typeInfo.outerClass.get();
             UnresolvedTypeDeclaration outerDecl =
-                internallyDefinedTypes.get(typeInfo.canonName);
+                internallyDefinedTypes.get(outerClassName);
             TypeInfo outerTypeInfo = outerDecl.decl.getDeclaredTypeInfo();
             resolve(outerDecl, loop);
             interfacesToInheritDeclarationsFrom.addAll(
@@ -247,6 +256,11 @@ class DeclarationPass implements AbstractPass<Void> {
 
       TypeNameResolver dupe = resolvedScopes.put(scope, resolver);
       Preconditions.checkState(dupe == null);
+      if (DEBUG) {
+        System.err.println(
+            "Resolved scope " + ((BaseNode) scope).getSourcePosition() + " : "
+            + scope.getClass().getSimpleName());
+      }
       return resolver;
     }
 
@@ -274,6 +288,10 @@ class DeclarationPass implements AbstractPass<Void> {
 
     private void doResolveDeclaration(
         UnresolvedTypeDeclaration d, Set<Name> loop) {
+      if (DEBUG) {
+        System.err.println("Resolving " + d.decl.getDeclaredTypeInfo().canonName
+            + " with loop=" + loop);
+      }
       TypeNameResolver nameResolver = resolverForScope(d.scope, loop);
 
       TypeDeclaration decl = d.decl;
@@ -401,6 +419,11 @@ class DeclarationPass implements AbstractPass<Void> {
           // Tentative until we figure out inheritance
           partialTypeInfo.innerClasses);
       d.decl.setDeclaredTypeInfo(typeInfo);
+      d.stage = Stage.RESOLVED;
+
+      if (DEBUG) {
+        System.err.println("Resolved " + typeName);
+      }
     }
   }
 

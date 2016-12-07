@@ -1,13 +1,21 @@
 package com.mikesamuel.cil.ast.passes;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import org.junit.Test;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
+import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.Java8Comments;
@@ -64,15 +72,36 @@ public class DeclarationPassTest extends TestCase {
 
   private static void assertDeclarations(
       String[][] expectedLines,
-      String[]... inputLines)
+      String[][] inputLines,
+      String... expectedErrors)
   throws UnparseVerificationException {
+    Logger logger = Logger.getAnonymousLogger();
+    logger.setUseParentHandlers(false);
+    List<LogRecord> logRecords = Lists.newArrayList();
+    logger.addHandler(new Handler() {
+
+      @Override
+      public void publish(LogRecord record) {
+        logRecords.add(record);
+      }
+
+      @Override
+      public void flush() {
+        // Ok
+      }
+
+      @Override
+      public void close() {
+        // Ok
+      }
+    });
+    logger.setLevel(Level.WARNING);
 
     List<CompilationUnitNode> cus = ClassNamingPassTest.parseCompilationUnits(
         inputLines
         );
 
-    DeclarationPass dp = new DeclarationPass(
-        Logger.getLogger(DeclarationPassTest.class.getName()));
+    DeclarationPass dp = new DeclarationPass(logger);
     dp.run(cus);
 
     StringBuilder sb = new StringBuilder();
@@ -90,7 +119,7 @@ public class DeclarationPassTest extends TestCase {
           SList.forwardIterable(serialized.get().output));
       FormattedSource fs = Unparse.format(verified);
       if (sb.length() != 0) {
-        sb.append("\n");
+        sb.append("\n\n");
       }
       sb.append(fs.code);
     }
@@ -106,6 +135,37 @@ public class DeclarationPassTest extends TestCase {
     String want = sb.toString();
 
     assertEquals(want, got);
+
+    if (!logRecords.isEmpty()) {
+      List<String> unsatisfied = new ArrayList<>();
+      for (String expectedError : expectedErrors) {
+        Iterator<LogRecord> it = logRecords.iterator();
+        boolean found = false;
+        while (it.hasNext()) {
+          LogRecord r = it.next();
+          if (r.getMessage().contains(expectedError)) {
+            it.remove();
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          unsatisfied.add(expectedError);
+        }
+      }
+      if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
+        fail(
+            "Expected errors " + unsatisfied + "\ngot " +
+            Lists.transform(
+                logRecords,
+                new Function<LogRecord, String>() {
+                  @Override
+                  public String apply(LogRecord r) {
+                    return r.getMessage();
+                  }
+                }));
+      }
+    }
   }
 
   @Test
@@ -194,6 +254,115 @@ public class DeclarationPassTest extends TestCase {
             "public class C {}"
           },
         });
+  }
+
+  @Test
+  public static void testInnerTypes() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "package foo;"
+            + " // /foo/C extends /java/lang/Object"
+            + " contains /foo/C$I, /foo/C$J",
+            "class C {"
+            + " // /foo/C$I extends /java/lang/Object in /foo/C",
+              "interface I {}"
+            + " // /foo/C$J extends /java/lang/Object in /foo/C",
+              "interface J {} }",
+          }
+        },
+        new String[][] {
+          {
+            "package foo;",
+            "class C {",
+            "  interface I {}",
+            "  interface J {}",
+            "}",
+          },
+        });
+  }
+
+  @Test
+  public static void testDuplicateTopLevelType() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "package foo;"
+            + " // /foo/C extends /java/lang/Object",
+            "class C {}",
+          },
+          {
+            "package foo;"
+            + " // /foo/C",
+            "class C {}",
+          }
+        },
+        new String[][] {
+          {
+            "//a.java",
+            "package foo;",
+            "class C {",
+            "}",
+          },
+          {
+            "//b.java",
+            "package foo;",
+            "class C {",
+            "}",
+          },
+        },
+        "Duplicate definition for /foo/C "
+        );
+  }
+
+  @Test
+  public static void testDuplicateInnerType() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "package foo;"
+            + " // /foo/C extends /java/lang/Object"
+            + " contains /foo/C$I",  // Only one mentioned as inner
+            "class C {"
+            + " // /foo/C$I extends /java/lang/Object in /foo/C",
+              "interface I {}"
+            // Actually resolved
+            + " // /foo/C$I in /foo/C",  // Partially resolved
+              "interface I {} }",
+          }
+        },
+        new String[][] {
+          {
+            "//Foo.java",
+            "package foo;",
+            "class C {",
+            "  interface I {}",
+            "  interface I {}",
+            "}",
+          },
+        },
+        "//Foo.java:5+3-17: Duplicate definition for /foo/C$I"
+        + " originally defined at //Foo.java:4+3-17");
+  }
+
+  @Test
+  public static void testAnonymousTypeInMethod() throws Exception {
+
+  }
+
+  @Test
+  public static void testAnonymousTypeInConstructor() throws Exception {
+
+  }
+
+  @Test
+  public static void testAnonymousTypesInOverloadedMethods() throws Exception {
+
+  }
+
+  @Test
+  public static void testConstructorWithTypeParameters() throws Exception {
+
   }
 
 }

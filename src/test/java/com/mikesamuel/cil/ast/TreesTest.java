@@ -106,8 +106,8 @@ public final class TreesTest extends TestCase {
     String golden = Joiner.on('\n').join(
         "FieldDeclaration.Declaration : test:1+1 - 2+23",
         "  JavaDocComment.Builtin /** In \u2124 */ : test:1+1-17",
-        "  FieldModifier.Public : test:2+1-7",
-        "  FieldModifier.Final : test:2+8-13",
+        "  Modifier.Public : test:2+1-7",
+        "  Modifier.Final : test:2+8-13",
         "  UnannType.NotAtType : test:2+14-20",
         "    Type.PrimitiveType : test:2+14-20",
         "      PrimitiveType.AnnotationNumericType : test:2+14-20",

@@ -34,15 +34,15 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
   protected void handleTypeDeclaration(
       TypeScope scope, TypeDeclaration d, Name name, boolean isAnonymous) {
     UnresolvedTypeDeclaration decl = new UnresolvedTypeDeclaration(scope, d);
-    UnresolvedTypeDeclaration dupe = declaredTypes.put(name, decl);
-    if (dupe != null) {
-      // TODO: Test this on
-      // class C { class I {} class I {} }
+    UnresolvedTypeDeclaration dupe = declaredTypes.get(name);
+    if (dupe == null) {
+      declaredTypes.put(name, decl);
+    } else {
       SourcePosition pos = ((BaseNode) d).getSourcePosition();
       SourcePosition opos = ((BaseNode) dupe.decl).getSourcePosition();
       logger.severe(
           (pos != null ? pos + ": " : "")
-          + "Duplicate definition for " + pos
+          + "Duplicate definition for " + name
           + (opos != null ? " originally defined at " + opos.toString() : "")
           );
     }
