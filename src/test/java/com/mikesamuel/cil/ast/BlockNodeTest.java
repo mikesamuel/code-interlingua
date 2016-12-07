@@ -32,8 +32,8 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
 
         push(BlockNode.Variant.LcBlockStatementsRc),
         token("{", -1),
-        push(
-            BlockStatementsNode.Variant.BlockStatementBlockStatement),
+        push(BlockStatementsNode.Variant
+            .BlockStatementBlockStatementBlockTypeScope),
         push(BlockStatementNode.Variant.Statement),
         push(StatementNode.Variant.EmptyStatement),
         push(EmptyStatementNode.Variant.Sem),
@@ -55,7 +55,8 @@ public final class BlockNodeTest extends AbstractParSerTestCase {
 
         push(BlockNode.Variant.LcBlockStatementsRc),
         token("{", -1),
-        push(BlockStatementsNode.Variant.BlockStatementBlockStatement),
+        push(BlockStatementsNode.Variant
+            .BlockStatementBlockStatementBlockTypeScope),
         push(BlockStatementNode.Variant.Statement),
         push(StatementNode.Variant.Block),
         push(BlockNode.Variant.LcBlockStatementsRc),

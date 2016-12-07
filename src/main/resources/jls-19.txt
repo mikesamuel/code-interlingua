@@ -529,7 +529,7 @@ ConstructorModifier:
      "private"
 ConstructorDeclarator:
      [TypeParameters] SimpleTypeName "(" [FormalParameterList] ")"
-ConstructorBody: (@trait=TypeScopeNoForward)
+ConstructorBody:
      "{" [ExplicitConstructorInvocation] [BlockStatements] "}"
 ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
@@ -653,13 +653,30 @@ VariableInitializerList:
 
 // Blocks and Statements
 (chapter=Statement)
-Block:(@trait=TypeScopeNoForward)
+Block:
      "{" [BlockStatements] "}"
 BlockStatements:
-     BlockStatement {BlockStatement}
+     // The JLS grammar originally was defined simply
+     //     BlockStatement {BlockStatement}
+     // and included ClassDeclaration among BlockStatement.
+     //
+     // Class declarations in blocks cannot be forward referenced, so in
+     //   static class C {}
+     //   static {
+     //     C x;  // The type C refers to the class C defined outside the block.
+     //     class C {}
+     //     C y;  // The rype C refers to the class C defined within the block.
+     //   }
+     // x and y have different types.
+     //
+     // Adding BlockTypeScope lets us maintain the invariant that each type
+     // defined in a TypeScope is visible to all type references in the scope
+     BlockStatement {BlockStatement} [BlockTypeScope]
+     BlockTypeScope
+BlockTypeScope: (@trait=TypeScope)
+     ClassDeclaration [BlockStatements]
 BlockStatement:
      LocalVariableDeclarationStatement
-     ClassDeclaration
      Statement
 LocalVariableDeclarationStatement:
      LocalVariableDeclaration ";"
@@ -703,7 +720,7 @@ SwitchStatement:
      "switch" "(" Expression ")" SwitchBlock
 SwitchBlock:
      "{" {SwitchBlockStatementGroup} "}"
-SwitchBlockStatementGroup:(@trait=TypeScopeNoForward)
+SwitchBlockStatementGroup:
      SwitchLabels [BlockStatements]
 SwitchLabels:
      SwitchLabel {SwitchLabel}

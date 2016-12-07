@@ -2741,7 +2741,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testBlockStatementsBlockStatementBlockStatement() {
     parseSanityCheck(
-        BlockStatementsNode.Variant.BlockStatementBlockStatement,
+        BlockStatementsNode.Variant.BlockStatementBlockStatementBlockTypeScope,
         "foo(); bar(); baz();"
         );
   }
@@ -2761,9 +2761,9 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>ClassDeclaration</pre>
    */
   @Test
-  public void testBlockStatementClassDeclaration() {
+  public void testBlockStatementsClassDeclaration() {
     parseSanityCheck(
-        BlockStatementNode.Variant.ClassDeclaration,
+        BlockStatementsNode.Variant.BlockTypeScope,
         "class Inner {}"
         );
   }

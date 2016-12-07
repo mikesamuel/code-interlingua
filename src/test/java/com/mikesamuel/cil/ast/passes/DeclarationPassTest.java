@@ -167,6 +167,47 @@ public class DeclarationPassTest extends TestCase {
     assertEquals(want, got);
   }
 
+
+  @Test
+  public static void testEmptyCompilationUnit() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+          }
+        },
+        new String[][] {
+          {
+          },
+        });
+
+    assertDeclarations(
+        new String[][] {
+          {
+            "package foo;",
+          }
+        },
+        new String[][] {
+          {
+            "package foo;",
+          },
+        });
+
+
+    assertDeclarations(
+        new String[][] {
+          {
+            "@java.lang.annotations.ParametersAreNonnullByDefault"
+            + " package foo;",
+          }
+        },
+        new String[][] {
+          {
+            "@java.lang.annotations.ParametersAreNonnullByDefault",
+            "package foo;",
+          },
+        });
+  }
+
   @Test
   public static void testOneClass() throws Exception {
     assertDeclarations(
@@ -466,22 +507,241 @@ public class DeclarationPassTest extends TestCase {
 
   @Test
   public static void testNamedTypeInMethod() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "// public /C extends /java/lang/Object contains /C.f(1)$R",
+            "public interface C {",
+            "  default void f()",
+            "  {",
+            "    // /C.f(1)$R extends /java/lang/Object"
+            +     " implements /java/lang/Runnable in /C",
+            "    class R implements Runnable { public void run() {} }",
+            "    (new R() ) .run();",
+            "  }",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "public interface C {",
+            "  default void f() {",
+            "    class R implements Runnable {",
+            "      public void run() {}",
+            "    }",
+            "    (new R()).run();",
+            "  }",
+            "}",
+          },
+        });
 
+  }
+
+
+  @Test
+  public static void testForwardDeclarationsInBlocks() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "// public /C extends /java/lang/Object"
+            + " contains /C.f(1)$E, /C.f(1)$D, /C.f(1)$F, /C$D",
+            "public class C {",
+            "  static Class[] f() {"
+            + " // /C.f(1)$E extends /C$D in /C",
+                "class E extends D {}"
+            + " // /C.f(1)$D extends /java/lang/Object in /C",
+                "class D {}"
+            + " // /C.f(1)$F extends /C.f(1)$D in /C",
+                "class F extends D {}"
+            +  " return new Class[] { E.class, F.class, };"
+            +" }",
+            "  // static /C$D extends /java/lang/Object in /C",
+            "  static class D {}",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "public class C {",
+            "",
+            "  static Class[] f() {",
+            "    class E extends D {}",
+            "    class D {}",
+            "    class F extends D {}",
+            "    return new Class[] { E.class, F.class };",
+            "  }",
+            "  static class D {}",
+            "}",
+          },
+        });
+  }
+
+  @Test
+  public static void testCyclicDeclarationsInBlocks() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            // TODO pull this example into the type reference resolution tests
+            // when they're written.
+            "// /C extends /java/lang/Object contains /C.f(1)$C",
+            "class C {",
+            "  public static C f(boolean sub) {",
+            "    if (!sub) { return new C(); }",  // This should resolve to /C
+            // Forward declaration rules do not prevent a class from referring
+            // to itself so this is the correct resolution even though this
+            // input is invalid due to class cycles.
+            "    // /C.f(1)$C extends /C.f(1)$C in /C",
+            "    class C extends C {}",
+            "    return new C();",  // This resolves to f(1)$C
+            "  }",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "class C {",
+            "  public static C f(boolean sub) {",
+            "    if (!sub) { return new C(); }",
+            "    class C extends C {}",
+            "    return new C();",
+            "  }",
+            "}",
+          },
+        });
   }
 
   @Test
   public static void testNamedTypeInConstructor() throws Exception {
-
+    assertDeclarations(
+        new String[][] {
+          {
+            "// public /C extends /java/lang/Object contains /C.<init>(1)$R",
+            "public class C {",
+            "  <// /C.<init>(1).<T> extends /java/lang/Object",
+            "  T> C()",
+            "  {",
+            "    // /C.<init>(1)$R extends /java/lang/Object"
+            +     " implements /java/lang/Runnable in /C",
+            "    class R implements Runnable { public void run() {} }",
+            "    (new R() ) .run();",
+            "  }",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "public class C {",
+            "  <T> C() {",
+            "    class R implements Runnable {",
+            "      public void run() {}",
+            "    }",
+            "    (new R()).run();",
+            "  }",
+            "}",
+          },
+        });
   }
 
   @Test
   public static void testAnonymousTypesInOverloadedMethods() throws Exception {
-
+    assertDeclarations(
+        new String[][] {
+          {
+            "import com.google.common.base.Supplier", ";",
+            "// /C extends /java/lang/Object contains /C.f(1)$1, /C.f(2)$1",
+            "class C {",
+            "  Supplier f(int i) {",
+            "    return",
+            "    // anonymous /C.f(1)$1 extends"
+            +     " /com/google/common/base/Supplier in /C",
+            "    new Supplier() { @Override public Object get() { return i; } }",
+            "    ;",
+            "  }",
+            "  Supplier f(float f) {",
+            "    return",
+            "    // anonymous /C.f(2)$1 extends"
+            +     " /com/google/common/base/Supplier in /C",
+            "    new Supplier() { @Override public Object get() { return f; } }",
+            "    ;",
+            "  }",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "import com.google.common.base.Supplier;",
+            "class C {",
+            "  Supplier f(int i) {",
+            "    return new Supplier() {",
+            "      @Override public Object get() { return i; }",
+            "    };",
+            "  }",
+            "  Supplier f(float f) {",
+            "    return new Supplier() {",
+            "      @Override public Object get() { return f; }",
+            "    };",
+            "  }",
+            "}",
+          },
+        });
   }
 
   @Test
-  public static void testConstructorWithTypeParameters() throws Exception {
+  public static void testForwardReferenceToTypeParameter() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "// /Bar extends /java/lang/Object contains /Bar$T",
+            "class Bar {"
+            + " // static /Bar$T extends /java/lang/Object in /Bar",
+            "static class T {} "
+            + "static<"
+            + "// /Bar.f(1).<P> extends /Bar.f(1).<T>",
+            "P extends T, "
+            + "// /Bar.f(1).<T> extends /java/lang/CharSequence",
+            "T extends CharSequence> void f() {} "
+            + "}",
+          }
+        },
+        new String[][] {
+          {
+            "class Bar {",
+            "  static class T {}",
+            "  static <P extends T, T extends CharSequence> void f() {}",
+            "}",
+          },
+        });
+  }
 
+
+  @Test
+  public static void testSelfReferenceToTypeParameter() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "// public /Foo extends /java/lang/Object",
+            "public class Foo<"
+            + "// /Foo.<T> extends /java/lang/Object",
+            "T> {"
+            + " <"
+            // Illegal cyclic reference but correct from a scoping point of
+            // view.
+            // This scoping is necessary so that declarations like
+            //   <T extends Comparable<T>>
+            //   <E extends Enum<E>>
+            // work properly.
+            + "// /Foo.f(1).<T> extends /Foo.f(1).<T>",
+            "T extends T> void f(T x) {} "
+            + "}",
+          }
+        },
+        new String[][] {
+          {
+            "public class Foo<T> {",
+            "  <T extends T> void f(T x) {}",
+            "}",
+          },
+        });
   }
 
 }

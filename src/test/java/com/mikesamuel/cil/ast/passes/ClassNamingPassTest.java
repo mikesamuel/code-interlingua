@@ -186,10 +186,12 @@ public final class ClassNamingPassTest extends TestCase {
       String[]... linesPerFile) {
     ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
     for (String[] lines : linesPerFile) {
-      Input inp = Input.builder()
-          .code(Joiner.on('\n').join(lines))
-          .source(lines[0])
-          .build();
+      Input.Builder inputBuilder = Input.builder()
+          .code(Joiner.on('\n').join(lines));
+      if (lines.length != 0) {
+        inputBuilder.source(lines[0]);
+      }
+      Input inp = inputBuilder.build();
       ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
           .parse(new ParseState(inp), new LeftRecursion(),
               ParseErrorReceiver.DEV_NULL);

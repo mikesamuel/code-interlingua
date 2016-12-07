@@ -53,7 +53,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "Block.LcBlockStatementsRc",
         "  TemplateDirectives.TemplateDirectives",
         "    TemplateDirective.BlockStart",
-        "  BlockStatements.BlockStatementBlockStatement",
+        "  BlockStatements.BlockStatementBlockStatementBlockTypeScope",
         "    BlockStatement.Statement",
         "      Statement.EmptyStatement",
         "        EmptyStatement.Sem",
@@ -67,7 +67,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         PTree.complete(NodeType.BlockStatements),
         "int x; <% { %><% let s = \"foo\"; %> int <% s %>; <% } %> continue;",
 
-        "BlockStatements.BlockStatementBlockStatement",
+        "BlockStatements.BlockStatementBlockStatementBlockTypeScope",
         "  BlockStatement.LocalVariableDeclarationStatement",
         "    LocalVariableDeclarationStatement.LocalVariableDeclarationSem",
         "      LocalVariableDeclaration.Declaration",
