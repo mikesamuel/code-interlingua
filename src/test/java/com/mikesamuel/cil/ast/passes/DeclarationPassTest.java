@@ -45,7 +45,7 @@ public class DeclarationPassTest extends TestCase {
         TypeDeclaration td = (TypeDeclaration) node;
         TypeInfo ti = td.getDeclaredTypeInfo();
         if (ti != null) {
-          return Java8Comments.lineComment(
+          return Java8Comments.blockComment(
               (
                   Modifier.toString(ti.modifiers)
                   + (ti.isAnonymous ? " anonymous" : "")
@@ -61,7 +61,8 @@ public class DeclarationPassTest extends TestCase {
                       ? "" : " contains "
                           + Joiner.on(", ").join(ti.innerClasses))
               )
-              .trim());
+              .trim(),
+              false);
         }
       }
       return null;
@@ -213,8 +214,9 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "package foo; // /foo/C extends /java/lang/Object",
-            "class C {}",
+            "package foo;"
+            + " /* /foo/C extends /java/lang/Object */"
+            + "class C {}",
           }
         },
         new String[][] {
@@ -230,8 +232,8 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// /C extends /java/lang/Object",
-            "class C {}",
+            "/* /C extends /java/lang/Object */"
+            + "class C {}",
           }
         },
         new String[][] {
@@ -247,9 +249,9 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// /C extends /Object",
-            "class C extends Object {}"
-            + " // /Object extends /java/lang/Object",
+            "/* /C extends /Object */",
+            "class C extends Object {}",
+            "/* /Object extends /java/lang/Object */",
             "class Object {}",
           }
         },
@@ -267,8 +269,8 @@ public class DeclarationPassTest extends TestCase {
         new String[][] {
           {
             "package foo.bar", ";",  // TODO: why split line before ";"?
-            "// /foo/bar/I extends /java/lang/Object"
-            + " implements /java/lang/Runnable",
+            "/* /foo/bar/I extends /java/lang/Object"
+            + " implements /java/lang/Runnable */",
             "interface I extends Runnable {}",
           }
         },
@@ -285,13 +287,13 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "package com.example;"
-            + " // public /com/example/C extends /java/lang/Object",
+            "package com.example;",
+            "/* public /com/example/C extends /java/lang/Object */",
             "public class C {}",
           },
           {
-            "package com.example;"
-            + " // public final /com/example/D extends /com/example/C",
+            "package com.example;",
+            "/* public final /com/example/D extends /com/example/C */",
             "public final class D extends C {}",
           }
         },
@@ -314,13 +316,13 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "package com.example;"
-            + " // public final /com/example/D extends /com/example/C",
+            "package com.example;",
+            "/* public final /com/example/D extends /com/example/C */",
             "public final class D extends C {}",
           },
           {
-            "package com.example;"
-            + " // public /com/example/C extends /java/lang/Object",
+            "package com.example;",
+            "/* public /com/example/C extends /java/lang/Object */",
             "public class C {}",
           }
         },
@@ -341,14 +343,15 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "package foo;"
-            + " // /foo/C extends /java/lang/Object"
-            + " contains /foo/C$I, /foo/C$J",
-            "class C { "
-            + "// /foo/C$I extends /java/lang/Object in /foo/C",
-            "  interface I {} "
-            + "// /foo/C$J extends /java/lang/Object in /foo/C",
-            "  interface J {} }",
+            "package foo;",
+            "/* /foo/C extends /java/lang/Object"
+            + " contains /foo/C$I, /foo/C$J */",
+            "class C {",
+            "  /* /foo/C$I extends /java/lang/Object in /foo/C */",
+            "  interface I {}",
+            "  /* /foo/C$J extends /java/lang/Object in /foo/C */",
+            "  interface J {}",
+            "}",
           }
         },
         new String[][] {
@@ -368,13 +371,13 @@ public class DeclarationPassTest extends TestCase {
         new String[][] {
           {
             "package foo;"
-            + " // /foo/C extends /java/lang/Object",
-            "class C {}",
+            + " /* /foo/C extends /java/lang/Object */"
+            + "class C {}",
           },
           {
             "package foo;"
-            + " // /foo/C",
-            "class C {}",
+            + " /* /foo/C */"
+            + "class C {}",
           }
         },
         new String[][] {
@@ -400,15 +403,15 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "package foo;"
-            + " // /foo/C extends /java/lang/Object"
-            + " contains /foo/C$I",  // Only one mentioned as inner
-            "class C { "
-            + "// /foo/C$I extends /java/lang/Object in /foo/C",
-            "  interface I {} "
-            // Actually resolved
-            + "// /foo/C$I in /foo/C",  // Partially resolved
-            "  interface I {} }",
+            "package foo;",
+            "/* /foo/C extends /java/lang/Object"
+            + " contains /foo/C$I */",  // Only one mentioned as inner
+            "class C {",
+            "  /* /foo/C$I extends /java/lang/Object in /foo/C */",  // Resolved
+            "  interface I {}",
+            "  /* /foo/C$I in /foo/C */",  // Partially resolved
+            "  interface I {}",
+            "}",
           }
         },
         new String[][] {
@@ -432,13 +435,14 @@ public class DeclarationPassTest extends TestCase {
           {
             "package foo;",
             "import com.google.common.base.Supplier", ";",
-            "// /foo/C extends /java/lang/Object contains /foo/C.foo(1)$1",
+            "/* /foo/C extends /java/lang/Object contains /foo/C.foo(1)$1 */",
             "class C {",
-            "  public <// /foo/C.foo(1).<T> extends /java/lang/Object",
+            "  public <",
+            "  /* /foo/C.foo(1).<T> extends /java/lang/Object */",
             "  T> Supplier<T> foo(T x) {",
             "    return",
-            "    // anonymous /foo/C.foo(1)$1"
-            + " extends /com/google/common/base/Supplier in /foo/C",
+            "    /* anonymous /foo/C.foo(1)$1"
+            +     " extends /com/google/common/base/Supplier in /foo/C */",
             "    new Supplier<T> () { @Override public T get() { return x; } }",
             "    ;",
             "  }",
@@ -469,16 +473,17 @@ public class DeclarationPassTest extends TestCase {
             "package foo;",
             "import java.io.Serializable;",
             "import java.util.*;",
-            "// /foo/C extends /java/lang/Object contains /foo/C.<init>(1)$1",
+            "/* /foo/C extends /java/lang/Object contains /foo/C.<init>(1)$1 */",
             "class C {",
             "  public",
-            "  <// /foo/C.<init>(1).<T> extends /java/lang/Comparable"
-            + " implements /java/io/Serializable",
+            "  <",
+            "  /* /foo/C.<init>(1).<T> extends /java/lang/Comparable"
+            +   " implements /java/io/Serializable */",
             "  T extends Comparable<T> & Serializable> C(T x) {",
             "    super",
-            "    ("
-            +    "// anonymous /foo/C.<init>(1)$1 extends /java/util/Map$Entry"
-            +      " in /foo/C",
+            "    (",
+            "        /* anonymous /foo/C.<init>(1)$1"
+            +         " extends /java/util/Map$Entry in /foo/C */",
             "        new Map.Entry<T, T> () {",
             "          @Override public T getKey() { return x; }",
             "          @Override public T getValue() { return x; }",
@@ -510,12 +515,12 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// public /C extends /java/lang/Object contains /C.f(1)$R",
+            "/* public /C extends /java/lang/Object contains /C.f(1)$R */",
             "public interface C {",
             "  default void f()",
             "  {",
-            "    // /C.f(1)$R extends /java/lang/Object"
-            +     " implements /java/lang/Runnable in /C",
+            "    /* /C.f(1)$R extends /java/lang/Object"
+            +     " implements /java/lang/Runnable in /C */",
             "    class R implements Runnable { public void run() {} }",
             "    (new R() ) .run();",
             "  }",
@@ -543,19 +548,20 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// public /C extends /java/lang/Object"
-            + " contains /C.f(1)$E, /C.f(1)$D, /C.f(1)$F, /C$D",
+            "/* public /C extends /java/lang/Object"
+            + " contains /C.f(1)$E, /C.f(1)$D, /C.f(1)$F, /C$D */",
             "public class C {",
-            "  static Class[] f() {"
-            +  " // /C.f(1)$E extends /C$D in /C",
-            "    class E extends D {}"
-            +  " // /C.f(1)$D extends /java/lang/Object in /C",
-            "    class D {}"
-            +  " // /C.f(1)$F extends /C.f(1)$D in /C",
-            "    class F extends D {}"
-            +  " return new Class[] { E.class, F.class, };"
-            +" }",
-            "  // static /C$D extends /java/lang/Object in /C",
+            "  static Class[] f() {",
+            "    /* /C.f(1)$E extends /C$D in /C */",
+            "    class E extends D {}",
+            "    /* /C.f(1)$D extends /java/lang/Object in /C */",
+            "    class D {}",
+            "    /* /C.f(1)$F extends /C.f(1)$D in /C */",
+            "    class F extends D {}",
+            "    return new Class[] { E.class, F.class, }",
+            "    ;",  // TODO
+            "  }",
+            "  /* static /C$D extends /java/lang/Object in /C */",
             "  static class D {}",
             "}",
           }
@@ -583,14 +589,14 @@ public class DeclarationPassTest extends TestCase {
           {
             // TODO pull this example into the type reference resolution tests
             // when they're written.
-            "// /C extends /java/lang/Object contains /C.f(1)$C",
+            "/* /C extends /java/lang/Object contains /C.f(1)$C */",
             "class C {",
             "  public static C f(boolean sub) {",
             "    if (!sub) { return new C(); }",  // This should resolve to /C
             // Forward declaration rules do not prevent a class from referring
             // to itself so this is the correct resolution even though this
             // input is invalid due to class cycles.
-            "    // /C.f(1)$C extends /C.f(1)$C in /C",
+            "    /* /C.f(1)$C extends /C.f(1)$C in /C */",
             "    class C extends C {}",
             "    return new C();",  // This resolves to f(1)$C
             "  }",
@@ -615,13 +621,14 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// public /C extends /java/lang/Object contains /C.<init>(1)$R",
+            "/* public /C extends /java/lang/Object contains /C.<init>(1)$R */",
             "public class C {",
-            "  <// /C.<init>(1).<T> extends /java/lang/Object",
+            "  <",
+            "  /* /C.<init>(1).<T> extends /java/lang/Object */",
             "  T> C()",
             "  {",
-            "    // /C.<init>(1)$R extends /java/lang/Object"
-            +     " implements /java/lang/Runnable in /C",
+            "    /* /C.<init>(1)$R extends /java/lang/Object"
+            +     " implements /java/lang/Runnable in /C */",
             "    class R implements Runnable { public void run() {} }",
             "    (new R() ) .run();",
             "  }",
@@ -648,19 +655,19 @@ public class DeclarationPassTest extends TestCase {
         new String[][] {
           {
             "import com.google.common.base.Supplier", ";",
-            "// /C extends /java/lang/Object contains /C.f(1)$1, /C.f(2)$1",
+            "/* /C extends /java/lang/Object contains /C.f(1)$1, /C.f(2)$1 */",
             "class C {",
             "  Supplier f(int i) {",
             "    return",
-            "    // anonymous /C.f(1)$1 extends"
-            +     " /com/google/common/base/Supplier in /C",
+            "    /* anonymous /C.f(1)$1 extends"
+            +     " /com/google/common/base/Supplier in /C */",
             "    new Supplier() { @Override public Object get() { return i; } }",
             "    ;",
             "  }",
             "  Supplier f(float f) {",
             "    return",
-            "    // anonymous /C.f(2)$1 extends"
-            +     " /com/google/common/base/Supplier in /C",
+            "    /* anonymous /C.f(2)$1 extends"
+            +     " /com/google/common/base/Supplier in /C */",
             "    new Supplier() { @Override public Object get() { return f; } }",
             "    ;",
             "  }",
@@ -691,16 +698,16 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// /Bar extends /java/lang/Object contains /Bar$T",
-            "class Bar {"
-            + " // static /Bar$T extends /java/lang/Object in /Bar",
-            "  static class T {} "
-            + "static <"
-            + "// /Bar.f(1).<P> extends /Bar.f(1).<T>",
-            "  P extends T, "
-            + "// /Bar.f(1).<T> extends /java/lang/CharSequence",
-            "  T extends CharSequence> void f() {} "
-            + "}",
+            "/* /Bar extends /java/lang/Object contains /Bar$T */",
+            "class Bar {",
+            "  /* static /Bar$T extends /java/lang/Object in /Bar */",
+            "  static class T {}",
+            "  static <",
+            "  /* /Bar.f(1).<P> extends /Bar.f(1).<T> */",
+            "  P extends T,",
+            "  /* /Bar.f(1).<T> extends /java/lang/CharSequence */",
+            "  T extends CharSequence> void f() {}",
+            "}",
           }
         },
         new String[][] {
@@ -719,9 +726,9 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "// public /Foo extends /java/lang/Object",
-            "public class Foo<"
-            + "// /Foo.<T> extends /java/lang/Object",
+            "/* public /Foo extends /java/lang/Object */",
+            "public class Foo<",
+            "/* /Foo.<T> extends /java/lang/Object */",
             "T> {"
             + " <"
             // Illegal cyclic reference but correct from a scoping point of
@@ -730,8 +737,8 @@ public class DeclarationPassTest extends TestCase {
             //   <T extends Comparable<T>>
             //   <E extends Enum<E>>
             // work properly.
-            + "// /Foo.f(1).<T> extends /Foo.f(1).<T>",
-            "  T extends T> void f(T x) {} "
+            + "/* /Foo.f(1).<T> extends /Foo.f(1).<T> */"
+            + "T extends T> void f(T x) {} "
             + "}",
           }
         },
