@@ -278,6 +278,15 @@ public final class Name {
         break;
       case TYPE_PARAMETER:
         before = "<";
+        if (parent != null) {
+          switch (parent.type) {
+            case PACKAGE:
+              break;
+            default:
+              before = ".<";
+              break;
+          }
+        }
         after = ">";
         break;
     }
