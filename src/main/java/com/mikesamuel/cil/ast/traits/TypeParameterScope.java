@@ -13,7 +13,7 @@ import com.mikesamuel.cil.ast.TypeParametersNode;
 /**
  * A scope for {@link TypeParametersNode type parameters}.
  */
-public interface TypeParameterScope extends TypeScopeNoForward {
+public interface TypeParameterScope extends TypeScope {
 
   /**
    * The declared type parameters if any.
