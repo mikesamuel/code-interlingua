@@ -272,20 +272,23 @@ class DeclarationPass implements AbstractPass<Void> {
       ic.collectImports(cu);
       TypeNameResolver typeNameResolver =
           TypeNameResolver.Resolvers.eitherOr(
-              TypeNameResolver.Resolvers.eitherOr(
+              // Full names trump all others and any ambiguities among them need
+              // to be reported.
               TypeNameResolver.Resolvers
               .unqualifiedNameToQualifiedTypeResolver(
                   ic.getStaticTypeImports(), logger),
 
-              TypeNameResolver.Resolvers
-              .wildcardLookup(ic.getWildcardTypeImports(), canonicalizer)
-              ),
-          TypeNameResolver.Resolvers
-              .wildcardLookup(ImmutableList.of(
-                  ic.getCurrentPackage(), JAVA_LANG),
-                  canonicalizer)
-          );
+              // Stuff in the same package trumps wildcard imports.
+              TypeNameResolver.Resolvers.wildcardLookup(
+                  ImmutableList.of(ic.getCurrentPackage()), canonicalizer),
 
+              // Explicit wildcard imports trump implicit imports.
+              TypeNameResolver.Resolvers.wildcardLookup(
+                  ic.getWildcardTypeImports(), canonicalizer),
+
+              // java.lang.* is implicitly visible.
+              TypeNameResolver.Resolvers.wildcardLookup(
+                  ImmutableList.of(JAVA_LANG), canonicalizer));
       return typeNameResolver;
     }
 

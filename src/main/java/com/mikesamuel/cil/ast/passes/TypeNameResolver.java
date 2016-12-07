@@ -374,19 +374,25 @@ public interface TypeNameResolver {
     }
 
     /**
-     * Handles type name masking by falling back to the second resolver only
-     * if no results are found for the first.
+     * Handles type name masking by falling back to later resolvers only
+     * if no results are found for the preceding.
      */
     public static TypeNameResolver eitherOr(
-        TypeNameResolver a, TypeNameResolver b) {
+        TypeNameResolver a, TypeNameResolver... rest) {
+      ImmutableList<TypeNameResolver> resolvers =
+          ImmutableList.<TypeNameResolver>builder()
+          .add(a)
+          .add(rest)
+          .build();
       return new TypeNameResolver() {
 
         @Override
         public Iterable<Name> lookupTypeName(Name ambiguousName) {
-          Iterable<Name> aNames = a.lookupTypeName(ambiguousName);
-          return Iterables.isEmpty(aNames)
-              ? b.lookupTypeName(ambiguousName)
-              : aNames;
+          for (TypeNameResolver r : resolvers) {
+            Iterable<Name> names = r.lookupTypeName(ambiguousName);
+            if (!Iterables.isEmpty(names)) { return names; }
+          }
+          return ImmutableList.of();
         }
 
       };

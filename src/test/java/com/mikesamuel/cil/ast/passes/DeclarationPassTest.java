@@ -185,6 +185,42 @@ public class DeclarationPassTest extends TestCase {
   }
 
   @Test
+  public static void testOneTypeInDefaultPackage() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "// /C extends /java/lang/Object",
+            "class C {}",
+          }
+        },
+        new String[][] {
+          {
+            "class C {}"
+          },
+        });
+  }
+
+  @Test
+  public static void testTypeInDefaultPackageResolvedWhenMasksJavaLang()
+  throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "// /C extends /Object",
+            "class C extends Object {}"
+            + " // /Object extends /java/lang/Object",
+            "class Object {}",
+          }
+        },
+        new String[][] {
+          {
+            "class C extends Object {}",
+            "class Object {}",  // Masks java.lang.Object
+          },
+        });
+  }
+
+  @Test
   public static void testOneInterface() throws Exception {
     assertDeclarations(
         new String[][] {
@@ -357,7 +393,7 @@ public class DeclarationPassTest extends TestCase {
             "import com.google.common.base.Supplier", ";",
             "// /foo/C extends /java/lang/Object contains /foo/C.foo(1)$1",
             "class C {",
-            "  public<// /foo/C.foo(1)<T> extends /java/lang/Object",
+            "  public<// /foo/C.foo(1).<T> extends /java/lang/Object",
             "  T> Supplier<T> foo(T x) {",
             "    return",
             "    // anonymous /foo/C.foo(1)$1"
@@ -386,7 +422,46 @@ public class DeclarationPassTest extends TestCase {
 
   @Test
   public static void testAnonymousTypeInConstructor() throws Exception {
-
+    assertDeclarations(
+        new String[][] {
+          {
+            "package foo;",
+            "import java.io.Serializable;",
+            "import java.util.*;",
+            "// /foo/C extends /java/lang/Object contains /foo/C.<init>(1)$1",
+            "class C {",
+            "  public",
+            "  <// /foo/C.<init>(1).<T> extends /java/lang/Comparable"
+            + " implements /java/io/Serializable",
+            "  T extends Comparable<T> & Serializable> C(T x) {",
+            "    super",
+            "    ("
+            +    "// anonymous /foo/C.<init>(1)$1 extends /java/util/Map$Entry"
+            +      " in /foo/C",
+            "        new Map.Entry<T, T> () {",
+            "          @Override public T getKey() { return x; }",
+            "          @Override public T getValue() { return x; }",
+            "        }",
+            "    );",
+            "  }",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "package foo;",
+            "import java.io.Serializable;",
+            "import java.util.*;",
+            "class C {",
+            "  public <T extends Comparable<T> & Serializable> C(T x) {",
+            "    super(new Map.Entry<T, T>() {",
+            "      @Override public T getKey() { return x; }",
+            "      @Override public T getValue() { return x; }",
+            "    });",
+            "  }",
+            "}",
+          },
+        });
   }
 
   @Test
