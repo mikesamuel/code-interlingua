@@ -157,7 +157,12 @@ implements TokenBreaker<SList<NodeVariant>> {
             return TokenBreak.SHOULD;
           }
           break;
-        case "<": case ">":
+        case "<":
+          if (isKeyword(left)) {
+            return TokenBreak.SHOULD;
+          }
+          //$FALL-THROUGH$
+        case ">":
           if (rightStack != null) {
             switch (rightStack.x.getNodeType()) {
               case TypeParameters: case TypeArguments:

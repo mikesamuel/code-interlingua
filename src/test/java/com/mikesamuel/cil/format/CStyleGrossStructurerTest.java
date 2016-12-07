@@ -28,6 +28,25 @@ public final class CStyleGrossStructurerTest extends TestCase {
   }
 
   @Test
+  public void testPackageThenClass() throws Exception {
+    assertReformattedJava(
+        ""
+        + "package foo.bar;\n"
+        + "interface I extends Runnable {}");
+  }
+
+  @Test
+  public void testTypeParameters() throws Exception {
+    assertReformattedJava(
+        ""
+        + "class Bar {\n"
+        + "  static class T {}\n"
+        + "  static <P extends T, T> void f() {}\n"
+        + "}");
+  }
+
+
+  @Test
   public void testSimpleClass() throws Exception {
     assertReformattedJava("class C {}", "class C {}");
   }
@@ -81,6 +100,11 @@ public final class CStyleGrossStructurerTest extends TestCase {
         "Foo", ".", "bar", ".", "baz", ".", "boo", ".", "far", ".", "faz",
         "(", "argument", ",", "argument", ")", ";",
         "}");
+  }
+
+  private void assertReformattedJava(String canon)
+  throws Exception {
+    assertReformattedJava(canon, canon, NodeType.CompilationUnit);
   }
 
   private void assertReformattedJava(String want, String input)

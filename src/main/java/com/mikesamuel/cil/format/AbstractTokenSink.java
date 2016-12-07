@@ -10,7 +10,7 @@ import com.google.common.collect.Lists;
  */
 public abstract class AbstractTokenSink implements TokenSink {
   private int line = 1;
-  /** Index past last linebreak in sb or 0 if no such index. */
+  /** Index past last linebreak in the output buffer or 0 if no such index. */
   private int startOfLine;
   private final List<Integer> indentStack = Lists.newArrayList();
   private boolean needSpace, needNewline;
@@ -151,8 +151,11 @@ public abstract class AbstractTokenSink implements TokenSink {
       }
       needNewline = false;
       needSpace = false;
+    }
+    if (atStartOfLine()) {
       int indent = this.indentation();
       appendSpaceChars(' ', indent);
+      needSpace = false;
     }
     if (needSpace) {
       if (!atStartOfLine()) {
