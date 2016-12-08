@@ -287,11 +287,11 @@ ClassOrInterfaceType:
      ContextFreeNames
      ClassType
      InterfaceType
-ClassType:
+ClassType: (@trait=TypeReference)
      ContextFreeNames
      ClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
      {Annotation} Identifier [TypeArguments]
-InterfaceType:
+InterfaceType: (@trait=TypeReference)
      ClassType
 TypeVariable:
      {Annotation} Identifier
@@ -348,7 +348,7 @@ MethodName:
      Identifier
 SimpleTypeName:
      Identifier
-TypeName:
+TypeName: (@trait=TypeReference)
      !"@" ContextFreeNames
      PackageOrTypeName "." Identifier
      Identifier
