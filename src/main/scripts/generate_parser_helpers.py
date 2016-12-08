@@ -13,6 +13,9 @@ _TRAITS = {
     'TypeDeclaration': (
         (('TypeInfo', 'declaredTypeInfo'),),
         ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
+    'TypeReference': (
+        (('TypeInfo', 'referencedTypeInfo'),),
+        ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
     }
 
 _CUSTOM_NODE_CONTENT = {
@@ -1291,16 +1294,34 @@ public enum NodeType implements ParSerable {
             if annot_name.startswith('(@trait='):
                 traits.append(annot_name[8:-1])
 
+        # extra code for the Node body.
         extra_code = []
         custom_code, custom_code_imports = _CUSTOM_NODE_CONTENT.get(prod['name'], ('', ()))
         extra_code.append(custom_code)
         extra_imports.update(custom_code_imports)
+
+        builder_rtype = '%s.Builder' % node_class_name
+
+        # extra code for the custom builder body.
+        builder_code = []
+
+        # extra code for the custom builder's copyMetadataFrom method
+        builder_copy_code = []
+
+        # extra code for the custom builder's build method
+        builder_build_code = []
 
         for trait in traits:
             extra_imports.add('%s.traits.%s' % (_JAVA_PACKAGE, trait))
             trait_fields, trait_imports = _TRAITS.get(trait, ((), ()))
             extra_imports.update(trait_imports)
             for trait_type, trait_field in trait_fields:
+                record = {
+                    'trait_field': trait_field,
+                    'utrait_field': '%s%s' % (trait_field[0].upper(), trait_field[1:]),
+                    'trait_type': trait_type,
+                    'builder_rtype': builder_rtype,
+                }
                 extra_code.append(
                     ('  private %(trait_type)s %(trait_field)s;\n'
                      '\n'
@@ -1313,11 +1334,25 @@ public enum NodeType implements ParSerable {
                      '  public final %(trait_type)s get%(utrait_field)s() {\n'
                      '    return this.%(trait_field)s;\n'
                      '  }\n')
-                    % {
-                        'trait_field': trait_field,
-                        'utrait_field': '%s%s' % (trait_field[0].upper(), trait_field[1:]),
-                        'trait_type': trait_type,
-                    })
+                    % record)
+                builder_copy_code.append(
+                    ('        this.%(trait_field)s = source.get%(utrait_field)s();')
+                    % record
+                    )
+                builder_build_code.append(
+                    ('        newNode.set%(utrait_field)s(this.%(trait_field)s);')
+                    % record
+                    )
+                builder_code.append(
+                    ('      private %(trait_type)s %(trait_field)s;\n'
+                     '\n'
+                     '      /** Sets metadata for new instance. */\n'
+                     '      public final %(builder_rtype)s\n'
+                     '      set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
+                     '        this.%(trait_field)s = new%(utrait_field)s;\n'
+                     '        return this;\n'
+                     '      }\n'
+                    ) % record)
         trait_ifaces = ''
         if traits:
             trait_ifaces = '\nimplements %s' % (', '.join(traits))
@@ -1347,18 +1382,6 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
   }
 
 %(extra_code)s
-  /** Mutable builder type. */
-  static BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant>
-  builder(Variant v) {
-    return new BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant>(v) {
-      @Override
-      @SuppressWarnings("synthetic-access")
-      public %(node_class_name)s build() {
-        return new %(node_class_name)s(
-            getVariant(), %(builder_actuals)s);
-      }
-    };
-  }
 
   @Override
   public Variant getVariant() {
@@ -1393,13 +1416,40 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     public Lookahead1 getLookahead1() { return lookahead1; }
 
     @Override
-    public %(node_class_name)s.%(builder_kind)sBuilder<%(node_class_name)s, Variant> nodeBuilder() {
-      return %(node_class_name)s.builder(this);
+    public %(node_class_name)s.Builder nodeBuilder() {
+      @SuppressWarnings("synthetic-access")
+      %(node_class_name)s.Builder b = new %(node_class_name)s.Builder(this);
+      return b;
     }
 
     @Override
     public String toString() {
       return getNodeType().name() + "." + name();
+    }
+  }
+
+  /** A builder for %(node_class_name)ss */
+  public static final class Builder
+  extends BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant> {
+    private Builder(Variant v) {
+      super(v);
+    }
+
+%(builder_code)s
+
+    @Override
+    public Builder copyMetadataFrom(%(node_class_name)s source) {
+%(builder_copy_code)s
+      return this;
+    }
+
+    @Override
+    @SuppressWarnings("synthetic-access")
+    public %(node_class_name)s build() {
+      %(node_class_name)s newNode = new %(node_class_name)s(
+          getVariant(), %(builder_actuals)s);
+%(builder_build_code)s
+      return newNode;
     }
   }
 }
@@ -1417,6 +1467,9 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     'builder_kind': builder_kind,
     'builder_actuals': builder_actuals,
     'extra_code': '\n'.join(extra_code),
+    'builder_code': '\n'.join(builder_code),
+    'builder_copy_code': '\n'.join(builder_copy_code),
+    'builder_build_code': '\n'.join(builder_build_code),
     'trait_ifaces': trait_ifaces,
     })
 

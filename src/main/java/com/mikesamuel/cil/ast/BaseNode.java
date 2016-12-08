@@ -131,6 +131,9 @@ public abstract class BaseNode {
       return newNodeVariant;
     }
 
+    /** Any nodes built will have the same meta-data as the given node. */
+    public abstract Builder<N, V> copyMetadataFrom(N source);
+
     /** Builds a complete node. */
     public abstract N build();
   }
