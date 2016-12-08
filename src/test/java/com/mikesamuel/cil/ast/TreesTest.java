@@ -31,7 +31,7 @@ public final class TreesTest extends TestCase {
         Event.pop()));
 
     IdentifierNode want =
-        IdentifierNode.builder(IdentifierNode.Variant.Builtin)
+        IdentifierNode.Variant.Builtin.nodeBuilder()
         .leaf("foo")
         .build();
 
@@ -70,8 +70,8 @@ public final class TreesTest extends TestCase {
         Event.pop()
         ));
 
-    BaseNode want = ClassLiteralNode.builder(
-        ClassLiteralNode.Variant.NumericTypeDimDotClass)
+    BaseNode want =
+        ClassLiteralNode.Variant.NumericTypeDimDotClass.nodeBuilder()
         .add(
             NumericTypeNode.Variant.IntegralType.nodeBuilder()
             .add(
@@ -80,8 +80,8 @@ public final class TreesTest extends TestCase {
                 )
             .build()
             )
-        .add(DimNode.builder(DimNode.Variant.LsRs).build())
-        .add(DimNode.builder(DimNode.Variant.LsRs).build())
+        .add(DimNode.Variant.LsRs.nodeBuilder().build())
+        .add(DimNode.Variant.LsRs.nodeBuilder().build())
         .build();
 
     assertEquals(got.toString(), want.toString());
