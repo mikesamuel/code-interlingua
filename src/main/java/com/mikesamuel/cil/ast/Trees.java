@@ -12,6 +12,7 @@ import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Ignorables;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.ParSer;
+import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -70,6 +71,11 @@ public final class Trees {
     Preconditions.checkState(!it.hasNext());
 
     return root.nodes.get(0);
+  }
+
+  /** @see #of(Input, SList) */
+  public static BaseNode of(ParseState state) {
+    return of(state.input, state.output);
   }
 
   private static Tier buildTier(
@@ -256,7 +262,7 @@ public final class Trees {
     SList<Event> afterContent;
     if (value != null) {
       Preconditions.checkState(children.isEmpty());
-      int startIndex = node.getSourcePosition().startCharInFile();
+      int startIndex = pos != null ? pos.startCharInFile() : -1;
       afterContent = SList.append(
           beforeContent,
           variant.isIgnorable()
