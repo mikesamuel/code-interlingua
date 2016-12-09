@@ -104,13 +104,13 @@ public final class TypeNameResolverTest extends TestCase {
             .child("mikesamuel", Type.PACKAGE)
             .child("cil", Type.PACKAGE)
             .child("ast", Type.PACKAGE)
-            .child("passes", Type.PACKAGE)
+            .child("meta", Type.PACKAGE)
             .child("TypeNameResolverTest", Type.CLASS)
             .child("E", Type.CLASS)
             .child("1", Type.CLASS)
             ),
         lookupTypeName(
-            "com.mikesamuel.cil.ast.passes.TypeNameResolverTest.E.1"));
+            "com.mikesamuel.cil.ast.meta.TypeNameResolverTest.E.1"));
   }
 
   @Test
@@ -167,7 +167,7 @@ public final class TypeNameResolverTest extends TestCase {
             .child("mikesamuel", Type.PACKAGE)
             .child("cil", Type.PACKAGE)
             .child("ast", Type.PACKAGE)
-            .child("passes", Type.PACKAGE)
+            .child("meta", Type.PACKAGE)
             .child("TypeNameResolverTest", Type.CLASS)
             .child("Sub", Type.CLASS)
             .child("I", Type.CLASS)
