@@ -162,14 +162,18 @@ public final class Trees {
           tier.content = e.getContent();
           SourcePosition pos = makeSourcePosition(
               e.getContentIndex(), e.nCharsConsumed(), input);
-          tier.contentPosition = pos;
-          tier.updatePosition(pos);
+          if (pos != null) {
+            tier.contentPosition = pos;
+            tier.updatePosition(pos);
+          }
           break;
         }
         case TOKEN: {
           SourcePosition pos = makeSourcePosition(
               e.getContentIndex(), e.nCharsConsumed(), input);
-          tier.updatePosition(pos);
+          if (pos != null) {
+            tier.updatePosition(pos);
+          }
           break;
         }
         case IGNORABLE: {
@@ -180,7 +184,9 @@ public final class Trees {
             tier.content = e.getContent();
             tier.contentPosition = pos;
           }
-          tier.updatePosition(pos);
+          if (pos != null) {
+            tier.updatePosition(pos);
+          }
           break;
         }
         case DELAYED_CHECK:
