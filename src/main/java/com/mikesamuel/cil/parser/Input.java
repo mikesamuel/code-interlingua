@@ -3,8 +3,10 @@ package com.mikesamuel.cil.parser;
 import java.io.IOException;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharSource;
 import com.mikesamuel.cil.ast.NodeTypeTables;
+import com.mikesamuel.cil.event.Event;
 
 /**
  * A parser input.
@@ -63,6 +65,7 @@ public abstract class Input {
     return new Builder();
   }
 
+
   private static final class TextInput extends Input {
     private final DecodedContent content;
     /**
@@ -103,12 +106,41 @@ public abstract class Input {
   }
 
 
+  private static final class EventInput extends Input {
+    private final TokenAndContentText tokenAndContentText;
+
+    @SuppressWarnings("synthetic-access")
+    private EventInput(
+        String source, ImmutableList<Event> events,
+        boolean allowNonStandardProductions) {
+      super(source, allowNonStandardProductions);
+      this.tokenAndContentText = new TokenAndContentText(events);
+    }
+
+    @Override
+    public CharSequence content() {
+      return tokenAndContentText;
+    }
+
+    @Override
+    public SourcePosition getSourcePosition(int left, int right) {
+      return tokenAndContentText.getSourcePosition(left, right);
+    }
+
+    @Override
+    public SourcePosition getSourcePosition(int index) {
+      return tokenAndContentText.getSourcePosition(index);
+    }
+  }
+
+
   /**
    * A builder for inputs.
    */
   public static final class Builder {
     private String source = "unknown";
-    private String code = "";
+    private String code = null;
+    private ImmutableList<Event> events = null;
     private boolean allowNonStandardProductions = false;
 
     private Builder() {
@@ -117,17 +149,42 @@ public abstract class Input {
     /**
      * Specifies the code content.  Not additive.
      * @param codeSource read immediately.
+     * @throws IOException on failure to read from codeSource.
+     * @throws IllegalStateException if {@link #events(Iterable)} have been
+     *     specified.
      */
     public Builder code(CharSource codeSource) throws IOException {
-      this.code = codeSource.read();
+      return code(codeSource.read());
+    }
+
+    /**
+     * Specifies the code content.  Not additive.
+     *
+     * @throws IllegalStateException if {@link #events(Iterable)} have been
+     *     specified.
+     */
+    public Builder code(CharSequence codeChars) {
+      Preconditions.checkState(
+          events == null,
+          "At most one of code or events may be specified");
+      this.code = codeChars.toString();
       return this;
     }
 
     /**
+     * Specifies the content based on a series of events.
+     * Not additive.
      *
+     * @param newEvents whose {@linkplain Event#getContent() content} specifies
+     *     the tokens in the inputs.
+     *     This event stream should include {@link Event#positionMark}s that
+     *     can associate source positions with the parsed output.
      */
-    public Builder code(CharSequence codeChars) {
-      this.code = codeChars.toString();
+    public Builder events(Iterable<? extends Event> newEvents) {
+      Preconditions.checkState(
+          code == null,
+          "At most one of code or events may be specified");
+      this.events = ImmutableList.copyOf(newEvents);
       return this;
     }
 
@@ -153,7 +210,11 @@ public abstract class Input {
      */
     @SuppressWarnings("synthetic-access")
     public Input build() {
-      return new TextInput(source, code, allowNonStandardProductions);
+      if (events != null) {
+        return new EventInput(source, events, allowNonStandardProductions);
+      }
+      return new TextInput(
+          source, code != null ? code : "", allowNonStandardProductions);
     }
   }
 }

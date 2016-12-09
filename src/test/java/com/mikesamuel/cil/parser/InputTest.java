@@ -2,89 +2,71 @@ package com.mikesamuel.cil.parser;
 
 import org.junit.Test;
 
-import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.parser.Unparse.Verified;
 
 import junit.framework.TestCase;
 
 @SuppressWarnings("javadoc")
 public final class InputTest extends TestCase {
 
-  // TODO: Move this to IgnorablesTest.
+  private static BaseNode parse(ParSer ps, Input inp) {
+    ParseResult result = ps.parse(
+        new ParseState(inp), new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
+    assertEquals(
+        inp.content().toString(),
+        ParseResult.Synopsis.SUCCESS, result.synopsis);
+    return Trees.of(result.next());
+  }
 
-  @Test
-  public static void testTokenBreaks() {
-    String code = Joiner.on('\n').join(
-        "",
-        "package foo.bar.baz;",
-        "",
-        "  ",
-        "// Foo Bar Baz",
-        "",
-        "/** A jdoc comment */class Foo",
-        "extends/**/Bar{",
-        "  java.lang .",
-        "String s;",
-        "}");
+  private void reparseTextInputAsEventInput(ParSer ps, String input)
+      throws Exception {
+    Input textInput = Input.builder().source(getName()).code(input).build();
+    BaseNode root = parse(ps, textInput);
 
-    ImmutableList<String> want = ImmutableList.of(
-        "#\n",
-        "!package",
-        "# ",
-        "!foo.bar.baz;",
-        "#\n\n  \n// Foo Bar Baz\n\n/** A jdoc comment */",
-        "!class",
-        "# ",
-        "!Foo",
-        "#\n",
-        "!extends",
-        "#/**/",
-        "!Bar{",
-        "#\n  ",
-        "!java.lang",
-        "# ",
-        "!.",
-        "#\n",
-        "!String",
-        "# ",
-        "!s;",
-        "#\n",
-        "!}");
+    Optional<SerialState> afterReparse = ps.unparse(new SerialState(
+        SList.forwardIterable(Trees.startUnparse(null, root, null))),
+        SerialErrorReceiver.DEV_NULL);
+    assertTrue(afterReparse.isPresent());
+    Verified v = Unparse.verify(
+        SList.forwardIterable(afterReparse.get().output));
 
-    ImmutableList.Builder<String> gotBuilder = ImmutableList.builder();
+    Input eventsInput = Input.builder().events(v.events).build();
+    BaseNode reroot = parse(ps, eventsInput);
 
-    Input input = Input.builder().code(code).build();
-    StringBuilder token = new StringBuilder();
-    int parsed = 0;
-    CharSequence inputContent = input.content();
-    int limit = inputContent.length();
-    while (parsed < limit) {
-      int idx = input.indexAfterIgnorables(parsed);
-      int end;
-      if (idx != parsed) {
-        if (token.length() != 0) {
-          gotBuilder.add("!" + token);
-          token.setLength(0);
-        }
-        gotBuilder.add("#" + inputContent.subSequence(parsed, idx));
-        end = idx;
-      } else {
-        token.append(inputContent.charAt(idx));
-        end = idx + 1;
-      }
-      parsed = end;
-    }
-    if (token.length() != 0) {
-      gotBuilder.add("!" + token);
-      token.setLength(0);
+    if (!root.equals(reroot)) {
+      assertEquals(  // Dump string that diffs nicely in Eclipse.
+          root.toAsciiArt(""),
+          reroot.toAsciiArt(""));
+      fail();
     }
 
-    ImmutableList<String> got = gotBuilder.build();
-    if (!want.equals(got)) {
-      Joiner j = Joiner.on("\n======\n");
-      assertEquals(j.join(want), j.join(got));
-      assertEquals(want, got);
+    compareSourcePositionsRecursively(root, reroot);
+  }
+
+  private void compareSourcePositionsRecursively(BaseNode a, BaseNode b) {
+    SourcePosition apos = a.getSourcePosition();
+    SourcePosition bpos = b.getSourcePosition();
+    if (!(apos == null ? bpos == null : apos.equals(bpos))) {
+      assertEquals(a.getTextContent(" "), apos, bpos);
+    }
+
+    ImmutableList<BaseNode> achildren = a.getChildren();
+    ImmutableList<BaseNode> bchildren = b.getChildren();
+    int n = achildren.size();
+    assertEquals(bchildren.size(), n);  // Structure checked before entry.
+    for (int i = 0; i < n; ++i) {
+      compareSourcePositionsRecursively(achildren.get(i), bchildren.get(i));
     }
   }
 
+  @Test
+  public void testEventBasedInput() throws Exception {
+    reparseTextInputAsEventInput(
+        NodeType.Expression.getParSer(), "1 + 1 * 42 - x.y % 32");
+  }
 }

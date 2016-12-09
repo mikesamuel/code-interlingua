@@ -33,6 +33,18 @@ public final class SourcePosition {
   }
 
   /**
+   * A position that is shifted by the given number of characters within the
+   * file.
+   */
+  public SourcePosition shift(int delta) {
+    if (delta == 0) { return this; }
+    int newStartCharInFile = startCharInFile + delta;
+    Preconditions.checkArgument(newStartCharInFile >= 0);
+    return new SourcePosition(
+        starts, newStartCharInFile, endCharInFile + delta);
+  }
+
+  /**
    * File path, URI, or other diagnostic string describing the source of the
    * content.
    */
