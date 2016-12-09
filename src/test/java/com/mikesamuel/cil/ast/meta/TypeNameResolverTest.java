@@ -1,4 +1,4 @@
-package com.mikesamuel.cil.ast.passes;
+package com.mikesamuel.cil.ast.meta;
 
 import org.junit.After;
 import org.junit.Before;
@@ -6,6 +6,8 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
+import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.Name.Type;
 
 import junit.framework.TestCase;
