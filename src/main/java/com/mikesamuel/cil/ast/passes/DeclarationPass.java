@@ -36,6 +36,8 @@ import com.mikesamuel.cil.ast.TypeVariableNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.Name.Type;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
+import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
+import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -264,6 +266,7 @@ class DeclarationPass implements AbstractPass<Void> {
             "Resolved scope " + ((BaseNode) scope).getSourcePosition() + " : "
             + scope.getClass().getSimpleName());
       }
+      scope.setTypeNameResolver(resolver);
       return resolver;
     }
 

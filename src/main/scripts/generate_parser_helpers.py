@@ -10,13 +10,20 @@ _JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
 # Maps trait interfaces to metadata fields specified and imports required.
 _TRAITS = {
     'CallableDeclaration': ((('String', 'methodDescriptor'),), ()),
+    'NamePart': (
+        (('Name.Type', 'namePartType'),),
+        ('com.mikesamuel.cil.ast.meta.Name',)),
     'TypeDeclaration': (
         (('TypeInfo', 'declaredTypeInfo'),),
         ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
     'TypeReference': (
         (('TypeInfo', 'referencedTypeInfo'),),
         ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
+    'TypeScope': (
+        (('TypeNameResolver', 'typeNameResolver'),),
+        ('com.mikesamuel.cil.ast.meta.TypeNameResolver',)),
     }
+_TRAITS['TypeParameterScope'] = _TRAITS['TypeScope']
 
 _CUSTOM_NODE_CONTENT = {
     'ConstructorDeclaration': ('  @Override public String getMethodName() { return "<init>"; }', ()),

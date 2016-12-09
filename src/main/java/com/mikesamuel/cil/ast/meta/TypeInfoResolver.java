@@ -1,4 +1,4 @@
-package com.mikesamuel.cil.ast.passes;
+package com.mikesamuel.cil.ast.meta;
 
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -10,8 +10,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.meta.Name;
-import com.mikesamuel.cil.ast.meta.TypeInfo;
 
 /**
  * Fetches meta-data for an ambiguous type name.

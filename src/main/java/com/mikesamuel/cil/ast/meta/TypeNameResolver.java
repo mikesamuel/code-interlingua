@@ -1,4 +1,4 @@
-package com.mikesamuel.cil.ast.passes;
+package com.mikesamuel.cil.ast.meta;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -20,9 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.meta.Name;
-import com.mikesamuel.cil.ast.meta.Name.Type;
-import com.mikesamuel.cil.ast.meta.TypeInfo;
 
 /**
  * Looks up the fully qualified name for the given
@@ -254,8 +251,8 @@ public interface TypeNameResolver {
         Map<String, Name> m = new LinkedHashMap<>();
         for (Name name : names) {
           Preconditions.checkArgument(
-              name.type == Type.CLASS
-              || name.type == Type.TYPE_PARAMETER);
+              name.type == Name.Type.CLASS
+              || name.type == Name.Type.TYPE_PARAMETER);
           Name redundant = m.put(name.identifier, name);
           if (redundant != null && !redundant.equals(name)) {
             // TODO: thread through location.
@@ -272,11 +269,11 @@ public interface TypeNameResolver {
 
         @Override
         public Iterable<Name> lookupTypeName(Name ambiguousName) {
-          if (ambiguousName.type == Type.TYPE_PARAMETER) {
+          if (ambiguousName.type == Name.Type.TYPE_PARAMETER) {
             return ImmutableList.of(ambiguousName);
           }
-          if (ambiguousName.type == Type.CLASS
-              || ambiguousName.type == Type.AMBIGUOUS) {
+          if (ambiguousName.type == Name.Type.CLASS
+              || ambiguousName.type == Name.Type.AMBIGUOUS) {
             if (ambiguousName.parent == null) {
               Name qualifiedName = identifierToName.get(
                   ambiguousName.identifier);
@@ -289,7 +286,7 @@ public interface TypeNameResolver {
                 switch (outerName.type) {
                   case CLASS:
                     innerNames.add(outerName.child(
-                        ambiguousName.identifier, Type.CLASS));
+                        ambiguousName.identifier, Name.Type.CLASS));
                     continue;
                   case TYPE_PARAMETER:
                     // This can be validly reached by code like
@@ -329,7 +326,7 @@ public interface TypeNameResolver {
           Iterables.all(packagesAndOuterTypes, new Predicate<Name>() {
             @Override
             public boolean apply(Name nm) {
-              return nm.type == Type.PACKAGE || nm.type == Type.CLASS;
+              return nm.type == Name.Type.PACKAGE || nm.type == Name.Type.CLASS;
             }
           }));
       return new TypeNameResolver() {
@@ -360,7 +357,8 @@ public interface TypeNameResolver {
           for (Name oneContainer : packagesAndOuterTypes) {
             Name importedClass = oneContainer;
             for (String typeNameIdent : typeNameIdents) {
-              importedClass = importedClass.child(typeNameIdent, Type.CLASS);
+              importedClass = importedClass.child(
+                  typeNameIdent, Name.Type.CLASS);
             }
             for (Name canonicalImportedClass
                  : canonicalizer.lookupTypeName(importedClass)) {
