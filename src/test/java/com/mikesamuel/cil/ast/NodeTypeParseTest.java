@@ -3858,7 +3858,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassOrInterfaceTypeToInstantiateAnnotationIdentifierDotAnnotationIdentifierTypeArgumentsOrDiamond() {
     parseSanityCheck(
-        ClassOrInterfaceTypeToInstantiateNode.Variant.AnnotationIdentifierDotAnnotationIdentifierTypeArgumentsOrDiamond,
+        ClassOrInterfaceTypeToInstantiateNode.Variant.ClassOrInterfaceTypeDiamond,
         "@A Outer. @B Inner. @C Inner<>"
         );
   }
@@ -3880,8 +3880,12 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testTypeArgumentsOrDiamondLtGt() {
     parseSanityCheck(
-        TypeArgumentsOrDiamondNode.Variant.LtGt,
+        TypeArgumentsOrDiamondNode.Variant.Diamond,
         "<>"
+        );
+    parseSanityCheck(
+        TypeArgumentsOrDiamondNode.Variant.Diamond,
+        "< >"
         );
   }
 

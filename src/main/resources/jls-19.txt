@@ -228,7 +228,7 @@ interpolations when parsed in non-standard mode.
 
 // Lexical Structure
 (chapter=Literal)
-Identifier:
+Identifier: (@trait=NamePart)
      builtin // IdentifierChars but not a Keyword or BooleanLiteral or NullLiteral
 IdentifierChars:
      builtin // JavaLetter {JavaLetterOrDigit}
@@ -843,10 +843,17 @@ ClassLiteral:
 UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration)
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
-     {Annotation} Identifier {"." {Annotation} Identifier} [TypeArgumentsOrDiamond]
+     // Lookahead avoids type arguments then diamond as in (new foo.Bar<T><>())
+     // and filters out interstitial arguments as in (new foo.Outer<X>.Bar<Y>()).
+     // TODO: MiscParserTestCase for these.
+     !!ClassOrInterfaceTypeNoTypeArguments ClassOrInterfaceType [Diamond] (@name=ClassOrInterfaceTypeDiamond)
+ClassOrInterfaceTypeNoTypeArguments:
+     {Annotation} Identifier {"." {Annotation} Identifier} [TypeArgumentsOrDiamond] !"." !"<"
 TypeArgumentsOrDiamond:
      TypeArguments
-     "<>"
+     Diamond
+Diamond:
+     "<" ">"
 ArgumentList:
      Expression {"," Expression}
 ArrayCreationExpression:
