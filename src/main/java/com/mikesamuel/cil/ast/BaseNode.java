@@ -5,6 +5,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -328,6 +329,13 @@ public abstract class BaseNode {
     indentation.append(prefix);
     appendAsciiArt(indentation, out, decorator);
     return out.toString();
+  }
+
+  /**
+   * Like {@link #toAsciiArt(String, Function)} but does not decorate.
+   */
+  public String toAsciiArt(String prefix) {
+    return toAsciiArt(prefix, Functions.constant(null));
   }
 
   private void appendAsciiArt(
