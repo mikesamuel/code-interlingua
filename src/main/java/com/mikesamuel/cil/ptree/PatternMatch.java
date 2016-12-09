@@ -43,7 +43,7 @@ final class PatternMatch extends PTParSer {
       } else {
         int snippetIndex = state.index;
         int snippetEnd = snippetIndex + 10;
-        CharSequence content = state.input.content;
+        CharSequence content = state.input.content();
         int contentEnd = content.length();
         boolean needsEllipsis = contentEnd > snippetEnd;
         if (!needsEllipsis) {

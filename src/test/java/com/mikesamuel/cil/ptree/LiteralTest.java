@@ -30,7 +30,10 @@ public final class LiteralTest extends TestCase {
         ImmutableList.of(Event.token("===", -1)),
         ImmutableList.copyOf(SList.forwardIterable(after.output)));
     assertEquals(5, after.index);  // No more tokens
-    assertEquals("", after.input.content.subSequence(after.index).toString());
+    CharSequence content = after.input.content();
+    assertEquals(
+        "",
+        content.subSequence(after.index, content.length()).toString());
   }
 
 }

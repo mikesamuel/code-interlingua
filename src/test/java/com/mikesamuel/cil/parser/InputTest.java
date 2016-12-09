@@ -56,7 +56,8 @@ public final class InputTest extends TestCase {
     Input input = Input.builder().code(code).build();
     StringBuilder token = new StringBuilder();
     int parsed = 0;
-    int limit = input.content.length();
+    CharSequence inputContent = input.content();
+    int limit = inputContent.length();
     while (parsed < limit) {
       int idx = input.indexAfterIgnorables(parsed);
       int end;
@@ -65,10 +66,10 @@ public final class InputTest extends TestCase {
           gotBuilder.add("!" + token);
           token.setLength(0);
         }
-        gotBuilder.add("#" + input.content.subSequence(parsed, idx));
+        gotBuilder.add("#" + inputContent.subSequence(parsed, idx));
         end = idx;
       } else {
-        token.append(input.content.charAt(idx));
+        token.append(inputContent.charAt(idx));
         end = idx + 1;
       }
       parsed = end;

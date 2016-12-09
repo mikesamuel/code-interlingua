@@ -182,8 +182,9 @@ final class Reference extends PTParSer {
     if (DEBUG) {
       System.err.println(
           indent() + "Entered " + nodeType + " @ " + state.index);
+      CharSequence content = state.input.content();
       String din = dumpInput(
-          state.input.content.subSequence(state.index).toString());
+          content.subSequence(state.index, content.length()).toString());
       if (din != null) {
         System.err.println(indent() + ". . input=`" + din + "`");
       }
@@ -206,10 +207,11 @@ final class Reference extends PTParSer {
     if (wasLrTriggered && result.synopsis == ParseResult.Synopsis.SUCCESS) {
       ParseState afterSeed = result.next();
       if (DEBUG) {
+        CharSequence content = afterSeed.input.content();
         System.err.println(
             indent() + "AfterSeed " + nodeType
             + "\n" + indent() + ". . input=`"
-            + afterSeed.input.content.subSequence(afterSeed.index) + "`");
+            + content.subSequence(afterSeed.index, content.length()) + "`");
         if (false) {
           System.err.println(
               indent() + ". . output="

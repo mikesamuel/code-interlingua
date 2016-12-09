@@ -31,8 +31,9 @@ final class Completer extends ParSer {
         if (nextState.isEmpty()) {
           return result;
         }
-        CharSequence unparsed =
-            nextState.input.content.subSequence(nextState.index);
+        CharSequence content = nextState.input.content();
+        CharSequence unparsed = content.subSequence(
+            nextState.index, content.length());
         if (unparsed.length() > 10) {
           unparsed = unparsed.subSequence(0, 10) + "...";
         }

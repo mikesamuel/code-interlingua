@@ -27,7 +27,7 @@ public final class ParseState {
 
   private ParseState(
       Input input, int index, @Nullable SList<Event> output) {
-    Preconditions.checkState(0 <= index && index <= input.content.length());
+    Preconditions.checkState(0 <= index && index <= input.content().length());
     this.input = input;
     this.index = index;
     this.output = output != null ? output : null;
@@ -35,7 +35,7 @@ public final class ParseState {
 
   /** True if no unprocessed input except for ignorable tokens. */
   public boolean isEmpty() {
-    return index == input.content.length();
+    return index == input.content().length();
   }
 
   /**
@@ -50,7 +50,7 @@ public final class ParseState {
     if (newIndex == index) {
       return this;
     }
-    Preconditions.checkState(newIndex <= input.content.length());
+    Preconditions.checkState(newIndex <= input.content().length());
     return withIndex(newIndex);
   }
 
@@ -90,12 +90,13 @@ public final class ParseState {
    */
   public boolean startsWith(
       String text, Optional<TokenMergeGuard> hazardDetector) {
-    if (regionMatches(input.content, index, text, 0, text.length())) {
+    CharSequence content = input.content();
+    if (regionMatches(content, index, text, 0, text.length())) {
       if (!hazardDetector.isPresent()) {
         return true;
       }
       TokenMergeGuard hazard = hazardDetector.get();
-      if (!hazard.isHazard(input.content, index, index + text.length())) {
+      if (!hazard.isHazard(content, index, index + text.length())) {
         return true;
       }
     }
@@ -106,8 +107,9 @@ public final class ParseState {
    * A matcher for the given pattern at the current parse position.
    */
   public Matcher matcherAtStart(Pattern p) {
-    Matcher m = p.matcher(input.content);
-    m.region(index, input.content.length());
+    CharSequence content = input.content();
+    Matcher m = p.matcher(content);
+    m.region(index, content.length());
     m.useTransparentBounds(false);
     m.useAnchoringBounds(true);
     return m;
@@ -115,7 +117,7 @@ public final class ParseState {
 
   @Override
   public String toString() {
-    CharSequence content = input.content;
+    CharSequence content = input.content();
     CharSequence inputFragment;
     int fragmentEnd = index + 10;
     if (fragmentEnd >= content.length()) {

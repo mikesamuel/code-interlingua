@@ -9,21 +9,17 @@ import com.mikesamuel.cil.ast.NodeTypeTables;
 /**
  * A parser input.
  */
-public final class Input {
-  /**
-   * The content to parse.
-   */
-  public final DecodedContent content;
-  /**
-   * The line-level structure of the source file.
-   */
-  public final LineStarts lineStarts;
+public abstract class Input {
   /**
    * True iff the input may contain
    * {@link NodeTypeTables#NONSTANDARD non-standard} productions.
    */
   public final boolean allowNonStandardProductions;
 
+  /**
+   * The content to parse.
+   */
+  public abstract CharSequence content();
 
   /**
    * Maps (indexIntoContent,
@@ -32,14 +28,8 @@ public final class Input {
 
   /**
    * @param source diagnostic string describing the source of the content.
-   * @param input the code to parse.
-   * @throws IOException if there is a failure reading input.
    */
-  private Input(
-      String source, String encodedContent,
-      boolean allowNonStandardProductions) {
-    this.content = new DecodedContent(encodedContent);
-    this.lineStarts = new LineStarts(source, encodedContent);
+  private Input(String source, boolean allowNonStandardProductions) {
     this.allowNonStandardProductions = allowNonStandardProductions;
   }
 
@@ -50,7 +40,7 @@ public final class Input {
    * @param index the start of input or an index just past the end of a token.
    */
   public int indexAfterIgnorables(int index) {
-    return Ignorables.scanPastIgnorablesFrom(content, index, null);
+    return Ignorables.scanPastIgnorablesFrom(content(), index, null);
   }
 
   /**
@@ -58,20 +48,12 @@ public final class Input {
    * @param left inclusive index into content.
    * @param right exclusive index into content.
    */
-  public SourcePosition getSourcePosition(int left, int right) {
-    return new SourcePosition(
-        lineStarts, content.indexInEncoded(left),
-        content.indexInEncoded(right));
-  }
+  public abstract SourcePosition getSourcePosition(int left, int right);
 
   /**
    * Like {@link #getSourcePosition(int, int)} but for a zero-width region.
    */
-  public SourcePosition getSourcePosition(int index) {
-    int indexInEncoded = content.indexInEncoded(index);
-    return new SourcePosition(
-        lineStarts, indexInEncoded, indexInEncoded);
-  }
+  public abstract SourcePosition getSourcePosition(int index);
 
   /**
    * A builder for inputs.
@@ -80,6 +62,46 @@ public final class Input {
   public static Builder builder() {
     return new Builder();
   }
+
+  private static final class TextInput extends Input {
+    private final DecodedContent content;
+    /**
+     * The line-level structure of the source file.
+     */
+    private final LineStarts lineStarts;
+
+    /**
+     * @param encodedContent the code to parse.
+     */
+    @SuppressWarnings("synthetic-access")
+    private TextInput(
+        String source, String encodedContent,
+        boolean allowNonStandardProductions) {
+      super(source, allowNonStandardProductions);
+      this.content = new DecodedContent(encodedContent);
+      this.lineStarts = new LineStarts(source, encodedContent);
+    }
+
+    @Override
+    public CharSequence content() {
+      return content;
+    }
+
+    @Override
+    public SourcePosition getSourcePosition(int left, int right) {
+      return new SourcePosition(
+          lineStarts, content.indexInEncoded(left),
+          content.indexInEncoded(right));
+    }
+
+    @Override
+    public SourcePosition getSourcePosition(int index) {
+      int indexInEncoded = content.indexInEncoded(index);
+      return new SourcePosition(
+          lineStarts, indexInEncoded, indexInEncoded);
+    }
+  }
+
 
   /**
    * A builder for inputs.
@@ -131,7 +153,7 @@ public final class Input {
      */
     @SuppressWarnings("synthetic-access")
     public Input build() {
-      return new Input(source, code, allowNonStandardProductions);
+      return new TextInput(source, code, allowNonStandardProductions);
     }
   }
 }

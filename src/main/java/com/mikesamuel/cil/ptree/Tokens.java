@@ -417,13 +417,14 @@ public final class Tokens {
         //      //  /** This is a line comment not a javadoc comment */
         //      /*  /** This is a non-javadoc comment */
         JavaDocCommentRecognizer r = new JavaDocCommentRecognizer();
+        CharSequence content = state.input.content();
         int scanEnd = Ignorables.scanPastIgnorablesFrom(
-            state.input.content, lastTokenEnd, r);
+            content, lastTokenEnd, r);
         Preconditions.checkState(scanEnd == state.index);
         if (r.rightmostJavadocCommentContent != null) {
           int nLeadingWhitespace = 0;
           for (int i = r.rightmostJavadocCommentIndex; --i >= lastTokenEnd;) {
-            char ch = state.input.content.charAt(i);
+            char ch = content.charAt(i);
             if (ch == ' ' || ch == '\t') {
               ++nLeadingWhitespace;
             } else {

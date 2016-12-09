@@ -31,6 +31,7 @@ import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
+import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.parser.Unparse;
 import com.mikesamuel.cil.ptree.PTree;
 import com.mikesamuel.cil.template.Templates;
@@ -163,14 +164,15 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
     StringBuilder allTokenText = new StringBuilder();
     ParseState start = new ParseState(input);
+    CharSequence inputContent = input.content();
     for (ParseState ps = start; !ps.isEmpty();) {
-      char ch = input.content.charAt(ps.index);
+      char ch = inputContent.charAt(ps.index);
       int nConsumed = 1;
       if (ch == '\'' || ch == '"') {
         int end;
-        int limit = input.content.length();
+        int limit = inputContent.length();
         for (end = ps.index + 1; end < limit; ++end) {
-          char c = input.content.charAt(end);
+          char c = inputContent.charAt(end);
           if (c == ch) {
             ++end;
             break;
@@ -180,7 +182,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         }
         nConsumed = end - ps.index;
       }
-      allTokenText.append(input.content, ps.index, ps.index + nConsumed);
+      allTokenText.append(inputContent, ps.index, ps.index + nConsumed);
       ps = ps.advance(nConsumed);
     }
     LeftRecursion lr = new LeftRecursion();
@@ -218,7 +220,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
             case POP:  // TODO: default
               if (stackDepth == 0) {
                 fail(
-                    "Parsing `" + input.content
+                    "Parsing `" + inputContent
                     + "`, depth goes negative after `" + tokensOnOutput + "`");
               }
               --stackDepth;
@@ -244,19 +246,19 @@ public abstract class AbstractParSerTestCase extends TestCase {
         if (firstPushVariants.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
-          assertEquals(input.content.toString(), variant, firstPushVariants.get(0));
+          assertEquals(inputContent.toString(), variant, firstPushVariants.get(0));
           if (!variant.isAnon()) {
             assertEquals(variant, node.getVariant());
           }
         }
         assertEquals(
-            input.content.toString(),
+            inputContent.toString(),
             allTokenText.toString(), tokensOnOutput.toString());
         doubleCheck(parSer, afterParse, fuzzSet);
         return;
       case FAILURE:
         fail(
-            "`" + input.content + "` does not match " + variant + "\n"
+            "`" + inputContent + "` does not match " + variant + "\n"
                 + parseErr.getErrorMessage());
         return;
     }
@@ -351,7 +353,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         new ParseState(input), new LeftRecursion(), reparseErr);
     switch (reparse.synopsis) {
       case FAILURE:
-        fail("Reparse of `" + input.content + "` failed: "
+        fail("Reparse of `" + input.content() + "` failed: "
              + reparseErr.getErrorMessage());
         break;
       case SUCCESS:
@@ -435,10 +437,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
     String getErrorMessage() {
       if (latest == null) { return "No error message"; }
       int index = latest.index;
-      int ln = latest.input.lineStarts.getLineNumber(index);
-      int co = latest.input.lineStarts.charInLine(index);
-      return latest.input.lineStarts.source + ":" + ln + ":" + co + ": "
-          + latestMessage;
+      SourcePosition pos = latest.input.getSourcePosition(index);
+      int ln = pos.startLineInFile();
+      int co = pos.startCharInFile();
+      return pos.getSource() + ":" + ln + ":" + co + ": " + latestMessage;
     }
   }
 
