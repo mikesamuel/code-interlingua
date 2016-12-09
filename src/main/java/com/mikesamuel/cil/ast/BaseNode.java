@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ast;
 
+import java.util.List;
+
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
@@ -7,6 +9,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -29,6 +32,11 @@ public abstract class BaseNode {
     this.children = ImmutableList.copyOf(children);
     this.literalValue = literalValue;
   }
+
+  /**
+   * A builder that currently has the state of this node allowing modification.
+   */
+  public abstract Builder<?, ?> builder();
 
   /** The particular variant within the production. */
   public NodeVariant getVariant() {
@@ -122,9 +130,21 @@ public abstract class BaseNode {
   public static abstract
   class Builder<N extends BaseNode, V extends NodeVariant> {
     private final V newNodeVariant;
+    /** True if it changed from its parent. */
+    private boolean changed;
 
     protected Builder(V variant) {
       this.newNodeVariant = Preconditions.checkNotNull(variant);
+      this.changed = true;
+    }
+
+    protected Builder(N source) {
+      @SuppressWarnings("unchecked")
+      // Unsound but safe is subclassing follows discipline.  For this reason
+      // we keep constructors package-private.
+      V sourceVariant = (V) source.getVariant();
+      this.newNodeVariant = sourceVariant;
+      this.changed = false;
     }
 
     protected V getVariant() {
@@ -136,6 +156,18 @@ public abstract class BaseNode {
 
     /** Builds a complete node. */
     public abstract N build();
+
+    protected void markChanged() {
+      this.changed = true;
+    }
+
+    /**
+     * True iff the builder was derived from a node and no changes were
+     * made to that node.
+     */
+    public boolean changed() {
+      return this.changed;
+    }
   }
 
   /**
@@ -144,20 +176,57 @@ public abstract class BaseNode {
   public static abstract
   class InnerBuilder<N extends BaseNode, V extends NodeVariant>
   extends Builder<N, V> {
-    private final ImmutableList.Builder<BaseNode> newNodeChildren =
-        ImmutableList.builder();
+    private final List<BaseNode> newNodeChildren = Lists.newArrayList();
 
     protected InnerBuilder(V variant) {
       super(variant);
     }
 
+    protected InnerBuilder(N source) {
+      super(source);
+      newNodeChildren.addAll(source.getChildren());
+    }
+
+    /** The count of children thus far. */
+    public int getNChildren() {
+      return newNodeChildren.size();
+    }
+
+    /** The child at index i */
+    public BaseNode getChild(int i) {
+      return newNodeChildren.get(i);
+    }
+
     protected ImmutableList<BaseNode> getChildren() {
-      return newNodeChildren.build();
+      return ImmutableList.copyOf(newNodeChildren);
     }
 
     /** Adds a child node. */
     public InnerBuilder<N, V> add(BaseNode child) {
-      this.newNodeChildren.add(child);
+      return add(newNodeChildren.size(), child);
+    }
+
+    /** Adds a child node at the given index. */
+    public InnerBuilder<N, V> add(int index, BaseNode child) {
+      this.newNodeChildren.add(index, Preconditions.checkNotNull(child));
+      this.markChanged();
+      return this;
+    }
+
+    /** Adds a child node at the given index. */
+    public InnerBuilder<N, V> replace(int index, BaseNode child) {
+      BaseNode old = this.newNodeChildren.set(
+          index, Preconditions.checkNotNull(child));
+      if (old != child) {
+        this.markChanged();
+      }
+      return this;
+    }
+
+    /** Adds a child node at the given index. */
+    public InnerBuilder<N, V> remove(int index) {
+      this.newNodeChildren.remove(index);
+      this.markChanged();
       return this;
     }
   }
@@ -174,13 +243,22 @@ public abstract class BaseNode {
       super(variant);
     }
 
+    protected LeafBuilder(N source) {
+      super(source);
+      newLiteralValue = Optional.fromNullable(source.getValue());
+    }
+
     protected String getLiteralValue() {
       return newLiteralValue.orNull();
     }
 
     /** Specifies the value. */
     public LeafBuilder<N, V> leaf(String leafLiteralValue) {
-      this.newLiteralValue = Optional.of(leafLiteralValue);
+      Optional<String> newValueOpt = Optional.of(leafLiteralValue);
+      if (!newLiteralValue.equals(newValueOpt)) {
+        this.newLiteralValue = newValueOpt;
+        this.markChanged();
+      }
       return this;
     }
   }

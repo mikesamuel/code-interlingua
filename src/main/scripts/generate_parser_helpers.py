@@ -1336,22 +1336,25 @@ public enum NodeType implements ParSerable {
                      '  }\n')
                     % record)
                 builder_copy_code.append(
-                    ('        this.%(trait_field)s = source.get%(utrait_field)s();')
+                    ('      set%(utrait_field)s(source.get%(utrait_field)s());')
                     % record
                     )
                 builder_build_code.append(
-                    ('        newNode.set%(utrait_field)s(this.%(trait_field)s);')
+                    ('      newNode.set%(utrait_field)s(this.%(trait_field)s);')
                     % record
                     )
                 builder_code.append(
-                    ('      private %(trait_type)s %(trait_field)s;\n'
+                    ('    private %(trait_type)s %(trait_field)s;\n'
                      '\n'
-                     '      /** Sets metadata for new instance. */\n'
-                     '      public final %(builder_rtype)s\n'
-                     '      set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
+                     '    /** Sets metadata for new instance. */\n'
+                     '    public final %(builder_rtype)s\n'
+                     '    set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
+                     '      if (this.%(trait_field)s != new%(utrait_field)s) {\n'
                      '        this.%(trait_field)s = new%(utrait_field)s;\n'
-                     '        return this;\n'
+                     '        markChanged();\n'
                      '      }\n'
+                     '      return this;\n'
+                     '    }\n'
                     ) % record)
         trait_ifaces = ''
         if traits:
@@ -1386,6 +1389,13 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
   @Override
   public Variant getVariant() {
     return (Variant) super.getVariant();
+  }
+
+  @Override
+  public Builder builder() {
+    @SuppressWarnings("synthetic-access")
+    Builder b = new Builder(this);
+    return b;
   }
 
   /** Variants of this node. */
@@ -1433,6 +1443,10 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
   extends BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant> {
     private Builder(Variant v) {
       super(v);
+    }
+
+    private Builder(%(node_class_name)s source) {
+      super(source);
     }
 
 %(builder_code)s
