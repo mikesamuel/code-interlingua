@@ -130,7 +130,8 @@ public abstract class BaseNode {
    */
   public static abstract
   class Builder<N extends BaseNode, V extends NodeVariant> {
-    private final V newNodeVariant;
+    private V newNodeVariant;
+    private SourcePosition sourcePosition;
     /** True if it changed from its parent. */
     private boolean changed;
 
@@ -145,6 +146,8 @@ public abstract class BaseNode {
       // we keep constructors package-private.
       V sourceVariant = (V) source.getVariant();
       this.newNodeVariant = sourceVariant;
+      this.sourcePosition = source.getSourcePosition();
+      this.copyMetadataFrom(source);
       this.changed = false;
     }
 
@@ -152,8 +155,41 @@ public abstract class BaseNode {
       return newNodeVariant;
     }
 
+    protected SourcePosition getSourcePosition() {
+      return sourcePosition;
+    }
+
+    /**
+     * Specifies the variant that will be built.
+     */
+    public Builder<N, V> variant(V newVariant) {
+      if (newVariant != this.newNodeVariant) {
+        this.newNodeVariant = Preconditions.checkNotNull(newVariant);
+        markChanged();
+      }
+      return this;
+    }
+
     /** Any nodes built will have the same meta-data as the given node. */
-    public abstract Builder<N, V> copyMetadataFrom(N source);
+    public Builder<N, V> copyMetadataFrom(N source) {
+      SourcePosition pos = source.getSourcePosition();
+      if (pos != null) {
+        setSourcePosition(pos);
+      }
+      return this;
+    }
+
+    /**
+     * Specifies the source position for the built node.
+     */
+    public Builder<N, V> setSourcePosition(SourcePosition newSourcePosition) {
+      if (!(sourcePosition == null ? newSourcePosition == null
+          : sourcePosition.equals(newSourcePosition))) {
+        this.sourcePosition = newSourcePosition;
+        markChanged();
+      }
+      return this;
+    }
 
     /** Builds a complete node. */
     public abstract N build();
@@ -263,7 +299,6 @@ public abstract class BaseNode {
       return this;
     }
   }
-
 
 
   @Override
