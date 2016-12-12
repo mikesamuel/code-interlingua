@@ -283,17 +283,25 @@ ReferenceType:
      ArrayType
      ClassOrInterfaceType
      TypeVariable
-ClassOrInterfaceType:
+ClassOrInterfaceType: (@trait=TypeReference)
+     // This turns the original grammar on its head because in JLS chapter 19,
+     // ClassOrInterfaceType:
+     //    ClassType
+     //    InterfaceType
+     // The JLS defines a whole suite of type names:
+     //   ClassOrInterfaceType, ClassType, InterfaceType,
+     //   ClassOrInterfaceTypeToInstantiate, Unann*.
+     // The Java reflective libraries represent all of these via java.lang.Class
+     // with a bit field of modifiers, so we use a single production
+     // and associate modifier metadata with it when we know enough to distinguish
+     // interfaces from normal classes.
      ContextFreeNames
-     ClassType
-     InterfaceType
-ClassType: (@trait=TypeReference)
-     ContextFreeNames
-     ClassOrInterfaceType "." {Annotation} Identifier [TypeArguments]
-     {Annotation} Identifier [TypeArguments]
-InterfaceType: (@trait=TypeReference)
-     ClassType
-TypeVariable:
+     [ClassOrInterfaceType "."] {Annotation} Identifier [TypeArguments]
+ClassType:
+     ClassOrInterfaceType
+InterfaceType:
+     ClassOrInterfaceType
+TypeVariable: (@trait=TypeReference)
      {Annotation} Identifier
 ArrayType:
      PrimitiveType Dims
@@ -386,7 +394,7 @@ ContextFreeName:
 
 // Packages
 (chapter=Package)
-CompilationUnit: (@trait=TypeScope)
+CompilationUnit: (@trait=TypeScope) (@trait=ExpressionNameScope)
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
      // TODO: Why is the package name here not left-associative as it is under the names chapter?
@@ -416,7 +424,7 @@ TypeDeclaration:
 ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
-NormalClassDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope)
+NormalClassDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope) (@trait=ExpressionNameScope)
      [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
@@ -535,13 +543,13 @@ ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-EnumDeclaration: (@trait=TypeDeclaration)
+EnumDeclaration: (@trait=TypeDeclaration) (@trait=ExpressionNameScope)
      [JavaDocComment] {!!ClassModifier Modifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
 EnumBody:
      "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
 EnumConstantList:
      EnumConstant {"," EnumConstant}
-EnumConstant: (@trait=TypeDeclaration)
+EnumConstant: (@trait=TypeDeclaration) (@trait=ExpressionNameScope)
      {!!EnumConstantModifier Modifier} FieldName ["(" [ArgumentList] ")"] [ClassBody] (@name=Declaration)
 EnumConstantModifier:
      Annotation
@@ -553,7 +561,7 @@ EnumBodyDeclarations: (@trait=TypeScope)
 InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
-NormalInterfaceDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope)
+NormalInterfaceDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope) (@trait=ExpressionNameScope)
      [JavaDocComment] {!!InterfaceModifier Modifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
 InterfaceModifier:
      Annotation
@@ -655,7 +663,7 @@ VariableInitializerList:
 (chapter=Statement)
 Block:
      "{" [BlockStatements] "}"
-BlockStatements:
+BlockStatements: (@trait=ExpressionNameScope)
      // The JLS grammar originally was defined simply
      //     BlockStatement {BlockStatement}
      // and included ClassDeclaration among BlockStatement.
@@ -840,7 +848,7 @@ ClassLiteral:
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration)
+UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration) (@trait=ExpressionNameScope)
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
      // Lookahead avoids type arguments then diamond as in (new foo.Bar<T><>())

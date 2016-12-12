@@ -9,19 +9,50 @@ _JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
 
 # Maps trait interfaces to metadata fields specified and imports required.
 _TRAITS = {
-    'CallableDeclaration': ((('String', 'methodDescriptor'),), ()),
+    'CallableDeclaration': (
+        (
+            ('ExpressionNameResolver', 'expressionNameResolver'),
+            ('String', 'methodDescriptor'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
+        )
+    ),
+    'ExpressionNameScope': (
+        (
+            ('ExpressionNameResolver', 'expressionNameResolver'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
+        )),
     'NamePart': (
-        (('Name.Type', 'namePartType'),),
-        ('com.mikesamuel.cil.ast.meta.Name',)),
+        (
+            ('Name.Type', 'namePartType'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.Name',
+        )),
     'TypeDeclaration': (
-        (('TypeInfo', 'declaredTypeInfo'),),
-        ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
+        (
+            ('TypeInfo', 'declaredTypeInfo'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.TypeInfo',
+        )),
     'TypeReference': (
-        (('TypeInfo', 'referencedTypeInfo'),),
-        ('com.mikesamuel.cil.ast.meta.TypeInfo',)),
+        (
+            ('TypeInfo', 'referencedTypeInfo'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.TypeInfo',
+        )),
     'TypeScope': (
-        (('TypeNameResolver', 'typeNameResolver'),),
-        ('com.mikesamuel.cil.ast.meta.TypeNameResolver',)),
+        (
+            ('TypeNameResolver', 'typeNameResolver'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.TypeNameResolver',
+        )),
     }
 _TRAITS['TypeParameterScope'] = _TRAITS['TypeScope']
 
@@ -1011,112 +1042,6 @@ public enum NodeType implements ParSerable {
                             pn, rn, is_left and 'blue' or 'black')
                 print >>dot_out_file, '}'
         write_dot()
-    # To handle left recursion, we need to know the shortest depth-first
-    # cycle from a left call in a variant back to that variant.
-    # See GrowTheSeed.java for the use.
-    # This can be compute-intensive, so we precompute that here.
-    def compute_shortest_left_call_loop_map():
-
-        # We walk the grammar and either
-        # 1. Build a solution recursively.  The return type for this is a
-        #    tuple of the form ((prod_name, variant_name), rest_of_chain)
-        # 2. The symbolic value CONTINUE which means keep looking.
-        # 3. The symbolic value NO_MORE_LEFT_CALLS which means that no more
-        #    left calls will be found on the current branch.
-        NO_MORE_LEFT_CALLS = 0
-        CONTINUE = 1
-
-        # TODO: memoize this as it's likely to be used several times within
-        # the same production.
-        def shortest_left_call_chain(ptree, dest, visited):
-            (dest_pn, dest_vn) = dest
-            nm = ptree['name']
-            if nm == '()':
-                for cpt in ptree['ptree']:
-                    r = shortest_left_call_chain(cpt, dest, visited)
-                    if r != CONTINUE:
-                        return r
-                return CONTINUE
-            elif nm in ('[]', '{}'):
-                for cpt in ptree['ptree']:
-                    r = shortest_left_call_chain(cpt, dest, visited)
-                    if r == NO_MORE_LEFT_CALLS:
-                        break
-                    elif r != CONTINUE:
-                        return r
-                return CONTINUE
-            elif nm == 'nla':
-                return CONTINUE
-            elif nm == 'lit':
-                assert ptree['pleaf'][0]
-                return NO_MORE_LEFT_CALLS
-            elif nm == 'ref':
-                callee_name = ptree['pleaf'][0]
-                if verbose: print '\trecurse to %s' % callee_name
-                if callee_name == 'builtin':
-                    return NO_MORE_LEFT_CALLS
-                callee = prods_by_name[callee_name]
-                for callee_variant in callee['variants']:
-                    key = (callee_name, callee_variant['name'])
-                    if verbose: print '\t\tfound key %r vs %r' % (key, dest)
-                    if key == dest:
-                        if verbose: print '\t\tMATCH'
-                        return (dest, None)
-                    if callee_name not in visited:
-                        visited.add(callee_name)
-                        if verbose: print '\t\tRECURSING to %r' % (key,)
-                        r = shortest_left_call_chain(
-                            { 'name': '()', 'ptree': callee_variant['ptree'] },
-                            dest,
-                            visited)
-                        visited.remove(callee_name)
-                        if r not in (CONTINUE, NO_MORE_LEFT_CALLS):
-                            return (key, r)
-                if callee_name in empty_matching:
-                    return CONTINUE
-                else:
-                    return NO_MORE_LEFT_CALLS
-            else:
-                raise AssertionError(nm)
-        def find_shortest_left_call_chain_btw(src_pn, dest):
-            visited = set()
-            r = shortest_left_call_chain(
-                { 'name': 'ref', 'pleaf': (src_pn, None) },
-                dest, visited)
-            if r in (CONTINUE, NO_MORE_LEFT_CALLS):
-                return None
-            left_call_chain = []
-            while r is not None:
-                left_call_chain.append(r[0])
-                r = r[1]
-            assert left_call_chain[-1] == dest
-            del left_call_chain[-1]
-            return tuple(left_call_chain)
-
-        results = {}
-        for (dest, left_calls) in left_calls_per_variant.iteritems():
-            dest_pn, dest_vn = dest
-            if dest_vn not in left_recursion[dest_pn]:
-                continue
-            for callee in left_calls:
-                key = (dest, callee)
-                if key not in results:
-                    if verbose:
-                        print 'computing short left call chain %s -> %r' % (
-                            callee, dest)
-                    chain = find_shortest_left_call_chain_btw(callee, dest)
-                    if chain is not None:
-                        full_chain = [dest]
-                        full_chain.extend(chain)
-                        results[key] = full_chain
-                        if verbose:
-                            print '\t%r' % (full_chain,)
-                    else:
-                        raise Error('Failed to find LR markers for %r' % dest)
-        return results
-
-    shortest_left_call_loop_map = compute_shortest_left_call_loop_map()
-
 
     def ptree_to_java_builder(prod, pt, prefix):
         name = pt['name']
@@ -1178,6 +1103,7 @@ public enum NodeType implements ParSerable {
             'com.mikesamuel.cil.parser.Lookahead1',
             'com.mikesamuel.cil.parser.ParSer',
             'com.mikesamuel.cil.parser.ParSerable',
+            'com.mikesamuel.cil.parser.SourcePosition',
             'com.mikesamuel.cil.ptree.PTree',
         ))
 
@@ -1461,6 +1387,7 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     @Override
     public Builder copyMetadataFrom(%(node_class_name)s source) {
 %(builder_copy_code)s
+      super.copyMetadataFrom(source);
       return this;
     }
 
@@ -1470,6 +1397,10 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
       %(node_class_name)s newNode = new %(node_class_name)s(
           getVariant(), %(builder_actuals)s);
 %(builder_build_code)s
+      SourcePosition sourcePosition = getSourcePosition();
+      if (sourcePosition != null) {
+        newNode.setSourcePosition(sourcePosition);
+      }
       return newNode;
     }
   }

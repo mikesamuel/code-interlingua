@@ -11,7 +11,7 @@ import com.mikesamuel.cil.ast.NodeType;
  * Declares a callable which corresponds to a JVM method, static method, or
  * special method.
  */
-public interface CallableDeclaration {
+public interface CallableDeclaration extends ExpressionNameScope {
   /**
    * The name of the method.
    */

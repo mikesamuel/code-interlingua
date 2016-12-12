@@ -357,7 +357,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassOrInterfaceTypeClassType() {
     parseSanityCheck(
-        ClassOrInterfaceTypeNode.Variant.ClassType,
+        ClassOrInterfaceTypeNode.Variant.ContextFreeNames,
         "@Nonnull String",
         Fuzz.SAME_VARIANT
         );
@@ -365,16 +365,14 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
 
   /**
    * <pre>InterfaceType</pre>
-   *
+   */
   @Test
   public void testClassOrInterfaceTypeInterfaceType() {
     parseSanityCheck(
-        ClassOrInterfaceTypeNode.Variant.InterfaceType,
-        "Comparable<Integer>",
-        // Can't lexically distinguish ClassType from InterfaceType
-        Fuzz.SAME_VARIANT
+        ClassOrInterfaceTypeNode.Variant.ContextFreeNames,
+        "Comparable<Integer>"
         );
-  }*/
+  }
 
   /**
    * <pre>{ Annotation } Identifier [ TypeArguments ]</pre>
@@ -382,9 +380,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassTypeAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
-        ClassTypeNode.Variant.AnnotationIdentifierTypeArguments,
-        "@Nonnull String",
-        Fuzz.SAME_VARIANT  // Context free names
+        ClassTypeNode.Variant.ClassOrInterfaceType,
+        "@Nonnull String"
         );
   }
 
@@ -394,9 +391,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassTypeClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
-        ClassTypeNode.Variant.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments,
-        "ImmutableList.Builder<String>",
-        Fuzz.SAME_VARIANT  // Context free names
+        ClassTypeNode.Variant.ClassOrInterfaceType,
+        "ImmutableList.Builder<String>"
         );
   }
 
@@ -406,7 +402,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testInterfaceTypeClassType() {
     parseSanityCheck(
-        InterfaceTypeNode.Variant.ClassType,
+        InterfaceTypeNode.Variant.ClassOrInterfaceType,
         "Comparable"
         );
   }
@@ -4030,9 +4026,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   public void testMethodReferenceExpressionNameClnClnTypeArgumentsIdentifier() {
     parseSanityCheck(
         PrimaryNode.Variant.MethodReference,
-        "foo::<String>bar",
-        // TODO: can't lexically distinguish ExpressionName from TypeReference.
-        Fuzz.SAME_VARIANT
+        "foo::<String>bar"
         );
   }
 
