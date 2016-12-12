@@ -3,6 +3,7 @@ package com.mikesamuel.cil.ast.passes;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -42,7 +43,7 @@ import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.parser.SourcePosition;
 
-class DeclarationPass implements AbstractPass<Void> {
+class DeclarationPass implements AbstractPass<TypeInfoResolver> {
   final Logger logger;
 
   static final boolean DEBUG = false;
@@ -66,8 +67,11 @@ class DeclarationPass implements AbstractPass<Void> {
     return TypeInfoResolver.Resolvers.forClassLoader(cl);
   }
 
+  /**
+   * @return a TypeInfoResolver that resolves canonical names.
+   */
   @Override
-  public Void run(
+  public TypeInfoResolver run(
       Iterable<? extends CompilationUnitNode> compilationUnits) {
     // To properly map type names to canonical type names, we need four things:
     // 1. The set of internally defined types.
@@ -92,7 +96,7 @@ class DeclarationPass implements AbstractPass<Void> {
     // (3) on demand for (4)
     sr.resolveAll();
 
-    return null;
+    return sr.typeInfoResolver;
   }
 
   final class ScopeResolver {
@@ -150,6 +154,9 @@ class DeclarationPass implements AbstractPass<Void> {
       for (UnresolvedTypeDeclaration d : this.internallyDefinedTypes.values()) {
         loop.clear();
         resolve(d, loop);
+      }
+      for (TypeScope scope : scopeToParent.keySet()) {
+        resolverForScope(scope, new HashSet<Name>());
       }
     }
 
