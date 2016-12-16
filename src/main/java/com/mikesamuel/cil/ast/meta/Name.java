@@ -11,8 +11,7 @@ import com.mikesamuel.cil.ast.traits.CallableDeclaration;
 public final class Name {
   /**
    * The preceding elements in the name if any.
-   * In a disambiguated name, this will only be null for a local variable,
-   * type parameter, or the default package.
+   * In a unambiguous name, this will only be null for the default package.
    * <p>
    * In an ambiguous name, it may be null to indicate that we don't know which
    * tree (default package, imported package, inherited scope, current scope)
@@ -60,8 +59,6 @@ public final class Name {
         || parent == null || parent.type == Type.PACKAGE
         || parent.type == Type.CLASS || parent.type == Type.AMBIGUOUS
         || parent.type == Type.METHOD);
-    // Locals must have a null parent.
-    Preconditions.checkArgument(parent == null || type != Type.LOCAL);
     // Only the default package can be identifierless.
     Preconditions.checkArgument(
         identifier.length() != 0 || (type == Type.PACKAGE && parent == null));
@@ -242,6 +239,8 @@ public final class Name {
    * {@code .} is used before a field or a method, and a method is followed by
    * {@code ()}.
    * {@code <...>} surround type parameters.
+   * {@code :} is used between a method descriptor and formal parameters or
+   *    local variables visible scoped to its body.
    */
   public void appendInternalNameString(StringBuilder sb) {
     if (parent != null) {
@@ -266,6 +265,7 @@ public final class Name {
         before = ".";
         break;
       case LOCAL:
+        before = ":";
         break;
       case METHOD:
         if (parent != null) {
