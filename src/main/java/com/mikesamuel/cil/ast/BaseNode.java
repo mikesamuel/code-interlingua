@@ -1,6 +1,7 @@
 package com.mikesamuel.cil.ast;
 
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -8,9 +9,12 @@ import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -59,6 +63,17 @@ public abstract class BaseNode {
     for (BaseNode child : children) {
       if (child.getNodeType() == nt) {
         return child;
+      }
+    }
+    return null;
+  }
+
+  /** The first child with the given type or null. */
+  public @Nullable <T>
+  T firstChildWithType(Class<? extends T> cl) {
+    for (BaseNode child : children) {
+      if (cl.isInstance(child)) {
+        return cl.cast(child);
       }
     }
     return null;
@@ -349,6 +364,82 @@ public abstract class BaseNode {
   }
 
   /**
+   * A finder rooted at this that returns results of the given node type or
+   * trait.
+   */
+  public <T> Finder<T> finder(Class<T> resultType) {
+    return new Finder<>(resultType);
+  }
+
+  /** Searches the subtree rooted at {@code BaseNode.this}. */
+  public final class Finder<T> {
+    private final Class<? extends T> matchType;
+    private Predicate<? super BaseNode> match;
+    private Predicate<? super BaseNode> enter;
+    private boolean allowNonStandard = false;
+
+    Finder(Class<? extends T> matchType) {
+      this.matchType = matchType;
+      match = Predicates.instanceOf(matchType);
+      enter = Predicates.alwaysTrue();
+    }
+
+    /**
+     * Restricts matched nodes to those with a node type among those given.
+     *
+     * @return {@code this} to enable chaining.
+     */
+    public Finder<T> match(NodeType nt, NodeType... nts) {
+      match = Predicates.and(match, new HasNodeTypeIn(nt, nts));
+      return this;
+    }
+
+    /**
+     * Restricts nodes recursively searched by excluding them to ones with a
+     * node type among those given.
+     *
+     * @return {@code this} to enable chaining.
+     */
+    public Finder<T> exclude(NodeType nt, NodeType... nts) {
+      enter = Predicates.and(
+          enter, Predicates.not(new HasNodeTypeIn(nt, nts)));
+      return this;
+    }
+
+    /**
+     * Sets whether the finder will recurse into
+     * {@linkplain NodeTypeTables#NONSTANDARD nonstandard} productions.
+     * Defaults to false.
+     */
+    public Finder<T> allowNonStandard(boolean b) {
+      this.allowNonStandard = b;
+      return this;
+    }
+
+    /**
+     * Performs a search and returns the results.
+     */
+    public ImmutableList<T> find() {
+      ImmutableList.Builder<T> results = ImmutableList.builder();
+      find(BaseNode.this, results);
+      return results.build();
+    }
+
+    private void find(BaseNode node, ImmutableList.Builder<T> results) {
+      if (match.apply(node)) {
+        results.add(Preconditions.checkNotNull(matchType.cast(node)));
+      }
+      if (enter.apply(node)
+          && (allowNonStandard
+              || !NodeTypeTables.NONSTANDARD.contains(node.getNodeType()))) {
+        for (BaseNode child : node.getChildren()) {
+          find(child, results);
+        }
+      }
+    }
+  }
+
+  /**
    * A diagnostic string describing the structure of the tree.
    *
    * @param prefix a string to place to the left on each line.
@@ -395,6 +486,19 @@ public abstract class BaseNode {
     out.append(variant);
     if (literalValue != null) {
       out.append(' ').append(literalValue);
+    }
+  }
+
+  private static final class HasNodeTypeIn implements Predicate<BaseNode> {
+    final Set<NodeType> nodeTypes;
+
+    HasNodeTypeIn(NodeType nt, NodeType... nts) {
+      this.nodeTypes = Sets.immutableEnumSet(nt, nts);
+    }
+
+    @Override
+    public boolean apply(BaseNode node) {
+      return nodeTypes.contains(node.getNodeType());
     }
   }
 }
