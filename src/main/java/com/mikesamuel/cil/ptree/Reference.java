@@ -42,15 +42,10 @@ final class Reference extends PTParSer {
     if (variants == null) {
       ImmutableList.Builder<NodeVariant> variantsBuilder =
           ImmutableList.builder();
-      NodeType nt = null;
       for (Enum<?> e : nodeType.getVariantType().getEnumConstants()) {
         NodeVariant nv = (NodeVariant) e;
         variantsBuilder.add(nv);
-        if (nt == null) {
-          nt = nv.getNodeType();
-        } else {
-          Preconditions.checkState(nt == nv.getNodeType());
-        }
+        Preconditions.checkState(nodeType == nv.getNodeType());
       }
       this.variants = variantsBuilder.build();
     }
