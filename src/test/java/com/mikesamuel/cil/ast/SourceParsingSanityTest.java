@@ -40,6 +40,7 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
     for (String line : Resources.readLines(
             Resources.getResource(getClass(), "/all-sources.txt"),
             Charsets.UTF_8)) {
+      setUp();
       File source = new File(line.trim());
       System.err.println("Parsing " + source);
       long t0 = System.nanoTime();
