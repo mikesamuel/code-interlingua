@@ -1,5 +1,9 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -9,6 +13,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 
 /**
@@ -54,6 +59,8 @@ public interface TypeInfoResolver {
                       return Optional.absent();
                     }
 
+                    Name className = nameForClass(clazz);
+
                     Class<?> superClass = clazz.getSuperclass();
                     Class<?> outerClass = clazz.getEnclosingClass();
 
@@ -67,8 +74,42 @@ public interface TypeInfoResolver {
                         ImmutableList.builder();
                     findInnerClasses(clazz, innerNames, Sets.newHashSet());
 
+                    ImmutableList.Builder<MemberInfo> members =
+                        ImmutableList.builder();
+                    for (Field f : clazz.getDeclaredFields()) {
+                      int mods = f.getModifiers();
+                      if (!Modifier.isPrivate(mods)) {
+                        members.add(new FieldInfo(
+                            mods,
+                            className.child(f.getName(), Name.Type.FIELD)));
+                      }
+                    }
+                    for (Method m : clazz.getDeclaredMethods()) {
+                      int mods = m.getModifiers();
+                      if (!Modifier.isPrivate(mods)) {
+                        members.add(new CallableInfo(
+                            mods,
+                            className.method(
+                                m.getName(),
+                                methodDescriptorFor(
+                                    m.getParameterTypes(), m.getReturnType()))
+                            ));
+                      }
+                    }
+                    for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+                      int mods = c.getModifiers();
+                      if (!Modifier.isPrivate(mods)) {
+                        members.add(new CallableInfo(
+                            mods,
+                            className.method(
+                                "<init>",
+                                methodDescriptorFor(
+                                    c.getParameterTypes(), Void.TYPE))));
+                      }
+                    }
+
                     return Optional.of(new TypeInfo(
-                        nameForClass(clazz),
+                        className,
                         clazz.getModifiers(),
                         clazz.isAnonymousClass(),
                         superClass != null
@@ -78,7 +119,8 @@ public interface TypeInfoResolver {
                         outerClass != null
                         ? Optional.of(nameForClass(outerClass))
                         : Optional.<Name>absent(),
-                        innerNames.build()
+                        innerNames.build(),
+                        members.build()
                         ));
                   }
                 });
@@ -154,6 +196,47 @@ public interface TypeInfoResolver {
         parent = pkg;
       }
       return parent.child(simpleName, Name.Type.CLASS);
+    }
+
+    private static String methodDescriptorFor(
+        Class<?>[] parameterTypes, Class<?> returnType) {
+      StringBuilder sb = new StringBuilder();
+      sb.append('(');
+      for (Class<?> parameterType : parameterTypes) {
+        appendTypeDescriptor(sb, parameterType);
+      }
+      sb.append(')');
+      appendTypeDescriptor(sb, returnType);
+      return sb.toString();
+    }
+
+    private static final ImmutableMap<Class<?>, Character> PRIMITIVE_FIELD_TYPES
+        = ImmutableMap.<Class<?>, Character>builder()
+        .put(Void.TYPE, 'V')
+        .put(Boolean.TYPE, 'Z')
+        .put(Byte.TYPE, 'B')
+        .put(Character.TYPE, 'C')
+        .put(Double.TYPE, 'D')
+        .put(Float.TYPE, 'F')
+        .put(Integer.TYPE, 'I')
+        .put(Long.TYPE, 'J')
+        .put(Short.TYPE, 'S')
+        .build();
+
+    private static void appendTypeDescriptor(StringBuilder sb, Class<?> t) {
+      Preconditions.checkArgument(!t.isAnnotation());
+      if (t.isPrimitive()) {
+        sb.append(PRIMITIVE_FIELD_TYPES.get(t).charValue());
+      } else {
+        Class<?> bareType = t;
+        while (bareType.isArray()) {
+          sb.append('[');
+          bareType = bareType.getComponentType();
+        }
+        sb.append('L');
+        sb.append(t.getName());
+        sb.append(';');
+      }
     }
 
     private static void findInnerClasses(

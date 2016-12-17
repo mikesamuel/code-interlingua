@@ -1,6 +1,5 @@
 package com.mikesamuel.cil.ast.passes;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -327,22 +326,8 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
           case Modifier:
             ModifierNode.Variant modVariant =
                 ((ModifierNode) child).getVariant();
-            switch (modVariant) {
-              case Abstract: modifiers |= Modifier.ABSTRACT; continue;
-              case Annotation: continue;
-              case Default: continue;
-              case Final: modifiers |= Modifier.FINAL; continue;
-              case Native: modifiers |= Modifier.NATIVE; continue;
-              case Private: modifiers |= Modifier.PRIVATE; continue;
-              case Protected: modifiers |= Modifier.PROTECTED; continue;
-              case Public: modifiers |= Modifier.PUBLIC; continue;
-              case Static: modifiers |= Modifier.STATIC; continue;
-              case Strictfp: modifiers |= Modifier.STRICT; continue;
-              case Synchronized: modifiers |= Modifier.SYNCHRONIZED; continue;
-              case Transient: modifiers |= Modifier.TRANSIENT; continue;
-              case Volatile: modifiers |= Modifier.VOLATILE; continue;
-            }
-            throw new AssertionError(modVariant);
+            modifiers |= ModifierNodes.modifierBits(modVariant);
+            break;
           case ArgumentList:
             // Process arguments to enum and anon-class constructors outside
             // the body scope.
@@ -434,7 +419,8 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
           typeName, modifiers, isAnonymous, Optional.of(superTypeName),
           interfaceNames.build(), partialTypeInfo.outerClass,
           // Tentative until we figure out inheritance
-          partialTypeInfo.innerClasses);
+          partialTypeInfo.innerClasses,
+          partialTypeInfo.declaredMembers);
       d.decl.setDeclaredTypeInfo(typeInfo);
       d.stage = Stage.RESOLVED;
 

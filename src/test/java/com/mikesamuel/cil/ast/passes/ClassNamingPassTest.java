@@ -4,6 +4,7 @@ import static com.mikesamuel.cil.ast.meta.Name.Type.CLASS;
 import static com.mikesamuel.cil.ast.meta.Name.Type.PACKAGE;
 import static com.mikesamuel.cil.ast.meta.Name.Type.TYPE_PARAMETER;
 
+import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -12,15 +13,8 @@ import org.junit.Test;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
-import com.mikesamuel.cil.parser.Input;
-import com.mikesamuel.cil.parser.LeftRecursion;
-import com.mikesamuel.cil.parser.ParseErrorReceiver;
-import com.mikesamuel.cil.parser.ParseResult;
-import com.mikesamuel.cil.parser.ParseState;
-import com.mikesamuel.cil.ptree.PTree;
 
 import junit.framework.TestCase;
 
@@ -32,7 +26,8 @@ public final class ClassNamingPassTest extends TestCase {
 
   @Test
   public static void testClassFinder() {
-    List<CompilationUnitNode> compilationUnits = parseCompilationUnits(
+    List<CompilationUnitNode> compilationUnits =
+        PassTestHelpers.parseCompilationUnits(
         new String[][] {
           {
             "package foo.bar;",
@@ -58,6 +53,7 @@ public final class ClassNamingPassTest extends TestCase {
             "  C(3) {},",
             "  ;",
             "  X(int i) { }",
+            "  static { }",
             "}",
           },
           {
@@ -72,135 +68,151 @@ public final class ClassNamingPassTest extends TestCase {
           },
         });
     ClassNamingPass p = new ClassNamingPass(LOGGER);
-
-    ImmutableList<Name> want = ImmutableList.of(
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("C", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("C", CLASS)
-        .child("I", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("C", CLASS)
-        .child("I", CLASS)
-        .child("J", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("C", CLASS)
-        .child("1", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("C", CLASS)
-        .child("2", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("C", CLASS)
-        .child("1", CLASS)
-        .child("1", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("foo", PACKAGE)
-        .child("bar", PACKAGE)
-        .child("D", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("Foo", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("Foo", CLASS)
-        .child("A", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("X", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("X", CLASS)
-        .child("1", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("X", CLASS)
-        .child("1", CLASS)
-        .child("Z", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("X", CLASS)
-        .child("2", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("parameterized", PACKAGE)
-        .child("P", CLASS),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("parameterized", PACKAGE)
-        .child("P", CLASS)
-        .child("T", TYPE_PARAMETER),
-
-        Name.DEFAULT_PACKAGE
-        .child("com", PACKAGE)
-        .child("example", PACKAGE)
-        .child("parameterized", PACKAGE)
-        .child("P", CLASS)
-        .method("bar", "(1)")
-        .child("T", TYPE_PARAMETER)
-);
-
     ClassNamingPass.DeclarationsAndScopes declsAndScopes =
         p.run(compilationUnits);
-    ImmutableList<Name> got = ImmutableList.copyOf(
-        declsAndScopes.declarations.keySet());
 
-    if (!want.equals(got)) {
-      assertEquals(
-          Joiner.on('\n').join(want),
-          Joiner.on('\n').join(got));
-      assertEquals(want, got);
-    }
-  }
+    {
+      ImmutableList<Name> want = ImmutableList.of(
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("C", CLASS),
 
-  static ImmutableList<CompilationUnitNode> parseCompilationUnits(
-      String[]... linesPerFile) {
-    ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
-    for (String[] lines : linesPerFile) {
-      Input.Builder inputBuilder = Input.builder()
-          .code(Joiner.on('\n').join(lines));
-      if (lines.length != 0) {
-        inputBuilder.source(lines[0]);
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("C", CLASS)
+          .child("I", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("C", CLASS)
+          .child("I", CLASS)
+          .child("J", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("C", CLASS)
+          .child("1", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("C", CLASS)
+          .child("2", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("C", CLASS)
+          .child("1", CLASS)
+          .child("1", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("foo", PACKAGE)
+          .child("bar", PACKAGE)
+          .child("D", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("Foo", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("Foo", CLASS)
+          .child("A", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("X", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("X", CLASS)
+          .child("1", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("X", CLASS)
+          .child("1", CLASS)
+          .child("Z", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("X", CLASS)
+          .child("2", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("parameterized", PACKAGE)
+          .child("P", CLASS),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("parameterized", PACKAGE)
+          .child("P", CLASS)
+          .child("T", TYPE_PARAMETER),
+
+          Name.DEFAULT_PACKAGE
+          .child("com", PACKAGE)
+          .child("example", PACKAGE)
+          .child("parameterized", PACKAGE)
+          .child("P", CLASS)
+          .method("bar", "(1)")
+          .child("T", TYPE_PARAMETER)
+          );
+
+      ImmutableList<Name> got = ImmutableList.copyOf(
+          declsAndScopes.declarations.keySet());
+
+      if (!want.equals(got)) {
+        assertEquals(  // Nice eclipse diff.
+            Joiner.on('\n').join(want),
+            Joiner.on('\n').join(got));
+        assertEquals(want, got);
       }
-      Input inp = inputBuilder.build();
-      ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
-          .parse(new ParseState(inp), new LeftRecursion(),
-              ParseErrorReceiver.DEV_NULL);
-      assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);
-      ParseState afterParse = result.next();
-      CompilationUnitNode cu = (CompilationUnitNode)
-          Trees.of(inp, afterParse.output);
-      b.add(cu);
     }
-    return b.build();
+
+    {
+      ImmutableList<String> want = ImmutableList.of(
+          "private static final /foo/bar/C.x",
+          "/foo/bar/C$1.y",
+          "public static final /Foo$A.B",
+          "public static final /Foo$A.C",
+          "public static final /com/example/X.A",
+          "public static final /com/example/X.B",
+          "public static final /com/example/X.C",
+          "private /com/example/X.<init>(1)",
+          "private static /com/example/X.<clinit>(1)",
+          "/com/example/parameterized/P.foo(1)",
+          "/com/example/parameterized/P.bar(1)"
+          );
+
+      ImmutableList.Builder<String> b = ImmutableList.builder();
+
+      for (UnresolvedTypeDeclaration d : declsAndScopes.declarations.values()) {
+        for (MemberInfo mi : d.decl.getDeclaredTypeInfo().declaredMembers) {
+          String modString = Modifier.toString(mi.modifiers);
+          b.add(
+              modString + (modString.isEmpty() ? "" : " ")
+              + mi.canonName.toString());
+        }
+      }
+
+      ImmutableList<String> got = b.build();
+
+      if (!want.equals(got)) {
+        assertEquals(  // Nice eclipse diff.
+            Joiner.on('\n').join(want),
+            Joiner.on('\n').join(got));
+        assertEquals(want, got);
+      }
+    }
   }
 }
