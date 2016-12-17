@@ -62,6 +62,7 @@ abstract class AbstractTypeDeclarationPass<T> implements AbstractPass<T> {
         ordinal += 1;
         methodCounters.put(nameWithoutDescriptor, ordinal);
         methodDescriptor = "(" + ordinal + ")";
+        cd.setMethodDescriptor(methodDescriptor);
       }
       childOuter = childOuter.method(methodName, methodDescriptor);
     }
