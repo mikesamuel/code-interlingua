@@ -348,6 +348,8 @@ UnannClassType:
 (chapter=Name)
 FieldName:
      Identifier
+EnumConstantName:
+     FieldName
 Label:
      Identifier
 LocalName:
@@ -364,16 +366,18 @@ PackageOrTypeName:
      !"@" ContextFreeNames
      PackageOrTypeName "." Identifier
      Identifier
-ExpressionName:
-     !"@" ContextFreeNames
-     AmbiguousName "." Identifier
-     Identifier
+// The JLS defines ExpressionName and AmbiguousName, but we use
+// the more general ContextFreeNames instead.
+//ExpressionName:
+//     !"@" ContextFreeNames
+//     AmbiguousName "." Identifier
+//     Identifier
+//AmbiguousName:
+//     !"@" ContextFreeNames
+//     AmbiguousName "." Identifier
+//     Identifier
 PackageName:
      Identifier {"." Identifier}
-AmbiguousName:
-     !"@" ContextFreeNames
-     AmbiguousName "." Identifier
-     Identifier
 
 // ContextFreeNames matches a series of dotted names, possibly with
 // annotations and/or type parameters.
@@ -394,7 +398,7 @@ ContextFreeName:
 
 // Packages
 (chapter=Package)
-CompilationUnit: (@trait=TypeScope) (@trait=ExpressionNameScope)
+CompilationUnit: (@trait=TypeScope) (@trait=ExpressionNameScope) @toplevel
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
      // TODO: Why is the package name here not left-associative as it is under the names chapter?
@@ -424,7 +428,7 @@ TypeDeclaration:
 ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
-NormalClassDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope) (@trait=ExpressionNameScope)
+NormalClassDeclaration: (@trait=TypeDeclaration,TypeParameterScope)
      [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
@@ -445,7 +449,7 @@ Superinterfaces:
      "implements" InterfaceTypeList
 InterfaceTypeList:
      InterfaceType {"," InterfaceType}
-ClassBody: (@trait=TypeScope)
+ClassBody: (@trait=TypeScope,ExpressionNameScope)
      "{" {ClassBodyDeclaration} "}"
 ClassBodyDeclaration:
      ClassMemberDeclaration
@@ -473,12 +477,12 @@ VariableDeclaratorList:
      VariableDeclarator {"," VariableDeclarator}
 VariableDeclarator:
      VariableDeclaratorId ["=" VariableInitializer]
-VariableDeclaratorId:
+VariableDeclaratorId: (@trait=ExpressionNameDeclaration)
      Identifier [Dims]
 VariableInitializer:
      Expression
      ArrayInitializer
-MethodDeclaration: (@trait=TypeParameterScope) (@trait=CallableDeclaration)
+MethodDeclaration: (@trait=TypeParameterScope,CallableDeclaration)
      [JavaDocComment] {!!MethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
 MethodModifier:
      Annotation
@@ -528,7 +532,7 @@ InstanceInitializer: (@trait=CallableDeclaration)
      Block
 StaticInitializer: (@trait=CallableDeclaration)
      "static" Block
-ConstructorDeclaration: (@trait=TypeParameterScope) (@trait=CallableDeclaration)
+ConstructorDeclaration: (@trait=TypeParameterScope,CallableDeclaration)
      [JavaDocComment] {!!ConstructorModifier Modifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
 ConstructorModifier:
      Annotation
@@ -543,14 +547,14 @@ ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-EnumDeclaration: (@trait=TypeDeclaration) (@trait=ExpressionNameScope)
+EnumDeclaration: (@trait=TypeDeclaration)
      [JavaDocComment] {!!ClassModifier Modifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
-EnumBody:
+EnumBody: (@trait=TypeScope,ExpressionNameScope)
      "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
 EnumConstantList:
      EnumConstant {"," EnumConstant}
-EnumConstant: (@trait=TypeDeclaration) (@trait=ExpressionNameScope)
-     {!!EnumConstantModifier Modifier} FieldName ["(" [ArgumentList] ")"] [ClassBody] (@name=Declaration)
+EnumConstant: (@trait=TypeDeclaration,ExpressionNameDeclaration)
+     {!!EnumConstantModifier Modifier} EnumConstantName ["(" [ArgumentList] ")"] [ClassBody] (@name=Declaration)
 EnumConstantModifier:
      Annotation
 EnumBodyDeclarations: (@trait=TypeScope)
@@ -561,7 +565,7 @@ EnumBodyDeclarations: (@trait=TypeScope)
 InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
-NormalInterfaceDeclaration: (@trait=TypeDeclaration) (@trait=TypeParameterScope) (@trait=ExpressionNameScope)
+NormalInterfaceDeclaration: (@trait=TypeDeclaration,TypeParameterScope)
      [JavaDocComment] {!!InterfaceModifier Modifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
 InterfaceModifier:
      Annotation
@@ -573,7 +577,7 @@ InterfaceModifier:
      "strictfp"
 ExtendsInterfaces:
      "extends" InterfaceTypeList
-InterfaceBody: (@trait=TypeScope)
+InterfaceBody: (@trait=TypeScope,ExpressionNameScope)
      "{" {InterfaceMemberDeclaration} "}"
 InterfaceMemberDeclaration:
      ConstantDeclaration
@@ -588,7 +592,7 @@ ConstantModifier:
      "public"
      "static"
      "final"
-InterfaceMethodDeclaration: (@trait=TypeParameterScope) (@trait=CallableDeclaration)
+InterfaceMethodDeclaration: (@trait=TypeParameterScope,CallableDeclaration)
      [JavaDocComment] {!!InterfaceMethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
 InterfaceMethodModifier:
      Annotation
@@ -661,9 +665,9 @@ VariableInitializerList:
 
 // Blocks and Statements
 (chapter=Statement)
-Block:
+Block: (@trait=ExpressionNameScope)
      "{" [BlockStatements] "}"
-BlockStatements: (@trait=ExpressionNameScope)
+BlockStatements:
      // The JLS grammar originally was defined simply
      //     BlockStatement {BlockStatement}
      // and included ClassDeclaration among BlockStatement.
@@ -683,7 +687,7 @@ BlockStatements: (@trait=ExpressionNameScope)
      BlockTypeScope
 BlockTypeScope: (@trait=TypeScope)
      ClassDeclaration [BlockStatements]
-BlockStatement:
+BlockStatement: (@trait=LimitedScopeElement)
      LocalVariableDeclarationStatement
      Statement
 LocalVariableDeclarationStatement:
@@ -726,7 +730,7 @@ AssertStatement:
      "assert" Expression [":" Expression] ";"
 SwitchStatement:
      "switch" "(" Expression ")" SwitchBlock
-SwitchBlock:
+SwitchBlock: (@trait=ExpressionNameScope)
      "{" {SwitchBlockStatementGroup} "}"
 SwitchBlockStatementGroup:
      SwitchLabels [BlockStatements]
@@ -737,10 +741,8 @@ SwitchLabel:
      "default" ":"
 CaseValue:
      Identifier !!":" (@name=Ambiguous)  // Foo could be a constant reference or an enum name
-     EnumConstantName
+     EnumConstantName !!":"
      ConstantExpression
-EnumConstantName:
-     FieldName
 WhileStatement:
      "while" "(" Expression ")" Statement
 DoStatement:
@@ -848,7 +850,7 @@ ClassLiteral:
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration) (@trait=ExpressionNameScope)
+UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration)
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
      // Lookahead avoids type arguments then diamond as in (new foo.Bar<T><>())
@@ -999,9 +1001,9 @@ ConstantExpression:
 // This is not part of the Java grammar, but instead defines productions that are
 // solely used when parsing AST templates.
 (chapter=Template)
-TemplateDirectives: @nonstandard
+TemplateDirectives: @nonstandard @toplevel
     "<%" TemplateDirective "%>" {"<%" TemplateDirective "%>"}                  (@name=TemplateDirectives)
-TemplateInterpolation: @nonstandard
+TemplateInterpolation: @nonstandard @toplevel
     "<%" !TemplateDirective TemplateComprehension "%>"                         (@name=Interpolation)
 TemplateDirective: @nonstandard
     "let" Identifier ["=" Expression] {"," Identifier ["=" Expression]} [";"]  (@name=Vars)

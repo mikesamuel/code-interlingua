@@ -18,12 +18,26 @@ _TRAITS = {
             'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
         )
     ),
+    'ExpressionNameDeclaration': (
+        (
+            ('Name', 'declaredExpressionName'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.Name',
+        )),
     'ExpressionNameScope': (
         (
             ('ExpressionNameResolver', 'expressionNameResolver'),
         ),
         (
             'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
+        )),
+    'LimitedScopeElement': (
+        (
+            ('DeclarationPositionMarker', 'declarationPositionMarker'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker',
         )),
     'NamePart': (
         (
@@ -572,6 +586,65 @@ def process_grammar(
                                                .replace('\n', '\n\t\t\t\t')
                     print '\t\t\t\t%s' % pprinted_variant
 
+    def for_each_chapter(f):
+        for chapter in grammar:
+            f(chapter)
+
+    def for_each_prod(f):
+        def g(chapter):
+            for prod in chapter['prods']:
+                f(chapter, prod)
+        for_each_chapter(g)
+
+    def for_each_variant(f):
+        def g(chapter, prod):
+            for variant in prod['variants']:
+                f(chapter, prod, variant)
+        for_each_prod(g)
+
+    def assignforlambda(obj, key, val):
+        obj[key] = val
+
+    prods_by_name = {}
+    for_each_prod(lambda c, p: assignforlambda(prods_by_name, p['name'], p))
+
+    def compute_reachable():
+        reachable = set()
+        def compute_reachable_from(pn):
+            def walk_ptree(pt):
+                if 'ptree' in pt:
+                    for sub in pt['ptree']:
+                        walk_ptree(sub)
+                elif pt['name'] == 'ref':
+                    ref_name = pt['pleaf'][0]
+                    compute_reachable_from(ref_name)
+            if pn not in reachable:
+                reachable.add(pn)
+                prod = prods_by_name.get(pn, None)
+                if prod is not None:
+                    for v in prod['variants']:
+                        for pt in v['ptree']:
+                            walk_ptree(pt)
+        for pn, prod in prods_by_name.iteritems():
+            if '@toplevel' in (annot[0] for annot in prod['annots']):
+                compute_reachable_from(pn)
+        return reachable
+
+    reachable = compute_reachable()
+
+    def prune_unreachable():
+        unreachable = set(prods_by_name.keys()).difference(reachable)
+        if verbose:
+            # Dump a list of productions that are not reachable from @toplevel prods
+            for ur in unreachable:
+                print 'UNREACHABLE: %s' % ur
+        for ur in unreachable:
+            del prods_by_name[ur]
+        def prune(c):
+            c['prods'] = tuple([p for p in c['prods'] if p['name'] in reachable])
+        for_each_chapter(prune)
+    prune_unreachable()
+
     def create_enum_members():
         enum_members = []
         for chapter in grammar:
@@ -649,25 +722,6 @@ public enum NodeType implements ParSerable {
             'generator': generator,
             'members': ''.join(create_enum_members()),
         })
-
-    def for_each_chapter(f):
-        for chapter in grammar:
-            f(chapter)
-
-    def for_each_prod(f):
-        def g(chapter):
-            for prod in chapter['prods']:
-                f(chapter, prod)
-        for_each_chapter(g)
-
-    def for_each_variant(f):
-        def g(chapter, prod):
-            for variant in prod['variants']:
-                f(chapter, prod, variant)
-        for_each_prod(g)
-
-    def assignforlambda(obj, key, val):
-        obj[key] = val
 
     variant_lookaheads = {}
     def compute_lookaheads():
@@ -806,9 +860,6 @@ public enum NodeType implements ParSerable {
     if verbose:
         for ((pn, vn), toks) in variant_lookaheads.iteritems():
             print 'LA %s.%s = %r' % (pn, vn, toks)
-
-    prods_by_name = {}
-    for_each_prod(lambda c, p: assignforlambda(prods_by_name, p['name'], p))
 
     # We need to know which productions can match the empty string so we
     # can reliably identify calls which might be left-recursive.
@@ -1225,7 +1276,7 @@ public enum NodeType implements ParSerable {
         traits = []
         for (annot_name, _) in prod['annots']:
             if annot_name.startswith('(@trait='):
-                traits.append(annot_name[8:-1])
+                traits.extend([x.strip() for x in annot_name[8:-1].split(',') if len(x.strip())])
 
         # extra code for the Node body.
         extra_code = []
@@ -1799,7 +1850,6 @@ public abstract class %(class_name)s<T> {
                     walk_ptree({ 'name': '()', 'ptree': variant['ptree'] })
                 callees_by_pn[caller_pn] = callees
             for_each_prod(ptree_walker)
-            print repr(callees_by_pn)
 
             called_cross_chapter = {}
             for caller_pn, callees in callees_by_pn.iteritems():

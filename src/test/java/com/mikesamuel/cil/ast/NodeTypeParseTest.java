@@ -23,17 +23,6 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
    * <pre>builtin</pre>
    */
   @Test
-  public void testIdentifierCharsBuiltin() {
-    parseSanityCheck(
-        IdentifierCharsNode.Variant.Builtin,
-        "foo"
-        );
-  }
-
-  /**
-   * <pre>builtin</pre>
-   */
-  @Test
   public void testIntegerLiteralBuiltin() {
     parseSanityCheck(
         IntegerLiteralNode.Variant.Builtin,
@@ -647,29 +636,6 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   }
 
   /**
-   * <pre>ExpressionName "." Identifier ! "("</pre>
-   */
-  @Test
-  public void testExpressionNameExpressionNameDotIdentifierNotLp() {
-    parseSanityCheck(
-        ExpressionNameNode.Variant.AmbiguousNameDotIdentifier,
-        "foo.bar",
-        Fuzz.SAME_VARIANT  // Context free names
-        );
-  }
-
-  /**
-   * <pre>Identifier</pre>
-   */
-  @Test
-  public void testExpressionNameIdentifier() {
-    parseSanityCheck(
-        ExpressionNameNode.Variant.NotAtContextFreeNames,
-        "foo"
-        );
-  }
-
-  /**
    * <pre>Identifier</pre>
    */
   @Test
@@ -699,30 +665,6 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
     parseSanityCheck(
         PackageNameNode.Variant.IdentifierDotIdentifier,
         "com"
-        );
-  }
-
-  /**
-   * <pre>AmbiguousName "." Identifier</pre>
-   */
-  @Test
-  public void testAmbiguousNameAmbiguousNameDotIdentifier() {
-    parseSanityCheck(
-        AmbiguousNameNode.Variant.AmbiguousNameDotIdentifier,
-        "foo.bar",
-        Fuzz.SAME_VARIANT  // Context free names
-        );
-  }
-
-  /**
-   * <pre>Identifier</pre>
-   */
-  @Test
-  public void testAmbiguousNameIdentifier() {
-    parseSanityCheck(
-        AmbiguousNameNode.Variant.NotAtContextFreeNames,
-        "ambiguous",
-        Fuzz.SAME_VARIANT  // Context free names
         );
   }
 
