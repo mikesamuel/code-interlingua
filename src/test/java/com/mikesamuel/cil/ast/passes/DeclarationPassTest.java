@@ -1,36 +1,19 @@
 package com.mikesamuel.cil.ast.passes;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import org.junit.Test;
 
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.Java8Comments;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.format.FormattedSource;
-import com.mikesamuel.cil.parser.SList;
-import com.mikesamuel.cil.parser.SerialErrorReceiver;
-import com.mikesamuel.cil.parser.SerialState;
-import com.mikesamuel.cil.parser.Unparse;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
-import com.mikesamuel.cil.parser.Unparse.Verified;
 
 import junit.framework.TestCase;
 
@@ -75,99 +58,22 @@ public class DeclarationPassTest extends TestCase {
       String[][] inputLines,
       String... expectedErrors)
   throws UnparseVerificationException {
-    Logger logger = Logger.getAnonymousLogger();
-    logger.setUseParentHandlers(false);
-    List<LogRecord> logRecords = Lists.newArrayList();
-    logger.addHandler(new Handler() {
+    PassTestHelpers.assertAnnotatedOutput(
+        new PassTestHelpers.PassRunner() {
 
-      @Override
-      public void publish(LogRecord record) {
-        logRecords.add(record);
-      }
-
-      @Override
-      public void flush() {
-        // Ok
-      }
-
-      @Override
-      public void close() {
-        // Ok
-      }
-    });
-    logger.setLevel(Level.WARNING);
-
-    List<CompilationUnitNode> cus = ClassNamingPassTest.parseCompilationUnits(
-        inputLines
-        );
-
-    DeclarationPass dp = new DeclarationPass(logger);
-    dp.run(cus);
-
-    {
-      List<String> unsatisfied = new ArrayList<>();
-      for (String expectedError : expectedErrors) {
-        Iterator<LogRecord> it = logRecords.iterator();
-        boolean found = false;
-        while (it.hasNext()) {
-          LogRecord r = it.next();
-          if (r.getMessage().contains(expectedError)) {
-            it.remove();
-            found = true;
-            break;
+          @Override
+          public ImmutableList<CompilationUnitNode> runPasses(
+              Logger logger, ImmutableList<CompilationUnitNode> cus) {
+            DeclarationPass dp = new DeclarationPass(logger);
+            dp.run(cus);
+            return cus;
           }
-        }
-        if (!found) {
-          unsatisfied.add(expectedError);
-        }
-      }
-      if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
-        fail(
-            "Expected errors " + unsatisfied + "\ngot " +
-            Lists.transform(
-                logRecords,
-                new Function<LogRecord, String>() {
-                  @Override
-                  public String apply(LogRecord r) {
-                    return r.getMessage();
-                  }
-                }));
-      }
-    }
-
-    StringBuilder sb = new StringBuilder();
-    for (CompilationUnitNode cu : cus) {
-      Iterable<Event> skeleton = SList.forwardIterable(
-          Trees.startUnparse(null, cu, DECORATOR));
-      Optional<SerialState> serialized =
-          NodeType.CompilationUnit.getParSer().unparse(
-          new SerialState(skeleton),
-          SerialErrorReceiver.DEV_NULL);
-      assertTrue(
-          skeleton.toString(),
-          serialized.isPresent());
-      Verified verified = Unparse.verify(
-          SList.forwardIterable(serialized.get().output));
-      FormattedSource fs = Unparse.format(verified);
-      if (sb.length() != 0) {
-        sb.append("\n\n");
-      }
-      sb.append(fs.code);
-    }
-    String got = sb.toString();
-
-    sb.setLength(0);
-    for (String[] linesForOneCu : expectedLines) {
-      if (sb.length() != 0) {
-        sb.append("\n\n");
-      }
-      sb.append(Joiner.on('\n').join(linesForOneCu));
-    }
-    String want = sb.toString();
-
-    assertEquals(want, got);
+        },
+        expectedLines,
+        inputLines,
+        DECORATOR,
+        expectedErrors);
   }
-
 
   @Test
   public static void testEmptyCompilationUnit() throws Exception {
@@ -268,7 +174,7 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "package foo.bar", ";",  // TODO: why split line before ";"?
+            "package foo.bar;",
             "/* /foo/bar/I extends /java/lang/Object"
             + " implements /java/lang/Runnable */",
             "interface I extends Runnable {}",
@@ -434,7 +340,7 @@ public class DeclarationPassTest extends TestCase {
         new String[][] {
           {
             "package foo;",
-            "import com.google.common.base.Supplier", ";",
+            "import com.google.common.base.Supplier;",
             "/* /foo/C extends /java/lang/Object contains /foo/C.foo(1)$1 */",
             "class C {",
             "  public <",
@@ -443,8 +349,7 @@ public class DeclarationPassTest extends TestCase {
             "    return",
             "    /* anonymous /foo/C.foo(1)$1"
             +     " extends /com/google/common/base/Supplier in /foo/C */",
-            "    new Supplier<T> () { @Override public T get() { return x; } }",
-            "    ;",
+            "    new Supplier<T> () { @Override public T get() { return x; } };",
             "  }",
             "}"
           }
@@ -475,13 +380,11 @@ public class DeclarationPassTest extends TestCase {
             "import java.util.*;",
             "/* /foo/C extends /java/lang/Object contains /foo/C.<init>(1)$1 */",
             "class C {",
-            "  public",
-            "  <",
+            "  public <",
             "  /* /foo/C.<init>(1).<T> extends /java/lang/Comparable"
             +   " implements /java/io/Serializable */",
             "  T extends Comparable<T> & Serializable> C(T x) {",
-            "    super",
-            "    (",
+            "    super (",
             "        /* anonymous /foo/C.<init>(1)$1"
             +         " extends /java/util/Map$Entry in /foo/C */",
             "        new Map.Entry<T, T> () {",
@@ -517,8 +420,7 @@ public class DeclarationPassTest extends TestCase {
           {
             "/* public /C extends /java/lang/Object contains /C.f(1)$R */",
             "public interface C {",
-            "  default void f()",
-            "  {",
+            "  default void f() {",
             "    /* /C.f(1)$R extends /java/lang/Object"
             +     " implements /java/lang/Runnable in /C */",
             "    class R implements Runnable { public void run() {} }",
@@ -558,8 +460,7 @@ public class DeclarationPassTest extends TestCase {
             "    class D {}",
             "    /* /C.f(1)$F extends /C.f(1)$D in /C */",
             "    class F extends D {}",
-            "    return new Class[] { E.class, F.class, }",
-            "    ;",  // TODO
+            "    return new Class[] { E.class, F.class, };",
             "  }",
             "  /* static /C$D extends /java/lang/Object in /C */",
             "  static class D {}",
@@ -625,8 +526,7 @@ public class DeclarationPassTest extends TestCase {
             "public class C {",
             "  <",
             "  /* /C.<init>(1).<T> extends /java/lang/Object */",
-            "  T> C()",
-            "  {",
+            "  T> C() {",
             "    /* /C.<init>(1)$R extends /java/lang/Object"
             +     " implements /java/lang/Runnable in /C */",
             "    class R implements Runnable { public void run() {} }",
@@ -654,22 +554,20 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "import com.google.common.base.Supplier", ";",
+            "import com.google.common.base.Supplier;",
             "/* /C extends /java/lang/Object contains /C.f(1)$1, /C.f(2)$1 */",
             "class C {",
             "  Supplier f(int i) {",
             "    return",
             "    /* anonymous /C.f(1)$1 extends"
             +     " /com/google/common/base/Supplier in /C */",
-            "    new Supplier() { @Override public Object get() { return i; } }",
-            "    ;",
+            "    new Supplier() { @Override public Object get() { return i; } };",
             "  }",
             "  Supplier f(float f) {",
             "    return",
             "    /* anonymous /C.f(2)$1 extends"
             +     " /com/google/common/base/Supplier in /C */",
-            "    new Supplier() { @Override public Object get() { return f; } }",
-            "    ;",
+            "    new Supplier() { @Override public Object get() { return f; } };",
             "  }",
             "}",
           }

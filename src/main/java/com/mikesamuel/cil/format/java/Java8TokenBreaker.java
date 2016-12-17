@@ -117,7 +117,7 @@ implements TokenBreaker<SList<NodeVariant>> {
         case "<":
           if (leftStack != null) {
             switch (leftStack.x.getNodeType()) {
-              case TypeParameters: case TypeArguments:
+              case TypeParameters: case TypeArguments: case Diamond:
                 return TokenBreak.SHOULD_NOT;
               default:
                 break;
@@ -222,7 +222,7 @@ implements TokenBreaker<SList<NodeVariant>> {
           break;
         case "}":
           if ("else".equals(right) || "catch".equals(right)
-              || "finally".equals(right)) {
+              || "finally".equals(right) || ";".equals(right)) {
             // Also "while" inside a DoStatement
             return TokenBreak.SHOULD_NOT;
           }

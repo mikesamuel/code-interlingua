@@ -198,12 +198,12 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
                 // line.
                 break;
               }
-              int columnAfterLookeahead = sink.column();
+              int columnAfterLookahead = sink.column();
               if (nextToken != null) {
                 switch (space) {
                   case MUST:
                   case SHOULD:
-                    ++columnAfterLookeahead;
+                    ++columnAfterLookahead;
                     break;
                   case MAY:
                   case SHOULD_NOT:
@@ -215,7 +215,7 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
                 // TODO: Add a hint to decorated token so that we know whether
                 // subsequent lines of a multiline token need to be indented,
                 // like Javadoc comment tokens.
-                columnAfterLookeahead += nextToken.content.length();
+                columnAfterLookahead += nextToken.content.length();
                 if (nextBreak != null && nextBreak.nextToken != null) {
                   // See if we want to treat this as a preferred break point
                   // based on one break lookahead so that we break like
@@ -224,16 +224,20 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
                   // instead of
                   //   a, b, c, d
                   //   , e, f,
+                  boolean needToAccountForNextToken = false;
                   switch (nextBreak.line) {
                     case MAY:
+                      needToAccountForNextToken = true;
+                      break;
                     case MUST:
                     case SHOULD:
                       break;
                     case SHOULD_NOT:
+                      needToAccountForNextToken = true;
                       switch (nextBreak.space) {
                         case MUST:
                         case SHOULD:
-                          ++columnAfterLookeahead;
+                          ++columnAfterLookahead;
                           break;
                         case MAY:
                         case SHOULD_NOT:
@@ -241,11 +245,14 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
                       }
                       break;
                   }
-                  columnAfterLookeahead += nextBreak.nextToken.content.length();
+                  if (needToAccountForNextToken) {
+                    columnAfterLookahead +=
+                        nextBreak.nextToken.content.length();
+                  }
                 }
               }
 
-              if (columnAfterLookeahead > softColumnLimit) {
+              if (columnAfterLookahead > softColumnLimit) {
                 sink.newline();
                 return;
               }

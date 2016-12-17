@@ -77,6 +77,23 @@ public final class CStyleGrossStructurerTest extends TestCase {
   }
 
   @Test
+  public void testTokenThatIsBrokenAfterFollowedByVeryLongToken()
+  throws Exception {
+    assertReformattedJava(
+        ""
+            + "foo();"
+            + "\n"
+            + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            + "\n"
+            + "();",
+        ""
+            + "foo();"
+            + "\n"
+            + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa();",
+        NodeType.BlockStatements);
+  }
+
+  @Test
   public static void testCommentIndentation() {
     assertFormattedJava(
         ""
