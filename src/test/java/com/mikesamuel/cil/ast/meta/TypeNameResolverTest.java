@@ -44,8 +44,7 @@ public final class TypeNameResolverTest extends TestCase {
   }
 
   private ImmutableList<Name> lookupTypeName(String qualifiedName) {
-    Name ambiguousName = ambiguousName(qualifiedName);
-    return ImmutableList.copyOf(r.lookupTypeName(ambiguousName));
+    return r.lookupTypeName(ambiguousName(qualifiedName));
   }
 
 
