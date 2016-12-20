@@ -17,13 +17,13 @@ import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageDeclarationNode;
 import com.mikesamuel.cil.ast.PackageNameNode;
+import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
-import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
-import com.mikesamuel.cil.ast.TypeNameNode;
+import com.mikesamuel.cil.ast.TypeImportOnDemandDeclarationNode;
 
 @SuppressWarnings("javadoc")
 public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
@@ -31,13 +31,12 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
   @Test
   public void testSingleStaticImport() {
     assertParsePasses(
-        NodeType.SingleStaticImportDeclaration,
-        "import static com.example.Foo.bar;",
-        /**/push(SingleStaticImportDeclarationNode.Variant
-                .ImportStaticTypeNameDotIdentifierSem),
+        NodeType.TypeImportOnDemandDeclaration,
+        "import com.example.Foo.bar.*;",
+        /**/push(TypeImportOnDemandDeclarationNode.Variant
+                .ImportPackageOrTypeNameDotStrSem),
         /*..*/token("import", -1),
-        /*..*/token("static", -1),
-        /*..*/push(TypeNameNode.Variant.NotAtContextFreeNames),
+        /*..*/push(PackageOrTypeNameNode.Variant.NotAtContextFreeNames),
         /*....*/push(ContextFreeNamesNode.Variant
                     .ContextFreeNameDotContextFreeName),
         /*......*/push(ContextFreeNameNode.Variant.Name),
@@ -57,12 +56,16 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
         /*..........*/content("Foo", -1),
         /*........*/pop(),
         /*......*/pop(),
+        /*......*/token(".", -1),
+        /*......*/push(ContextFreeNameNode.Variant.Name),
+        /*........*/push(IdentifierNode.Variant.Builtin),  // Child of import
+        /*..........*/content("bar", -1),
+        /*........*/pop(),
+        /*......*/pop(),
         /*....*/pop(),
         /*..*/pop(),
         /*..*/token(".", -1),
-        /*..*/push(IdentifierNode.Variant.Builtin),  // Child of import
-        /*....*/content("bar", -1),
-        /*..*/pop(),
+        /*..*/token("*", -1),
         /*..*/token(";", -1),
         /**/pop());
   }
