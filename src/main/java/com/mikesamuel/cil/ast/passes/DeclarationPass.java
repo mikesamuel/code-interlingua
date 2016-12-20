@@ -479,8 +479,8 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
           break;
         case SingleTypeImportDeclaration:
           Name ambigName = toName(node, Type.AMBIGUOUS);
-          ImmutableList<Name> importedTypes = ImmutableList.copyOf(
-              typeNameResolver.lookupTypeName(ambigName));
+          ImmutableList<Name> importedTypes =
+              typeNameResolver.lookupTypeName(ambigName);
           switch (importedTypes.size()) {
             case 0:
               error(
@@ -500,9 +500,8 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
           break;
         case TypeImportOnDemandDeclaration:
           Name importedPackageOrType = toName(node, Type.AMBIGUOUS);
-          ImmutableList<Name> outerTypes = ImmutableList.copyOf(
-              typeNameResolver.lookupTypeName(
-                  importedPackageOrType));
+          ImmutableList<Name> outerTypes = typeNameResolver.lookupTypeName(
+              importedPackageOrType);
           switch (outerTypes.size()) {
             case 0:
               // Assume anything not a type is a package.
