@@ -305,6 +305,16 @@ public interface ExpressionNameResolver {
       }
 
       @Override
+      public boolean equals(Object o) {
+        return this == o;
+      }
+
+      @Override
+      public int hashCode() {
+        return -1;
+      }
+
+      @Override
       public String toString() {
         return "EARLIEST";
       }
@@ -321,6 +331,16 @@ public interface ExpressionNameResolver {
         if (o == this) { return 0; }
         if (o == EARLIEST) { return 1; }
         return -o.compareTo(this);
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return this == o;
+      }
+
+      @Override
+      public int hashCode() {
+        return -1;
       }
 
       @Override
