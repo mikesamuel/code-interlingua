@@ -37,7 +37,7 @@ public interface TypeNameResolver {
    *     {@link com.mikesamuel.cil.ast.meta.Name.Type#PACKAGE} or
    *     {@link com.mikesamuel.cil.ast.meta.Name.Type#CLASS}
    */
-  public Iterable<Name> lookupTypeName(Name ambiguousName);
+  public ImmutableList<Name> lookupTypeName(Name ambiguousName);
 
   /**
    * Factories for common resolvers.
@@ -113,7 +113,7 @@ public interface TypeNameResolver {
                 });
 
         @Override
-        public Iterable<Name> lookupTypeName(Name ambigName) {
+        public ImmutableList<Name> lookupTypeName(Name ambigName) {
           try {
             return cache.get(ambigName);
           } catch (ExecutionException e) {
@@ -268,7 +268,7 @@ public interface TypeNameResolver {
       return new TypeNameResolver() {
 
         @Override
-        public Iterable<Name> lookupTypeName(Name ambiguousName) {
+        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
           if (ambiguousName.type == Name.Type.TYPE_PARAMETER) {
             return ImmutableList.of(ambiguousName);
           }
@@ -332,7 +332,7 @@ public interface TypeNameResolver {
       return new TypeNameResolver() {
 
         @Override
-        public Iterable<Name> lookupTypeName(Name ambiguousName) {
+        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
           ImmutableList<String> typeNameIdents;
           {
             ImmutableList.Builder<String> b = ImmutableList.builder();
@@ -385,10 +385,10 @@ public interface TypeNameResolver {
       return new TypeNameResolver() {
 
         @Override
-        public Iterable<Name> lookupTypeName(Name ambiguousName) {
+        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
           for (TypeNameResolver r : resolvers) {
-            Iterable<Name> names = r.lookupTypeName(ambiguousName);
-            if (!Iterables.isEmpty(names)) { return names; }
+            ImmutableList<Name> names = r.lookupTypeName(ambiguousName);
+            if (!names.isEmpty()) { return names; }
           }
           return ImmutableList.of();
         }
