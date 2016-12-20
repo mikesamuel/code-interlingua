@@ -66,10 +66,15 @@ public final class ExpressionScopePass implements AbstractPass<Void> {
 
     if (node instanceof TypeDeclaration) {
       TypeInfo ti = ((TypeDeclaration) node).getDeclaredTypeInfo();
-      childResolver = ExpressionNameResolver.Resolvers.forType(
-          ti, typeInfoResolver);
-      currentMarker = DeclarationPositionMarker.EARLIEST;
-      childOuter = ((TypeDeclaration) node).getDeclaredTypeInfo().canonName;
+      if (ti != null) {
+        // Could be null for (new ...) that do not declare an
+        // anonymous type.
+        Preconditions.checkNotNull(ti, node);
+        childResolver = ExpressionNameResolver.Resolvers.forType(
+            ti, typeInfoResolver);
+        currentMarker = DeclarationPositionMarker.EARLIEST;
+        childOuter = ((TypeDeclaration) node).getDeclaredTypeInfo().canonName;
+      }
     }
 
     if (node instanceof CallableDeclaration) {
@@ -212,9 +217,8 @@ public final class ExpressionScopePass implements AbstractPass<Void> {
   }
 
   private Optional<TypeInfo> lookupType(TypeNameNode typeName) {
-    ImmutableList<Name> names = ImmutableList.copyOf(
-        qualifiedNameResolver.lookupTypeName(
-            ambiguousNameFor(typeName)));
+    ImmutableList<Name> names = qualifiedNameResolver.lookupTypeName(
+            ambiguousNameFor(typeName));
     switch (names.size()) {
       case 0:
         error(typeName, "Cannot resolve name " + typeName.getTextContent("."));

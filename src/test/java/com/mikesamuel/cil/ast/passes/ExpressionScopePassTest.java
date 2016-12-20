@@ -232,6 +232,83 @@ public final class ExpressionScopePassTest extends TestCase {
         });
   }
 
+  @Test
+  public static void testBrokenSingleStaticImport() throws Exception {
+    assertScopesAndMarkers(
+        new String[][] {
+          {
+            "/* (Names) */"
+            + "import static java.lang.System.err.println;",
+          },
+        },
+        new String[][] {
+          {
+            "//test",
+            "import static java.lang.System.err.println;",
+          },
+          //0         1    ^    2         3    ^    4         5
+          //012345678901234567890123456789012345678901234567890
+          // For Line position below
+        },
+        "//test:2+15-35: Cannot resolve name java.lang.System.err",
+        "//test:2+15-35: Unknown type java.lang.System.err");
+  }
+
+  @Test
+  public static void testImportOfStaticMethod() throws Exception {
+    assertScopesAndMarkers(
+        new String[][] {
+          {
+            "/* (Names) */"  // No names.
+            + "import static java.lang.Math.random;",
+          },
+        },
+        new String[][] {
+          {
+            "//test",
+            "import static java.lang.Math.random;",
+          },
+          //0         1    ^    2         3    ^    4         5
+          //012345678901234567890123456789012345678901234567890
+          // For Line position below
+        });
+  }
+
+  @Test
+  public static void testImportOfStaticField() throws Exception {
+    assertScopesAndMarkers(
+        new String[][] {
+          {
+            "/* (Names /java/lang/Math.PI) */"  // No names.
+            + "import static java.lang.Math.PI;",
+          },
+        },
+        new String[][] {
+          {
+            "//test",
+            "import static java.lang.Math.PI;",
+          },
+        });
+  }
+
+  @Test
+  public static void testImportOfStaticFields() throws Exception {
+    assertScopesAndMarkers(
+        new String[][] {
+          {
+            "/* (Names /java/lang/Math{E,PI}) */"  // No names.
+            + "import static java.lang.Math.*;",
+          },
+        },
+        new String[][] {
+          {
+            "//test",
+            "import static java.lang.Math.*;",
+          },
+        });
+  }
+
+
   private static void assertScopesAndMarkers(
       String[][] want, String[][] inputs, String... expectedErrors)
   throws UnparseVerificationException {
