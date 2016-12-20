@@ -346,13 +346,13 @@ UnannClassType:
 
 // Names
 (chapter=Name)
-FieldName:
+FieldName: (@trait=ExpressionNameReference)
      Identifier
 EnumConstantName:
      FieldName
 Label:
      Identifier
-LocalName:
+LocalName: (@trait=ExpressionNameReference)
      Identifier
 MethodName:
      Identifier

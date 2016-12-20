@@ -25,6 +25,13 @@ _TRAITS = {
         (
             'com.mikesamuel.cil.ast.meta.Name',
         )),
+    'ExpressionNameReference': (
+        (
+            ('Name', 'referencedExpressionName'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.Name',
+        )),
     'ExpressionNameScope': (
         (
             ('ExpressionNameResolver', 'expressionNameResolver'),
@@ -1160,17 +1167,58 @@ public enum NodeType implements ParSerable {
 
         is_inner_node = not (len(variants) == 1 and variants[0]['name'] == 'Builtin')
 
+        # extra code for the Node body.
+        extra_code = []
+        custom_code, custom_code_imports = _CUSTOM_NODE_CONTENT.get(prod['name'], ('', ()))
+        extra_code.append(custom_code)
+        extra_imports.update(custom_code_imports)
+
+        builder_rtype = '%s.Builder' % node_class_name
+
+        # extra code for the custom builder body.
+        builder_code = []
+
+        # extra code for the custom builder's copyMetadataFrom method
+        builder_copy_code = []
+
+        # extra code for the custom builder's build method
+        builder_build_code = []
+
         if is_inner_node:
             ctor_formals = 'Iterable<? extends BaseNode> children'
             builder_kind = 'Inner'
             builder_actuals = 'getChildren()'
             super_ctor_actuals = 'children, null'
+            builder_code.append('''
+    @Override public %(builder_rtype)s add(BaseNode child) {
+      super.add(child);
+      return this;
+    }
+    @Override public %(builder_rtype)s add(int index, BaseNode child) {
+      super.add(index, child);
+      return this;
+    }
+    @Override public %(builder_rtype)s replace(int index, BaseNode child) {
+      super.replace(index, child);
+      return this;
+    }
+    @Override public %(builder_rtype)s remove(int index) {
+      super.remove(index);
+      return this;
+    }
+''' % { 'builder_rtype': builder_rtype })
         else:
             ctor_formals = 'String literalValue'
             builder_kind = 'Leaf'
             builder_actuals = 'getLiteralValue()'
             super_ctor_actuals = 'ImmutableList.of(), literalValue'
             extra_imports.add('com.google.common.collect.ImmutableList')
+            builder_code.append('''
+    @Override public %(builder_rtype)s leaf(String newValue) {
+      super.leaf(newValue);
+      return this;
+    }
+''' % { 'builder_rtype': builder_rtype })
 
         def create_variant_members():
             variant_code = []
@@ -1277,23 +1325,6 @@ public enum NodeType implements ParSerable {
         for (annot_name, _) in prod['annots']:
             if annot_name.startswith('(@trait='):
                 traits.extend([x.strip() for x in annot_name[8:-1].split(',') if len(x.strip())])
-
-        # extra code for the Node body.
-        extra_code = []
-        custom_code, custom_code_imports = _CUSTOM_NODE_CONTENT.get(prod['name'], ('', ()))
-        extra_code.append(custom_code)
-        extra_imports.update(custom_code_imports)
-
-        builder_rtype = '%s.Builder' % node_class_name
-
-        # extra code for the custom builder body.
-        builder_code = []
-
-        # extra code for the custom builder's copyMetadataFrom method
-        builder_copy_code = []
-
-        # extra code for the custom builder's build method
-        builder_build_code = []
 
         for trait in traits:
             extra_imports.add('%s.traits.%s' % (_JAVA_PACKAGE, trait))
