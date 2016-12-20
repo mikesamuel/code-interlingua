@@ -31,7 +31,7 @@ public abstract class Input {
   /**
    * @param source diagnostic string describing the source of the content.
    */
-  private Input(String source, boolean allowNonStandardProductions) {
+  private Input(boolean allowNonStandardProductions) {
     this.allowNonStandardProductions = allowNonStandardProductions;
   }
 
@@ -80,7 +80,7 @@ public abstract class Input {
     private TextInput(
         String source, String encodedContent,
         boolean allowNonStandardProductions) {
-      super(source, allowNonStandardProductions);
+      super(allowNonStandardProductions);
       this.content = new DecodedContent(encodedContent);
       this.lineStarts = new LineStarts(source, encodedContent);
     }
@@ -111,9 +111,8 @@ public abstract class Input {
 
     @SuppressWarnings("synthetic-access")
     private EventInput(
-        String source, ImmutableList<Event> events,
-        boolean allowNonStandardProductions) {
-      super(source, allowNonStandardProductions);
+        ImmutableList<Event> events, boolean allowNonStandardProductions) {
+      super(allowNonStandardProductions);
       this.tokenAndContentText = new TokenAndContentText(events);
     }
 
@@ -211,7 +210,7 @@ public abstract class Input {
     @SuppressWarnings("synthetic-access")
     public Input build() {
       if (events != null) {
-        return new EventInput(source, events, allowNonStandardProductions);
+        return new EventInput(events, allowNonStandardProductions);
       }
       return new TextInput(
           source, code != null ? code : "", allowNonStandardProductions);
