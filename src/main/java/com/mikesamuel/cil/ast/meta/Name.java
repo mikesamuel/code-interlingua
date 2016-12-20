@@ -44,7 +44,7 @@ public final class Name {
 
   private Name(
       @Nullable Name parent, String identifier,
-      @Nullable String descriptor, @Nullable Type type) {
+      @Nullable String descriptor, Type type) {
     Preconditions.checkArgument(type != null);
     // Packages cannot have non-package parents.
     Preconditions.checkArgument(
@@ -97,7 +97,13 @@ public final class Name {
     return new Name(null, childIdentifier, null, childType);
   }
 
-
+  /**
+   * This name, but with the given parent.
+   */
+  public Name reparent(@Nullable Name newParent) {
+    if (parent == newParent) { return this; }
+    return new Name(newParent, identifier, descriptor, type);
+  }
 
   /**
    * The type of thing referred to by part of a name.
