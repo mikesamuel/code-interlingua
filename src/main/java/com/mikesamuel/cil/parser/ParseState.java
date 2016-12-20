@@ -15,7 +15,7 @@ import com.mikesamuel.cil.event.Event;
 public final class ParseState {
   /** The input to parse. */
   public final Input input;
-  /** The position of the parse cursor in the index. */
+  /** The position of the parse cursor in the input. */
   public final int index;
   /** The output which can be replayed for a tree builder. */
   public final @Nullable SList<Event> output;
