@@ -301,7 +301,7 @@ public interface ExpressionNameResolver {
       @Override
       public int compareTo(DeclarationPositionMarker o) {
         if (o == this) { return 0; }
-        return -o.compareTo(this);
+        return -Integer.signum(o.compareTo(this));
       }
 
       @Override
@@ -330,7 +330,7 @@ public interface ExpressionNameResolver {
       public int compareTo(DeclarationPositionMarker o) {
         if (o == this) { return 0; }
         if (o == EARLIEST) { return 1; }
-        return -o.compareTo(this);
+        return -Integer.signum(o.compareTo(this));
       }
 
       @Override

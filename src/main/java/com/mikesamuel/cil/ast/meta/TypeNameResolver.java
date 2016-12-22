@@ -156,7 +156,7 @@ public interface TypeNameResolver {
               new Predicate<Name>() {
                 @Override
                 public boolean apply(Name name) {
-                  return name.type == Name.Type.CLASS;
+                  return name != null && name.type == Name.Type.CLASS;
                 }
               }));
     }
@@ -326,7 +326,8 @@ public interface TypeNameResolver {
           Iterables.all(packagesAndOuterTypes, new Predicate<Name>() {
             @Override
             public boolean apply(Name nm) {
-              return nm.type == Name.Type.PACKAGE || nm.type == Name.Type.CLASS;
+              return nm != null && (
+                  nm.type == Name.Type.PACKAGE || nm.type == Name.Type.CLASS);
             }
           }));
       return new TypeNameResolver() {

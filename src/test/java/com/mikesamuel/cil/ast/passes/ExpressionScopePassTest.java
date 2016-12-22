@@ -17,6 +17,7 @@ import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import junit.framework.TestCase;
 
 @SuppressWarnings("javadoc")
@@ -45,8 +46,11 @@ public final class ExpressionScopePassTest extends TestCase {
    * TypeInfo resolver.
    */
   public static class S {
+    @SuppressFBWarnings("UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD")
     public int i;
+    @SuppressFBWarnings("UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD")
     public static String s;
+    @SuppressFBWarnings("UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD")
     public static String t;
     @SuppressWarnings("unused")
     private double d;

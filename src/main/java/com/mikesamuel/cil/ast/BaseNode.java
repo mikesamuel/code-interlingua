@@ -446,10 +446,12 @@ public abstract class BaseNode {
    *     Can be used to indent.
    * @param decorator called for each node to return a string that is displayed
    *     to the right on the same line.  A return value of null means no
-   *     decoration to display.
+   *     decoration to display.  A value of null is equivalent to
+   *     {@code Functions.constant(null)}.
    */
   public String toAsciiArt(
-      String prefix, Function<? super BaseNode, ? extends String> decorator) {
+      String prefix,
+      @Nullable Function<? super BaseNode, ? extends String> decorator) {
     StringBuilder out = new StringBuilder();
     StringBuilder indentation = new StringBuilder();
     indentation.append(prefix);
@@ -466,10 +468,10 @@ public abstract class BaseNode {
 
   private void appendAsciiArt(
       StringBuilder prefix, StringBuilder out,
-      Function<? super BaseNode, ? extends String> decorator) {
+      @Nullable Function<? super BaseNode, ? extends String> decorator) {
     out.append(prefix);
     appendNodeHeader(out);
-    String decoration = decorator.apply(this);
+    String decoration = decorator != null ? decorator.apply(this) : null;
     if (decoration != null) {
       out.append(" : ").append(decoration);
     }
@@ -498,7 +500,7 @@ public abstract class BaseNode {
 
     @Override
     public boolean apply(BaseNode node) {
-      return nodeTypes.contains(node.getNodeType());
+      return node != null && nodeTypes.contains(node.getNodeType());
     }
   }
 }

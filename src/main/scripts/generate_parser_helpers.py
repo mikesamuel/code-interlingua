@@ -1364,13 +1364,14 @@ public enum NodeType implements ParSerable {
                      '    /** Sets metadata for new instance. */\n'
                      '    public final %(builder_rtype)s\n'
                      '    set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
-                     '      if (this.%(trait_field)s != new%(utrait_field)s) {\n'
+                     '      if (!Objects.equal(this.%(trait_field)s, new%(utrait_field)s)) {\n'
                      '        this.%(trait_field)s = new%(utrait_field)s;\n'
                      '        markChanged();\n'
                      '      }\n'
                      '      return this;\n'
                      '    }\n'
                     ) % record)
+                extra_imports.add('com.google.common.base.Objects')
         trait_ifaces = ''
         if traits:
             trait_ifaces = '\nimplements %s' % (', '.join(traits))
