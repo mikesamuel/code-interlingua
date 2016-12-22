@@ -806,7 +806,6 @@ ExpressionAtom:
      ClassType "::" [TypeArguments] "new"  (@name=ConstructorReference)
      ArrayType "::" "new"  (@name=ArrayConstructorReference)
      MethodName "(" [ArgumentList] ")" (@name=MethodInvocation)
-     ContextFreeNames
      LocalName !!UsePrefix  (@name=Local)
      FieldName !!UsePrefix  (@name=FreeField)
      TypeName !!"."  (@name=StaticMember)

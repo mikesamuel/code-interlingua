@@ -4881,17 +4881,6 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   }
 
   /**
-   * <pre>ExpressionName</pre>
-   */
-  @Test
-  public void testExpressionAtomExpressionName() {
-    parseSanityCheck(
-        ExpressionAtomNode.Variant.ContextFreeNames,
-        "foo"
-        );
-  }
-
-  /**
    * <pre>Primary IncrDecrOperator</pre>
    */
   @Test
