@@ -1,17 +1,21 @@
 package com.mikesamuel.cil.ast.passes;
 
 import java.lang.reflect.Modifier;
+import java.util.List;
 import java.util.logging.Logger;
 
 import org.junit.Test;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
+import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
@@ -348,7 +352,7 @@ public class DeclarationPassTest extends TestCase {
             "  T> Supplier<T> foo(T x) {",
             "    return",
             "    /* anonymous /foo/C.foo(1)$1"
-            +     " extends /com/google/common/base/Supplier in /foo/C */",
+            +     " extends /com/google/common/base/Supplier</foo/C.foo(1).<T>> in /foo/C */",
             "    new Supplier<T> () { @Override public T get() { return x; } };",
             "  }",
             "}"
@@ -381,12 +385,15 @@ public class DeclarationPassTest extends TestCase {
             "/* /foo/C extends /java/lang/Object contains /foo/C.<init>(1)$1 */",
             "class C {",
             "  public <",
-            "  /* /foo/C.<init>(1).<T> extends /java/lang/Comparable"
+            "  /* /foo/C.<init>(1).<T> extends"
+            +   " /java/lang/Comparable</foo/C.<init>(1).<T>>"
             +   " implements /java/io/Serializable */",
             "  T extends Comparable<T> & Serializable> C(T x) {",
             "    super (",
-            "        /* anonymous /foo/C.<init>(1)$1"
-            +         " extends /java/util/Map$Entry in /foo/C */",
+            "        /* anonymous /foo/C.<init>(1)$1 extends "
+            +         "/java/util/Map$Entry</foo/C.<init>(1).<T>,"
+            +                             " /foo/C.<init>(1).<T>> "
+            +         "in /foo/C */",
             "        new Map.Entry<T, T> () {",
             "          @Override public T getKey() { return x; }",
             "          @Override public T getValue() { return x; }",
@@ -647,6 +654,42 @@ public class DeclarationPassTest extends TestCase {
             "}",
           },
         });
+  }
+
+  @Test
+  public static void testTypeParameters() {
+    List<CompilationUnitNode> cus =
+        PassTestHelpers.parseCompilationUnits(
+        new String[][] {
+          {
+            "package foo.bar;",
+            "",
+            "class Baz<T> extends Foo<T> {",
+            "  class Boo<T> {",
+            "  }",
+            "}",
+          },
+        });
+    Logger logger = Logger.getAnonymousLogger();
+    logger.setUseParentHandlers(false);  // Ignore missing ambiguous type "Foo"
+    DeclarationPass dp = new DeclarationPass(logger);
+    TypeInfoResolver r = dp.run(cus);
+
+    Name bazName = Name.DEFAULT_PACKAGE
+        .child("foo", Name.Type.PACKAGE)
+        .child("bar", Name.Type.PACKAGE)
+        .child("Baz", Name.Type.CLASS);
+    Name bazBooName = bazName.child("Boo", Name.Type.CLASS);
+
+    Optional<TypeInfo> bazInfoOpt = r.resolve(bazName);
+    assertTrue(bazInfoOpt.isPresent());
+    assertEquals(
+        ImmutableList.of(bazBooName),
+        bazInfoOpt.get().innerClasses);
+    assertEquals(
+        ImmutableList.of(
+            bazName.child("T", Name.Type.TYPE_PARAMETER)),
+        bazInfoOpt.get().parameters);
   }
 
 }

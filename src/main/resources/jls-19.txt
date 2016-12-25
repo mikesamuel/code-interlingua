@@ -251,7 +251,7 @@ JavaDocComment: @nointerp
 //     any Unicode character that is a "Java letter"
 //JavaLetterOrDigit:
 //     any Unicode character that is a "Java letter-or-digit"
-Literal:
+Literal: (@trait=Typed)
      FloatingPointLiteral
      IntegerLiteral
      BooleanLiteral
@@ -796,7 +796,7 @@ Resource:
 
 // Expressions
 (chapter=Expression)
-ExpressionAtom:
+ExpressionAtom: (@trait=Typed)
      UnqualifiedClassInstanceCreationExpression
      ArrayCreationExpression
      Literal
@@ -811,7 +811,7 @@ ExpressionAtom:
      TypeName !!"."  (@name=StaticMember)
      ReferenceType !!"::"  (@name=StaticReference)
      !CastExpression "(" Expression ")"  (@name=Parenthesized)
-Primary:
+Primary: (@trait=Typed)
      Primary "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
      Primary "::" [TypeArguments] MethodName  (@name=MethodReference)
      Primary "." UnqualifiedClassInstanceCreationExpression  (@name=InnerClassCreation)
@@ -819,7 +819,7 @@ Primary:
      !SimpleCallPrefix ContextFreeNames !DotKeywordDimsOrCtorRef (@name=Ambiguous)
      Primary "." FieldName  (@name=FieldAccess)
      ExpressionAtom @anon
-LeftHandSide:
+LeftHandSide: (@trait=Typed)
      Primary (@postcond=Postconds.Primary.FieldAccess)       (@name=FieldAccess)
      Primary (@postcond=Postconds.Primary.ArrayAccess)       (@name=ArrayAccess)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.Local)     (@name=Local)
@@ -834,17 +834,17 @@ DotKeywordDimsOrCtorRef:
      "::" [TypeArguments] "new"
 SimpleCallPrefix:
      MethodName "("
-MethodInvocation:
+MethodInvocation: (@trait=Typed)
      Primary (@postcond=Postconds.Primary.MethodInvocation) (@name=ExplicitCallee)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
-ClassInstanceCreationExpression:
+ClassInstanceCreationExpression: (@trait=Typed)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
      Primary (@postcond=Postconds.Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
 UsePrefix:
      "."
      "["
      "::"
-ClassLiteral:
+ClassLiteral: (@trait=Typed)
      TypeName {Dim} "." "class"
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
@@ -865,7 +865,7 @@ Diamond:
      "<" ">"
 ArgumentList:
      Expression {"," Expression}
-ArrayCreationExpression:
+ArrayCreationExpression: (@trait=Typed)
      "new" PrimitiveType Dims ArrayInitializer !"["
      "new" ClassOrInterfaceType Dims ArrayInitializer !"["
      "new" PrimitiveType DimExprs [Dims] !"["
@@ -874,7 +874,7 @@ DimExprs:
      DimExpr {DimExpr}
 DimExpr:
      {Annotation} "[" Expression "]"
-Expression:
+Expression: (@trait=Typed)
      Assignment
      LambdaExpression
      ConditionalExpression
@@ -889,7 +889,7 @@ InferredFormalParameterList:
 LambdaBody:
      Expression
      Block
-Assignment:
+Assignment: (@trait=Typed)
      LeftHandSide AssignmentOperator Expression
 AssignmentOperator:
      "="
@@ -904,32 +904,32 @@ AssignmentOperator:
      "&="
      "^="
      "|="
-ConditionalExpression:
+ConditionalExpression: (@trait=Typed)
      ConditionalOrExpression "?" Expression ":" LambdaExpression
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
      ConditionalOrExpression @anon
-ConditionalOrExpression:
+ConditionalOrExpression: (@trait=Typed)
      ConditionalOrExpression "||" ConditionalAndExpression
      ConditionalAndExpression @anon
-ConditionalAndExpression:
+ConditionalAndExpression: (@trait=Typed)
      ConditionalAndExpression "&&" InclusiveOrExpression
      InclusiveOrExpression @anon
-InclusiveOrExpression:
+InclusiveOrExpression: (@trait=Typed)
      InclusiveOrExpression "|" ExclusiveOrExpression
      ExclusiveOrExpression @anon
-ExclusiveOrExpression:
+ExclusiveOrExpression: (@trait=Typed)
      ExclusiveOrExpression "^" AndExpression
      AndExpression @anon
-AndExpression:
+AndExpression: (@trait=Typed)
      AndExpression "&" EqualityExpression
      EqualityExpression @anon
-EqualityExpression:
+EqualityExpression: (@trait=Typed)
      EqualityExpression EqualityOperator RelationalExpression
      RelationalExpression @anon
 EqualityOperator:
      "=="
      "!="
-RelationalExpression:
+RelationalExpression: (@trait=Typed)
      RelationalExpression RelationalOperator ShiftExpression
      RelationalExpression "instanceof" ReferenceType
      ShiftExpression @anon
@@ -938,27 +938,27 @@ RelationalOperator:
      ">="
      "<"
      ">"
-ShiftExpression:
+ShiftExpression: (@trait=Typed)
      ShiftExpression ShiftOperator AdditiveExpression
      AdditiveExpression @anon
 ShiftOperator:
      "<<"
      ">>>"
      ">>"
-AdditiveExpression:
+AdditiveExpression: (@trait=Typed)
      AdditiveExpression AdditiveOperator MultiplicativeExpression
      MultiplicativeExpression @anon
 AdditiveOperator:
      "+"
      "-"
-MultiplicativeExpression:
+MultiplicativeExpression: (@trait=Typed)
      MultiplicativeExpression MultiplicativeOperator UnaryExpression
      UnaryExpression @anon
 MultiplicativeOperator:
      "*"
      "/"
      "%"
-UnaryExpression:
+UnaryExpression: (@trait=Typed)
      CastExpression
      PreExpression
      PostExpression
@@ -972,14 +972,14 @@ PrefixOperator:
 IncrDecrOperator:
      "++"
      "--"
-PreExpression:
+PreExpression: (@trait=Typed)
      IncrDecrOperator LeftHandSideExpression
-PostExpression:
+PostExpression: (@trait=Typed)
      LeftHandSideExpression IncrDecrOperator
-LeftHandSideExpression:
+LeftHandSideExpression: (@trait=Typed)
      LeftHandSide @anon
      "(" LeftHandSideExpression ")"
-CastExpression:
+CastExpression: (@trait=Typed)
      "(" ConfirmCast ")" LambdaExpression (@name=Lambda)
      "(" Cast ")" !AmbiguousBinaryUnaryOperator UnaryExpression (@name=Expression)
 Cast:
@@ -992,7 +992,7 @@ ConvertCast:
 AmbiguousBinaryUnaryOperator:
      "+"
      "-"
-ConstantExpression:
+ConstantExpression: (@trait=Typed)
      Expression
 
 

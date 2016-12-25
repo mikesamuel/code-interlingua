@@ -9,10 +9,16 @@ import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.TypeArgumentNode;
+import com.mikesamuel.cil.ast.WildcardBoundsNode;
+import com.mikesamuel.cil.ast.WildcardNode;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
+import com.mikesamuel.cil.ast.meta.TypeSpecification;
+import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
 
@@ -21,14 +27,82 @@ final class AmbiguousNames {
     // Static API
   }
 
+  private static void error(
+      Logger logger, @Nullable SourcePosition pos, String msg) {
+    String fullMessage = pos != null ? pos + ": " + msg : msg;
+    logger.severe(fullMessage);
+  }
+
+  static TypeSpecification typeSpecificationOf(
+      BaseNode nameNode, TypeNameResolver canonResolver, Logger logger) {
+    SourcePosition pos = nameNode.getSourcePosition();
+
+    // TODO: obviate the distinction between diamonds and arguments by rewriting
+    // all diamond operators in-situ.
+    Name rawName = ambiguousNameOf(nameNode);
+    ImmutableList<Name> canonNames = canonResolver.lookupTypeName(rawName);
+    switch (canonNames.size()) {
+      case 0:
+        error(logger, pos, "Unrecognized type " + rawName);
+        return StaticType.ERROR_TYPE.typeSpecification;
+      case 1:
+        break;
+      default:
+        error(logger, pos, "Ambiguous type " + rawName + ": " + canonNames);
+        break;
+    }
+
+    Name canonName = canonNames.get(0);
+
+    ImmutableList.Builder<TypeBinding> bindings = ImmutableList.builder();
+    for (TypeArgumentNode arg :
+         nameNode.finder(TypeArgumentNode.class)
+             .exclude(
+                 NodeType.Annotation,
+                 // Don't recurse in the finder.  Recurse via this method.
+                 NodeType.TypeArgument)
+             .find()) {
+      TypeSpecification argSpec = typeSpecificationOf(
+          arg.getChildren().get(0), canonResolver, logger);
+      TypeSpecification.Variance variance =
+          TypeSpecification.Variance.INVARIANT;
+      switch (arg.getVariant()) {
+        case ReferenceType:
+          break;
+        case Wildcard:
+          WildcardNode wc = arg.firstChildWithType(WildcardNode.class);
+          if (wc != null) {
+            WildcardBoundsNode wcb = arg.firstChildWithType(
+                WildcardBoundsNode.class);
+            if (wcb != null) {
+              switch (wcb.getVariant()) {
+                case ExtendsReferenceType:
+                  variance = TypeSpecification.Variance.EXTENDS;
+                  break;
+                case SuperReferenceType:
+                  variance = TypeSpecification.Variance.SUPER;
+                  break;
+              }
+              break;
+            }
+          }
+          error(
+              logger, arg.getSourcePosition(),
+              "Missing bounds for type argument");
+          break;
+      }
+      bindings.add(new TypeBinding(variance, argSpec));
+    }
+    return new TypeSpecification(canonName, bindings.build());
+  }
+
   static @Nullable Name ambiguousNameOf(BaseNode nameNode) {
     Name name = null;
     for (IdentifierNode ident :
          nameNode.finder(IdentifierNode.class)
              .exclude(
                  NodeType.Annotation,
-                 NodeType.TypeArgumentsOrDiamond,
-                 NodeType.TypeArguments,
+                 NodeType.TypeArgumentList,
                  NodeType.TypeParameters)
              .find()) {
       Name.Type type = ident.getNamePartType();

@@ -119,16 +119,16 @@ public interface ExpressionNameResolver {
       }
       if (ti.superType.isPresent()) {
         Optional<TypeInfo> superTypeInfoOpt = canonNameResolver.resolve(
-            ti.superType.get());
+            ti.superType.get().typeName);
         if (superTypeInfoOpt.isPresent()) {
           addFieldsFrom(
               superTypeInfoOpt.get(), fieldNameToCanonName, canonNameResolver,
               staticOnly, permBits & ~Modifier.PRIVATE, fromPackage);
         }
       }
-      for (Name interfaceName : ti.interfaces) {
+      for (TypeSpecification interfaceSpec : ti.interfaces) {
         Optional<TypeInfo> interfaceTypeInfoOpt = canonNameResolver.resolve(
-            interfaceName);
+            interfaceSpec.typeName);
         if (interfaceTypeInfoOpt.isPresent()) {
           addFieldsFrom(
               interfaceTypeInfoOpt.get(),

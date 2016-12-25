@@ -38,6 +38,8 @@ import com.mikesamuel.cil.ast.meta.Name.Type;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
+import com.mikesamuel.cil.ast.meta.TypeSpecification;
+import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -215,11 +217,12 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
                 internallyDefinedTypes.get(outerClassName);
             TypeInfo outerTypeInfo = outerDecl.decl.getDeclaredTypeInfo();
             resolve(outerDecl, loop);
-            interfacesToInheritDeclarationsFrom.addAll(
-                outerTypeInfo.interfaces);
+            for (TypeSpecification iface : outerTypeInfo.interfaces) {
+              interfacesToInheritDeclarationsFrom.add(iface.typeName);
+            }
             if (outerTypeInfo.superType.isPresent()) {
               superTypesToInheritDeclarationsFrom.add(
-                  outerTypeInfo.superType.get());
+                  outerTypeInfo.superType.get().typeName);
             }
           }
         }
@@ -227,8 +230,8 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
         Map<String, Name> identifierToCanonName = new LinkedHashMap<>();
         for (Name superTypeName
             : Iterables.concat(
-              interfacesToInheritDeclarationsFrom,
-              superTypesToInheritDeclarationsFrom)) {
+                interfacesToInheritDeclarationsFrom,
+                superTypesToInheritDeclarationsFrom)) {
           TypeInfo ti;
           UnresolvedTypeDeclaration td =
               internallyDefinedTypes.get(superTypeName);
@@ -315,9 +318,10 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
       // Collect the declared type after resolving its super-types.
       Name typeName = decl.getDeclaredTypeInfo().canonName;
 
-      Name superTypeName = JAVA_LANG_OBJECT;
+      TypeSpecification superTypeSpec = new TypeSpecification(JAVA_LANG_OBJECT);
 
-      ImmutableList.Builder<Name> interfaceNames = ImmutableList.builder();
+      ImmutableList.Builder<TypeSpecification> interfaceNames =
+          ImmutableList.builder();
       int modifiers = 0;
       for (BaseNode child : children) {
         switch (child.getNodeType()) {
@@ -336,33 +340,20 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
             break;
           case Superclass:
           case ClassOrInterfaceTypeToInstantiate: {
-            Name ambigName = toName(child, Type.AMBIGUOUS);
-            superTypeName =
-                soleType(
-                    nameResolver.lookupTypeName(ambigName),
-                    child, "super type", typeName)
-                .or(superTypeName);
+            superTypeSpec = AmbiguousNames.typeSpecificationOf(
+                child, nameResolver, logger);
             break;
           }
           case TypeBound:
             for (BaseNode grandChild : child.getChildren()) {
               if (grandChild instanceof ClassOrInterfaceTypeNode
                   || grandChild instanceof TypeVariableNode) {
-                Name ambigName = toName(grandChild, Type.AMBIGUOUS);
-                Optional<Name> extendedTypeOpt =
-                    soleType(
-                        nameResolver.lookupTypeName(ambigName),
-                        child, "type bound", typeName);
-                superTypeName = extendedTypeOpt.or(superTypeName);
+                superTypeSpec = AmbiguousNames.typeSpecificationOf(
+                    grandChild, nameResolver, logger);
               } else if (grandChild instanceof AdditionalBoundNode) {
-                Name ambigName = toName(grandChild, Type.AMBIGUOUS);
-                Optional<Name> additionalBoundOpt =
-                    soleType(
-                        nameResolver.lookupTypeName(ambigName),
-                        child, "additional bound", typeName);
-                if (additionalBoundOpt.isPresent()) {
-                  interfaceNames.add(additionalBoundOpt.get());
-                }
+                TypeSpecification typeSpec = AmbiguousNames.typeSpecificationOf(
+                    grandChild, nameResolver, logger);
+                interfaceNames.add(typeSpec);
               }
             }
             break;
@@ -373,14 +364,9 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
             for (BaseNode interfacesChild : interfacesNode.getChildren()) {
               InterfaceTypeNode interfaceType =
                   (InterfaceTypeNode) interfacesChild;
-              Name ambigName = toName(interfaceType, Type.AMBIGUOUS);
-              Optional<Name> interfaceNameOpt =
-                  soleType(
-                      nameResolver.lookupTypeName(ambigName),
-                      child, "interface type", typeName);
-              if (interfaceNameOpt.isPresent()) {
-                interfaceNames.add(interfaceNameOpt.get());
-              }
+              TypeSpecification typeSpec = AmbiguousNames.typeSpecificationOf(
+                  interfaceType, nameResolver, logger);
+              interfaceNames.add(typeSpec);
             }
             break;
           case TypeParameters:
@@ -399,11 +385,13 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
         case TypeParameter:
           break;
         case AnnotationTypeDeclaration:
-          interfaceNames.add(JAVA_LANG_ANNOTATION_ANNOTATION);
+          interfaceNames.add(new TypeSpecification(
+              JAVA_LANG_ANNOTATION_ANNOTATION));
           break;
         case EnumDeclaration:
           // Would be Enum<typeName> if Name captured generic parameters.
-          superTypeName = JAVA_LANG_ENUM;
+          superTypeSpec = new TypeSpecification(
+              JAVA_LANG_ENUM, ImmutableList.of(new TypeBinding(typeName)));
           break;
         case UnqualifiedClassInstanceCreationExpression:
         case EnumConstant:
@@ -414,38 +402,20 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
       }
 
       TypeInfo partialTypeInfo = typeInfoResolver.resolve(typeName).get();
+      Preconditions.checkState(typeName.equals(partialTypeInfo.canonName));
 
-      TypeInfo typeInfo = new TypeInfo(
-          typeName, modifiers, isAnonymous, Optional.of(superTypeName),
-          interfaceNames.build(), partialTypeInfo.outerClass,
-          // Tentative until we figure out inheritance
-          partialTypeInfo.innerClasses,
-          partialTypeInfo.declaredMembers);
+      TypeInfo typeInfo = partialTypeInfo.builder()
+          .modifiers(modifiers)
+          .isAnonymous(isAnonymous)
+          .superType(Optional.of(superTypeSpec))
+          .interfaces(interfaceNames.build())
+          .build();
       d.decl.setDeclaredTypeInfo(typeInfo);
       d.stage = Stage.RESOLVED;
 
       if (DEBUG) {
         System.err.println("Resolved " + typeName);
       }
-    }
-
-    private Optional<Name> soleType(
-        Iterable<Name> results,
-        BaseNode source, String desc, Name declarationName) {
-      switch (Iterables.size(results)) {
-        case 0:
-          error(source, "Cannot resolve " + desc + " for " + declarationName);
-          break;
-        case 1:
-          return Optional.of(Iterables.getOnlyElement(results));
-        default:
-          error(
-              source,
-              "Ambiguous " + desc + " for " + declarationName + " : "
-              + Iterables.toString(results));
-          break;
-      }
-      return Optional.absent();
     }
   }
 
@@ -478,7 +448,7 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
           this.currentPackage = toName(node, Type.PACKAGE);
           break;
         case SingleTypeImportDeclaration:
-          Name ambigName = toName(node, Type.AMBIGUOUS);
+          Name ambigName = AmbiguousNames.ambiguousNameOf(node);
           ImmutableList<Name> importedTypes =
               typeNameResolver.lookupTypeName(ambigName);
           switch (importedTypes.size()) {
@@ -499,7 +469,7 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
           }
           break;
         case TypeImportOnDemandDeclaration:
-          Name importedPackageOrType = toName(node, Type.AMBIGUOUS);
+          Name importedPackageOrType = AmbiguousNames.ambiguousNameOf(node);
           ImmutableList<Name> outerTypes = typeNameResolver.lookupTypeName(
               importedPackageOrType);
           switch (outerTypes.size()) {
@@ -571,4 +541,5 @@ class DeclarationPass implements AbstractPass<TypeInfoResolver> {
   static final Name JAVA_LANG_ANNOTATION_ANNOTATION = JAVA_LANG
       .child("annotation", Type.PACKAGE)
       .child("Annotation", Type.CLASS);
+
 }

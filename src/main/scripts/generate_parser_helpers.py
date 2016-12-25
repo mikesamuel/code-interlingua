@@ -7,6 +7,7 @@ import re
 
 _JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
 
+
 # Maps trait interfaces to metadata fields specified and imports required.
 _TRAITS = {
     'CallableDeclaration': (
@@ -59,6 +60,13 @@ _TRAITS = {
         ),
         (
             'com.mikesamuel.cil.ast.meta.TypeInfo',
+        )),
+    'Typed': (
+        (
+            ('StaticType', 'staticType'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.StaticType',
         )),
     'TypeReference': (
         (

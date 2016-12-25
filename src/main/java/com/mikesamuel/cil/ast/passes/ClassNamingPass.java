@@ -58,10 +58,10 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           + (opos != null ? " originally defined at " + opos.toString() : "")
           );
     }
-    TypeInfo partialTypeInfo = new TypeInfo(
-        name, 0, isAnonymous, Optional.absent(), ImmutableList.of(),
-        Optional.fromNullable(name.getOuterType()), ImmutableList.of(),
-        ImmutableList.of());
+    TypeInfo partialTypeInfo = TypeInfo.builder(name)
+        .isAnonymous(isAnonymous)
+        .outerClass(Optional.fromNullable(name.getOuterType()))
+        .build();
     d.setDeclaredTypeInfo(partialTypeInfo);
   }
 
@@ -175,11 +175,11 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
   @Override
   protected DeclarationsAndScopes getResult() {
     Multimap<Name, Name> innerTypes = ArrayListMultimap.create();
+    Multimap<Name, Name> parameters = ArrayListMultimap.create();
     for (Name declName : declaredTypes.keySet()) {
       Name outerTypeName = declName.getOuterType();
-      if (outerTypeName != null) {
-        innerTypes.put(outerTypeName, declName);
-      }
+      (declName.type == Name.Type.CLASS ? innerTypes : parameters)
+          .put(outerTypeName, declName);
     }
 
     for (Map.Entry<Name, UnresolvedTypeDeclaration> e
@@ -187,13 +187,16 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       Name declName = e.getKey();
       UnresolvedTypeDeclaration decl = e.getValue();
       if (decl.stage == Stage.UNRESOLVED) {
-        Optional<Name> outerType =
-            Optional.fromNullable(declName.getOuterType());
+        Optional<Name> outerType = declName.type == Name.Type.CLASS
+            ? Optional.fromNullable(declName.getOuterType())
+            : Optional.absent();
         char nameChar0 = declName.identifier.charAt(0);
         boolean isAnonymous = '0' <= nameChar0 && nameChar0 <= '9';
         // Does not include those inherited.
         ImmutableList<Name> innerTypeList = ImmutableList.copyOf(
             innerTypes.get(declName));
+        ImmutableList<Name> parameterList = ImmutableList.copyOf(
+            parameters.get(declName));
 
         ImmutableList<MemberInfo> members;
         if (declName.type == Name.Type.TYPE_PARAMETER) {
@@ -202,15 +205,15 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           members = findMembers(declName, decl.decl);
         }
 
-        decl.decl.setDeclaredTypeInfo(new TypeInfo(
-            declName,
-            Modifier.PUBLIC,  // Optimistic
-            isAnonymous,
-            Optional.<Name>absent(),  // Optimistic
-            ImmutableList.<Name>of(),  // Optimistic
-            outerType,
-            innerTypeList,
-            members));
+        decl.decl.setDeclaredTypeInfo(
+            TypeInfo.builder(declName)
+               .modifiers(Modifier.PUBLIC)  // OPTIMISTIC
+               .isAnonymous(isAnonymous)
+               .outerClass(outerType)
+               .innerClasses(innerTypeList)
+               .parameters(parameterList)
+               .declaredMembers(members)
+               .build());
       }
     }
 

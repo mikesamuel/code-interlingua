@@ -2,8 +2,13 @@ package com.mikesamuel.cil.ast.meta;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.GenericDeclaration;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -61,13 +66,13 @@ public interface TypeInfoResolver {
 
                     Name className = nameForClass(clazz);
 
-                    Class<?> superClass = clazz.getSuperclass();
+                    Type superType = clazz.getGenericSuperclass();
                     Class<?> outerClass = clazz.getEnclosingClass();
 
-                    ImmutableList.Builder<Name> interfaceNames =
+                    ImmutableList.Builder<TypeSpecification> interfaceSpecs =
                         ImmutableList.builder();
-                    for (Class<?> iface : clazz.getInterfaces()) {
-                      interfaceNames.add(nameForClass(iface));
+                    for (Type iface : clazz.getGenericInterfaces()) {
+                      interfaceSpecs.add(specForType(iface));
                     }
 
                     ImmutableList.Builder<Name> innerNames =
@@ -107,39 +112,54 @@ public interface TypeInfoResolver {
                                     c.getParameterTypes(), Void.TYPE))));
                       }
                     }
+                    ImmutableList.Builder<Name> parameters =
+                        ImmutableList.builder();
+                    for (TypeVariable<?> v : clazz.getTypeParameters()) {
+                      parameters.add(className.child(
+                          v.getName(), Name.Type.TYPE_PARAMETER));
+                    }
 
-                    return Optional.of(new TypeInfo(
-                        className,
-                        clazz.getModifiers(),
-                        clazz.isAnonymousClass(),
-                        superClass != null
-                        ? Optional.of(nameForClass(superClass))
-                        : Optional.<Name>absent(),
-                        interfaceNames.build(),
-                        outerClass != null
-                        ? Optional.of(nameForClass(outerClass))
-                        : Optional.<Name>absent(),
-                        innerNames.build(),
-                        members.build()
-                        ));
+                    TypeInfo.Builder b = TypeInfo.builder(className)
+                        .modifiers(clazz.getModifiers())
+                        .isAnonymous(clazz.isAnonymousClass())
+                        .superType(superType != null
+                            ? Optional.of(specForType(superType))
+                            : Optional.<TypeSpecification>absent())
+                        .interfaces(interfaceSpecs.build())
+                        .parameters(parameters.build())
+                        .outerClass(outerClass != null
+                            ? Optional.of(nameForClass(outerClass))
+                            : Optional.<Name>absent())
+                        .innerClasses(innerNames.build())
+                        .declaredMembers(members.build());
+
+                    return Optional.of(b.build());
                   }
                 });
 
         @Override
         public Optional<TypeInfo> resolve(Name name) {
-          @SuppressWarnings("synthetic-access")
-          String binaryName = toBinaryName(name);
-          try {
-            return cache.get(binaryName);
-          } catch (ExecutionException e) {
-            throw new AssertionError(e);
+          if (name.type == Name.Type.CLASS) {
+            @SuppressWarnings("synthetic-access")
+            String binaryName = toBinaryName(name);
+            try {
+              return cache.get(binaryName);
+            } catch (ExecutionException e) {
+              throw new AssertionError(e);
+            }
           }
+          // TODO if name is a template parameter name, then lookup its
+          // containing class, method, or constructor to get its bounds.
+
+          // It's possible for StaticType.ERROR_TYPE.typeSpecification.typeName
+          // to reach here which has name type FIELD.
+          return Optional.absent();
         }
       };
     }
 
     private static String toBinaryName(Name name) {
-      Preconditions.checkArgument(name.type == Name.Type.CLASS);
+      Preconditions.checkArgument(name.type == Name.Type.CLASS, name);
       StringBuilder sb = new StringBuilder();
       appendBinaryName(name, sb);
       return sb.toString();
@@ -196,6 +216,55 @@ public interface TypeInfoResolver {
         parent = pkg;
       }
       return parent.child(simpleName, Name.Type.CLASS);
+    }
+
+    private static TypeSpecification specForType(Type t) {
+      if (t instanceof Class) {
+        return new TypeSpecification(nameForClass((Class<?>) t));
+      } else if (t instanceof ParameterizedType) {
+        ParameterizedType pt = (ParameterizedType) t;
+        ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
+            ImmutableList.builder();
+        for (Type ta : pt.getActualTypeArguments()) {
+          bindings.add(bindingForType(ta));
+        }
+        return new TypeSpecification(
+            nameForClass((Class<?>) pt.getRawType()), bindings.build());
+      } else if (t instanceof TypeVariable) {
+        TypeVariable<?> tv = (TypeVariable<?>) t;
+        GenericDeclaration d = tv.getGenericDeclaration();
+        if (d instanceof Class) {
+          Name name = nameForClass((Class<?>) d)
+              .child(tv.getName(), Name.Type.TYPE_PARAMETER);
+          return new TypeSpecification(name);
+        } else {
+          throw new AssertionError(d);
+        }
+      } else {
+        throw new AssertionError(t.getClass());
+      }
+    }
+
+    private static TypeSpecification.TypeBinding bindingForType(Type t) {
+      if (t instanceof WildcardType) {
+        WildcardType wt = (WildcardType) t;
+        Type[] lb = wt.getLowerBounds();
+        if (lb.length != 0) {
+          Preconditions.checkState(lb.length == 1, t);
+          return new TypeSpecification.TypeBinding(
+              TypeSpecification.Variance.SUPER,
+              specForType(lb[0]));
+        }
+        Type[] ub = wt.getUpperBounds();
+        Preconditions.checkState(ub.length == 1, t);
+        return new TypeSpecification.TypeBinding(
+            TypeSpecification.Variance.EXTENDS,
+            specForType(ub[0]));
+      } else {
+        return new TypeSpecification.TypeBinding(
+            TypeSpecification.Variance.INVARIANT,
+            specForType(t));
+      }
     }
 
     private static String methodDescriptorFor(

@@ -20,9 +20,11 @@ public final class TypeInfo {
    */
   public final boolean isAnonymous;
   /** The name of the super-type. */
-  public final Optional<Name> superType;
+  public final Optional<TypeSpecification> superType;
   /** The name of implemented interfaces. */
-  public final ImmutableList<Name> interfaces;
+  public final ImmutableList<TypeSpecification> interfaces;
+  /** Any type parameters for the type. */
+  public final ImmutableList<Name> parameters;
   /** The name of the outer class if any. */
   public final Optional<Name> outerClass;
   /**
@@ -35,13 +37,13 @@ public final class TypeInfo {
    */
   public final ImmutableList<MemberInfo> declaredMembers;
 
-  /** */
-  public TypeInfo(
+  private TypeInfo(
       Name canonName,
       int modifiers,
       boolean isAnonymous,
-      Optional<Name> superType,
-      ImmutableList<Name> interfaces,
+      Optional<TypeSpecification> superType,
+      ImmutableList<TypeSpecification> interfaces,
+      ImmutableList<Name> parameters,
       Optional<Name> outerClass,
       ImmutableList<Name> innerClasses,
       ImmutableList<MemberInfo> declaredMembers) {
@@ -50,6 +52,7 @@ public final class TypeInfo {
     this.isAnonymous = isAnonymous;
     this.superType = superType;
     this.interfaces = interfaces;
+    this.parameters = parameters;
     this.outerClass = outerClass;
     this.innerClasses = innerClasses;
     this.declaredMembers = declaredMembers;
@@ -69,7 +72,7 @@ public final class TypeInfo {
 
     if (superType.isPresent()) {
       Optional<TypeInfo> superTypeInfo =
-          superTypeResolver.resolve(superType.get());
+          superTypeResolver.resolve(superType.get().typeName);
       if (superTypeInfo.isPresent()) {
         Optional<MemberInfo> miOpt =
             superTypeInfo.get().memberMatching(superTypeResolver, p);
@@ -79,8 +82,9 @@ public final class TypeInfo {
     // We may end up visiting some interfaces multiple times, but this is ok
     // as long as there are no inheritance cycles.
     // TODO: Might this be called before inheritance cycles have been ruled out?
-    for (Name iface : interfaces) {
-      Optional<TypeInfo> ifaceTypeInfoOpt = superTypeResolver.resolve(iface);
+    for (TypeSpecification iface : interfaces) {
+      Optional<TypeInfo> ifaceTypeInfoOpt =
+          superTypeResolver.resolve(iface.typeName);
       if (ifaceTypeInfoOpt.isPresent()) {
         Optional<MemberInfo> miOpt = ifaceTypeInfoOpt.get().memberMatching(
             superTypeResolver, p);
@@ -101,5 +105,86 @@ public final class TypeInfo {
       nm = nm.parent;
     }
     return nm;
+  }
+
+  /** A builder for TypeInfo with the given name. */
+  public static Builder builder(Name canonName) {
+    @SuppressWarnings("synthetic-access")
+    Builder b = new Builder(canonName);
+    return b;
+  }
+
+  /** A builder whose state is initialized to that of this. */
+  public Builder builder() {
+    return builder(canonName)
+        .modifiers(modifiers)
+        .isAnonymous(isAnonymous)
+        .superType(superType)
+        .interfaces(interfaces)
+        .parameters(parameters)
+        .outerClass(outerClass)
+        .innerClasses(innerClasses)
+        .declaredMembers(declaredMembers);
+  }
+
+  @SuppressWarnings("javadoc")
+  public static final class Builder {
+    private Name canonName;
+    private int modifiers;
+    private boolean isAnonymous;
+    private Optional<TypeSpecification> superType = Optional.absent();
+    private ImmutableList<TypeSpecification> interfaces = ImmutableList.of();
+    private ImmutableList<Name> parameters = ImmutableList.of();
+    private Optional<Name> outerClass = Optional.absent();
+    private ImmutableList<Name> innerClasses = ImmutableList.of();
+    private ImmutableList<MemberInfo> declaredMembers = ImmutableList.of();
+
+    private Builder(Name canonName) {
+      this.canonName = canonName;
+    }
+
+    public Builder modifiers(int newModifiers) {
+      this.modifiers = newModifiers;
+      return this;
+    }
+    public Builder isAnonymous(boolean newIsAnonymous) {
+      this.isAnonymous = newIsAnonymous;
+      return this;
+    }
+
+    public Builder superType(Optional<TypeSpecification> newSuperType) {
+      this.superType = newSuperType;
+      return this;
+    }
+    public Builder interfaces(ImmutableList<TypeSpecification> newInterfaces) {
+      this.interfaces = newInterfaces;
+      return this;
+    }
+    public Builder parameters(ImmutableList<Name> newParameters) {
+      this.parameters = newParameters;
+      return this;
+    }
+    public Builder outerClass(Optional<Name> newOuterClass) {
+      this.outerClass = newOuterClass;
+      return this;
+    }
+    public Builder innerClasses(ImmutableList<Name> newInnerClasses) {
+      this.innerClasses = newInnerClasses;
+      return this;
+    }
+    public Builder declaredMembers(
+        ImmutableList<MemberInfo> newDeclaredMembers) {
+      this.declaredMembers = newDeclaredMembers;
+      return this;
+    }
+
+    public TypeInfo build() {
+      @SuppressWarnings("synthetic-access")
+      TypeInfo ti = new TypeInfo(
+          canonName, modifiers, isAnonymous, superType,
+          interfaces, parameters, outerClass, innerClasses,
+          declaredMembers);
+      return ti;
+    }
   }
 }

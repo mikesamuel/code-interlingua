@@ -109,20 +109,49 @@ public final class Name {
    * The type of thing referred to by part of a name.
    */
   public enum Type {
-    /** */
-    PACKAGE,
-    /** */
-    CLASS,
-    /** */
-    FIELD,
-    /** */
-    METHOD,
+    /** Name for a package name element. */
+    PACKAGE(false, false, false),
+    /**
+     * Name for a {@code class}, {@code enum}, {@code interface},
+     * or {@code @interface} declaration.
+     */
+    CLASS(true, false, false),
+    /** Name for a field. */
+    FIELD(false, true, false),
+    /** Name for a method, constructor, or initializer block. */
+    METHOD(false, false, true),
     /** Includes method & constructor parameters. */
-    LOCAL,
-    /** */
-    TYPE_PARAMETER,
-    /** */
-    AMBIGUOUS,
+    LOCAL(false, true, false),
+    /** Name for a type parameter declaration. */
+    TYPE_PARAMETER(true, false, false),
+    /**
+     * Type for a name part that has not been disambiguated.
+     * @see com.mikesamuel.cil.ast.passes.DisambiguationPass
+     */
+    AMBIGUOUS(false, false, false),
+    ;
+
+    /**
+     * True if the name is the name of a class type, interface type,
+     * or a type parameter.
+     */
+    public final boolean isType;
+
+    /**
+     * True if there could be a value associated with the name.
+     */
+    public final boolean isReadable;
+
+    /**
+     *
+     */
+    public final boolean isCallable;
+
+    Type(boolean isType, boolean isReadable, boolean isCallable) {
+      this.isType = isType;
+      this.isReadable = isReadable;
+      this.isCallable = isCallable;
+    }
   }
 
 
@@ -311,12 +340,12 @@ public final class Name {
    * Assuming this name represents a type, the containing type if any.
    */
   public Name getOuterType() {
-    if (type != Type.CLASS) { return null; }
+    if (!type.isType) { return null; }
     Name ancestor;
     for (ancestor = parent; ancestor != null && ancestor.type == Type.METHOD;
         ancestor = ancestor.parent) {
       // Just skipping method containers to find a class container.
     }
-    return ancestor != null && ancestor.type == Type.CLASS ? ancestor : null;
+    return ancestor != null && ancestor.type.isType ? ancestor : null;
   }
 }
