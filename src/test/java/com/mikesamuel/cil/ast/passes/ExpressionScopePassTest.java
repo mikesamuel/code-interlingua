@@ -46,6 +46,7 @@ public final class ExpressionScopePassTest extends TestCase {
    * TypeInfo resolver.
    */
   public static class S {
+    // Used reflectively by test code.
     @SuppressFBWarnings("UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD")
     public int i;
     @SuppressFBWarnings("UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD")
