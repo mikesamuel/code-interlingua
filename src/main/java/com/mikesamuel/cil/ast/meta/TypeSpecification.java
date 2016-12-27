@@ -1,13 +1,20 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.util.Map;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 /**
  * A specification for a type that has not yet been checked for structural
  * consistency with {@link TypeInfo}.
  */
 public final class TypeSpecification {
+  /** The type specification for {@code Object}. */
+  public static final TypeSpecification JAVA_LANG_OBJECT =
+      new TypeSpecification(StaticType.JAVA_LANG_OBJECT);
+
   /**
    * The name of the raw element type.  If this specifies an
    * array of primitives, like {@code int[]} then use a field name like
@@ -68,7 +75,8 @@ public final class TypeSpecification {
         typeName.type.isType
         ||
         typeName.type == Name.Type.FIELD
-        && typeName.identifier.equals("TYPE"));
+        && typeName.identifier.equals("TYPE"),
+        typeName);
     this.typeName = typeName;
     this.bindings = bindings;
     this.nDims = nDims;
@@ -210,5 +218,57 @@ public final class TypeSpecification {
     INVARIANT,
     /** */
     SUPER,
+  }
+
+  /** Substitute for type parameters. */
+  public TypeSpecification subst(
+      ImmutableList<Name> parameters,
+      ImmutableList<TypeBinding> typeParameterBindings) {
+    Preconditions.checkArgument(
+        parameters.size() == typeParameterBindings.size());
+    ImmutableMap.Builder<Name, TypeBinding> substitutions =
+        ImmutableMap.builder();
+    // TODO: If an input contains a duplicate definition like
+    //    <T, T> void f(T x)
+    // might we get duplicate key errors?
+    // TODO: Which pass should check for that?
+    for (int i = 0, n = parameters.size(); i < n; ++i) {
+      substitutions.put(parameters.get(i), typeParameterBindings.get(i));
+    }
+    return subst(substitutions.build());
+  }
+
+  /** Substitute for type parameters. */
+  public TypeSpecification subst(
+      Map<? super Name, ? extends TypeBinding> bindingMap) {
+    TypeBinding b = bindingMap.get(typeName);
+    if (b != null) {
+      switch (b.variance) {
+        case EXTENDS:
+        case INVARIANT:
+          return b.typeSpec;
+        case SUPER:
+          return JAVA_LANG_OBJECT;
+      }
+    }
+    ImmutableList.Builder<TypeBinding> substs = null;
+    for (int i = 0, n = bindings.size(); i < n; ++i) {
+      TypeBinding binding = bindings.get(i);
+      TypeSpecification bindingSpec = binding.typeSpec.subst(bindingMap);
+      if (bindingSpec != binding.typeSpec) {
+        binding = new TypeBinding(binding.variance, bindingSpec);
+        if (substs == null) {
+          substs = ImmutableList.builder();
+          substs.addAll(bindings.subList(0, i));
+        }
+      }
+      if (substs != null) {
+        substs.add(binding);
+      }
+    }
+    if (substs == null) { return this; }
+    ImmutableList<TypeBinding> newBindings = substs.build();
+    Preconditions.checkState(bindings.size() == newBindings.size());
+    return new TypeSpecification(typeName, newBindings, nDims);
   }
 }

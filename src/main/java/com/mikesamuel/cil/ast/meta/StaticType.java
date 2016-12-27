@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.lang.reflect.Modifier;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -9,9 +10,11 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
@@ -214,7 +217,9 @@ public abstract class StaticType {
           return Cast.SAME;
         }
         if (this.isFloaty == nt.isFloaty) {
-          return this.byteWidth < nt.byteWidth || this.isSigned != nt.isSigned
+          return this.byteWidth < nt.byteWidth
+              || (this.byteWidth == nt.byteWidth
+                  && this.isSigned != nt.isSigned)
               ? Cast.CONVERTING_LOSSY  // double -> float, long -> int
               : Cast.CONVERTING_LOSSLESS; // float -> double, int -> long
         } else {
@@ -238,7 +243,7 @@ public abstract class StaticType {
   private static final Name JAVA_LANG =
       JAVA.child("lang", Name.Type.PACKAGE);
 
-  private static final Name JAVA_LANG_OBJECT =
+  static final Name JAVA_LANG_OBJECT =
       JAVA_LANG.child("Object", Name.Type.CLASS);
 
   private static final Name JAVA_LANG_CLONEABLE =
@@ -270,6 +275,7 @@ public abstract class StaticType {
     @Override
     public Cast assignableFrom(StaticType t) {
       if (t == this) { return Cast.SAME; }
+      if (t == T_VOID) { return Cast.DISJOINT; }
       if (t instanceof PrimitiveType) {
         return Cast.BOX;
       }
@@ -308,7 +314,7 @@ public abstract class StaticType {
       if (this.equals(t)) {
         return Cast.SAME;
       }
-      if (t == ERROR_TYPE) {
+      if (t == ERROR_TYPE && !"void".equals(name)) {
         return Cast.UNBOX;
       }
       if (wrapperType != null && t instanceof TypePool.ClassOrInterfaceType
@@ -321,12 +327,12 @@ public abstract class StaticType {
   }
 
   /** Type {@code byte} */
-  public static final OneOffType T_VOID = new OneOffType(
+  public static final PrimitiveType T_VOID = new OneOffType(
       "void", null,
       JAVA_LANG.child("Void", Name.Type.CLASS).child("TYPE", Name.Type.FIELD));
 
   /** Type {@code byte} */
-  public static final OneOffType T_BOOLEAN = new OneOffType(
+  public static final PrimitiveType T_BOOLEAN = new OneOffType(
       "boolean", JAVA_LANG.child("Boolean", Name.Type.CLASS), null);
 
   /** Type {@code byte} */
@@ -341,7 +347,7 @@ public abstract class StaticType {
 
   /** Type {@code char} */
   public static final NumericType T_CHAR = new NumericType(
-      "char", false, 1, false,
+      "char", false, 2, false,
       JAVA_LANG.child("Character", Name.Type.CLASS));
 
   /** Type {@code int} */
@@ -501,6 +507,8 @@ public abstract class StaticType {
        */
       public final ImmutableList<TypeBinding> typeParameterBindings;
 
+      private ImmutableMap<Name, ClassOrInterfaceType> superTypesTransitive;
+
       private ClassOrInterfaceType(
           TypeSpecification spec,
           TypeInfo info) {
@@ -533,15 +541,38 @@ public abstract class StaticType {
       }
 
       Map<Name, ClassOrInterfaceType> getSuperTypesTransitive() {
-        Map<Name, ClassOrInterfaceType> m = new LinkedHashMap<>();
-        m.put(info.canonName, this);
-        if (info.superType.isPresent()) {
-          // TODO
-        }
-        for (TypeSpecification iface : info.interfaces) {
+        if (this.superTypesTransitive == null) {
+          Map<Name, ClassOrInterfaceType> m = new LinkedHashMap<>();
+          m.put(info.canonName, this);
 
+          Optional<TypeSpecification> superTypeOpt = info.superType;
+          if (!superTypeOpt.isPresent()
+              && Modifier.isInterface(info.modifiers)) {
+            // Interfaces implicitly have Object as the super type.
+            superTypeOpt = Optional.of(TypeSpecification.JAVA_LANG_OBJECT);
+          }
+
+          for (TypeSpecification ts :
+            Iterables.concat(superTypeOpt.asSet(), info.interfaces)) {
+            if (!typeParameterBindings.isEmpty()) {  // Not a raw type
+              ts = ts.subst(info.parameters, this.typeParameterBindings);
+            }
+            if (!m.containsKey(ts.typeName)) {
+              StaticType superType = TypePool.this.type(ts, null, null);
+              if (superType instanceof ClassOrInterfaceType) {  // Not error
+                ClassOrInterfaceType superCT = (ClassOrInterfaceType) superType;
+                m.put(ts.typeName, superCT);
+                // TODO: Fails to halt if dep cycles.
+                for (Map.Entry<Name, ClassOrInterfaceType> e :
+                  superCT.getSuperTypesTransitive().entrySet()) {
+                  m.putIfAbsent(e.getKey(), e.getValue());
+                }
+              }
+            }
+          }
+          this.superTypesTransitive = ImmutableMap.copyOf(m);
         }
-        return ImmutableMap.copyOf(m);
+        return this.superTypesTransitive;
       }
 
       @Override
@@ -554,6 +585,15 @@ public abstract class StaticType {
             if (this.typeParameterBindings.equals(ct.typeParameterBindings)) {
               return Cast.SAME;
               // TODO: parameter variance
+              // TODO: really
+              // TODO: really
+              // TODO: really
+              // TODO: really
+              // TODO: really
+              // TODO: really
+              // TODO: really
+              // TODO: really
+              // TODO: really
             } else if (this.typeParameterBindings.isEmpty()) {
               // Optimistic raw type assumptions.
               return Cast.CONFIRM_SAFE;
@@ -565,15 +605,56 @@ public abstract class StaticType {
           }
           Map<Name, ClassOrInterfaceType> ctSuperTypes =
               ct.getSuperTypesTransitive();
-          // TODO
+          ClassOrInterfaceType ctCommonSuperType = ctSuperTypes.get(
+              info.canonName);
+          if (ctCommonSuperType != null) {
+            Cast castToCtCommonSuper = this.assignableFrom(ctCommonSuperType);
+            switch (castToCtCommonSuper) {
+              case SAME:
+                return Cast.CONFIRM_SAFE;
+              case CONFIRM_SAFE:
+              case CONFIRM_CHECKED:  // Is this right?
+              case CONFIRM_UNCHECKED:
+                return castToCtCommonSuper;
+              case CONVERTING_LOSSLESS:
+              case CONVERTING_LOSSY:
+              case DISJOINT:
+              case BOX:
+              case UNBOX:
+                throw new AssertionError(castToCtCommonSuper);
+            }
+          }
 
           Map<Name, ClassOrInterfaceType> superTypes =
               getSuperTypesTransitive();
-          // TODO
-          throw new AssertionError("IMPLEMENT ME");
+          ClassOrInterfaceType commonSuperType = superTypes.get(
+              ct.info.canonName);
+          if (commonSuperType != null) {
+            Cast castToCommonSuper = commonSuperType.assignableFrom(ct);
+            switch (castToCommonSuper) {
+              case SAME:
+                return Cast.CONFIRM_CHECKED;
+              case CONFIRM_SAFE:
+              case CONFIRM_CHECKED:  // Is this right?
+              case CONFIRM_UNCHECKED:
+                return castToCommonSuper;
+              case CONVERTING_LOSSLESS:
+              case CONVERTING_LOSSY:
+              case DISJOINT:
+              case BOX:
+              case UNBOX:
+                throw new AssertionError(castToCommonSuper);
+            }
+          }
+
+          // TODO: Do we need to work on the
+          return Cast.DISJOINT;
         }
         if (t instanceof PrimitiveType) {
           PrimitiveType pt = (PrimitiveType) t;
+          if (pt.wrapperType == null) {
+            return Cast.DISJOINT;
+          }
           if (this.info.canonName.equals(pt.wrapperType)) {
             return Cast.BOX;
           }
@@ -656,12 +737,30 @@ public abstract class StaticType {
      * Type for an array type.
      */
     public final class ArrayType extends ReferenceType {
-      /** The type of array elements. */
+      /** The type of the elements of arrays with this static type. */
       public final StaticType elementType;
+      /**
+       * The type of the elements of the innermost array.
+       * This will never be itself an array type.
+       */
+      public final StaticType baseElementType;
+      /**
+       * One greater than the dimensionality of the element type or 1 if the
+       * element type is not itself an array type.
+       */
+      public final int dimensionality;
 
       private ArrayType(TypeSpecification spec, StaticType elementType) {
         super(spec);
         this.elementType = elementType;
+        if (elementType instanceof ArrayType) {
+          ArrayType at = (ArrayType) elementType;
+          this.dimensionality = at.dimensionality + 1;
+          this.baseElementType = at.baseElementType;
+        } else {
+          this.dimensionality = 1;
+          this.baseElementType = elementType;
+        }
       }
 
       @Override
@@ -682,8 +781,47 @@ public abstract class StaticType {
 
       @Override
       public Cast assignableFrom(StaticType t) {
-        // TODO
-        return null;
+        if (ERROR_TYPE.equals(t)) {
+          return Cast.CONFIRM_UNCHECKED;
+        }
+        if (t instanceof PrimitiveType) {
+          return Cast.DISJOINT;
+        }
+        if (t instanceof ClassOrInterfaceType) {
+          ClassOrInterfaceType cit = (ClassOrInterfaceType) t;
+          if (ARRAY_SUPER_TYPES.contains(cit.info.canonName)) {
+            return Cast.CONFIRM_CHECKED;
+          }
+          return Cast.DISJOINT;
+        }
+        Preconditions.checkArgument(t instanceof ArrayType);
+        ArrayType at = (ArrayType) t;
+        int dimDelta = this.dimensionality - at.dimensionality;
+        if (dimDelta == 0) {
+          Cast ec = elementType.assignableFrom(at.elementType);
+          switch (ec) {
+            case SAME:
+            case DISJOINT:
+            case CONFIRM_CHECKED:
+            case CONFIRM_SAFE:
+            case CONFIRM_UNCHECKED:
+              return ec;
+            case BOX:
+            case UNBOX:
+            case CONVERTING_LOSSLESS:
+            case CONVERTING_LOSSY:
+              return Cast.DISJOINT;
+          }
+          throw new AssertionError(ec);
+        } else {
+          StaticType a = this;
+          StaticType b = at;
+          while (a instanceof ArrayType && b instanceof ArrayType) {
+            a = ((ArrayType) a).elementType;
+            b = ((ArrayType) b).elementType;
+          }
+          return a.assignableFrom(b);
+        }
       }
     }
   }
