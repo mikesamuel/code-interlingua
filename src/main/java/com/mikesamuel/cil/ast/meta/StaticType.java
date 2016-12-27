@@ -23,6 +23,7 @@ import com.mikesamuel.cil.ast.IntegralTypeNode;
 import com.mikesamuel.cil.ast.NumericTypeNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -418,7 +419,8 @@ public abstract class StaticType {
         TypeSpecification tspec,
         @Nullable SourcePosition pos, @Nullable Logger logger) {
       return pool.computeIfAbsent(
-          tspec, new Function<TypeSpecification, StaticType>() {
+          tspec.canon(r),
+          new Function<TypeSpecification, StaticType>() {
             @Override
             public StaticType apply(TypeSpecification ts) {
               if (ts.nDims > 0) {
@@ -584,23 +586,61 @@ public abstract class StaticType {
             // compiled together.
             if (this.typeParameterBindings.equals(ct.typeParameterBindings)) {
               return Cast.SAME;
-              // TODO: parameter variance
-              // TODO: really
-              // TODO: really
-              // TODO: really
-              // TODO: really
-              // TODO: really
-              // TODO: really
-              // TODO: really
-              // TODO: really
-              // TODO: really
             } else if (this.typeParameterBindings.isEmpty()) {
               // Optimistic raw type assumptions.
               return Cast.CONFIRM_SAFE;
             } else if (ct.typeParameterBindings.isEmpty()) {
               return Cast.CONFIRM_UNCHECKED;
             } else {
-              return Cast.DISJOINT;
+              int n = typeParameterBindings.size();
+              Preconditions.checkState(n == ct.typeParameterBindings.size());
+              // Check variance per parameter
+              Cast result = Cast.CONFIRM_SAFE;
+              for (int i = 0; i < n; ++i) {
+                TypeBinding left = typeParameterBindings.get(i);
+                TypeBinding right = ct.typeParameterBindings.get(i);
+                StaticType leftType = type(left.typeSpec, null, null);
+                StaticType rightType = type(right.typeSpec, null, null);
+                Cast pc = leftType.assignableFrom(rightType);
+                switch (pc) {
+                  case DISJOINT:
+                    return Cast.DISJOINT;
+                  case SAME:
+                    if (left.variance != right.variance
+                        && right.variance != Variance.INVARIANT) {
+                      result = Cast.CONFIRM_UNCHECKED;
+                    }
+                    continue;
+                  case CONFIRM_SAFE:
+                    if (left.variance == Variance.EXTENDS) {
+                      // ok
+                    } else if (right.variance == Variance.SUPER) {
+                      result = Cast.CONFIRM_UNCHECKED;
+                    } else {
+                      return Cast.DISJOINT;
+                    }
+                    break;
+                  case CONFIRM_CHECKED:
+                    if (left.variance == Variance.SUPER) {
+                      // ok
+                    } else if (right.variance == Variance.EXTENDS) {
+                      result = Cast.CONFIRM_UNCHECKED;
+                    } else {
+                      return Cast.DISJOINT;
+                    }
+                    break;
+                  case CONFIRM_UNCHECKED:
+                    result = Cast.CONFIRM_UNCHECKED;
+                    break;
+                  case BOX:
+                  case CONVERTING_LOSSLESS:
+                  case CONVERTING_LOSSY:
+                  case UNBOX:
+                    throw new AssertionError(
+                        left + " =~= " + right + " => " + pc);
+                }
+              }
+              return result;
             }
           }
           Map<Name, ClassOrInterfaceType> ctSuperTypes =

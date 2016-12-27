@@ -40,6 +40,10 @@ final class AmbiguousNames {
     // TODO: obviate the distinction between diamonds and arguments by rewriting
     // all diamond operators in-situ.
     Name rawName = ambiguousNameOf(nameNode);
+    if (rawName == null) {
+      error(logger, pos, "Missing type name");
+      return StaticType.ERROR_TYPE.typeSpecification;
+    }
     ImmutableList<Name> canonNames = canonResolver.lookupTypeName(rawName);
     switch (canonNames.size()) {
       case 0:
@@ -62,12 +66,12 @@ final class AmbiguousNames {
                  // Don't recurse in the finder.  Recurse via this method.
                  NodeType.TypeArgument)
              .find()) {
-      TypeSpecification argSpec = typeSpecificationOf(
-          arg.getChildren().get(0), canonResolver, logger);
+      TypeSpecification argSpec = null;
       TypeSpecification.Variance variance =
           TypeSpecification.Variance.INVARIANT;
       switch (arg.getVariant()) {
         case ReferenceType:
+          argSpec = typeSpecificationOf(arg, canonResolver, logger);
           break;
         case Wildcard:
           WildcardNode wc = arg.firstChildWithType(WildcardNode.class);
@@ -83,7 +87,13 @@ final class AmbiguousNames {
                   variance = TypeSpecification.Variance.SUPER;
                   break;
               }
+              argSpec = typeSpecificationOf(wcb, canonResolver, logger);
               break;
+            } else {
+              // "?" without bounds.  Assume bounds based on parameter
+              // super-type.
+              variance = TypeSpecification.Variance.EXTENDS;
+              // use null for argSpec
             }
           }
           error(
@@ -91,6 +101,7 @@ final class AmbiguousNames {
               "Missing bounds for type argument");
           break;
       }
+
       bindings.add(new TypeBinding(variance, argSpec));
     }
     return new TypeSpecification(canonName, bindings.build());

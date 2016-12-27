@@ -1,10 +1,15 @@
 package com.mikesamuel.cil.ast.meta;
 
 import java.util.Map;
+import java.util.Set;
 
+import javax.annotation.Nullable;
+
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
 
 /**
  * A specification for a type that has not yet been checked for structural
@@ -148,13 +153,24 @@ public final class TypeSpecification {
   public static final class TypeBinding {
     /** The wildcard bounds variance if any or INVARIANT if not. */
     public final Variance variance;
-    /** The name of the referent type. */
-    public final TypeSpecification typeSpec;
+    /**
+     * The name of the referent type or null to assume the base type from the
+     * type parameter declaration.
+     */
+    public final @Nullable TypeSpecification typeSpec;
 
     /** */
-    public TypeBinding(Variance variance, TypeSpecification typeSpec) {
+    public TypeBinding(
+        Variance variance, @Nullable TypeSpecification typeSpec) {
+      Preconditions.checkArgument(
+          typeSpec != null || variance == Variance.EXTENDS, variance);
       this.variance = variance;
       this.typeSpec = typeSpec;
+    }
+
+    /** */
+    public TypeBinding(TypeSpecification typeSpec) {
+      this(Variance.INVARIANT, typeSpec);
     }
 
     /** */
@@ -166,7 +182,7 @@ public final class TypeSpecification {
     public String toString() {
       switch (variance) {
         case EXTENDS:
-          return "? extends " + typeSpec;
+          return typeSpec != null ? "? extends " + typeSpec : "?";
         case INVARIANT:
           return typeSpec.toString();
         case SUPER:
@@ -270,5 +286,83 @@ public final class TypeSpecification {
     ImmutableList<TypeBinding> newBindings = substs.build();
     Preconditions.checkState(bindings.size() == newBindings.size());
     return new TypeSpecification(typeName, newBindings, nDims);
+  }
+
+  /**
+   * A type specification that contains (transitively) no type bindings with
+   * a null specification.
+   * <p>
+   * Effectively, this means that {@code List<?>} has been rewritten to
+   * {@code List<? extends Object>}.
+   */
+  public TypeSpecification canon(TypeInfoResolver r) {
+    return canon(r, Sets.newHashSet());
+  }
+
+  private TypeSpecification canon(TypeInfoResolver r, Set<Name> resolving) {
+    Optional<TypeInfo> infoOpt = null;
+    ImmutableList.Builder<TypeBinding> canonBindings = null;
+    for (int i = 0, n = bindings.size(); i < n; ++i) {
+      TypeBinding b = bindings.get(i);
+      TypeBinding canon;
+      if (b.typeSpec == null) {
+        if (infoOpt == null) {
+          infoOpt = r.resolve(typeName);
+        }
+        TypeSpecification paramBaseType = JAVA_LANG_OBJECT;
+
+        find_type_parameter_bound:
+        if (infoOpt.isPresent()) {
+          TypeInfo info = infoOpt.get();
+          if (info.parameters.size() > i) {
+            TypeSpecification paramSpec = new TypeSpecification(
+                info.parameters.get(i));
+            // Handle cases where one type parameter extends another as in
+            // <T1, T2 extends T1>
+            while (true) {
+              Optional<TypeInfo> paramInfoOpt = r.resolve(paramSpec.typeName);
+              if (!paramInfoOpt.isPresent()) {
+                break find_type_parameter_bound;
+              }
+              TypeInfo paramInfo = paramInfoOpt.get();
+              if (!paramInfo.superType.isPresent()) {
+                break find_type_parameter_bound;
+              }
+              TypeSpecification paramSuperType = paramInfo.superType.get();
+              paramSpec = paramSuperType;
+              if (paramSuperType.typeName.type == Name.Type.CLASS) {
+                break;
+              }
+            }
+            paramBaseType = paramSpec;
+          }
+        }
+        if (resolving.add(this.typeName)) {
+          paramBaseType = paramBaseType.canon(r);
+        } else {
+          // TODO: Does this occur in legit cases?
+          // TODO: testcase (non-legit but parses)
+          //   class C<T extends C<?>> {
+          //     { C<?> c = null; }
+          //   }
+          paramBaseType = StaticType.ERROR_TYPE.typeSpecification;
+        }
+        canon = new TypeBinding(b.variance, paramBaseType);
+      } else {
+        TypeSpecification bspec = b.typeSpec.canon(r);
+        canon = bspec == b.typeSpec ? b : new TypeBinding(b.variance, bspec);
+      }
+      if (canonBindings == null && canon != b) {
+        canonBindings = ImmutableList.builder();
+        canonBindings.addAll(bindings.subList(0, i));
+      }
+      if (canonBindings != null) {
+        canonBindings.add(canon);
+      }
+    }
+
+    return canonBindings != null
+        ? new TypeSpecification(typeName, canonBindings.build(), nDims)
+        : this;
   }
 }

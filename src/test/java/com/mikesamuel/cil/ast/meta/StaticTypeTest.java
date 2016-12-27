@@ -9,6 +9,8 @@ import org.junit.Test;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.mikesamuel.cil.ast.meta.StaticType.Cast;
+import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 
 import junit.framework.TestCase;
 
@@ -83,11 +85,20 @@ public final class StaticTypeTest extends TestCase {
     }
   }
 
-  private StaticType type(String name) {
-    return type(name, 0);
+  private StaticType type(String name, TypeBinding... bindings) {
+    return type(name, 0, bindings);
   }
 
-  private StaticType type(String name, int nDims) {
+  private StaticType type(String name, int nDims, TypeBinding... bindings) {
+    return pool.type(spec(name, nDims, bindings), null, logger);
+  }
+
+  private static TypeSpecification spec(String name, TypeBinding... bindings) {
+    return spec(name, 0, bindings);
+  }
+
+  private static TypeSpecification spec(
+      String name, int nDims, TypeBinding... bindings) {
     Name nm = Name.DEFAULT_PACKAGE;
     int hash = name.lastIndexOf('#');
     String prefix = hash >= 0 ? name.substring(0, hash) : name;
@@ -98,7 +109,20 @@ public final class StaticTypeTest extends TestCase {
     if (hash >= 0) {
       nm = nm.child(name.substring(hash + 1), Name.Type.FIELD);
     }
-    return pool.type(new TypeSpecification(nm, nDims), null, logger);
+    return new TypeSpecification(
+            nm, ImmutableList.copyOf(bindings), nDims);
+  }
+
+  private static TypeBinding is(String s) {
+    return new TypeBinding(Variance.INVARIANT, spec(s));
+  }
+
+  private static TypeBinding ext(String s) {
+    return new TypeBinding(Variance.EXTENDS, spec(s));
+  }
+
+  private static TypeBinding sup(String s) {
+    return new TypeBinding(Variance.SUPER, spec(s));
   }
 
   @Test
@@ -365,8 +389,77 @@ public final class StaticTypeTest extends TestCase {
   }
 
   @Test
-  public void testGenerics() {
+  public void testGenericWithNonGenericSubclass() {
+    StaticType optional = type("java.util.Optional");
+    StaticType optionalString = type(
+        "java.util.Optional", is("java.lang.String"));
+    StaticType optional2String = type(
+        "java.util.Optional",
+        new TypeBinding(optionalString.typeSpecification));
+    StaticType optionalEString = type(
+        "java.util.Optional", ext("java.lang.String"));
+    StaticType optionalSString = type(
+        "java.util.Optional", sup("java.lang.String"));
+    StaticType optionalCharSequence = type(
+        "java.util.Optional", is("java.lang.CharSequence"));
+    StaticType optionalECharSequence = type(
+        "java.util.Optional", ext("java.lang.CharSequence"));
+
+    assertCasts(
+        Cast.DISJOINT,
+        type("java.lang.String"),
+        optional,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.DISJOINT,
+        type("java.lang.String"),
+        optionalString,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.DISJOINT,
+        optionalString,
+        optional2String,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.DISJOINT,
+        optionalString,
+        optionalCharSequence,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        optionalString,
+        optionalECharSequence,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        optionalCharSequence,
+        optionalSString,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        optionalString,
+        optionalSString,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        optionalCharSequence,
+        optionalECharSequence,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.CONFIRM_UNCHECKED,
+        optionalSString,
+        optionalEString,
+        Cast.CONFIRM_UNCHECKED);
+  }
+
+  @Test
+  public void testGenericsAndVarianceUsingCollections() {
     // TODO
+  }
+
+  @Test
+  public void testGenericArrayElements() {
+    // TODO: Object vs generic array are unchecked
   }
 
   /**
