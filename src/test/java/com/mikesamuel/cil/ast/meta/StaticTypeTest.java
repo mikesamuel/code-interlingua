@@ -465,13 +465,43 @@ public final class StaticTypeTest extends TestCase {
   }
 
   @Test
-  public void testGenericsAndVarianceUsingCollections() {
-    // TODO
+  public void testMultipleParameters() {
+    StaticType mapStrInt = type(
+        "java.util.Map", is("java.lang.String"), is("java.lang.Integer"));
+    StaticType mapGeneric = type(
+        "java.util.Map", ext("java.lang.Object"), ext("java.lang.Object"));
+    StaticType mapAnyNumInt = type(
+        "java.util.Map", ext("java.lang.Number"), is("java.lang.Integer"));
+    StaticType mapStrAnyCharSequence = type(
+        "java.util.Map", is("java.lang.String"), ext("java.lang.CharSequence"));
+
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        mapStrInt,
+        mapGeneric,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.DISJOINT,
+        mapStrInt,
+        mapAnyNumInt,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.DISJOINT,
+        mapStrInt,
+        mapStrAnyCharSequence,
+        Cast.DISJOINT);
   }
 
   @Test
   public void testGenericArrayElements() {
-    // TODO: Object vs generic array are unchecked
+    StaticType arrayOfGenericLists = type(
+        "java.util.List", 1, is("java.lang.String"));
+    StaticType arrayOfRawLists = type("java.util.List", 1);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        arrayOfGenericLists,
+        arrayOfRawLists,
+        Cast.CONFIRM_UNCHECKED);
   }
 
   /**
