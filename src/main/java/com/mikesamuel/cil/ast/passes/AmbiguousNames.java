@@ -71,7 +71,8 @@ final class AmbiguousNames {
           TypeSpecification.Variance.INVARIANT;
       switch (arg.getVariant()) {
         case ReferenceType:
-          argSpec = typeSpecificationOf(arg, canonResolver, logger);
+          argSpec = typeSpecificationOf(
+              arg.getChildren().get(0), canonResolver, logger);
           break;
         case Wildcard:
           WildcardNode wc = arg.firstChildWithType(WildcardNode.class);
