@@ -1368,7 +1368,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassOrInterfaceTypeUnannInterfaceType() {
     parseSanityCheck(
-        UnannClassTypeNode.Variant.NotAtClassType,
+        ClassTypeNode.Variant.ClassOrInterfaceType,
         "Bar<B>",
         // Cannot lexically distinguish Class types from interface types.
         Fuzz.SAME_VARIANT
@@ -1381,7 +1381,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassTypeIdentifierTypeArguments() {
     parseSanityCheck(
-        UnannClassTypeNode.Variant.NotAtClassType,
+        ClassTypeNode.Variant.ClassOrInterfaceType,
         "List<String>"
         );
   }
@@ -1392,7 +1392,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnannClassTypeUnannClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments() {
     parseSanityCheck(
-        UnannClassTypeNode.Variant.NotAtClassType,
+        ClassTypeNode.Variant.ClassOrInterfaceType,
         "ImmutableList.@Awesome Builder<T>",
         Fuzz.SAME_VARIANT  // Context free names
         );
@@ -3519,7 +3519,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testCatchTypeUnannClassTypePipClassType() {
     parseSanityCheck(
-        CatchTypeNode.Variant.UnannClassTypePipClassType,
+        CatchTypeNode.Variant.ClassTypePipClassType,
         "FileNotFoundException | NotSerializableException"
         );
   }
@@ -4044,7 +4044,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayCreationExpressionNewPrimitiveTypeDimExprsDims() {
     parseSanityCheck(
-        ArrayCreationExpressionNode.Variant.NewPrimitiveTypeDimExprsDimsNotLs,
+        ArrayCreationExpressionNode.Variant.NewArrayElementTypeDimExprsDimsNotLs,
         "new int[3][4]"
         );
   }
@@ -4055,7 +4055,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayCreationExpressionNewClassOrInterfaceTypeDimExprsDims() {
     parseSanityCheck(
-        ArrayCreationExpressionNode.Variant.NewClassOrInterfaceTypeDimExprsDimsNotLs,
+        ArrayCreationExpressionNode.Variant.NewArrayElementTypeDimExprsDimsNotLs,
         "new Foo[3][4]"
         );
   }
@@ -4066,7 +4066,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayCreationExpressionNewPrimitiveTypeDimsArrayInitializer() {
     parseSanityCheck(
-        ArrayCreationExpressionNode.Variant.NewPrimitiveTypeDimsArrayInitializerNotLs,
+        ArrayCreationExpressionNode.Variant.NewArrayElementTypeDimsArrayInitializer,
         "new int[][] { { 3, 4, 5, }, }"
         );
   }
@@ -4077,11 +4077,11 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayCreationExpressionNewClassOrInterfaceTypeDimsArrayInitializer() {
     parseSanityCheck(
-        ArrayCreationExpressionNode.Variant.NewClassOrInterfaceTypeDimsArrayInitializerNotLs,
+        ArrayCreationExpressionNode.Variant.NewArrayElementTypeDimsArrayInitializer,
         "new String[][] { { str, }, }"
         );
     parseSanityCheck(
-        ArrayCreationExpressionNode.Variant.NewClassOrInterfaceTypeDimsArrayInitializerNotLs,
+        ArrayCreationExpressionNode.Variant.NewArrayElementTypeDimsArrayInitializer,
         "new String[][] { { str } }",
         Fuzz.IMPLIED_TOKENS
         );

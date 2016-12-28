@@ -44,7 +44,7 @@ import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.parser.SourcePosition;
 
-class DeclarationPass implements AbstractPass<TypeInfoResolver> {
+final class DeclarationPass implements AbstractPass<TypeInfoResolver> {
   final Logger logger;
 
   static final boolean DEBUG = false;

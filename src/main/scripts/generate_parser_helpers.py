@@ -82,6 +82,13 @@ _TRAITS = {
         (
             'com.mikesamuel.cil.ast.meta.TypeNameResolver',
         )),
+    'WholeType': (
+        (
+            ('StaticType', 'staticType'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.StaticType',
+        )),
     }
 _TRAITS['TypeParameterScope'] = _TRAITS['TypeScope']
 

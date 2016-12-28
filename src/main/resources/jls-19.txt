@@ -264,10 +264,10 @@ Literal: (@trait=Typed)
 Type:
      ReferenceType
      PrimitiveType
-PrimitiveType:
+PrimitiveType: (@trait=WholeType)
      {Annotation} NumericType
      {Annotation} "boolean"
-NumericType:
+NumericType: (@trait=WholeType)
      IntegralType
      FloatingPointType
 IntegralType:
@@ -279,11 +279,11 @@ IntegralType:
 FloatingPointType:
      "float"
      "double"
-ReferenceType:
+ReferenceType: (@trait=WholeType)
      ArrayType
      ClassOrInterfaceType
      TypeVariable
-ClassOrInterfaceType: (@trait=TypeReference)
+ClassOrInterfaceType: (@trait=TypeReference,WholeType)
      // This turns the original grammar on its head because in JLS chapter 19,
      // ClassOrInterfaceType:
      //    ClassType
@@ -297,13 +297,13 @@ ClassOrInterfaceType: (@trait=TypeReference)
      // interfaces from normal classes.
      ContextFreeNames
      [ClassOrInterfaceType "."] {Annotation} Identifier [TypeArguments]
-ClassType:
+ClassType: (@trait=WholeType)
      ClassOrInterfaceType
-InterfaceType:
+InterfaceType: (@trait=WholeType)
      ClassOrInterfaceType
 TypeVariable: (@trait=TypeReference)
      {Annotation} Identifier
-ArrayType:
+ArrayType: (@trait=WholeType)
      PrimitiveType Dims
      ClassOrInterfaceType Dims
      TypeVariable Dims
@@ -339,10 +339,8 @@ WildcardBounds:
 // I rewrote them to delegate with a lookahead.
 // That way we don't have largely duplicative
 // node types for the annotatable and unannotated equivalents.
-UnannType:
+UnannType: (@trait=WholeType)
      !"@" Type
-UnannClassType:
-     !"@" ClassType
 
 // Names
 (chapter=Name)
@@ -782,7 +780,7 @@ CatchClause:
 CatchFormalParameter:
      {!!VariableModifier Modifier} CatchType VariableDeclaratorId (@name=CatchFormalParameter)
 CatchType:
-     UnannClassType {"|" ClassType}
+     ClassType {"|" ClassType}
 Finally:
      "finally" Block
 TryWithResourcesStatement:
@@ -866,10 +864,11 @@ Diamond:
 ArgumentList:
      Expression {"," Expression}
 ArrayCreationExpression: (@trait=Typed)
-     "new" PrimitiveType Dims ArrayInitializer !"["
-     "new" ClassOrInterfaceType Dims ArrayInitializer !"["
-     "new" PrimitiveType DimExprs [Dims] !"["
-     "new" ClassOrInterfaceType DimExprs [Dims] !"["
+     "new" ArrayElementType Dims ArrayInitializer
+     "new" ArrayElementType DimExprs [Dims] !"["
+ArrayElementType:
+     PrimitiveType
+     ClassOrInterfaceType
 DimExprs:
      DimExpr {DimExpr}
 DimExpr:
