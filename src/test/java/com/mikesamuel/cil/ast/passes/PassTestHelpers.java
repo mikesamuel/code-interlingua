@@ -62,7 +62,7 @@ class PassTestHelpers {
       String[][] inputLines,
       Decorator decorator,
       String... expectedErrors)
-    throws UnparseVerificationException {
+  throws UnparseVerificationException {
     Logger logger = Logger.getAnonymousLogger();
     logger.setUseParentHandlers(false);
     List<LogRecord> logRecords = Lists.newArrayList();
@@ -121,6 +121,24 @@ class PassTestHelpers {
       }
     }
 
+    String got = serializeCompilationUnits(cus, decorator);
+
+    StringBuilder sb = new StringBuilder();
+    for (String[] linesForOneCu : expectedLines) {
+      if (sb.length() != 0) {
+        sb.append("\n\n");
+      }
+      sb.append(Joiner.on('\n').join(linesForOneCu));
+    }
+    String want = sb.toString();
+
+    Assert.assertEquals(want, got);
+  }
+
+
+  static String serializeCompilationUnits(
+      Iterable<? extends CompilationUnitNode> cus, Decorator decorator)
+  throws UnparseVerificationException {
     StringBuilder sb = new StringBuilder();
     for (CompilationUnitNode cu : cus) {
       Iterable<Event> skeleton = SList.forwardIterable(
@@ -140,18 +158,7 @@ class PassTestHelpers {
       }
       sb.append(fs.code);
     }
-    String got = sb.toString();
-
-    sb.setLength(0);
-    for (String[] linesForOneCu : expectedLines) {
-      if (sb.length() != 0) {
-        sb.append("\n\n");
-      }
-      sb.append(Joiner.on('\n').join(linesForOneCu));
-    }
-    String want = sb.toString();
-
-    Assert.assertEquals(want, got);
+    return sb.toString();
   }
 
 
