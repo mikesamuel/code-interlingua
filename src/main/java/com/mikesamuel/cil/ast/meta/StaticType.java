@@ -594,13 +594,26 @@ public abstract class StaticType {
             } else {
               int n = typeParameterBindings.size();
               Preconditions.checkState(n == ct.typeParameterBindings.size());
-              // Check variance per parameter
+
+              // Optimistically assume this, and look for reasons to downgrade
+              // to disjoint or unchecked.
               Cast result = Cast.CONFIRM_SAFE;
+
+              // Check parameters pairwise taking variance into account.
               for (int i = 0; i < n; ++i) {
                 TypeBinding left = typeParameterBindings.get(i);
                 TypeBinding right = ct.typeParameterBindings.get(i);
+                if (left.variance == Variance.INVARIANT
+                    && right.variance == Variance.INVARIANT) {
+                  if (!left.equals(right)) {
+                    return Cast.DISJOINT;
+                  }
+                  continue;
+                }
+
                 StaticType leftType = type(left.typeSpec, null, null);
                 StaticType rightType = type(right.typeSpec, null, null);
+
                 Cast pc = leftType.assignableFrom(rightType);
                 switch (pc) {
                   case DISJOINT:
@@ -612,20 +625,25 @@ public abstract class StaticType {
                     }
                     continue;
                   case CONFIRM_SAFE:
-                    if (left.variance == Variance.EXTENDS) {
-                      // ok
-                    } else if (right.variance == Variance.SUPER) {
+                    if (right.variance == Variance.SUPER
+                        // Special case
+                        //   X<? super Foo> y = ...;
+                        //   X<? extends Object> x = y;
+                        // which is safe because all parameter bindings are
+                        // reference types and Object is a top for reference
+                        // types.
+                        && (left.variance != Variance.EXTENDS
+                            || !JAVA_LANG_OBJECT.equals(
+                                left.typeSpec.typeName))) {
                       result = Cast.CONFIRM_UNCHECKED;
-                    } else {
+                    } else if (left.variance != Variance.EXTENDS) {
                       return Cast.DISJOINT;
                     }
                     break;
                   case CONFIRM_CHECKED:
-                    if (left.variance == Variance.SUPER) {
-                      // ok
-                    } else if (right.variance == Variance.EXTENDS) {
+                    if (right.variance == Variance.EXTENDS) {
                       result = Cast.CONFIRM_UNCHECKED;
-                    } else {
+                    } else if (left.variance != Variance.SUPER) {
                       return Cast.DISJOINT;
                     }
                     break;

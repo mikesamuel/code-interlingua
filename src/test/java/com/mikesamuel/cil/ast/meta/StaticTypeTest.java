@@ -404,6 +404,8 @@ public final class StaticTypeTest extends TestCase {
         "java.util.Optional", is("java.lang.CharSequence"));
     StaticType optionalECharSequence = type(
         "java.util.Optional", ext("java.lang.CharSequence"));
+    StaticType optionalE = type(
+        "java.util.Optional", ext("java.lang.Object"));
 
     assertCasts(
         Cast.DISJOINT,
@@ -449,6 +451,16 @@ public final class StaticTypeTest extends TestCase {
         Cast.CONFIRM_UNCHECKED,
         optionalSString,
         optionalEString,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.CONFIRM_UNCHECKED,
+        optionalE,
+        optionalSString,
+        Cast.CONFIRM_SAFE);
+    assertCasts(
+        Cast.CONFIRM_UNCHECKED,
+        optionalECharSequence,
+        optionalSString,
         Cast.CONFIRM_UNCHECKED);
   }
 
