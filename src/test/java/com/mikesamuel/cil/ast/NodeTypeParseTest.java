@@ -413,7 +413,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayTypePrimitiveTypeDims() {
     parseSanityCheck(
-        ArrayTypeNode.Variant.PrimitiveTypeDims,
+        ArrayTypeNode.Variant.TypeAnnotationDim,
         "int[][]"
         );
   }
@@ -424,7 +424,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayTypeClassOrInterfaceTypeDims() {
     parseSanityCheck(
-        ArrayTypeNode.Variant.ClassOrInterfaceTypeDims,
+        ArrayTypeNode.Variant.TypeAnnotationDim,
         "Object[ ]"
         );
   }
@@ -435,7 +435,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testArrayTypeTypeVariableDims() {
     parseSanityCheck(
-        ArrayTypeNode.Variant.TypeVariableDims,
+        ArrayTypeNode.Variant.TypeAnnotationDim,
         "T[]",
         // Can't lexically distinguish TypeVariable from ClassOrInterfaceType
         Fuzz.SAME_VARIANT

@@ -304,9 +304,7 @@ InterfaceType: (@trait=WholeType)
 TypeVariable: (@trait=TypeReference)
      {Annotation} Identifier
 ArrayType: (@trait=WholeType)
-     PrimitiveType Dims
-     ClassOrInterfaceType Dims
-     TypeVariable Dims
+     Type {Annotation} Dim
 // This Dim production does not appear in the grammar, but including it here
 // means that the presence of optional or repeated "[]" pairs results in an
 // AST node.
@@ -495,7 +493,7 @@ MethodModifier:
      "strictfp"
 MethodHeader:
      [TypeParameters {Annotation}] Result MethodDeclarator [Throws]
-Result:
+Result: (@trait=WholeType)
      "void"
      UnannType
 MethodDeclarator:
