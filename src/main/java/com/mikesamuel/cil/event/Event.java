@@ -112,8 +112,8 @@ public abstract class Event {
    * An ephemeral event that indicates that the corresponding preceding
    * {@link #leftRecursionSuffixStart} is finished.
    */
-  public static LREnd leftRecursionSuffixEnd(NodeType nodeType) {
-    return new LREnd(nodeType);
+  public static LREnd leftRecursionSuffixEnd(NodeType nodeType, int index) {
+    return new LREnd(nodeType, index);
   }
 
   /**
@@ -510,9 +510,14 @@ public abstract class Event {
      * The production that was reached left-recursively.
      */
     public final NodeType nodeType;
+    /**
+     * The index at which the growing started.
+     */
+    public final int index;
 
-    LREnd(NodeType nodeType) {
+    LREnd(NodeType nodeType, int index) {
       this.nodeType = nodeType;
+      this.index = index;
     }
 
     @Override
@@ -526,6 +531,11 @@ public abstract class Event {
     }
 
     @Override
+    public int getContentIndex() {
+      return index;
+    }
+
+    @Override
     public String toString() {
       return "(LREnd " + nodeType + ")";
     }
@@ -534,6 +544,7 @@ public abstract class Event {
     public int hashCode() {
       final int prime = 31;
       int result = 1;
+      result = prime * result + index;
       result = prime * result + ((nodeType == null) ? 0 : nodeType.hashCode());
       return result;
     }
@@ -550,11 +561,15 @@ public abstract class Event {
         return false;
       }
       LREnd other = (LREnd) obj;
+      if (index != other.index) {
+        return false;
+      }
       if (nodeType != other.nodeType) {
         return false;
       }
       return true;
     }
+
   }
 
   /**

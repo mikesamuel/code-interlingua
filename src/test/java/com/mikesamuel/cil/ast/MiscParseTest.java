@@ -12,6 +12,14 @@ import org.junit.Test;
 public final class MiscParseTest extends AbstractParSerTestCase {
 
   @Test
+  public final void testFormalParameter() {
+    parseSanityCheck(
+        FormalParameterNode.Variant.Declaration,
+        "String name"
+        );
+  }
+
+  @Test
   public final void testFormalParameterList() {
     parseSanityCheck(
         FormalParameterListNode.Variant.FormalParametersComLastFormalParameter,

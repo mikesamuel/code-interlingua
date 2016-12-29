@@ -130,7 +130,8 @@ final class Reference extends PTParSer {
               indent() + "Found LR Growing " + nodeType + " @ " + start.index);
         }
         return ParseResult.success(
-            start.appendOutput(Event.leftRecursionSuffixEnd(nodeType)),
+            start.appendOutput(
+                Event.leftRecursionSuffixEnd(nodeType, start.index)),
             ParseResult.NO_WRITE_BACK_RESTRICTION,
             // Checked to make sure that the growing does not accidentally take
             // a non-left recursing path.
@@ -218,8 +219,10 @@ final class Reference extends PTParSer {
 
       grow_the_seed:
       while (true) {
+        ParseState beforeGrow = grown.appendOutput(
+            Event.leftRecursionSuffixStart());
         ParseResult growResult = parseVariants(
-            grown.appendOutput(Event.leftRecursionSuffixStart()),
+            beforeGrow,
             lr, err, LeftRecursion.Stage.GROWING,
             allExclusionsTriggered);
         allExclusionsTriggered.addAll(growResult.lrExclusionsTriggered);
@@ -228,14 +231,10 @@ final class Reference extends PTParSer {
             // Use the last successful growing.
             break grow_the_seed;
           case SUCCESS:
-            if (!growResult.lrExclusionsTriggered.contains(nodeType)) {
-              // TODO: check that left-recursion occurred at grown.index.
-              // We could walk and check that there is in fact an LREnd on the
-              // output, but it would be more efficient for lr to keep track of
-              // this.
+            ParseState next = growResult.next();
+            if (!growReachedLR(beforeGrow.index, next)) {
               break grow_the_seed;
             }
-            ParseState next = growResult.next();
             writeBack = Math.min(writeBack, growResult.writeBack);
             if (next.index == grown.index) {
               // no progress made.
@@ -537,27 +536,51 @@ final class Reference extends PTParSer {
     return Alternation.of(variants).getParSer().match(state, err);
   }
 
+  private boolean growReachedLR(int startIndex, ParseState s) {
+    int nOtherLREndsSeen = 0;
+    for (SList<Event> o = s.output; o != null; o = o.prev) {
+      Event e = o.x;
+      switch (e.getKind()) {
+        case LR_END:
+          if (e.getNodeType() == nodeType) {
+            return e.getContentIndex() == startIndex;
+          } else {
+            ++nOtherLREndsSeen;
+          }
+          break;
+        case LR_START:
+          if (nOtherLREndsSeen == 0) {
+            return false;
+          }
+          --nOtherLREndsSeen;
+          break;
+        default:
+          break;
+      }
+    }
+    throw new AssertionError("Missing LRStart");
+  }
 
   private static final class LRRewriter {
-    private final Event toPushback;
+    private final NodeType nodeTypeToPushback;
     private final List<List<Event>> pushback = Lists.newArrayList();
     private int popDepth;
 
     LRRewriter(NodeType nodeType) {
-      this.toPushback = Event.leftRecursionSuffixEnd(nodeType);
+      this.nodeTypeToPushback = nodeType;
     }
 
     SList<Event> rewrite(SList<Event> out) {
       if (DEBUG_LR) {
         String indent = indent();
-        System.err.println(indent + "before rewriteLR " + toPushback);
+        System.err.println(indent + "before rewriteLR " + nodeTypeToPushback);
         Debug.dumpEvents(indent, SList.forwardIterable(out), System.err);
       }
       SList<Event> withPushbackAndPops = pushback(out);
       Preconditions.checkState(pushback.isEmpty());
       if (DEBUG_LR) {
         String indent = indent();
-        System.err.println(indent + "after rewriteLR " + toPushback);
+        System.err.println(indent + "after rewriteLR " + nodeTypeToPushback);
         Debug.dumpEvents(
             indent, SList.forwardIterable(withPushbackAndPops), System.err);
       }
@@ -590,7 +613,7 @@ final class Reference extends PTParSer {
           --popDepth;
           if (popDepth == 0) {
             Preconditions.checkState(
-                toPushback.getNodeType() == e.getNodeType());
+                nodeTypeToPushback == e.getNodeType());
             pushedBack = out.prev;
             if (DEBUG_LR) {
               System.err.println(indent() + "Pushback = " + pushback);
@@ -607,7 +630,7 @@ final class Reference extends PTParSer {
           }
           break;
         case LR_END:
-          if (e.equals(toPushback)) {
+          if (e.getNodeType() == nodeTypeToPushback) {
             int pushCount = 0;
             int popCount = 0;
 
