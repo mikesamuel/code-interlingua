@@ -1385,6 +1385,8 @@ public enum NodeType implements ParSerable {
                      '      }\n'
                      '      return this;\n'
                      '    }\n'
+                     '\n'
+                     '    final %(trait_type)s get%(utrait_field)s() { return %(trait_field)s; }\n'
                     ) % record)
                 extra_imports.add('com.google.common.base.Objects')
         trait_ifaces = ''
@@ -1480,10 +1482,27 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
       super(source);
     }
 
+    private Builder(%(node_class_name)s.Builder source) {
+      super(source);
+    }
+
+    @Override
+    public Builder builder() {
+      return new Builder(this);
+    }
+
 %(builder_code)s
 
     @Override
     public Builder copyMetadataFrom(%(node_class_name)s source) {
+%(builder_copy_code)s
+      super.copyMetadataFrom(source);
+      return this;
+    }
+
+    @Override
+    public Builder copyMetadataFrom(BaseNode.Builder<%(node_class_name)s, Variant> src) {
+      Builder source = (Builder) src;
 %(builder_copy_code)s
       super.copyMetadataFrom(source);
       return this;

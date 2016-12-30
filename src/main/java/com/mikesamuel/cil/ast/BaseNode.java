@@ -20,7 +20,7 @@ import com.mikesamuel.cil.parser.SourcePosition;
 /**
  * A node in a Java AST.
  */
-public abstract class BaseNode {
+public abstract class BaseNode implements NodeOrBuilder {
   private final NodeVariant variant;
   private final ImmutableList<BaseNode> children;
   private final @Nullable String literalValue;
@@ -38,22 +38,21 @@ public abstract class BaseNode {
     this.literalValue = literalValue;
   }
 
-  /**
-   * A builder that currently has the state of this node allowing modification.
-   */
-  public abstract Builder<?, ?> builder();
 
   /** The particular variant within the production. */
+  @Override
   public NodeVariant getVariant() {
     return variant;
   }
 
   /** The production's node type. */
+  @Override
   public final NodeType getNodeType() {
     return getVariant().getNodeType();
   }
 
   /** Child nodes. */
+  @Override
   public final ImmutableList<BaseNode> getChildren() {
     return children;
   }
@@ -80,6 +79,7 @@ public abstract class BaseNode {
   }
 
   /** The value if any. */
+  @Override
   public final @Nullable String getValue() {
     return literalValue;
   }
@@ -144,7 +144,8 @@ public abstract class BaseNode {
    * Allows building nodes.
    */
   public static abstract
-  class Builder<N extends BaseNode, V extends NodeVariant> {
+  class Builder<N extends BaseNode, V extends NodeVariant>
+  implements NodeOrBuilder {
     private V newNodeVariant;
     private SourcePosition sourcePosition;
     /** True if it changed from its parent. */
@@ -166,7 +167,18 @@ public abstract class BaseNode {
       this.changed = false;
     }
 
-    protected V getVariant() {
+    protected Builder(Builder<N, V> source) {
+      // Unsound but safe is subclassing follows discipline.  For this reason
+      // we keep constructors package-private.
+      V sourceVariant = source.getVariant();
+      this.newNodeVariant = sourceVariant;
+      this.sourcePosition = source.getSourcePosition();
+      this.copyMetadataFrom(source);
+      this.changed = source.changed;
+    }
+
+    @Override
+    public V getVariant() {
       return newNodeVariant;
     }
 
@@ -187,6 +199,15 @@ public abstract class BaseNode {
 
     /** Any nodes built will have the same meta-data as the given node. */
     public Builder<N, V> copyMetadataFrom(N source) {
+      SourcePosition pos = source.getSourcePosition();
+      if (pos != null) {
+        setSourcePosition(pos);
+      }
+      return this;
+    }
+
+    /** Any nodes built will have the same meta-data as the given node. */
+    public Builder<N, V> copyMetadataFrom(Builder<N, V> source) {
       SourcePosition pos = source.getSourcePosition();
       if (pos != null) {
         setSourcePosition(pos);
@@ -239,6 +260,11 @@ public abstract class BaseNode {
       newNodeChildren.addAll(source.getChildren());
     }
 
+    protected InnerBuilder(Builder<N, V> source) {
+      super(source);
+      newNodeChildren.addAll(source.getChildren());
+    }
+
     /** The count of children thus far. */
     public int getNChildren() {
       return newNodeChildren.size();
@@ -249,8 +275,14 @@ public abstract class BaseNode {
       return newNodeChildren.get(i);
     }
 
-    protected ImmutableList<BaseNode> getChildren() {
+    @Override
+    public ImmutableList<BaseNode> getChildren() {
       return ImmutableList.copyOf(newNodeChildren);
+    }
+
+    @Override
+    public @Nullable String getValue() {
+      return null;
     }
 
     /** Adds a child node. */
@@ -300,8 +332,23 @@ public abstract class BaseNode {
       newLiteralValue = Optional.fromNullable(source.getValue());
     }
 
+    protected LeafBuilder(Builder<N, V> source) {
+      super(source);
+      newLiteralValue = Optional.fromNullable(source.getValue());
+    }
+
     protected String getLiteralValue() {
       return newLiteralValue.orNull();
+    }
+
+    @Override
+    public final String getValue() {
+      return getLiteralValue();
+    }
+
+    @Override
+    public ImmutableList<BaseNode> getChildren() {
+      return ImmutableList.of();
     }
 
     /** Specifies the value. */
