@@ -128,7 +128,7 @@ implements AbstractPass<ImmutableList<CompilationUnitNode>> {
         for (int i = 0, n = children.size(); i < n; ++i, ++j) {
           BaseNode child = children.get(i);
           ProcessingStatus childStatus = visit(
-              child, SList.append(pathFromRoot, new Parent(i, node)));
+              child, SList.append(pathFromRoot, makeParent(i, node, builder)));
           ImmutableList<BaseNode> replacements;
           if (childStatus == ProcessingStatus.BREAK
               || childStatus == ProcessingStatus.CONTINUE) {
@@ -184,15 +184,25 @@ implements AbstractPass<ImmutableList<CompilationUnitNode>> {
     return b.build();
   }
 
+  @SuppressWarnings("static-method")
+  protected <N extends BaseNode> Parent makeParent(
+      int indexInParent, N parent, BaseNode.Builder<N, ?> parentBuilder) {
+    return new Parent(indexInParent, parent, parentBuilder);
+  }
 
-  static final class Parent {
+
+  static class Parent {
     /** Index in parent's child list of the current node. */
     final int indexInParent;
     final BaseNode parent;
+    final BaseNode.Builder<?, ?> parentBuilder;
 
-    Parent(int indexInParent, BaseNode parent) {
+    Parent(
+        int indexInParent, BaseNode parent,
+        BaseNode.Builder<?, ?> parentBuilder) {
       this.indexInParent = indexInParent;
       this.parent = parent;
+      this.parentBuilder = parentBuilder;
     }
   }
 
