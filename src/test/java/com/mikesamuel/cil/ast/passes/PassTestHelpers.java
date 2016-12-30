@@ -63,6 +63,38 @@ class PassTestHelpers {
       Decorator decorator,
       String... expectedErrors)
   throws UnparseVerificationException {
+    ImmutableList<CompilationUnitNode> cus = expectErrors(
+        new LoggableOperation<ImmutableList<CompilationUnitNode>>() {
+          @Override
+          public ImmutableList<CompilationUnitNode> run(Logger logger) {
+            return passRunner.runPasses(
+                logger,
+                parseCompilationUnits(inputLines));
+          }
+        },
+        expectedErrors);
+
+    String got = serializeCompilationUnits(cus, decorator);
+
+    StringBuilder sb = new StringBuilder();
+    for (String[] linesForOneCu : expectedLines) {
+      if (sb.length() != 0) {
+        sb.append("\n\n");
+      }
+      sb.append(Joiner.on('\n').join(linesForOneCu));
+    }
+    String want = sb.toString();
+
+    Assert.assertEquals(want, got);
+  }
+
+  interface LoggableOperation<T> {
+    T run(Logger logger);
+  }
+
+  static <T> T expectErrors(
+      LoggableOperation<T> op, String... expectedErrors) {
+
     Logger logger = Logger.getAnonymousLogger();
     logger.setUseParentHandlers(false);
     List<LogRecord> logRecords = Lists.newArrayList();
@@ -85,56 +117,38 @@ class PassTestHelpers {
     });
     logger.setLevel(Level.WARNING);
 
-    ImmutableList<CompilationUnitNode> cus =
-        parseCompilationUnits(inputLines);
+    T result = op.run(logger);
 
-    cus = passRunner.runPasses(logger, cus);
-
-    {
-      List<String> unsatisfied = Lists.newArrayList();
-      for (String expectedError : expectedErrors) {
-        Iterator<LogRecord> it = logRecords.iterator();
-        boolean found = false;
-        while (it.hasNext()) {
-          LogRecord r = it.next();
-          if (r.getMessage().contains(expectedError)) {
-            it.remove();
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          unsatisfied.add(expectedError);
+    List<String> unsatisfied = Lists.newArrayList();
+    for (String expectedError : expectedErrors) {
+      Iterator<LogRecord> it = logRecords.iterator();
+      boolean found = false;
+      while (it.hasNext()) {
+        LogRecord r = it.next();
+        if (r.getMessage().contains(expectedError)) {
+          it.remove();
+          found = true;
+          break;
         }
       }
-      if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
-        Assert.fail(
-            "Expected errors " + unsatisfied + "\ngot " +
-            Lists.transform(
-                logRecords,
-                new Function<LogRecord, String>() {
-                  @Override
-                  public String apply(LogRecord r) {
-                    return r.getMessage();
-                  }
-                }));
+      if (!found) {
+        unsatisfied.add(expectedError);
       }
     }
-
-    String got = serializeCompilationUnits(cus, decorator);
-
-    StringBuilder sb = new StringBuilder();
-    for (String[] linesForOneCu : expectedLines) {
-      if (sb.length() != 0) {
-        sb.append("\n\n");
-      }
-      sb.append(Joiner.on('\n').join(linesForOneCu));
+    if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
+      Assert.fail(
+          "Expected errors " + unsatisfied + "\ngot " +
+              Lists.transform(
+                  logRecords,
+                  new Function<LogRecord, String>() {
+                    @Override
+                    public String apply(LogRecord r) {
+                      return r.getMessage();
+                    }
+                  }));
     }
-    String want = sb.toString();
-
-    Assert.assertEquals(want, got);
+    return result;
   }
-
 
   static String serializeCompilationUnits(
       Iterable<? extends CompilationUnitNode> cus, Decorator decorator)
@@ -148,7 +162,7 @@ class PassTestHelpers {
           new SerialState(skeleton),
           SerialErrorReceiver.DEV_NULL);
       Assert.assertTrue(
-          skeleton.toString(),
+          cu.toAsciiArt(""),
           serialized.isPresent());
       Verified verified = Unparse.verify(
           SList.forwardIterable(serialized.get().output));

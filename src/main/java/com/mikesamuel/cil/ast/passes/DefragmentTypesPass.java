@@ -1,10 +1,10 @@
 package com.mikesamuel.cil.ast.passes;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -13,18 +13,20 @@ import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AnnotationNode;
 import com.mikesamuel.cil.ast.ArrayTypeNode;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.BlockStatementNode;
 import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.ast.DimNode;
 import com.mikesamuel.cil.ast.DimsNode;
+import com.mikesamuel.cil.ast.LocalVariableDeclarationStatementNode;
 import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.TypeNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorListNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.parser.SList;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * Java allows for array dimensions to be specified after a declaration name
@@ -37,6 +39,12 @@ import com.mikesamuel.cil.parser.SList;
  * When multiple declarations are grouped, this can require splitting
  */
 final class DefragmentTypesPass extends AbstractRewritingPass {
+  final Logger logger;
+
+  DefragmentTypesPass(Logger logger) {
+    this.logger = logger;
+  }
+
   private static int countDims(@Nullable DimsNode dims) {
     int n = 0;
     if (dims != null) {
@@ -61,15 +69,22 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
     boolean foundOne = false;
     for (NodeOrBuilder decl : declList) {
       DimsNode dims = getDims(decl);
-//      System.err.println("For " + decl.getNodeType() + ", dims=" + dims);
       if (dims != null) {
         BaseNode type = getType(decl);
-//        System.err.println("For " + decl.getNodeType() + ", type=" + type);
         if (type != null) {
           BaseNode replacement = removeDimsAndAddDimsToType(decl, dims, type);
           replacements.add(replacement);
           foundOne = true;
           continue;
+        } else {
+          StringBuilder message = new StringBuilder();
+          SourcePosition pos = dims.getSourcePosition();
+          if (pos != null) {
+            message.append(pos).append(": ");
+          }
+          message.append(
+              "Floating array dimensions [] could not be reattached to a type");
+          logger.severe(message.toString());
         }
       }
       replacements.add(decl.toBaseNode());
@@ -81,8 +96,20 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
   private static final ImmutableSet<NodeType> BETWEEN_COMMON_ANCESTOR_AND_DIMS =
       Sets.immutableEnumSet(
+          // From ClassBodyDeclaration
           NodeType.ClassMemberDeclaration,
           NodeType.FieldDeclaration,
+
+          // From InterfaceMemberDeclaration
+          NodeType.ConstantDeclaration,
+
+          // From BlockStatement
+          NodeType.LocalVariableDeclarationStatement,
+          NodeType.LocalVariableDeclaration,
+          NodeType.Statement,
+          NodeType.ForStatement,
+          NodeType.BasicForStatement,
+          NodeType.ForInit,
 
           NodeType.VariableDeclarator,
           NodeType.VariableDeclaratorId,
@@ -93,9 +120,22 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
   private static final ImmutableSet<NodeType> BETWEEN_COMMON_ANCESTOR_AND_TYPE =
       Sets.immutableEnumSet(
+          // From ClassBodyDeclaration
           NodeType.ClassMemberDeclaration,
           NodeType.FieldDeclaration,
 
+          // From InterfaceMemberDeclaration
+          NodeType.ConstantDeclaration,
+
+          // From BlockStatement
+          NodeType.LocalVariableDeclarationStatement,
+          NodeType.LocalVariableDeclaration,
+          NodeType.Statement,
+          NodeType.ForStatement,
+          NodeType.BasicForStatement,
+          NodeType.ForInit,
+
+          // From others
           NodeType.MethodHeader,
           NodeType.Result,
           NodeType.UnannType);
@@ -103,11 +143,12 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   private static final ImmutableSet<NodeType> COMMON_ANCESTOR =
       Sets.immutableEnumSet(
           NodeType.AnnotationTypeElementDeclaration,
+          NodeType.BlockStatement,
           NodeType.CatchFormalParameter,
-          NodeType.ConstantDeclaration,
-          NodeType.EnhancedForStatement,
           NodeType.ClassBodyDeclaration,
+          NodeType.EnhancedForStatement,
           NodeType.FormalParameter,
+          NodeType.InterfaceMemberDeclaration,
           NodeType.LastFormalParameter,
           NodeType.MethodHeader,
           NodeType.Resource
@@ -122,10 +163,15 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   private static final ImmutableSet<NodeType> VAR_DECL_LIST_NODE_TYPES =
       Sets.immutableEnumSet(NodeType.VariableDeclaratorList);
 
+  private static final ImmutableSet<NodeType> NO_REWRAP_SPLIT =
+      Sets.immutableEnumSet(
+          NodeType.ForInit, NodeType.BasicForStatement,
+          NodeType.ForStatement, NodeType.Statement
+          );
+
   static <T> T processAlongPath(
       NodeOrBuilder node, ImmutableSet<NodeType> between,
       ImmutableSet<NodeType> target, FindOp<T> op) {
-//    System.err.println("Looking for " + target + " in " + node.getNodeType());
     ImmutableList<BaseNode> children = node.getChildren();
     for (int i = 0, n = children.size(); i < n; ++i) {
       BaseNode child = children.get(i);
@@ -139,16 +185,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
         return op.intermediate(node, i, child, result);
       }
     }
-/*
-    System.err.println(
-        "Found nothing in " +
-            Lists.transform(
-                node.getChildren(),
-                new Function<BaseNode, NodeType>() {
-                  @Override
-                  public NodeType apply(BaseNode n) { return n.getNodeType(); }
-                }));
-*/
     return null;
   }
 
@@ -205,6 +241,7 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
             return split != null ? split.build() : null;
           }
 
+          @SuppressWarnings("synthetic-access")
           @Override
           public ImmutableList<BaseNode> intermediate(
               NodeOrBuilder node, int indexOfChild, BaseNode child,
@@ -214,11 +251,34 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
             }
             ImmutableList.Builder<BaseNode> splitNodes =
                 ImmutableList.builder();
-            for (BaseNode splitChild : splitChildren) {
-              splitNodes.add(
-                  ((BaseNode.InnerBuilder<?, ?>) node.builder())
-                  .replace(indexOfChild, splitChild)
-                  .build());
+            for (int i = 0, n = splitChildren.size(); i < n; ++i) {
+              BaseNode splitChild = splitChildren.get(i);
+
+              BaseNode wrappedChild;
+              // We hack around local variable declarations in for statements.
+              if (NO_REWRAP_SPLIT.contains(node.getNodeType())
+                  && i + 1 < n) {
+                wrappedChild = splitChild;
+              } else {
+                BaseNode.InnerBuilder<?, ?> builder =
+                    ((BaseNode.InnerBuilder<?, ?>) node.builder());
+                if (node.getNodeType() == NodeType.BlockStatement
+                    && splitChild.getNodeType()
+                       == NodeType.LocalVariableDeclaration) {
+                  ((BlockStatementNode.Builder) builder).variant(
+                      BlockStatementNode.Variant
+                      .LocalVariableDeclarationStatement);
+
+                  splitChild =
+                      LocalVariableDeclarationStatementNode
+                      .Variant.LocalVariableDeclarationSem.nodeBuilder()
+                      .add(splitChild)
+                      .build();
+                }
+                builder.replace(indexOfChild, splitChild);
+                wrappedChild = builder.build();
+              }
+              splitNodes.add(wrappedChild);
             }
             return splitNodes.build();
           }
@@ -281,7 +341,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
           @Override
           public TypeNode found(NodeOrBuilder node) {
-//            System.err.println("found=" + node);
             TypeNode typeNode = (TypeNode) node;
             // There could be template nodes on this too.
             List<BaseNode> annotationsEtc = Lists.newArrayList();
@@ -312,7 +371,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
                 annotationsEtc.add(child);
               }
             }
-//            System.err.println("\t=> " + typeNode);
             return typeNode;
           }
 
@@ -320,10 +378,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           public BaseNode intermediate(
               NodeOrBuilder node, int indexOfChild, BaseNode child,
               BaseNode newChild) {
-//            System.err.println("node\n" + node.toAsciiArt(". "));
-//            System.err.println("indexOfChild=" + indexOfChild);
-//            System.err.println("child\n" + child.toAsciiArt(". "));
-//            System.err.println("newChild\n" + newChild.toAsciiArt(". "));
             Preconditions.checkState(
                 child.getNodeType() == newChild.getNodeType(),
                 "%s != %s",
@@ -336,7 +390,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
         });
 
-//System.err.println("withFixedType\n" + withFixedType.toAsciiArt(". "));
     return processAlongPath(
         withFixedType,
         BETWEEN_COMMON_ANCESTOR_AND_DIMS, DIMS_NODE_TYPES,

@@ -1,10 +1,13 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Logger;
+
 import org.junit.Test;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
 import junit.framework.TestCase;
@@ -12,14 +15,21 @@ import junit.framework.TestCase;
 @SuppressWarnings("javadoc")
 public final class DefragmentTypesPassTest extends TestCase {
 
-  private void assertRewritten(String want, String input) {
-    ImmutableList<CompilationUnitNode> inputCus =
-        PassTestHelpers.parseCompilationUnits(new String[] {
-            "//" + getName() + "\n" + input });
+  private void assertRewritten(String want, String input, String... errors) {
     ImmutableList<CompilationUnitNode> wantedCus =
         PassTestHelpers.parseCompilationUnits(new String[] { want });
-    ImmutableList<CompilationUnitNode> gotCus =
-        new DefragmentTypesPass().run(inputCus);
+
+    ImmutableList<CompilationUnitNode> gotCus = PassTestHelpers.expectErrors(
+        new LoggableOperation<ImmutableList<CompilationUnitNode>>() {
+          @Override
+          public ImmutableList<CompilationUnitNode> run(Logger logger) {
+            ImmutableList<CompilationUnitNode> inputCus =
+                PassTestHelpers.parseCompilationUnits(new String[] {
+                    "//" + getName(), input });
+
+            return new DefragmentTypesPass(logger).run(inputCus);
+          }
+        }, errors);
 
     try {
       assertEquals(
@@ -73,8 +83,7 @@ public final class DefragmentTypesPassTest extends TestCase {
             "class C {",
             "  C() {",
             "    int[] a = getArray();",
-            "    int i = 0;",
-            "    for (; i < a.length; ++i) {",
+            "    for (int i = 0; i < a.length; ++i) {",
             "      a[i] = 1;",
             "    }",
             "  }",
@@ -120,7 +129,14 @@ public final class DefragmentTypesPassTest extends TestCase {
   public void testNoReturnType() {
     assertRewritten(
         "class C { void f()[] {} }",
-        "class C { void f()[] {} }");  // TODO: log an error
+        "class C { void f()[] {} }",
+        //23456789012345678901234567890
+        //        1         2
+        //                 ^^
+
+        "//testNoReturnType:2+19-21: "
+        + "Floating array dimensions [] could not be reattached to a type"
+        );
   }
 
   // TODO: do we need to at least issue an error on floating dims in
