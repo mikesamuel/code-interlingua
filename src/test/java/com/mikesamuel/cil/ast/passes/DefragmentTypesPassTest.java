@@ -116,6 +116,13 @@ public final class DefragmentTypesPassTest extends TestCase {
         "@interface A { String x()[]; }");
   }
 
+  @Test
+  public void testNoReturnType() {
+    assertRewritten(
+        "class C { void f()[] {} }",
+        "class C { void f()[] {} }");  // TODO: log an error
+  }
+
   // TODO: do we need to at least issue an error on floating dims in
   // try/resource and catch
 }
