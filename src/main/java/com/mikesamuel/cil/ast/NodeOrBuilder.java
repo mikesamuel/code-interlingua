@@ -33,5 +33,10 @@ public interface NodeOrBuilder {
    * A builder that currently has the state of this node allowing modification.
    */
   BaseNode.Builder<?, ?> builder();
+
+  /**
+   * This as a base node.
+   */
+  BaseNode toBaseNode();
 }
 // TODO: Maybe make all traits extend this interface.

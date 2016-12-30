@@ -96,6 +96,11 @@ public abstract class BaseNode implements NodeOrBuilder {
     this.sourcePosition = newSourcePosition;
   }
 
+  @Override
+  public final BaseNode toBaseNode() {
+    return this;
+  }
+
   /**
    * The content of descendant leaf nodes separated by the given string.
    */
@@ -229,6 +234,12 @@ public abstract class BaseNode implements NodeOrBuilder {
 
     /** Builds a complete node. */
     public abstract N build();
+
+    @Override
+    public final N toBaseNode() {
+      return build();
+    }
+
 
     protected void markChanged() {
       this.changed = true;
