@@ -462,7 +462,7 @@ ClassMemberDeclaration:
      ClassDeclaration
      InterfaceDeclaration
      ";"
-FieldDeclaration:
+FieldDeclaration: (@trait=MemberDeclaration)
      [JavaDocComment] {!!FieldModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
      Annotation
@@ -582,7 +582,7 @@ InterfaceMemberDeclaration:
      ClassDeclaration
      InterfaceDeclaration
      ";"
-ConstantDeclaration:
+ConstantDeclaration: (@trait=MemberDeclaration)
      [JavaDocComment] {!!ConstantModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 ConstantModifier:
      Annotation
@@ -608,7 +608,7 @@ AnnotationTypeMemberDeclaration:
      ClassDeclaration
      InterfaceDeclaration
      ";"
-AnnotationTypeElementDeclaration:
+AnnotationTypeElementDeclaration: (@trait=MemberDeclaration)
      [JavaDocComment] {!!AnnotationTypeElementModifier Modifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
 AnnotationTypeElementModifier:
      Annotation

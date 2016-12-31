@@ -14,11 +14,12 @@ _TRAITS = {
         (
             ('ExpressionNameResolver', 'expressionNameResolver'),
             ('String', 'methodDescriptor'),
+            ('MemberInfo', 'memberInfo'),
         ),
         (
             'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
-        )
-    ),
+            'com.mikesamuel.cil.ast.meta.MemberInfo',
+        )),
     'ExpressionNameDeclaration': (
         (
             ('Name', 'declaredExpressionName'),
@@ -46,6 +47,13 @@ _TRAITS = {
         ),
         (
             'com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker',
+        )),
+    'MemberDeclaration': (
+        (
+            ('MemberInfo', 'memberInfo'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.MemberInfo',
         )),
     'NamePart': (
         (
