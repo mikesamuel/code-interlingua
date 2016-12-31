@@ -37,27 +37,37 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
 
   @Test
   public void testThemAll() throws Exception {
+    long totalTime = 0;
+    int nFiles = 0;
     for (String line : Resources.readLines(
             Resources.getResource(getClass(), "/all-sources.txt"),
             Charsets.UTF_8)) {
       setUp();
       File source = new File(line.trim());
-      System.err.println("Parsing " + source);
       long t0 = System.nanoTime();
-      parseSanityCheck(
-          CompilationUnitNode.Variant
-          .PackageDeclarationImportDeclarationTypeDeclaration,
-          Input.builder()
-              .source(source.getPath())
-              .code(Files.asCharSource(source, Charsets.UTF_8))
-              .build(),
-          Fuzz.IMPLIED_TOKENS);
-      long t1 = System.nanoTime();
-      System.err.println(
-          "Parsed " + source + " in "
-          + String.format("%.2f", (t1 - t0) / 1.e6) + " ms");
-      System.err.flush();
+      boolean ok = false;
+      try {
+        parseSanityCheck(
+            CompilationUnitNode.Variant
+            .PackageDeclarationImportDeclarationTypeDeclaration,
+            Input.builder()
+            .source(source.getPath())
+            .code(Files.asCharSource(source, Charsets.UTF_8))
+            .build(),
+            Fuzz.IMPLIED_TOKENS);
+        ok = true;
+      } finally {
+        long t1 = System.nanoTime();
+        totalTime += t1 - t0;
+        ++nFiles;
+        if (!ok) {
+          System.err.println("Failed parsing " + source
+              + " after " + ((t1 - t0) / 1e6) + " ms");
+          System.err.flush();
+        }
+      }
     }
+    System.err.println("Parsed " + nFiles + " in " + (totalTime / 1e6) + " ms");
   }
 
   /**
