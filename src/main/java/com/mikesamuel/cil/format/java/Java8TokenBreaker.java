@@ -73,7 +73,9 @@ implements TokenBreaker<SList<NodeVariant>> {
         case "[":
         case "(": return TokenBreak.SHOULD_NOT;
         case ")":
-          if (";".equals(right)) { return TokenBreak.SHOULD_NOT; }
+          if (";".equals(right) || ")".equals(right)) {
+            return TokenBreak.SHOULD_NOT;
+          }
           return TokenBreak.SHOULD;
         case "{":
           if ("}".equals(right)) { return TokenBreak.SHOULD_NOT; }

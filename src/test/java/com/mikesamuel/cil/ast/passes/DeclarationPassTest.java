@@ -431,7 +431,7 @@ public class DeclarationPassTest extends TestCase {
             "    /* /C.f(1)$R extends /java/lang/Object"
             +     " implements /java/lang/Runnable in /C */",
             "    class R implements Runnable { public void run() {} }",
-            "    (new R() ) .run();",
+            "    (new R()) .run();",
             "  }",
             "}",
           }
@@ -537,7 +537,7 @@ public class DeclarationPassTest extends TestCase {
             "    /* /C.<init>(1)$R extends /java/lang/Object"
             +     " implements /java/lang/Runnable in /C */",
             "    class R implements Runnable { public void run() {} }",
-            "    (new R() ) .run();",
+            "    (new R()) .run();",
             "  }",
             "}",
           }
