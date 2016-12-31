@@ -512,7 +512,7 @@ VariableModifier:
      "final"
 LastFormalParameter:
      {!!VariableModifier Modifier} UnannType {Annotation} "..." VariableDeclaratorId  (@name=Variadic)
-     FormalParameter
+     FormalParameter @anon
 ReceiverParameter:
      {Annotation} UnannType [SimpleTypeName "."] "this"
 Throws:
