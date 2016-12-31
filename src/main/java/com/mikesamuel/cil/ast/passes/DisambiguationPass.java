@@ -268,6 +268,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
       if (anc.x.parent instanceof ExpressionNameScope) {
         ExpressionNameResolver r = ((ExpressionNameScope) anc.x.parent)
             .getExpressionNameResolver();
+        if (r == null) { continue; }
         canonNameOpt = r.resolveReference(ident0, marker);
         if (canonNameOpt.isPresent()) { break; }
         marker = DeclarationPositionMarker.LATEST;  // Passing out of scope.
