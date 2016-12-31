@@ -112,7 +112,7 @@ _TOKEN_RE = re.compile(
         r'/[*](?:[^*/]|[*]+(?!=[/*])|[/])*[*]+/',  # Block comment
         r'[ \t]+',  # Whitespace.  Indentation is significant
         r'[\r\n]+',  # Line breaks
-        r'"(?:[^"\\]*|\\.)*"',  # Quoted string
+        r'"(?:[^"\\]+|\\.)*"',  # Quoted string
         r'[A-Za-z_$]\w*',  # Word
         r'\(@\w+=[^"\'()]*\)',  # Annotation with value
         r'@\w+',  # Valueless annotation
