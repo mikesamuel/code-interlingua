@@ -337,7 +337,6 @@ final class ClassMemberPass extends AbstractPass<Void> {
                 IdentifierNode.class);
             Name name = Name.root(ident.getValue(), Name.Type.TYPE_PARAMETER);
             ImmutableList<Name> canonNames = r.lookupTypeName(name);
-            System.err.println("name=" + name + ", canonNames=" + canonNames);
             switch (canonNames.size()) {
               case 0:
                 error(ident, "Undefined type variable name " + name);
