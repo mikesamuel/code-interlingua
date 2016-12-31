@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
@@ -22,12 +23,16 @@ import com.mikesamuel.cil.ast.traits.TypeScope;
 /**
  * Fires for each class declaration.
  */
-abstract class AbstractTypeDeclarationPass<T> implements AbstractPass<T> {
+abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
   private final Map<Name, Integer> anonClassCounters = new HashMap<>();
   private final Map<Name, Integer> methodCounters = new HashMap<>();
   private final Map<TypeScope, TypeScope> scopeToParentScope =
       new IdentityHashMap<>();
   private Name pkg = Name.DEFAULT_PACKAGE;
+
+  AbstractTypeDeclarationPass(Logger logger) {
+    super(logger);
+  }
 
   /**
    * @param name the name of the type declared.

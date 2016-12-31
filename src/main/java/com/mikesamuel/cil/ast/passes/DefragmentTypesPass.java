@@ -26,7 +26,6 @@ import com.mikesamuel.cil.ast.TypeNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorListNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.parser.SList;
-import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * Java allows for array dimensions to be specified after a declaration name
@@ -39,10 +38,9 @@ import com.mikesamuel.cil.parser.SourcePosition;
  * When multiple declarations are grouped, this can require splitting
  */
 final class DefragmentTypesPass extends AbstractRewritingPass {
-  final Logger logger;
 
   DefragmentTypesPass(Logger logger) {
-    this.logger = logger;
+    super(logger);
   }
 
   private static int countDims(@Nullable DimsNode dims) {
@@ -77,14 +75,8 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           foundOne = true;
           continue;
         } else {
-          StringBuilder message = new StringBuilder();
-          SourcePosition pos = dims.getSourcePosition();
-          if (pos != null) {
-            message.append(pos).append(": ");
-          }
-          message.append(
+          error(dims,
               "Floating array dimensions [] could not be reattached to a type");
-          logger.severe(message.toString());
         }
       }
       replacements.add(decl.toBaseNode());

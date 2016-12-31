@@ -85,6 +85,7 @@ public abstract class BaseNode implements NodeOrBuilder {
   }
 
   /** The source position.  Non-normative. */
+  @Override
   public final @Nullable SourcePosition getSourcePosition() {
     return sourcePosition;
   }
@@ -187,7 +188,8 @@ public abstract class BaseNode implements NodeOrBuilder {
       return newNodeVariant;
     }
 
-    protected SourcePosition getSourcePosition() {
+    @Override
+    public @Nullable SourcePosition getSourcePosition() {
       return sourcePosition;
     }
 

@@ -32,28 +32,20 @@ import com.mikesamuel.cil.ast.traits.ExpressionNameDeclaration;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * Associates expression name resolvers and position markers with scopes and
  * block statements so that a later pass can resolve expression names.
  */
-public final class ExpressionScopePass implements AbstractPass<Void> {
+public final class ExpressionScopePass extends AbstractPass<Void> {
   final TypeInfoResolver typeInfoResolver;
   final TypeNameResolver qualifiedNameResolver;
-  final Logger logger;
 
   ExpressionScopePass(TypeInfoResolver typeInfoResolver, Logger logger) {
+    super(logger);
     this.typeInfoResolver = typeInfoResolver;
-    this.logger = logger;
     this.qualifiedNameResolver =
         TypeNameResolver.Resolvers.canonicalizer(typeInfoResolver);
-  }
-
-  void error(BaseNode node, String msg) {
-    SourcePosition pos = node.getSourcePosition();
-    String fullMessage = pos != null ? pos + ": " + msg : msg;
-    logger.severe(fullMessage);
   }
 
   private DeclarationPositionMarker walk(
@@ -113,7 +105,7 @@ public final class ExpressionScopePass implements AbstractPass<Void> {
   }
 
   @Override
-  public Void run(Iterable<? extends CompilationUnitNode> compilationUnits) {
+  Void run(Iterable<? extends CompilationUnitNode> compilationUnits) {
     for (CompilationUnitNode cu : compilationUnits) {
       ExpressionNameResolver r = resolverFor(cu);
       cu.setExpressionNameResolver(r);

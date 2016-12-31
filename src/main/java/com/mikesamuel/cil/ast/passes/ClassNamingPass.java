@@ -34,12 +34,11 @@ import com.mikesamuel.cil.parser.SourcePosition;
  */
 final class ClassNamingPass
 extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
-  private final Logger logger;
   private final Map<Name, UnresolvedTypeDeclaration> declaredTypes
       = new LinkedHashMap<>();
 
   ClassNamingPass(Logger logger) {
-    this.logger = logger;
+    super(logger);
   }
 
   @Override
@@ -50,13 +49,11 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
     if (dupe == null) {
       declaredTypes.put(name, decl);
     } else {
-      SourcePosition pos = ((BaseNode) d).getSourcePosition();
       SourcePosition opos = ((BaseNode) dupe.decl).getSourcePosition();
-      logger.severe(
-          (pos != null ? pos + ": " : "")
-          + "Duplicate definition for " + name
-          + (opos != null ? " originally defined at " + opos.toString() : "")
-          );
+      error(
+          d,
+          "Duplicate definition for " + name
+          + (opos != null ? " originally defined at " + opos.toString() : ""));
     }
     TypeInfo partialTypeInfo = TypeInfo.builder(name)
         .isAnonymous(isAnonymous)

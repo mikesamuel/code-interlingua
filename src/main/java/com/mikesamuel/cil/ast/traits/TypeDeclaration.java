@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.traits;
 
+import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 
 /**
@@ -11,7 +12,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfo;
  * not, but with an optional class body <code>(new Object() {})</code> there is
  * an anonymous class.
  */
-public interface TypeDeclaration {
+public interface TypeDeclaration extends NodeOrBuilder {
   /**
    * Sets the type declared.
    */

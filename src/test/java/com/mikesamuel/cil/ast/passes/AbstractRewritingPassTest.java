@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 import org.junit.Test;
@@ -30,12 +32,17 @@ import junit.framework.TestCase;
 @SuppressWarnings("javadoc")
 public final class AbstractRewritingPassTest extends TestCase {
 
+  Logger logger = Logger.getAnonymousLogger();
+  {
+    logger.setUseParentHandlers(false);
+  }
+
   @Test
   public void testInsertions() throws Exception {
     assertRewrite(
         "class Foo implements A, B, C, D, E {}",
         "class Foo implements A, B,    D, E {}",
-        new AbstractRewritingPass() {
+        new AbstractRewritingPass(logger) {
           @Override
           protected <N extends BaseNode> ProcessingStatus
           postvisit(N node, @Nullable SList<Parent> pathFromRoot,
@@ -73,7 +80,7 @@ public final class AbstractRewritingPassTest extends TestCase {
     assertRewrite(
         "class Foo implements G, G, C, G, G {}",
         "class Foo implements A, B, C, D, E {}",
-        new AbstractRewritingPass() {
+        new AbstractRewritingPass(logger) {
           @Override
           protected <N extends BaseNode> ProcessingStatus
           previsit(N node, @Nullable SList<Parent> pathFromRoot,
@@ -100,7 +107,7 @@ public final class AbstractRewritingPassTest extends TestCase {
     assertRewrite(
         "class Foo implements A, B, D, E {}",
         "class Foo implements A, B, C, D, E {}",
-        new AbstractRewritingPass() {
+        new AbstractRewritingPass(logger) {
           @Override
           protected <N extends BaseNode> ProcessingStatus
           previsit(N node, @Nullable SList<Parent> pathFromRoot,
@@ -125,7 +132,7 @@ public final class AbstractRewritingPassTest extends TestCase {
     assertRewrite(
         "class Foo implements A, B, D, E {}",
         "class Foo implements A, B, C, D, E {}",
-        new AbstractRewritingPass() {
+        new AbstractRewritingPass(logger) {
           @Override
           protected <N extends BaseNode> ProcessingStatus
           postvisit(N node, @Nullable SList<Parent> pathFromRoot,
@@ -152,7 +159,7 @@ public final class AbstractRewritingPassTest extends TestCase {
       assertRewrite(
           "NEVER COMPARED TO EXPECTED VALUE",
           "class Foo implements A, B, C, D, E {}",
-          new AbstractRewritingPass() {
+          new AbstractRewritingPass(logger) {
             @Override
             protected <N extends BaseNode> ProcessingStatus
             previsit(N node, @Nullable SList<Parent> pathFromRoot,
@@ -180,7 +187,7 @@ public final class AbstractRewritingPassTest extends TestCase {
     assertRewrite(
         "class Foo implements A, C, D, E {}",
         "class Foo implements A, B, C, D, E {}",
-        new AbstractRewritingPass() {
+        new AbstractRewritingPass(logger) {
           @Override
           protected <N extends BaseNode> ProcessingStatus
           previsit(N node, @Nullable SList<Parent> pathFromRoot,
@@ -203,7 +210,7 @@ public final class AbstractRewritingPassTest extends TestCase {
     assertRewrite(
         "class Foo implements A, C, D, E {}",
         "class Foo implements A, B, C, D, E {}",
-        new AbstractRewritingPass() {
+        new AbstractRewritingPass(logger) {
           @Override
           protected <N extends BaseNode> ProcessingStatus
           postvisit(N node, @Nullable SList<Parent> pathFromRoot,

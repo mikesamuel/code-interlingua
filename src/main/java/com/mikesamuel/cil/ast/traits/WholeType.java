@@ -1,12 +1,13 @@
 package com.mikesamuel.cil.ast.traits;
 
+import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.meta.StaticType;
 
 /**
  * A part of a type expression that can be referenced from outside a larger
  * type expression.
  */
-public interface WholeType {
+public interface WholeType extends NodeOrBuilder {
 
   /**
    * The static type.  Usually null until the typing pass has run.

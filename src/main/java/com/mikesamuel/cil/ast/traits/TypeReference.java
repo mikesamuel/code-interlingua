@@ -2,10 +2,11 @@ package com.mikesamuel.cil.ast.traits;
 
 import javax.annotation.Nullable;
 
+import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 
 /** A reference to a type. */
-public interface TypeReference {
+public interface TypeReference extends NodeOrBuilder {
   /**
    * Details about the referenced type.
    */

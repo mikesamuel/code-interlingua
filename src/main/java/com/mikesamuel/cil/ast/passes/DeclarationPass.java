@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
-import javax.annotation.Nullable;
-
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
@@ -42,21 +40,13 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
-import com.mikesamuel.cil.parser.SourcePosition;
 
-final class DeclarationPass implements AbstractPass<TypeInfoResolver> {
-  final Logger logger;
+final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
   static final boolean DEBUG = false;
 
   DeclarationPass(Logger logger) {
-    this.logger = logger;
-  }
-
-  protected void error(@Nullable BaseNode node, String message) {
-    SourcePosition pos = node != null ? node.getSourcePosition() : null;
-    String fullMessage = pos != null ? pos + ": " + message : message;
-    logger.severe(fullMessage);
+    super(logger);
   }
 
   /**
@@ -72,7 +62,7 @@ final class DeclarationPass implements AbstractPass<TypeInfoResolver> {
    * @return a TypeInfoResolver that resolves canonical names.
    */
   @Override
-  public TypeInfoResolver run(
+  TypeInfoResolver run(
       Iterable<? extends CompilationUnitNode> compilationUnits) {
     // To properly map type names to canonical type names, we need four things:
     // 1. The set of internally defined types.
@@ -172,7 +162,7 @@ final class DeclarationPass implements AbstractPass<TypeInfoResolver> {
         case IN_PROGRESS:
           d.stage = Stage.UNRESOLVABLE;
           error(
-              (BaseNode) d.decl,
+              d.decl,
               "Dependency loop for type declaration "
               + d.decl.getDeclaredTypeInfo().canonName
               + " : " + loop);
@@ -243,8 +233,7 @@ final class DeclarationPass implements AbstractPass<TypeInfoResolver> {
             if (tiOpt.isPresent()) {
               ti = tiOpt.get();
             } else {
-              error((BaseNode) scope,
-                  "Could not resolve super type " + superTypeName);
+              error(scope, "Could not resolve super type " + superTypeName);
               continue;
             }
           }

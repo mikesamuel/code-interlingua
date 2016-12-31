@@ -1,6 +1,9 @@
 package com.mikesamuel.cil.ast;
 
+import javax.annotation.Nullable;
+
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * An interface that allows examination of the content of a node.
@@ -11,6 +14,11 @@ public interface NodeOrBuilder {
    * The variant of the node.
    */
   NodeVariant getVariant();
+
+  /**
+   * The source position of the node if known.
+   */
+  @Nullable SourcePosition getSourcePosition();
 
   /**
    * The type of node.
@@ -39,4 +47,3 @@ public interface NodeOrBuilder {
    */
   BaseNode toBaseNode();
 }
-// TODO: Maybe make all traits extend this interface.

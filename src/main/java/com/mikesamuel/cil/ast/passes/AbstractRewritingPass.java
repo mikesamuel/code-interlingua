@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
@@ -10,7 +12,11 @@ import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.parser.SList;
 
 abstract class AbstractRewritingPass
-implements AbstractPass<ImmutableList<CompilationUnitNode>> {
+extends AbstractPass<ImmutableList<CompilationUnitNode>> {
+
+  AbstractRewritingPass(Logger logger) {
+    super(logger);
+  }
 
   static final class ProcessingStatus {
     /**
@@ -167,7 +173,7 @@ implements AbstractPass<ImmutableList<CompilationUnitNode>> {
   }
 
   @Override
-  public ImmutableList<CompilationUnitNode>
+  ImmutableList<CompilationUnitNode>
   run(Iterable<? extends CompilationUnitNode> compilationUnits) {
     ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
     for (CompilationUnitNode compilationUnit : compilationUnits) {

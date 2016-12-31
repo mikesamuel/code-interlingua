@@ -1,10 +1,28 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Logger;
+
+import javax.annotation.Nullable;
+
 import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.NodeOrBuilder;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 /** A compiler pass. */
-public interface AbstractPass<T> {
+abstract class AbstractPass<T> {
+
+  protected final Logger logger;
+
+  AbstractPass(Logger logger) {
+    this.logger = logger;
+  }
+
+  protected void error(@Nullable NodeOrBuilder node, String message) {
+    SourcePosition pos = node != null ? node.getSourcePosition() : null;
+    String fullMessage = pos != null ? pos + ": " + message : message;
+    logger.severe(fullMessage);
+  }
 
   /** Applies the pass to the given compilation units. */
-  T run(Iterable<? extends CompilationUnitNode> compilationUnits);
+  abstract T run(Iterable<? extends CompilationUnitNode> compilationUnits);
 }

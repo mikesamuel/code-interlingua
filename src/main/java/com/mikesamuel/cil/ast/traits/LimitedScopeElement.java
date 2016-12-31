@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.traits;
 
+import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
     .DeclarationPositionMarker;
 
@@ -18,7 +19,7 @@ import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
  *   }
  * }
  */
-public interface LimitedScopeElement {
+public interface LimitedScopeElement extends NodeOrBuilder {
   /**
    * Gets the marker to pass use with a resolver to limit the search to this
    * and earlier block elements.

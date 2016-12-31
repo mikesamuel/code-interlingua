@@ -49,21 +49,14 @@ final class DisambiguationPass extends AbstractRewritingPass {
   private final List<TypeScope> typeScopes = Lists.newArrayList();
   private final List<ExpressionNameScope> nameScopes = Lists.newArrayList();
   private final TypeInfoResolver typeInfoResolver;
-  private final Logger logger;
   private final boolean useLongNames;
 
   DisambiguationPass(
       TypeInfoResolver typeInfoResolver, Logger logger,
       boolean useLongNames) {
+    super(logger);
     this.typeInfoResolver = typeInfoResolver;
-    this.logger = logger;
     this.useLongNames = useLongNames;
-  }
-
-  protected void error(@Nullable BaseNode node, String message) {
-    SourcePosition pos = node != null ? node.getSourcePosition() : null;
-    String fullMessage = pos != null ? pos + ": " + message : message;
-    logger.severe(fullMessage);
   }
 
   @Override
