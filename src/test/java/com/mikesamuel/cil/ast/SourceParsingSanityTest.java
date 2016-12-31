@@ -4,10 +4,14 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.mikesamuel.cil.parser.Input;
@@ -39,11 +43,22 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
   public void testThemAll() throws Exception {
     long totalTime = 0;
     int nFiles = 0;
+    List<File> sources = Lists.newArrayList();
     for (String line : Resources.readLines(
-            Resources.getResource(getClass(), "/all-sources.txt"),
-            Charsets.UTF_8)) {
-      setUp();
+        Resources.getResource(getClass(), "/all-sources.txt"),
+        Charsets.UTF_8)) {
       File source = new File(line.trim());
+      sources.add(source);
+    }
+
+    if ("true".equalsIgnoreCase(System.getenv("TRAVIS"))) {
+      // Don't cause Travis test running to time out.
+      Collections.shuffle(sources);
+      sources.subList(50, sources.size()).clear();
+    }
+
+    for (File source : sources) {
+      setUp();
       long t0 = System.nanoTime();
       boolean ok = false;
       try {
