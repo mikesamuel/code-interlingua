@@ -339,6 +339,10 @@ WildcardBounds:
 // node types for the annotatable and unannotated equivalents.
 UnannType: (@trait=WholeType)
      !"@" Type
+Result: (@trait=WholeType)
+     "void"
+     UnannType
+
 
 // Names
 (chapter=Name)
@@ -493,9 +497,6 @@ MethodModifier:
      "strictfp"
 MethodHeader:
      [TypeParameters {Annotation}] Result MethodDeclarator [Throws]
-Result: (@trait=WholeType)
-     "void"
-     UnannType
 MethodDeclarator:
      MethodName "(" [FormalParameterList] ")" [Dims]
 FormalParameterList:
