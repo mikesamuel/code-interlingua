@@ -70,6 +70,30 @@ public final class DefragmentTypesPassTest extends TestCase {
   }
 
   @Test
+  public void testLongRunsOfDims() {
+    assertRewritten(
+        Joiner.on('\n').join(
+            "class C {",
+            "  C() {",
+            "    int[] i = null,",
+            "          j = {};",
+            "    int[][] k = {},",
+            "            l = {};",
+            "  }",
+            "}"),
+        Joiner.on('\n').join(
+            "class C {",
+            "  C() {",
+            "    int i[] = null,",
+            "        j[] = {},",
+            "        k[][] = {},",
+            "        l[][] = {};",
+            "  }",
+            "}")
+        );
+  }
+
+  @Test
   public void testForEach() {
     assertRewritten(
         "class C { C(int[][] arrays) { for (int[] arr : arrays) { } } }",
@@ -113,8 +137,8 @@ public final class DefragmentTypesPassTest extends TestCase {
   @Test
   public void testInterfaceMethod() {
     assertRewritten(
-        "interface I { int[][] f(int[][] x); }",
-        "interface I { int f(int x[][])[][]; }"
+        "interface I { int[][] f(int[][][] x); }",
+        "interface I { int f(int[] x[][])[][]; }"
         );
   }
 
@@ -139,6 +163,22 @@ public final class DefragmentTypesPassTest extends TestCase {
         );
   }
 
-  // TODO: do we need to at least issue an error on floating dims in
-  // try/resource and catch
+  @Test
+  public void testTryCatch() {
+    assertRewritten(
+        "class C { C() { try { } catch (Exception e[]) { } } }",
+        "class C { C() { try { } catch (Exception e[]) { } } }",
+        // Arrays can't be throwable so this is harmless.
+        "Floating array dimensions [] could not be reattached to a type");
+  }
+
+  @Test
+  public void testTryResource() {
+    // Meh.  Arrays can't be AutoCloseable so useless, but ok.
+    assertRewritten(
+        "class C { C() { try (OutputStream[] o = open()) { } } }",
+        "class C { C() { try (OutputStream o[] = open()) { } } }"
+        );
+  }
+
 }

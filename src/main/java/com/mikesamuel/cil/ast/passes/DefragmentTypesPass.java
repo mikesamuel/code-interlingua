@@ -94,6 +94,31 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
         : ProcessingStatus.CONTINUE;
   }
 
+  /**
+   * Any node type that can contain a {@link TypeNode} and floating
+   * {@link DimsNode} that modify that type.
+   * <p>
+   * If the Dims are part of a {@link VariableDeclaratorListNode} then the
+   * ancestor might be cloned, so we use the closest common ancestor that
+   * appears in a {...} repetition.
+   */
+  private static final ImmutableSet<NodeType> COMMON_ANCESTOR =
+      Sets.immutableEnumSet(
+          NodeType.AnnotationTypeElementDeclaration,
+          NodeType.BlockStatement,
+          NodeType.CatchFormalParameter,
+          NodeType.ClassBodyDeclaration,
+          NodeType.EnhancedForStatement,
+          NodeType.FormalParameter,
+          NodeType.InterfaceMemberDeclaration,
+          NodeType.LastFormalParameter,
+          NodeType.MethodHeader,
+          NodeType.Resource
+          );
+
+  /**
+   * Any nodes on the path from a common ancestor to its Dims.
+   */
   private static final ImmutableSet<NodeType> BETWEEN_COMMON_ANCESTOR_AND_DIMS =
       Sets.immutableEnumSet(
           // From ClassBodyDeclaration
@@ -118,6 +143,9 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           NodeType.MethodHeader,
           NodeType.MethodDeclarator);
 
+  /**
+   * Any nodes on the path from a common ancestor to its type.
+   */
   private static final ImmutableSet<NodeType> BETWEEN_COMMON_ANCESTOR_AND_TYPE =
       Sets.immutableEnumSet(
           // From ClassBodyDeclaration
@@ -140,20 +168,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           NodeType.Result,
           NodeType.UnannType);
 
-  private static final ImmutableSet<NodeType> COMMON_ANCESTOR =
-      Sets.immutableEnumSet(
-          NodeType.AnnotationTypeElementDeclaration,
-          NodeType.BlockStatement,
-          NodeType.CatchFormalParameter,
-          NodeType.ClassBodyDeclaration,
-          NodeType.EnhancedForStatement,
-          NodeType.FormalParameter,
-          NodeType.InterfaceMemberDeclaration,
-          NodeType.LastFormalParameter,
-          NodeType.MethodHeader,
-          NodeType.Resource
-          );
-
   private static final ImmutableSet<NodeType> TYPE_NODE_TYPES =
       Sets.immutableEnumSet(NodeType.Type, NodeType.ReferenceType);
 
@@ -163,6 +177,16 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   private static final ImmutableSet<NodeType> VAR_DECL_LIST_NODE_TYPES =
       Sets.immutableEnumSet(NodeType.VariableDeclaratorList);
 
+  /**
+   * When splitting a VariableDeclaratorList, we can't duplicate some structures
+   * like
+   * <code>for (int i = 0, j[] = {}; ...);</code>
+   * into
+   * <code>for (int i = 0; ...); for (int[] j = {}, ...);</code>
+   * without changing semantics.
+   * Instead, for all but the last, we drop these node types from the
+   * duplication, leaving a vanilla {@link VariableDeclarationStatementNode}.
+   */
   private static final ImmutableSet<NodeType> NO_REWRAP_SPLIT =
       Sets.immutableEnumSet(
           NodeType.ForInit, NodeType.BasicForStatement,
@@ -219,7 +243,14 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
                     lsBuilder.remove(0);
                   }
                   for (int j = lastSplitIndex; j < i; ++j) {
-                    lsBuilder.add(children.get(j));
+                    BaseNode splitChild = children.get(j);
+                    if (j != lastSplitIndex) {
+                      // Remove redundant DimsNodes since later passes assume
+                      // that there is a 1:1 relationship between DimsNodes
+                      // and TypeNodes.
+                      splitChild = removeDims(splitChild);
+                    }
+                    lsBuilder.add(splitChild);
                   }
                   split.add(lsBuilder.build());
                   lastSplitIndex = i;
@@ -233,7 +264,11 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
                 lsBuilder.remove(0);
               }
               for (int j = lastSplitIndex; j < children.size(); ++j) {
-                lsBuilder.add(children.get(j));
+                BaseNode splitChild = children.get(j);
+                if (j != lastSplitIndex) {
+                  splitChild = removeDims(splitChild);
+                }
+                lsBuilder.add(splitChild);
               }
               split.add(lsBuilder.build());
             }
@@ -390,8 +425,12 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
         });
 
+    return removeDims(withFixedType);
+  }
+
+  private static BaseNode removeDims(BaseNode start) {
     return processAlongPath(
-        withFixedType,
+        start,
         BETWEEN_COMMON_ANCESTOR_AND_DIMS, DIMS_NODE_TYPES,
         new FindOp<BaseNode>() {
 
@@ -415,5 +454,6 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           }
 
         });
+
   }
 }
