@@ -18,8 +18,19 @@ public abstract class MemberInfo {
 
   @Override
   public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append('(').append(getClass().getSimpleName());
     String modString = Modifier.toString(modifiers);
-    return "(" + getClass().getSimpleName()
-        + (modString.isEmpty() ? "" : " ") + modString + " " + canonName + ")";
+    if (!modString.isEmpty()) {
+      sb.append(' ').append(modString);
+    }
+    sb.append(' ').append(canonName);
+    appendExtraToString(sb);
+    return sb.append(')').toString();
+  }
+
+  protected void appendExtraToString(
+      @SuppressWarnings("unused") StringBuilder sb) {
+    // Overridable
   }
 }

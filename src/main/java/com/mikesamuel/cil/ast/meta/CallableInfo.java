@@ -19,7 +19,7 @@ public final class CallableInfo extends MemberInfo {
   /**
    * The method descriptor.
    *
-   * @return null if not set.  Usually set by the descriptor pass.
+   * @return null if not set.  Usually set by the class member pass.
    */
   public String getDescriptor() {
     return descriptor;
@@ -70,4 +70,15 @@ public final class CallableInfo extends MemberInfo {
   public void setVariadic(boolean isVariadic) {
     this.isVariadic = isVariadic;
   }
+
+  @Override
+  protected void appendExtraToString(StringBuilder sb) {
+    if (descriptor != null) {
+      sb.append(" @ ").append(descriptor);
+    }
+    if (returnType != null) {
+      sb.append(" : ").append(returnType);
+    }
+  }
+
 }
