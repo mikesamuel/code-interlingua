@@ -41,6 +41,12 @@ public abstract class StaticType {
   @Override
   public abstract String toString();
 
+  /**
+   * A JVM descriptor fragment.
+   * @see <a href="https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3">JVM spec 4.3.3</a>
+   */
+  public abstract String toDescriptor();
+
   @Override
   public abstract boolean equals(Object o);
 
@@ -163,15 +169,23 @@ public abstract class StaticType {
   public static abstract class PrimitiveType extends StaticType {
     final String name;
     final Name wrapperType;
+    final String descriptorFragment;
 
     private PrimitiveType(
-        String name, @Nullable Name wrapperType, @Nullable Name specType) {
+        String name, @Nullable Name wrapperType, @Nullable Name specType,
+        String descriptorFragment) {
       super(new TypeSpecification(
           specType != null
           ? specType
           : wrapperType.child("TYPE", Name.Type.FIELD)));
       this.name = name;
       this.wrapperType = wrapperType;
+      this.descriptorFragment = descriptorFragment;
+    }
+
+    @Override
+    public String toDescriptor() {
+      return descriptorFragment;
     }
   }
 
@@ -185,8 +199,9 @@ public abstract class StaticType {
 
     private NumericType(
         String name, boolean isFloaty, int byteWidth,
-        boolean isSigned, Name wrapperType) {
-      super(name, wrapperType, null);
+        boolean isSigned, Name wrapperType,
+        String descriptorFragment) {
+      super(name, wrapperType, null, descriptorFragment);
       this.isFloaty = isFloaty;
       this.byteWidth = byteWidth;
       this.isSigned = isSigned;
@@ -286,13 +301,18 @@ public abstract class StaticType {
       throw new AssertionError(t);
     }
 
+    @Override
+    public String toDescriptor() {
+      return "X";
+    }
   };
 
   private static final class OneOffType extends PrimitiveType {
 
     private OneOffType(
-        String name, @Nullable Name wrapperType, @Nullable Name specTypeName) {
-      super(name, wrapperType, specTypeName);
+        String name, @Nullable Name wrapperType, @Nullable Name specTypeName,
+        String descriptorFragment) {
+      super(name, wrapperType, specTypeName, descriptorFragment);
     }
 
     @Override
@@ -330,46 +350,48 @@ public abstract class StaticType {
   /** Type {@code byte} */
   public static final PrimitiveType T_VOID = new OneOffType(
       "void", null,
-      JAVA_LANG.child("Void", Name.Type.CLASS).child("TYPE", Name.Type.FIELD));
+      JAVA_LANG.child("Void", Name.Type.CLASS).child("TYPE", Name.Type.FIELD),
+      "V");
 
   /** Type {@code byte} */
   public static final PrimitiveType T_BOOLEAN = new OneOffType(
-      "boolean", JAVA_LANG.child("Boolean", Name.Type.CLASS), null);
+      "boolean", JAVA_LANG.child("Boolean", Name.Type.CLASS), null,
+      "Z");
 
   /** Type {@code byte} */
   public static final NumericType T_BYTE = new NumericType(
       "byte", false, 1, true,
-      JAVA_LANG.child("Byte", Name.Type.CLASS));
+      JAVA_LANG.child("Byte", Name.Type.CLASS), "B");
 
   /** Type {@code short} */
   public static final NumericType T_SHORT = new NumericType(
       "short", false, 2, true,
-      JAVA_LANG.child("Short", Name.Type.CLASS));
+      JAVA_LANG.child("Short", Name.Type.CLASS), "S");
 
   /** Type {@code char} */
   public static final NumericType T_CHAR = new NumericType(
       "char", false, 2, false,
-      JAVA_LANG.child("Character", Name.Type.CLASS));
+      JAVA_LANG.child("Character", Name.Type.CLASS), "C");
 
   /** Type {@code int} */
   public static final NumericType T_INT = new NumericType(
       "int", false, 4, true,
-      JAVA_LANG.child("Integer", Name.Type.CLASS));
+      JAVA_LANG.child("Integer", Name.Type.CLASS), "I");
 
   /** Type {@code long} */
   public static final NumericType T_LONG = new NumericType(
       "long", false, 8, true,
-      JAVA_LANG.child("Long", Name.Type.CLASS));
+      JAVA_LANG.child("Long", Name.Type.CLASS), "J");
 
   /** Type {@code float} */
   public static final NumericType T_FLOAT = new NumericType(
       "float", true, 4, true,
-      JAVA_LANG.child("Float", Name.Type.CLASS));
+      JAVA_LANG.child("Float", Name.Type.CLASS), "F");
 
   /** Type {@code double} */
   public static final NumericType T_DOUBLE = new NumericType(
       "double", true, 8, true,
-      JAVA_LANG.child("Double", Name.Type.CLASS));
+      JAVA_LANG.child("Double", Name.Type.CLASS), "D");
 
   private static final Set<Name> ARRAY_SUPER_TYPES = ImmutableSet.of(
       JAVA_LANG_OBJECT,
@@ -448,6 +470,7 @@ public abstract class StaticType {
 
               Optional<TypeInfo> tiOpt = r.resolve(ts.typeName);
               if (!tiOpt.isPresent()) {
+                Thread.dumpStack();
                 logger.severe(
                     (pos != null ? pos + ": " : "")
                     + " type name " + ts.typeName + " does not specify a type");
@@ -789,6 +812,44 @@ public abstract class StaticType {
       }
       return true;
     }
+
+    @Override
+    public String toDescriptor() {
+      if (info.canonName.type == Name.Type.TYPE_PARAMETER) {
+        Preconditions.checkState(info.superType.isPresent());
+        // Mimic type-erasure by using the upper-type bound.
+        return type(info.superType.get(), null, null).toDescriptor();
+      }
+      StringBuilder sb = new StringBuilder();
+      sb.append('L');
+      toDescriptor(this.info.canonName, sb);
+      return sb.append(';').toString();
+    }
+
+    private Name.Type toDescriptor(Name nm, StringBuilder sb) {
+      if (nm == Name.DEFAULT_PACKAGE) {
+        return null;
+      }
+      Name.Type parentType = toDescriptor(nm.parent, sb);
+      switch (nm.type) {
+        case CLASS:
+          if (parentType == Name.Type.CLASS) {
+            sb.append('$');
+          } else if (parentType == Name.Type.PACKAGE) {
+            sb.append('/');
+          }
+          sb.append(nm.identifier);
+          return Name.Type.CLASS;
+        case PACKAGE:
+          if (parentType != null) {
+            sb.append('/');
+          }
+          sb.append(nm.identifier);
+          return Name.Type.PACKAGE;
+        default:
+          return parentType;
+      }
+    }
   }
 
     /**
@@ -819,6 +880,11 @@ public abstract class StaticType {
           this.dimensionality = 1;
           this.baseElementType = elementType;
         }
+      }
+
+      @Override
+      public String toDescriptor() {
+        return "[" + elementType.toDescriptor();
       }
 
       @Override

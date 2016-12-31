@@ -365,4 +365,12 @@ public final class TypeSpecification {
         ? new TypeSpecification(typeName, canonBindings.build(), nDims)
         : this;
   }
+
+  /**
+   * Type specification of an array of elements whose type is specified by this.
+   */
+  public TypeSpecification arrayOf() {
+    return new TypeSpecification(
+        this.typeName, this.bindings, this.nDims + 1);
+  }
 }
