@@ -56,71 +56,78 @@ public interface TypeNameResolver {
      */
     public static TypeNameResolver canonicalizer(
         TypeInfoResolver typeInfoResolver) {
-      return new TypeNameResolver() {
+      return new Canonicalizer(typeInfoResolver);
+    }
 
-        private final LoadingCache<Name, ImmutableList<Name>> cache =
-            CacheBuilder.newBuilder()
-            .build(
-                new CacheLoader<Name, ImmutableList<Name>>() {
+    static final class Canonicalizer implements TypeNameResolver {
+      final TypeInfoResolver typeInfoResolver;
+      Canonicalizer(TypeInfoResolver typeInfoResolver) {
+        this.typeInfoResolver = typeInfoResolver;
+      }
 
-                  @Override
-                  public ImmutableList<Name> load(Name ambigName) {
-                    return ImmutableList.copyOf(findCanonicalNames(ambigName));
-                  }
+      private final LoadingCache<Name, ImmutableList<Name>> cache =
+          CacheBuilder.newBuilder()
+          .build(
+              new CacheLoader<Name, ImmutableList<Name>>() {
 
-                  private Set<Name> findCanonicalNames(Name ambigName) {
-                    Set<Name> canonNames = new LinkedHashSet<>();
-                    for (Name unambiguousClassName
-                         : disambiguateClasses(ambigName, true, false)) {
-                      Optional<TypeInfo> ti = typeInfoResolver.resolve(
-                          unambiguousClassName);
-                      if (ti.isPresent()) {
-                        TypeInfo type = ti.get();
-                        canonNames.add(type.canonName);
-                      }
+                @Override
+                public ImmutableList<Name> load(Name ambigName) {
+                  return ImmutableList.copyOf(findCanonicalNames(ambigName));
+                }
 
-                      Name parentClassName = unambiguousClassName.parent;
-                      if (parentClassName.type != Name.Type.CLASS) {
-                        continue;
-                      }
+                private Set<Name> findCanonicalNames(Name ambigName) {
+                  Set<Name> canonNames = new LinkedHashSet<>();
+                  for (Name unambiguousClassName
+                       : disambiguateClasses(ambigName, true, false)) {
+                    Optional<TypeInfo> ti = typeInfoResolver.resolve(
+                        unambiguousClassName);
+                    if (ti.isPresent()) {
+                      TypeInfo type = ti.get();
+                      canonNames.add(type.canonName);
+                    }
 
-                      // Consider the case where the name after lastDot refers
-                      // to an inner class name.
-                      // If name is "foo.Bar.Baz" we could convert it to a
-                      // binary name "foo.Bar$Baz" and use the classloader
-                      // but that will not handle the difference between
-                      // fully qualified names and canonical names.
-                      // Both of the following are valid
-                      //     java.util.Map.Entry<K, V> e;  // NOT CANONICAL
-                      //     java.util.HashMap.Entry<K, V> e;  // CANONICAL
-                      String innerName = unambiguousClassName.identifier;
-                      for (Name parentCanonName
-                           : findCanonicalNames(parentClassName)) {
-                        Optional<TypeInfo> outerTypeOpt =
-                            typeInfoResolver.resolve(parentCanonName);
-                        if (outerTypeOpt.isPresent()) {
-                          TypeInfo outerType = outerTypeOpt.get();
-                          for (Name innerClassName : outerType.innerClasses) {
-                            if (innerName.equals(innerClassName.identifier)) {
-                              canonNames.add(innerClassName);
-                            }
+                    Name parentClassName = unambiguousClassName.parent;
+                    if (parentClassName == null
+                        || !parentClassName.type.isType) {
+                      continue;
+                    }
+
+                    // Consider the case where the name after lastDot refers
+                    // to an inner class name.
+                    // If name is "foo.Bar.Baz" we could convert it to a
+                    // binary name "foo.Bar$Baz" and use the classloader
+                    // but that will not handle the difference between
+                    // fully qualified names and canonical names.
+                    // Both of the following are valid
+                    //     java.util.Map.Entry<K, V> e;  // NOT CANONICAL
+                    //     java.util.HashMap.Entry<K, V> e;  // CANONICAL
+                    String innerName = unambiguousClassName.identifier;
+                    for (Name parentCanonName
+                         : findCanonicalNames(parentClassName)) {
+                      Optional<TypeInfo> outerTypeOpt =
+                          typeInfoResolver.resolve(parentCanonName);
+                      if (outerTypeOpt.isPresent()) {
+                        TypeInfo outerType = outerTypeOpt.get();
+                        for (Name innerClassName : outerType.innerClasses) {
+                          if (innerName.equals(innerClassName.identifier)) {
+                            canonNames.add(innerClassName);
                           }
                         }
                       }
                     }
-                    return canonNames;
                   }
-                });
+                  return canonNames;
+                }
+              });
 
-        @Override
-        public ImmutableList<Name> lookupTypeName(Name ambigName) {
-          try {
-            return cache.get(ambigName);
-          } catch (ExecutionException e) {
-            throw new AssertionError(e);
-          }
+      @Override
+      public ImmutableList<Name> lookupTypeName(Name ambigName) {
+        try {
+          return cache.get(ambigName);
+        } catch (ExecutionException e) {
+          throw new AssertionError(e);
         }
-      };
+      }
     }
 
     @VisibleForTesting
@@ -136,7 +143,7 @@ public interface TypeNameResolver {
 
       if (!isAmbiguous) {
         // Fast path.
-        if (ambigName.type == Name.Type.CLASS) {
+        if (ambigName.type.isType) {
           return ImmutableList.of(ambigName);
         }
         Preconditions.checkArgument(ambigName.type == Name.Type.PACKAGE);
@@ -264,53 +271,65 @@ public interface TypeNameResolver {
         }
         identifierToName = ImmutableMap.copyOf(m);
       }
+      return new UnqualifiedNameResolver(identifierToName);
+    }
 
-      return new TypeNameResolver() {
+    static class UnqualifiedNameResolver implements TypeNameResolver {
+      final ImmutableMap<String, Name> identifierToName;
 
-        @Override
-        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
-          if (ambiguousName.type == Name.Type.TYPE_PARAMETER) {
-            return ImmutableList.of(ambiguousName);
-          }
-          if (ambiguousName.type == Name.Type.CLASS
-              || ambiguousName.type == Name.Type.AMBIGUOUS) {
-            if (ambiguousName.parent == null) {
-              Name qualifiedName = identifierToName.get(
-                  ambiguousName.identifier);
-              if (qualifiedName != null) {
-                return ImmutableList.of(qualifiedName);
-              }
-            } else {
-              ImmutableList.Builder<Name> innerNames = ImmutableList.builder();
-              for (Name outerName : lookupTypeName(ambiguousName.parent)) {
-                switch (outerName.type) {
-                  case CLASS:
-                    innerNames.add(outerName.child(
-                        ambiguousName.identifier, Name.Type.CLASS));
-                    continue;
-                  case TYPE_PARAMETER:
-                    // This can be validly reached by code like
-                    // class C<T> {
-                    //   T.I x;
-                    // }
-                    // and "no such type T.I" is an appropriate response.
-                    // TODO: should we spike fallback somehow?
-                    continue;
-                  case AMBIGUOUS:  // Should have been resolved.
-                  case PACKAGE:  // Packages contain types but are not types.
-                  case FIELD: case LOCAL: case METHOD:  // Not type parts
-                    break;
-                }
-                // If we get here, either the identifierToName map is borken
-                // or there is an unhandled case above.
-                throw new AssertionError(outerName.type);
-              }
-              return innerNames.build();
-            }
-          }
-          return ImmutableList.of();
+      UnqualifiedNameResolver(ImmutableMap<String, Name> identifierToName) {
+        this.identifierToName = identifierToName;
+      }
+
+      @Override
+      public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
+        if (ambiguousName.type == Name.Type.TYPE_PARAMETER
+            && ambiguousName.parent != null) {
+          return ImmutableList.of(ambiguousName);
         }
-      };
+        if (ambiguousName.type.isType
+            || ambiguousName.type == Name.Type.AMBIGUOUS) {
+          if (ambiguousName.parent == null) {
+            Name qualifiedName = identifierToName.get(
+                ambiguousName.identifier);
+            if (qualifiedName != null) {
+              return ImmutableList.of(qualifiedName);
+            }
+          } else {
+            ImmutableList.Builder<Name> innerNames = ImmutableList.builder();
+            for (Name outerName : lookupTypeName(ambiguousName.parent)) {
+              switch (outerName.type) {
+                case CLASS:
+                  innerNames.add(outerName.child(
+                      ambiguousName.identifier, Name.Type.CLASS));
+                  continue;
+                case TYPE_PARAMETER:
+                  // This can be validly reached by code like
+                  // class C<T> {
+                  //   T.I x;
+                  // }
+                  // and "no such type T.I" is an appropriate response.
+                  // TODO: should we spike fallback somehow?
+                  continue;
+                case AMBIGUOUS:  // Should have been resolved.
+                case PACKAGE:  // Packages contain types but are not types.
+                case FIELD: case LOCAL: case METHOD:  // Not type parts
+                  break;
+              }
+              // If we get here, either the identifierToName map is borken
+              // or there is an unhandled case above.
+              throw new AssertionError(outerName.type);
+            }
+            return innerNames.build();
+          }
+        }
+        return ImmutableList.of();
+      }
+
+      @Override
+      public String toString() {
+        return "(UnqualifiedNameResolver " + identifierToName.values() + ")";
+      }
     }
 
     /**
@@ -322,54 +341,73 @@ public interface TypeNameResolver {
      */
     public static TypeNameResolver wildcardLookup(
         Iterable<Name> packagesAndOuterTypes, TypeNameResolver canonicalizer) {
-      Preconditions.checkArgument(
-          Iterables.all(packagesAndOuterTypes, new Predicate<Name>() {
-            @Override
-            public boolean apply(Name nm) {
-              return nm != null && (
-                  nm.type == Name.Type.PACKAGE || nm.type == Name.Type.CLASS);
-            }
-          }));
-      return new TypeNameResolver() {
+      return new WildcardLookup(packagesAndOuterTypes, canonicalizer);
+    }
 
-        @Override
-        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
-          ImmutableList<String> typeNameIdents;
-          {
-            ImmutableList.Builder<String> b = ImmutableList.builder();
-            for (Name an = ambiguousName; an != null; an = an.parent) {
-              switch (an.type) {
-                case AMBIGUOUS:
-                case CLASS:
-                  b.add(an.identifier);
-                  continue;
-                case PACKAGE:
-                case TYPE_PARAMETER:
-                  return canonicalizer.lookupTypeName(ambiguousName);
-                case FIELD: case METHOD: case LOCAL:
-                  throw new IllegalArgumentException(ambiguousName.toString());
-              }
-              throw new AssertionError(an.type);
-            }
-            typeNameIdents = b.build().reverse();
-          }
+    static final class WildcardLookup implements TypeNameResolver {
+      final ImmutableList<Name> packagesAndOuterTypes;
+      final TypeNameResolver canonicalizer;
 
-          Set<Name> resolved = Sets.newLinkedHashSet();
-          for (Name oneContainer : packagesAndOuterTypes) {
-            Name importedClass = oneContainer;
-            for (String typeNameIdent : typeNameIdents) {
-              importedClass = importedClass.child(
-                  typeNameIdent, Name.Type.CLASS);
+      WildcardLookup(
+          Iterable<Name> packagesAndOuterTypes,
+          TypeNameResolver canonicalizer) {
+        this.canonicalizer = canonicalizer;
+        this.packagesAndOuterTypes = ImmutableList.copyOf(
+            packagesAndOuterTypes);
+        Preconditions.checkArgument(
+            Iterables.all(
+                this.packagesAndOuterTypes,
+                new Predicate<Name>() {
+                  @Override
+                  public boolean apply(Name nm) {
+                    return nm != null &&
+                        (nm.type == Name.Type.PACKAGE
+                        || nm.type == Name.Type.CLASS);
+                  }
+                }));
+      }
+
+      @Override
+      public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
+        ImmutableList<String> typeNameIdents;
+        {
+          ImmutableList.Builder<String> b = ImmutableList.builder();
+          for (Name an = ambiguousName; an != null; an = an.parent) {
+            switch (an.type) {
+              case AMBIGUOUS:
+              case CLASS:
+                b.add(an.identifier);
+                continue;
+              case PACKAGE:
+              case TYPE_PARAMETER:
+                return canonicalizer.lookupTypeName(ambiguousName);
+              case FIELD: case METHOD: case LOCAL:
+                throw new IllegalArgumentException(ambiguousName.toString());
             }
-            for (Name canonicalImportedClass
-                 : canonicalizer.lookupTypeName(importedClass)) {
-              resolved.add(canonicalImportedClass);
-            }
+            throw new AssertionError(an.type);
           }
-          return ImmutableList.copyOf(resolved);
+          typeNameIdents = b.build().reverse();
         }
 
-      };
+        Set<Name> resolved = Sets.newLinkedHashSet();
+        for (Name oneContainer : packagesAndOuterTypes) {
+          Name importedClass = oneContainer;
+          for (String typeNameIdent : typeNameIdents) {
+            importedClass = importedClass.child(
+                typeNameIdent, Name.Type.CLASS);
+          }
+          for (Name canonicalImportedClass
+               : canonicalizer.lookupTypeName(importedClass)) {
+            resolved.add(canonicalImportedClass);
+          }
+        }
+        return ImmutableList.copyOf(resolved);
+      }
+
+      @Override
+      public String toString() {
+        return "(WildcardLookup " + packagesAndOuterTypes + ")";
+      }
     }
 
     /**
@@ -378,23 +416,45 @@ public interface TypeNameResolver {
      */
     public static TypeNameResolver eitherOr(
         TypeNameResolver a, TypeNameResolver... rest) {
-      ImmutableList<TypeNameResolver> resolvers =
-          ImmutableList.<TypeNameResolver>builder()
-          .add(a)
-          .add(rest)
-          .build();
-      return new TypeNameResolver() {
-
-        @Override
-        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
-          for (TypeNameResolver r : resolvers) {
-            ImmutableList<Name> names = r.lookupTypeName(ambiguousName);
-            if (!names.isEmpty()) { return names; }
-          }
-          return ImmutableList.of();
+      ImmutableList.Builder<TypeNameResolver> b =
+          ImmutableList.builder();
+      if (a instanceof EitherOr) {
+        b.addAll(((EitherOr) a).resolvers);
+      } else {
+        b.add(a);
+      }
+      for (TypeNameResolver r : rest) {
+        if (r instanceof EitherOr) {
+          b.addAll(((EitherOr) r).resolvers);
+        } else {
+          b.add(r);
         }
+      }
+      ImmutableList<TypeNameResolver> resolvers = b.build();
+      if (resolvers.size() == 1) { return resolvers.get(0); }
+      return new EitherOr(resolvers);
+    }
 
-      };
+    static final class EitherOr implements TypeNameResolver {
+      ImmutableList<TypeNameResolver> resolvers;
+
+      EitherOr(ImmutableList<TypeNameResolver> resolvers) {
+        this.resolvers = resolvers;
+      }
+
+      @Override
+      public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
+        for (TypeNameResolver r : resolvers) {
+          ImmutableList<Name> names = r.lookupTypeName(ambiguousName);
+          if (!names.isEmpty()) { return names; }
+        }
+        return ImmutableList.of();
+      }
+
+      @Override
+      public String toString() {
+        return "(EitherOr " + resolvers + ")";
+      }
     }
   }
 
