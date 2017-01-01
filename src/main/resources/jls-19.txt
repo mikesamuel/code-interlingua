@@ -232,18 +232,18 @@ Identifier: (@trait=NamePart)
      builtin // IdentifierChars but not a Keyword or BooleanLiteral or NullLiteral
 IdentifierChars:
      builtin // JavaLetter {JavaLetterOrDigit}
-IntegerLiteral:
+IntegerLiteral: (@trait=Typed)
      builtin
-FloatingPointLiteral:
+FloatingPointLiteral: (@trait=Typed)
      builtin
-BooleanLiteral:
+BooleanLiteral: (@trait=Typed)
      "false"
      "true"
-CharacterLiteral:
+CharacterLiteral: (@trait=Typed)
      builtin
-StringLiteral:
+StringLiteral: (@trait=Typed)
      builtin
-NullLiteral:
+NullLiteral: (@trait=Typed)
      "null"
 JavaDocComment: @nointerp
      builtin @ignorable
@@ -251,7 +251,7 @@ JavaDocComment: @nointerp
 //     any Unicode character that is a "Java letter"
 //JavaLetterOrDigit:
 //     any Unicode character that is a "Java letter-or-digit"
-Literal: (@trait=Typed)
+Literal:
      FloatingPointLiteral
      IntegerLiteral
      BooleanLiteral
@@ -816,7 +816,7 @@ Primary: (@trait=Typed)
      !SimpleCallPrefix ContextFreeNames !DotKeywordDimsOrCtorRef (@name=Ambiguous)
      Primary "." FieldName  (@name=FieldAccess)
      ExpressionAtom @anon
-LeftHandSide: (@trait=Typed)
+LeftHandSide:
      Primary (@postcond=Postconds.Primary.FieldAccess)       (@name=FieldAccess)
      Primary (@postcond=Postconds.Primary.ArrayAccess)       (@name=ArrayAccess)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.Local)     (@name=Local)
@@ -974,7 +974,7 @@ PreExpression: (@trait=Typed)
      IncrDecrOperator LeftHandSideExpression
 PostExpression: (@trait=Typed)
      LeftHandSideExpression IncrDecrOperator
-LeftHandSideExpression: (@trait=Typed)
+LeftHandSideExpression:
      LeftHandSide @anon
      "(" LeftHandSideExpression ")"
 CastExpression: (@trait=Typed)
@@ -990,7 +990,7 @@ ConvertCast:
 AmbiguousBinaryUnaryOperator:
      "+"
      "-"
-ConstantExpression: (@trait=Typed)
+ConstantExpression:
      Expression
 
 
