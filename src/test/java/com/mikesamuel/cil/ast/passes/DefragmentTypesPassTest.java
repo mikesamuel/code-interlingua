@@ -33,8 +33,8 @@ public final class DefragmentTypesPassTest extends TestCase {
 
     try {
       assertEquals(
-          PassTestHelpers.serializeCompilationUnits(wantedCus, null),
-          PassTestHelpers.serializeCompilationUnits(gotCus, null));
+          PassTestHelpers.serializeNodes(wantedCus, null),
+          PassTestHelpers.serializeNodes(gotCus, null));
     } catch (UnparseVerificationException ex) {
       ex.printStackTrace();
       fail(ex.getMessage());

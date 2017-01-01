@@ -14,6 +14,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.Trees;
@@ -74,7 +75,7 @@ class PassTestHelpers {
         },
         expectedErrors);
 
-    String got = serializeCompilationUnits(cus, decorator);
+    String got = serializeNodes(cus, decorator);
 
     StringBuilder sb = new StringBuilder();
     for (String[] linesForOneCu : expectedLines) {
@@ -150,19 +151,19 @@ class PassTestHelpers {
     return result;
   }
 
-  static String serializeCompilationUnits(
-      Iterable<? extends CompilationUnitNode> cus, Decorator decorator)
+  static String serializeNodes(
+      Iterable<? extends BaseNode> nodes, Decorator decorator)
   throws UnparseVerificationException {
     StringBuilder sb = new StringBuilder();
-    for (CompilationUnitNode cu : cus) {
+    for (BaseNode node : nodes) {
       Iterable<Event> skeleton = SList.forwardIterable(
-          Trees.startUnparse(null, cu, decorator));
+          Trees.startUnparse(null, node, decorator));
       Optional<SerialState> serialized =
-          NodeType.CompilationUnit.getParSer().unparse(
+          node.getNodeType().getParSer().unparse(
           new SerialState(skeleton),
           SerialErrorReceiver.DEV_NULL);
       Assert.assertTrue(
-          cu.toAsciiArt(""),
+          node.toAsciiArt(""),
           serialized.isPresent());
       Verified verified = Unparse.verify(
           SList.forwardIterable(serialized.get().output));
@@ -174,7 +175,6 @@ class PassTestHelpers {
     }
     return sb.toString();
   }
-
 
   interface PassRunner {
     ImmutableList<CompilationUnitNode> runPasses(
