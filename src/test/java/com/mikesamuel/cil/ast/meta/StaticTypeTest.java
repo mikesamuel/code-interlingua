@@ -504,6 +504,47 @@ public final class StaticTypeTest extends TestCase {
         Cast.CONFIRM_UNCHECKED);
   }
 
+  @Test
+  public void testNullType() {
+    StaticType bool = type("java.lang.Boolean");
+    StaticType obj = type("java.lang.Object");
+    assertCasts(
+        Cast.SAME,
+        pool.T_NULL,
+        pool.T_NULL,
+        Cast.SAME);
+    assertCasts(
+        Cast.CONFIRM_UNCHECKED,
+        StaticType.ERROR_TYPE,
+        pool.T_NULL,
+        Cast.CONFIRM_UNCHECKED);
+    assertCasts(
+        Cast.DISJOINT,
+        StaticType.T_BOOLEAN,
+        pool.T_NULL,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.DISJOINT,
+        StaticType.T_VOID,
+        pool.T_NULL,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.DISJOINT,
+        StaticType.T_INT,
+        pool.T_NULL,
+        Cast.DISJOINT);
+    assertCasts(
+        Cast.CONFIRM_CHECKED,
+        bool,
+        pool.T_NULL,
+        Cast.CONFIRM_SAFE);
+    assertCasts(
+        Cast.CONFIRM_CHECKED,
+        obj,
+        pool.T_NULL,
+        Cast.CONFIRM_SAFE);
+  }
+
   /**
    * @param bToA The cast kind needed for code like
    *     {@code B b = ...; A a = (CAST) b;}.

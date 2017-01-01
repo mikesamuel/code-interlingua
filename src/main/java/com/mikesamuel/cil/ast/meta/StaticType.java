@@ -416,6 +416,11 @@ public abstract class StaticType {
       this.r = r;
     }
 
+    /**
+     * Special type for the {@code null} value which is a reference bottom type.
+     */
+    public final ReferenceType T_NULL = new NullType();
+
     private final Map<TypeSpecification, StaticType> pool =
         Maps.newHashMap();
     {
@@ -430,6 +435,7 @@ public abstract class StaticType {
       pool.put(T_FLOAT.typeSpecification,    T_FLOAT);
       pool.put(T_DOUBLE.typeSpecification,   T_DOUBLE);
       pool.put(ERROR_TYPE.typeSpecification, ERROR_TYPE);
+      pool.put(T_NULL.typeSpecification,     T_NULL);
     }
 
     /**
@@ -519,6 +525,53 @@ public abstract class StaticType {
       }
     }
 
+    private class NullType extends ReferenceType {
+
+      private NullType() {
+        super(new TypeSpecification(
+            // Outside normal type namespace since null is a keyword.
+            Name.DEFAULT_PACKAGE.child("null", Name.Type.CLASS)));
+      }
+
+      @Override
+      public String toString() {
+        return "<null>";
+      }
+
+      @Override
+      public String toDescriptor() {
+        return "X";
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o == this;
+      }
+
+      @Override
+      public int hashCode() {
+        return System.identityHashCode(this);
+      }
+
+      @Override
+      public Cast assignableFrom(StaticType t) {
+        if (t == this) {
+          return Cast.SAME;
+        }
+        if (ERROR_TYPE.equals(t)) {
+          return Cast.CONFIRM_UNCHECKED;
+        }
+        if (t instanceof ReferenceType) {
+          return Cast.CONFIRM_CHECKED;
+        }
+        // The <null> type may be assignable to Integer but it does not
+        // participate in unboxing.
+        return Cast.DISJOINT;
+      }
+
+    }
+
+
     /**
      * A class or interface type.
      */
@@ -602,6 +655,12 @@ public abstract class StaticType {
 
       @Override
       public Cast assignableFrom(StaticType t) {
+        if (ERROR_TYPE.equals(t)) {
+          return Cast.CONFIRM_UNCHECKED;
+        }
+        if (t instanceof NullType) {
+          return Cast.CONFIRM_SAFE;
+        }
         if (t instanceof ClassOrInterfaceType) {
           ClassOrInterfaceType ct = (ClassOrInterfaceType) t;
           if (info.canonName.equals(ct.info.canonName)) {
@@ -907,6 +966,9 @@ public abstract class StaticType {
       public Cast assignableFrom(StaticType t) {
         if (ERROR_TYPE.equals(t)) {
           return Cast.CONFIRM_UNCHECKED;
+        }
+        if (t instanceof NullType) {
+          return Cast.CONFIRM_SAFE;
         }
         if (t instanceof PrimitiveType) {
           return Cast.DISJOINT;
