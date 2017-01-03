@@ -126,7 +126,7 @@ public final class Name {
     TYPE_PARAMETER(true, false, false),
     /**
      * Type for a name part that has not been disambiguated.
-     * @see com.mikesamuel.cil.ast.passes.DisambiguationPass
+     * See the disambiguation pass for more detail.
      */
     AMBIGUOUS(false, false, false),
     ;
@@ -347,5 +347,40 @@ public final class Name {
       // Just skipping method containers to find a class container.
     }
     return ancestor != null && ancestor.type.isType ? ancestor : null;
+  }
+
+  /**
+   * The package containing this name if any.
+   */
+  public Name getPackage() {
+    Name nm = this;
+    while (nm != null && nm.type != Type.PACKAGE) {
+      nm = nm.parent;
+    }
+    return nm;
+  }
+
+  /**
+   * The class containing this name if any.
+   */
+  public Name getContainingClass() {
+    Name nm = this;
+    while (nm != null && nm.type != Type.CLASS) {
+      nm = nm.parent;
+    }
+    return nm;
+  }
+
+  /**
+   * The top level class containing this name if any.
+   */
+  public Name getTopLevelClass() {
+    Name nm = this;
+    while (nm != null
+        && (nm.type != Type.CLASS
+        || (nm.parent != null && nm.parent.type != Type.PACKAGE))) {
+      nm = nm.parent;
+    }
+    return nm;
   }
 }
