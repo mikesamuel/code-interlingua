@@ -6,8 +6,8 @@ import com.google.common.collect.ImmutableList;
 /** Describes a method, constructor, or initializer. */
 public final class CallableInfo extends MemberInfo {
   private String descriptor;
-  private StaticType returnType;
-  private ImmutableList<StaticType> parameterTypes;
+  private TypeSpecification returnType;
+  private ImmutableList<TypeSpecification> formalTypes;
   private boolean isVariadic;
 
   /** */
@@ -35,12 +35,12 @@ public final class CallableInfo extends MemberInfo {
    *
    * @return null if not set.  Usually set by the descriptor pass.
    */
-  public StaticType getReturnType() {
+  public TypeSpecification getReturnType() {
     return returnType;
   }
 
   /** */
-  public void setReturnType(StaticType returnType) {
+  public void setReturnType(TypeSpecification returnType) {
     this.returnType = returnType;
   }
 
@@ -50,13 +50,14 @@ public final class CallableInfo extends MemberInfo {
    *
    * @return null if not set.  Usually set by the descriptor pass.
    */
-  public ImmutableList<StaticType> getParameterTypes() {
-    return parameterTypes;
+  public ImmutableList<TypeSpecification> getFormalTypes() {
+    return formalTypes;
   }
 
-  /** */
-  public void setParameterTypes(ImmutableList<StaticType> parameterTypes) {
-    this.parameterTypes = parameterTypes;
+  /** @see #getFormalTypes() */
+  public void setFormalTypes(
+      Iterable<? extends TypeSpecification> newFormalTypes) {
+    this.formalTypes = ImmutableList.copyOf(newFormalTypes);
   }
 
   /**

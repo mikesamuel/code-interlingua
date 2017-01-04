@@ -5,16 +5,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 
 /** Describes a type. */
-public final class TypeInfo {
-  /**
-   * The canonical name, or in the case of anonymous classes, the ordinal
-   * following the canonical name of the containing class.
-   */
-  public final Name canonName;
-  /**
-   * @see java.lang.reflect.Modifier
-   */
-  public final int modifiers;
+public final class TypeInfo extends AccessibleInfo {
   /**
    * True for anonymous classes.
    */
@@ -38,8 +29,8 @@ public final class TypeInfo {
   public final ImmutableList<MemberInfo> declaredMembers;
 
   private TypeInfo(
-      Name canonName,
       int modifiers,
+      Name canonName,
       boolean isAnonymous,
       Optional<TypeSpecification> superType,
       ImmutableList<TypeSpecification> interfaces,
@@ -47,8 +38,7 @@ public final class TypeInfo {
       Optional<Name> outerClass,
       ImmutableList<Name> innerClasses,
       ImmutableList<MemberInfo> declaredMembers) {
-    this.canonName = canonName;
-    this.modifiers = modifiers;
+    super(modifiers, canonName);
     this.isAnonymous = isAnonymous;
     this.superType = superType;
     this.interfaces = interfaces;
@@ -181,7 +171,7 @@ public final class TypeInfo {
     public TypeInfo build() {
       @SuppressWarnings("synthetic-access")
       TypeInfo ti = new TypeInfo(
-          canonName, modifiers, isAnonymous, superType,
+          modifiers, canonName, isAnonymous, superType,
           interfaces, parameters, outerClass, innerClasses,
           declaredMembers);
       return ti;

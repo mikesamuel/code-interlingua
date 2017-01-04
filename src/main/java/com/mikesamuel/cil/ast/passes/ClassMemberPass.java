@@ -110,6 +110,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
         boolean hasErrorType = false;
         String errorDesc = StaticType.ERROR_TYPE.toDescriptor();
         StringBuilder descriptor = new StringBuilder();
+        ImmutableList.Builder<TypeSpecification> formalTypes =
+            ImmutableList.builder();
 
         if (paramList == null) {
           descriptor.append("()");
@@ -142,6 +144,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
             if (staticType == null) {
               staticType = StaticType.ERROR_TYPE;
             }
+            formalTypes.add(staticType.typeSpecification);
             if (isVariadic) {
               // Promote T... formals to arrays.
               staticType = typePool.type(
@@ -171,7 +174,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
         if (!hasErrorType) {
           info.setDescriptor(descriptor.toString());
         }
-        info.setReturnType(returnType);
+        info.setReturnType(returnType.typeSpecification);
+        info.setFormalTypes(formalTypes.build());
         cd.setMemberInfo(info);
       } else {
         error(node, "Missing member info for " + methodName);
@@ -190,7 +194,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
               childTypeInfo, fieldName);
           if (info != null) {
             WholeType valueType = findWholeType(node);
-            info.setValueType(valueType.getStaticType());
+            info.setValueType(valueType.getStaticType().typeSpecification);
             ((MemberDeclaration) node).setMemberInfo(info);
           } else {
             error(node, "Missing member info for " + fieldName);

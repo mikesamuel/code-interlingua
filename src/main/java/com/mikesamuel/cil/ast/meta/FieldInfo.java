@@ -6,7 +6,7 @@ import com.google.common.base.Preconditions;
  * Describes a {@link com.mikesamuel.cil.ast.NodeType#FieldDeclaration}.
  */
 public final class FieldInfo extends MemberInfo {
-  private StaticType valueType;
+  private TypeSpecification valueType;
 
   /** */
   public FieldInfo(int modifiers, Name canonName) {
@@ -18,12 +18,12 @@ public final class FieldInfo extends MemberInfo {
    * The type of values that may be stored in the field.
    * Null if the class member type has not yet run.
    */
-  public StaticType getValueType() {
+  public TypeSpecification getValueType() {
     return valueType;
   }
 
   /** */
-  public void setValueType(StaticType newValueType) {
+  public void setValueType(TypeSpecification newValueType) {
     this.valueType = newValueType;
   }
 

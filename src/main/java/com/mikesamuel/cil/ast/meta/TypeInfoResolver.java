@@ -2,6 +2,7 @@ package com.mikesamuel.cil.ast.meta;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.GenericDeclaration;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -9,9 +10,11 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
@@ -19,6 +22,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 
 /**
@@ -84,32 +88,61 @@ public interface TypeInfoResolver {
                     for (Field f : clazz.getDeclaredFields()) {
                       int mods = f.getModifiers();
                       if (!Modifier.isPrivate(mods)) {
-                        members.add(new FieldInfo(
+                        FieldInfo fi = new FieldInfo(
                             mods,
-                            className.child(f.getName(), Name.Type.FIELD)));
+                            className.child(f.getName(), Name.Type.FIELD));
+                        fi.setValueType(specForType(f.getGenericType()));
+                        members.add(fi);
                       }
                     }
-                    for (Method m : clazz.getDeclaredMethods()) {
+                    Method[] methods = clazz.getDeclaredMethods();
+                    for (Method m : methods) {
+                      String mname = m.getName();
                       int mods = m.getModifiers();
                       if (!Modifier.isPrivate(mods)) {
-                        members.add(new CallableInfo(
+                        int index = 0;
+                        for (Method om : methods) {
+                          if (m == om) { break; }
+                          if (mname.equals(om.getName())) {
+                            ++index;
+                          }
+                        }
+                        CallableInfo ci = new CallableInfo(
                             mods,
-                            className.method(
-                                m.getName(),
-                                methodDescriptorFor(
-                                    m.getParameterTypes(), m.getReturnType()))
-                            ));
+                            className.method(mname, "(" + index + ")"));
+                        ImmutableList.Builder<TypeSpecification> formalTypes =
+                            ImmutableList.builder();
+                        for (Type t : m.getGenericParameterTypes()) {
+                          formalTypes.add(specForType(t));
+                        }
+                        ci.setReturnType(specForType(m.getGenericReturnType()));
+                        ci.setVariadic(m.isVarArgs());
+                        ci.setFormalTypes(formalTypes.build());
+                        ci.setDescriptor(
+                            methodDescriptorFor(
+                                m.getParameterTypes(), m.getReturnType()));
+                        members.add(ci);
                       }
                     }
-                    for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+                    Constructor<?>[] ctors = clazz.getDeclaredConstructors();
+                    for (Constructor<?> c : ctors) {
                       int mods = c.getModifiers();
                       if (!Modifier.isPrivate(mods)) {
-                        members.add(new CallableInfo(
+                        int index = Arrays.asList(ctors).indexOf(c);
+                        CallableInfo ci = new CallableInfo(
                             mods,
-                            className.method(
-                                "<init>",
-                                methodDescriptorFor(
-                                    c.getParameterTypes(), Void.TYPE))));
+                            className.method("<init>", "(" + index + ")"));
+                        ImmutableList.Builder<TypeSpecification> formalTypes =
+                            ImmutableList.builder();
+                        for (Type t : c.getGenericParameterTypes()) {
+                          formalTypes.add(specForType(t));
+                        }
+                        ci.setReturnType(StaticType.T_VOID.typeSpecification);
+                        ci.setVariadic(c.isVarArgs());
+                        ci.setFormalTypes(formalTypes.build());
+                        ci.setDescriptor(methodDescriptorFor(
+                            c.getParameterTypes(), Void.TYPE));
+                        members.add(ci);
                       }
                     }
                     ImmutableList.Builder<Name> parameters =
@@ -218,9 +251,35 @@ public interface TypeInfoResolver {
       return parent.child(simpleName, Name.Type.CLASS);
     }
 
+    private static final ImmutableMap<Class<?>, Name> PRIMITIVE_CLASS_TO_NAME =
+        ImmutableMap.<Class<?>, Name>builder()
+        .put(void.class, StaticType.T_VOID.typeSpecification.typeName)
+        .put(boolean.class, StaticType.T_BOOLEAN.typeSpecification.typeName)
+        .put(byte.class, StaticType.T_BYTE.typeSpecification.typeName)
+        .put(char.class, StaticType.T_CHAR.typeSpecification.typeName)
+        .put(short.class, StaticType.T_SHORT.typeSpecification.typeName)
+        .put(int.class, StaticType.T_INT.typeSpecification.typeName)
+        .put(float.class, StaticType.T_FLOAT.typeSpecification.typeName)
+        .put(long.class, StaticType.T_LONG.typeSpecification.typeName)
+        .put(double.class, StaticType.T_DOUBLE.typeSpecification.typeName)
+        .build();
+
     private static TypeSpecification specForType(Type t) {
       if (t instanceof Class) {
-        return new TypeSpecification(nameForClass((Class<?>) t));
+        Class<?> cl = (Class<?>) t;
+        int nDims = 0;
+        while (cl.isArray()) {
+          ++nDims;
+          cl = cl.getComponentType();
+        }
+
+        Name nm;
+        if (cl.isPrimitive()) {
+          nm = PRIMITIVE_CLASS_TO_NAME.get(cl);
+        } else {
+          nm = nameForClass(cl);
+        }
+        return new TypeSpecification(nm, nDims);
       } else if (t instanceof ParameterizedType) {
         ParameterizedType pt = (ParameterizedType) t;
         ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
@@ -233,13 +292,35 @@ public interface TypeInfoResolver {
       } else if (t instanceof TypeVariable) {
         TypeVariable<?> tv = (TypeVariable<?>) t;
         GenericDeclaration d = tv.getGenericDeclaration();
+        Name parentName;
         if (d instanceof Class) {
-          Name name = nameForClass((Class<?>) d)
-              .child(tv.getName(), Name.Type.TYPE_PARAMETER);
-          return new TypeSpecification(name);
+          parentName = nameForClass((Class<?>) d);
+        } else if (d instanceof Method) {
+          Method m = (Method) d;
+          String mname = m.getName();
+          Class<?> dc = m.getDeclaringClass();
+          int index = 0;
+          for (Method om : dc.getDeclaredMethods()) {
+            if (m == om) { break; }
+            if (mname.equals(om.getName())) {
+              ++index;
+            }
+          }
+          parentName = nameForClass(dc).method(mname, "(" + index + ")");
+        } else if (d instanceof Constructor) {
+          Constructor<?> c = (Constructor<?>) d;
+          Class<?> dc = c.getDeclaringClass();
+          int index = Arrays.asList(dc.getDeclaredConstructors()).indexOf(c);
+          parentName = nameForClass(dc).method("<init>", "(" + index + ")");
         } else {
-          throw new AssertionError(d);
+          throw new AssertionError(d + " : " + d.getClass().getName());
         }
+        return new TypeSpecification(
+            parentName.child(tv.getName(), Name.Type.TYPE_PARAMETER));
+      } else if (t instanceof GenericArrayType) {
+        GenericArrayType at = (GenericArrayType) t;
+        TypeSpecification ts = specForType(at.getGenericComponentType());
+        return ts.withNDims(ts.nDims + 1);
       } else {
         throw new AssertionError(t.getClass());
       }
@@ -337,5 +418,37 @@ public interface TypeInfoResolver {
 
       };
     }
+  }
+
+  /**
+   * The super-types (non-transitive) of the given type.
+   * <p>
+   * For example, the super-type of {@code List<String>} is
+   * {@code Collection<String>} because {@code List<T> extends Collection<T>}.
+   */
+  public default Iterable<TypeSpecification> superTypesOf(
+      TypeSpecification ts) {
+    Optional<TypeInfo> infoOpt = resolve(ts.typeName);
+    if (!infoOpt.isPresent()) {
+      return ImmutableList.of();
+    }
+    TypeInfo info = infoOpt.get();
+    Optional<TypeSpecification> superTypeOpt = info.superType;
+    if (!superTypeOpt.isPresent()
+        && Modifier.isInterface(info.modifiers)) {
+      // Interfaces implicitly have Object as the super type.
+      superTypeOpt = Optional.of(TypeSpecification.JAVA_LANG_OBJECT);
+    }
+    return Iterables.transform(
+        Iterables.concat(superTypeOpt.asSet(), info.interfaces),
+        new Function<TypeSpecification, TypeSpecification>() {
+
+          @Override
+          public TypeSpecification apply(TypeSpecification sub) {
+            if (ts.bindings.isEmpty()) { return sub; }
+            // Not a raw type
+            return sub.subst(info.parameters, ts.bindings);
+          }
+        });
   }
 }

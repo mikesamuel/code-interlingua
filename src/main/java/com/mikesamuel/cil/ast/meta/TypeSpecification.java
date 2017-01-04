@@ -178,6 +178,40 @@ public final class TypeSpecification {
       this(Variance.INVARIANT, new TypeSpecification(typeName));
     }
 
+    TypeBinding subst(Map<? super Name, ? extends TypeBinding> bindingMap) {
+      Variance v = this.variance;
+      TypeSpecification ts = this.typeSpec;
+      if (typeSpec.bindings.isEmpty()) {
+        TypeBinding b = bindingMap.get(ts.typeName);
+        if (b != null) {
+          if (ts.nDims != 0) {
+            ts = b.typeSpec.withNDims(b.typeSpec.nDims + ts.nDims);
+          } else {
+            ts = b.typeSpec;
+          }
+
+          if (variance == b.variance
+              || variance == Variance.INVARIANT) {
+            v = b.variance;
+          } else if (b.variance == Variance.INVARIANT) {
+            // Use v from this.
+          } else {
+            // Can't reconcile super & extends.
+            return new TypeBinding(
+                Variance.INVARIANT, StaticType.ERROR_TYPE.typeSpecification);
+          }
+        }
+      }
+
+      ts = ts.subst(bindingMap);
+
+      if (ts.equals(this.typeSpec) && v == this.variance) {
+        return this;
+      } else {
+        return new TypeBinding(v, ts);
+      }
+    }
+
     @Override
     public String toString() {
       switch (variance) {
@@ -236,6 +270,22 @@ public final class TypeSpecification {
     SUPER,
   }
 
+  /**
+   * A type specification for the given type which is bound properly for the
+   * body of the declared type.
+   * <p>
+   * For example, for {@code class C<X, Y, Z>} this returns
+   * the type specification {@code C<X, Y, Z>} by binding each type parameter
+   * to itself.
+   */
+  public static TypeSpecification autoScoped(TypeInfo info) {
+    ImmutableList.Builder<TypeBinding> autoBindings = ImmutableList.builder();
+    for (Name parameter : info.parameters) {
+      autoBindings.add(new TypeBinding(parameter));
+    }
+    return new TypeSpecification(info.canonName, autoBindings.build());
+  }
+
   /** Substitute for type parameters. */
   public TypeSpecification subst(
       ImmutableList<Name> parameters,
@@ -257,6 +307,7 @@ public final class TypeSpecification {
   /** Substitute for type parameters. */
   public TypeSpecification subst(
       Map<? super Name, ? extends TypeBinding> bindingMap) {
+    if (bindingMap.isEmpty()) { return this; }
     TypeBinding b = bindingMap.get(typeName);
     if (b != null) {
       switch (b.variance) {
@@ -270,16 +321,13 @@ public final class TypeSpecification {
     ImmutableList.Builder<TypeBinding> substs = null;
     for (int i = 0, n = bindings.size(); i < n; ++i) {
       TypeBinding binding = bindings.get(i);
-      TypeSpecification bindingSpec = binding.typeSpec.subst(bindingMap);
-      if (bindingSpec != binding.typeSpec) {
-        binding = new TypeBinding(binding.variance, bindingSpec);
-        if (substs == null) {
-          substs = ImmutableList.builder();
-          substs.addAll(bindings.subList(0, i));
-        }
+      TypeBinding substBinding = binding.subst(bindingMap);
+      if (substs == null && !binding.equals(substBinding)) {
+        substs = ImmutableList.builder();
+        substs.addAll(bindings.subList(0, i));
       }
       if (substs != null) {
-        substs.add(binding);
+        substs.add(substBinding);
       }
     }
     if (substs == null) { return this; }
@@ -362,7 +410,7 @@ public final class TypeSpecification {
     }
 
     return canonBindings != null
-        ? new TypeSpecification(typeName, canonBindings.build(), nDims)
+        ? withBindings(canonBindings.build())
         : this;
   }
 
@@ -370,7 +418,24 @@ public final class TypeSpecification {
    * Type specification of an array of elements whose type is specified by this.
    */
   public TypeSpecification arrayOf() {
-    return new TypeSpecification(
-        this.typeName, this.bindings, this.nDims + 1);
+    return withNDims(nDims + 1);
+  }
+
+  /**
+   * This but with the given bindings.
+   */
+  public TypeSpecification withBindings(
+      ImmutableList<TypeBinding> newBindings) {
+    if (bindings.equals(newBindings)) {
+      return this;
+    }
+    return new TypeSpecification(this.typeName, newBindings, nDims);
+  }
+
+  /**
+   * This but with the given number of dimensions.
+   */
+  public TypeSpecification withNDims(int n) {
+    return new TypeSpecification(this.typeName, this.bindings, n);
   }
 }
