@@ -210,6 +210,11 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
       this.parent = parent;
       this.parentBuilder = parentBuilder;
     }
+
+    @Override
+    public String toString() {
+      return "(" + parent.getNodeType() + "#" + indexInParent + ")";
+    }
   }
 
 }

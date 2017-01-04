@@ -2,6 +2,8 @@ package com.mikesamuel.cil.ast.passes;
 
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import org.junit.Test;
 
 import com.google.common.base.Joiner;
@@ -26,6 +28,16 @@ public final class TypingPassTest extends TestCase {
       String[] expectedTypes,
       String... expectedErrors)
   throws UnparseVerificationException {
+    assertTyped(null, inputs, target, expectedTypes, expectedErrors);
+  }
+
+  private static void assertTyped(
+      @Nullable String[][] expectedWithCasts,
+      String[][] inputs,
+      Class<? extends Typed> target,
+      String[] expectedTypes,
+      String... expectedErrors)
+  throws UnparseVerificationException {
     ImmutableList<CompilationUnitNode> processedCus =
         PassTestHelpers.expectErrors(
             new LoggableOperation<ImmutableList<CompilationUnitNode>>() {
@@ -44,12 +56,19 @@ public final class TypingPassTest extends TestCase {
                     logger, typePool);
                 classMemberPass.run(cus);
                 TypingPass tp = new TypingPass(logger, typePool, true);
-                tp.run(cus);
-                return cus;
+                return tp.run(cus);
               }
 
             },
             expectedErrors);
+
+
+    if (expectedWithCasts != null) {
+      String got = PassTestHelpers.serializeNodes(processedCus, null);
+      assertEquals(
+          PassTestHelpers.normalizeCompilationUnitSource(expectedWithCasts),
+          got);
+    }
 
     ImmutableList.Builder<String> got = ImmutableList.builder();
     for (CompilationUnitNode cu : processedCus) {
@@ -101,16 +120,23 @@ public final class TypingPassTest extends TestCase {
     assertTyped(
         new String[][] {
           {
+            "class C {",
+            "  long i = (long) (+(int) Integer.valueOf(\"4\"));",
+            "}",
+          },
+        },
+        new String[][] {
+          {
             "//C",
             "class C {",
             "  long i = +Integer.valueOf(\"4\");",
             "}",
-          }
+          },
         },
         ExpressionNode.class,
         new String[] {
             // TODO: need to cast to long to satisfy initialized type
-            "+Integer.valueOf(\"4\") : int",
+            "(long) + (int) Integer.valueOf(\"4\") : int",
             "\"4\" : /java/lang/String",
         });
   }

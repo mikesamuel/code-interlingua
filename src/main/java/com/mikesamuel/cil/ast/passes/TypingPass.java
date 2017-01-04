@@ -8,6 +8,7 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -24,29 +25,39 @@ import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.ast.CastExpressionNode;
+import com.mikesamuel.cil.ast.CastNode;
 import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.ConditionalAndExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalOrExpressionNode;
+import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
+import com.mikesamuel.cil.ast.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InclusiveOrExpressionNode;
+import com.mikesamuel.cil.ast.IntegralTypeNode;
+import com.mikesamuel.cil.ast.Intermediates;
 import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.MultiplicativeExpressionNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
+import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.NumericTypeNode;
 import com.mikesamuel.cil.ast.PostExpressionNode;
 import com.mikesamuel.cil.ast.PreExpressionNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
+import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.RelationalExpressionNode;
 import com.mikesamuel.cil.ast.ShiftExpressionNode;
 import com.mikesamuel.cil.ast.ShiftOperatorNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
+import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
@@ -388,6 +399,87 @@ final class TypingPass extends AbstractRewritingPass {
         }
         case Expression:
           exprType = passThru(node);
+          if (pathFromRoot != null
+              && pathFromRoot.x.parent.getNodeType()
+                 == NodeType.VariableInitializer) {
+            SList<Parent> path = pathFromRoot;
+            int nDims = 0;
+            for (; path != null; path = path.prev) {
+              NodeType nt = path.x.parent.getNodeType();
+              System.err.println("nt=" + nt);
+              switch (nt) {
+                case VariableDeclarator:
+                case VariableDeclaratorList:
+                case VariableInitializer:
+                  continue;
+                case ArrayInitializer:
+                  ++nDims;
+                  continue;
+                case FieldDeclaration:
+                case ConstantDeclaration:
+                case LocalVariableDeclaration:
+                  UnannTypeNode declarationTypeNode =
+                      path.x.parent.firstChildWithType(UnannTypeNode.class);
+                  if (declarationTypeNode == null) {
+                    break;
+                  }
+                  StaticType declarationType =
+                      declarationTypeNode.getStaticType();
+                  System.err.println("declarationType=" + declarationType + ", nDims=" + nDims);
+                  if (declarationType == null) {
+                    break;
+                  }
+                  while (nDims != 0) {
+                    if (declarationType instanceof ArrayType) {
+                      declarationType =
+                          ((ArrayType) declarationType).elementType;
+                      --nDims;
+                    } else {
+                      break;
+                    }
+                  }
+                  if (nDims == 0) {
+                    Cast c = declarationType.assignableFrom(exprType);
+                    System.err.println("Cast needed " + c);
+                    switch (c) {
+                      case BOX:
+                      case CONFIRM_SAFE:
+                      case CONFIRM_UNCHECKED:
+                      case CONVERTING_LOSSLESS:
+                      case UNBOX:
+                        BaseNode.InnerBuilder<?, ?> parentBuilder =
+                            (BaseNode.InnerBuilder<?, ?>)
+                            pathFromRoot.x.parentBuilder;
+                        Operand op = new Operand(
+                            parentBuilder,
+                            pathFromRoot.x.indexInParent,
+                            NodeType.Expression);
+                        op.cast(exprType, declarationType);
+                        exprType = declarationType;
+                        break;
+                      case SAME:
+                        break;
+                      case CONFIRM_CHECKED:
+                      case CONVERTING_LOSSY:
+                      case DISJOINT:
+                        error(
+                            node, "Cannot use expression of type " + exprType
+                            + " to initialize declaration of type "
+                            + declarationType);
+                    }
+                  } else {
+                    error(
+                        node,
+                        "array initializer element assigned to non-array type");
+                  }
+                  break;
+                default:
+                  break;
+              }
+              break;
+            }
+          }
+          System.err.println("Path from root " + SList.forwardIterable(pathFromRoot));
           break type_switch;
         case Assignment: {
           AssignmentNode e = (AssignmentNode) node;
@@ -491,9 +583,10 @@ final class TypingPass extends AbstractRewritingPass {
               exprType = passThru(e);
               break type_switch;
             case PrefixOperatorUnaryExpression:
-              BaseNode operand = nthOperandOf(0, e);
+              Operand operand = nthOperandOf(
+                  0, builder, NodeType.UnaryExpression);
               if (operand != null) {
-                exprType = unboxNumericAsNecessary(node, passThru(operand));
+                exprType = unboxNumericAsNecessary(operand, passThru(operand));
               } else {
                 exprType = StaticType.ERROR_TYPE;
                 error(e, "Missing operand");
@@ -535,6 +628,10 @@ final class TypingPass extends AbstractRewritingPass {
     return ProcessingStatus.CONTINUE;
   }
 
+  private StaticType passThru(Operand op) {
+    return passThru(op.getNode());
+  }
+
   private StaticType passThru(BaseNode node) {
     for (BaseNode child : node.getChildren()) {
       if (NodeTypeTables.NONSTANDARD.contains(child.getNodeType())) {
@@ -558,19 +655,32 @@ final class TypingPass extends AbstractRewritingPass {
     return StaticType.ERROR_TYPE;
   }
 
-  private StaticType unboxNumericAsNecessary(BaseNode node, StaticType t) {
+  private StaticType unboxNumericAsNecessary(Operand op, StaticType t) {
     if (t instanceof NumericType) {
       return t;
     } else if (t instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) t;
       PrimitiveType pt = TO_WRAPPED.get(ct.info.canonName);
       if (pt != null && pt instanceof NumericType) {
+        op.cast(ct, pt);
         return pt;
       }
     }
-    error(node, "Cannot unbox " + t + " to a numeric type");
+    error(op.getNode(), "Cannot unbox " + t + " to a numeric type");
     return StaticType.ERROR_TYPE;
   }
+
+  private static final ImmutableMap<NumericType, NodeVariant>
+      NUMERIC_TYPE_TO_VARIANT =
+      ImmutableMap.<NumericType, NodeVariant>builder()
+      .put(StaticType.T_BYTE,   IntegralTypeNode.Variant.Byte)
+      .put(StaticType.T_CHAR,   IntegralTypeNode.Variant.Char)
+      .put(StaticType.T_SHORT,  IntegralTypeNode.Variant.Short)
+      .put(StaticType.T_INT,    IntegralTypeNode.Variant.Int)
+      .put(StaticType.T_LONG,   IntegralTypeNode.Variant.Long)
+      .put(StaticType.T_FLOAT,  FloatingPointTypeNode.Variant.Float)
+      .put(StaticType.T_DOUBLE, FloatingPointTypeNode.Variant.Double)
+      .build();
 
   private static final ImmutableMap<Name, PrimitiveType> TO_WRAPPED;
   static {
@@ -578,6 +688,9 @@ final class TypingPass extends AbstractRewritingPass {
         ImmutableMap.<Name, PrimitiveType>builder();
     for (PrimitiveType pt : StaticType.PRIMITIVE_TYPES) {
       b.put(pt.wrapperType, pt);
+      if (pt instanceof NumericType) {
+        Preconditions.checkState(NUMERIC_TYPE_TO_VARIANT.containsKey(pt));
+      }
     }
     TO_WRAPPED = b.build();
   }
@@ -596,16 +709,125 @@ final class TypingPass extends AbstractRewritingPass {
           NodeType.ShiftOperator
           );
 
-  private static BaseNode nthOperandOf(int n, BaseNode parent) {
-    int nLeft = n;
-    for (BaseNode child : parent.getChildren()) {
-      if (OPERATOR_NODE_TYPES.contains(child.getNodeType())) {
-        continue;
+  final class Operand {
+    final BaseNode.InnerBuilder<?, ?> parentBuilder;
+    final int indexInParent;
+    /**
+     * An ancestor type for the operand which may not be exactly the same due
+     * to {@link NodeVariant#isAnon()}.
+     */
+    final NodeType containerType;
+
+    Operand(
+        BaseNode.InnerBuilder<?, ?> parentBuilder, int indexInParent,
+        NodeType containerType) {
+      this.parentBuilder = parentBuilder;
+      this.indexInParent = indexInParent;
+      this.containerType = containerType;
+    }
+
+    void cast(StaticType sourceType, StaticType targetType) {
+      if (!injectCasts) { return; }
+      BaseNode toCast = getNode();
+      Optional<BaseNode> castable = Intermediates.wrap(
+          toCast, NodeType.UnaryExpression,
+          new Function<BaseNode, Void> () {
+            @Override
+            public Void apply(BaseNode intermediate) {
+              if (intermediate instanceof Typed) {
+                ((Typed) intermediate).setStaticType(sourceType);
+              }
+              return null;
+            }
+          });
+      if (castable.isPresent()) {
+        toCast = castable.get();
+      } else {
+        error(toCast, "Cannot cast to " + targetType);
+        return;
       }
-      if (nLeft == 0) {
-        return child;
+      CastNode cast;
+      if (targetType instanceof PrimitiveType) {
+        PrimitiveTypeNode targetTypeNode;
+        if (StaticType.T_BOOLEAN.equals(targetType)) {
+          targetTypeNode = PrimitiveTypeNode.Variant.AnnotationBoolean
+              .nodeBuilder()
+              .build();
+        } else {
+          NumericType nt = (NumericType) targetType;
+
+          @SuppressWarnings("synthetic-access")
+          NodeVariant v = NUMERIC_TYPE_TO_VARIANT.get(nt);
+          NumericTypeNode numericTypeNode =
+              (nt.isFloaty ? NumericTypeNode.Variant.FloatingPointType
+              : NumericTypeNode.Variant.IntegralType)
+              .nodeBuilder()
+              .add(v.nodeBuilder().build())
+              .build();
+
+          targetTypeNode = PrimitiveTypeNode.Variant.AnnotationNumericType
+              .nodeBuilder()
+              .add(numericTypeNode)
+              .build();
+        }
+        cast = CastNode.Variant.ConvertCast.nodeBuilder()
+            .add(ConvertCastNode.Variant.PrimitiveType.nodeBuilder()
+                .add(targetTypeNode)
+                .build())
+            .build();
+      } else {
+        // TODO: handle +/- unary op ambiguity
+        throw new Error("TODO");
       }
-      --nLeft;
+      CastExpressionNode castExpr = CastExpressionNode.Variant.Expression
+          .nodeBuilder()
+          .add(cast)
+          .add(toCast)
+          .build();
+
+      Optional<BaseNode> wrappedCast = Intermediates.wrap(
+          castExpr, containerType,
+          new Function<BaseNode, Void> () {
+            @Override
+            public Void apply(BaseNode intermediate) {
+              if (intermediate instanceof Typed) {
+                ((Typed) intermediate).setStaticType(targetType);
+              }
+              return null;
+            }
+          });
+
+      if (wrappedCast.isPresent()) {
+        parentBuilder.replace(indexInParent, wrappedCast.get());
+      } else {
+        error(toCast, "Cannot cast to " + targetType);
+      }
+    }
+
+    BaseNode getNode() {
+      return parentBuilder.getChild(indexInParent);
+    }
+  }
+
+  private Operand nthOperandOf(
+      int n, BaseNode.Builder<?, ?> parentBuilder, NodeType containerType) {
+    if (parentBuilder instanceof BaseNode.InnerBuilder) {
+      BaseNode.InnerBuilder<?, ?> ibuilder =
+          (InnerBuilder<?, ?>) parentBuilder;
+
+      int nLeft = n;
+      int nChildren = ibuilder.getNChildren();
+      for (int i = 0; i < nChildren; ++i) {
+        BaseNode child = ibuilder.getChild(i);
+        NodeType childNodeType = child.getNodeType();
+        if (OPERATOR_NODE_TYPES.contains(childNodeType)) {
+          continue;
+        }
+        if (nLeft == 0) {
+          return new Operand(ibuilder, i, containerType);
+        }
+        --nLeft;
+      }
     }
     return null;
   }
