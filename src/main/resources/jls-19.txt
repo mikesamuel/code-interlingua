@@ -978,11 +978,11 @@ LeftHandSideExpression:
      LeftHandSide @anon
      "(" LeftHandSideExpression ")"
 CastExpression: (@trait=Typed)
-     "(" ConfirmCast ")" LambdaExpression (@name=Lambda)
-     "(" Cast ")" !AmbiguousBinaryUnaryOperator UnaryExpression (@name=Expression)
-Cast:
-     ConfirmCast @anon
-     ConvertCast @anon
+     ConfirmCast LambdaExpression (@name=Lambda)
+     Cast        UnaryExpression  (@name=Expression)
+Cast: @nointerp
+     "(" ConfirmCast ")" !AmbiguousBinaryUnaryOperator @anon (@name=ConfirmCast)
+     "(" ConvertCast ")" @anon (@name=ConvertCast)
 ConfirmCast:
      ReferenceType {AdditionalBound}
 ConvertCast:
