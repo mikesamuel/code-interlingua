@@ -1,6 +1,5 @@
 package com.mikesamuel.cil.ast.meta;
 
-import java.lang.reflect.Modifier;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -14,7 +13,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
@@ -27,7 +25,7 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
- *
+ * Represents a Java type.
  */
 @SuppressWarnings("synthetic-access")
 public abstract class StaticType {
@@ -46,6 +44,11 @@ public abstract class StaticType {
    * @see <a href="https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3">JVM spec 4.3.3</a>
    */
   public abstract String toDescriptor();
+
+  /**
+   * A type that does not use any generic elements.
+   */
+  public abstract StaticType toErasedType();
 
   @Override
   public abstract boolean equals(Object o);
@@ -167,8 +170,10 @@ public abstract class StaticType {
 
   /** Base type for primitive types. */
   public static abstract class PrimitiveType extends StaticType {
-    final String name;
-    final Name wrapperType;
+    /** Keyword that specifies this type. */
+    public final String name;
+    /** The wrapper class. */
+    public final @Nullable Name wrapperType;
     final String descriptorFragment;
 
     private PrimitiveType(
@@ -184,6 +189,11 @@ public abstract class StaticType {
     }
 
     @Override
+    public PrimitiveType toErasedType() {
+      return this;
+    }
+
+    @Override
     public String toDescriptor() {
       return descriptorFragment;
     }
@@ -193,9 +203,12 @@ public abstract class StaticType {
    * A numeric primitive type.
    */
   public static final class NumericType extends PrimitiveType {
-    final boolean isFloaty;
-    final int byteWidth;
-    final boolean isSigned;
+    /** True iff a floating point type. */
+    public final boolean isFloaty;
+    /** sizeof this type. */
+    public final int byteWidth;
+    /** True iff the type is signed. */
+    public final boolean isSigned;
 
     private NumericType(
         String name, boolean isFloaty, int byteWidth,
@@ -305,6 +318,11 @@ public abstract class StaticType {
     public String toDescriptor() {
       return "X";
     }
+
+    @Override
+    public StaticType toErasedType() {
+      return this;
+    }
   };
 
   private static final class OneOffType extends PrimitiveType {
@@ -398,6 +416,20 @@ public abstract class StaticType {
       JAVA_LANG_CLONEABLE,
       JAVA.child("io", Name.Type.PACKAGE).child("Serializable", Name.Type.CLASS)
       );
+
+  /**
+   * All the primitive types.
+   */
+  public static final ImmutableList<PrimitiveType> PRIMITIVE_TYPES =
+      ImmutableList.of(
+          T_BOOLEAN,
+          T_BYTE,
+          T_CHAR,
+          T_SHORT,
+          T_INT,
+          T_FLOAT,
+          T_LONG,
+          T_DOUBLE);
 
   /**
    * Maintains a mapping of names to class or interface types so that we can
@@ -525,7 +557,7 @@ public abstract class StaticType {
       }
     }
 
-    private class NullType extends ReferenceType {
+    private final class NullType extends ReferenceType {
 
       private NullType() {
         super(new TypeSpecification(
@@ -569,6 +601,10 @@ public abstract class StaticType {
         return Cast.DISJOINT;
       }
 
+      @Override
+      public StaticType toErasedType() {
+        return this;
+      }
     }
 
 
@@ -601,6 +637,24 @@ public abstract class StaticType {
       }
 
       @Override
+      public StaticType toErasedType() {
+        TypeSpecification erasedSpec;
+        if (info.canonName.type == Name.Type.CLASS) {
+          if (this.typeParameterBindings.isEmpty()) {
+            return this;
+          } else {
+            erasedSpec = typeSpecification.withBindings(ImmutableList.of());
+          }
+        } else {
+          Preconditions.checkState(
+              Name.Type.TYPE_PARAMETER == info.canonName.type);
+        erasedSpec = info.superType.or(TypeSpecification.JAVA_LANG_OBJECT)
+            .withBindings(ImmutableList.of());
+        }
+        return type(erasedSpec, null, null).toErasedType();
+      }
+
+      @Override
       public String toString() {
         if (typeParameterBindings.isEmpty()) {
           return info.canonName.toString();
@@ -623,18 +677,7 @@ public abstract class StaticType {
           Map<Name, ClassOrInterfaceType> m = new LinkedHashMap<>();
           m.put(info.canonName, this);
 
-          Optional<TypeSpecification> superTypeOpt = info.superType;
-          if (!superTypeOpt.isPresent()
-              && Modifier.isInterface(info.modifiers)) {
-            // Interfaces implicitly have Object as the super type.
-            superTypeOpt = Optional.of(TypeSpecification.JAVA_LANG_OBJECT);
-          }
-
-          for (TypeSpecification ts :
-            Iterables.concat(superTypeOpt.asSet(), info.interfaces)) {
-            if (!typeParameterBindings.isEmpty()) {  // Not a raw type
-              ts = ts.subst(info.parameters, this.typeParameterBindings);
-            }
+          for (TypeSpecification ts : r.superTypesOf(this.typeSpecification)) {
             if (!m.containsKey(ts.typeName)) {
               StaticType superType = TypePool.this.type(ts, null, null);
               if (superType instanceof ClassOrInterfaceType) {  // Not error
@@ -939,6 +982,16 @@ public abstract class StaticType {
           this.dimensionality = 1;
           this.baseElementType = elementType;
         }
+      }
+
+      @Override
+      public StaticType toErasedType() {
+        StaticType erasedBaseType = baseElementType.toErasedType();
+        int nDims = this.typeSpecification.nDims
+            - baseElementType.typeSpecification.nDims
+            + erasedBaseType.typeSpecification.nDims;
+        return type(new TypeSpecification(
+            erasedBaseType.typeSpecification.typeName, nDims), null, null);
       }
 
       @Override
