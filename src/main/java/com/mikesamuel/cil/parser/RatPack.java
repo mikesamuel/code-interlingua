@@ -19,9 +19,11 @@ import com.mikesamuel.cil.event.Event;
  */
 public final class RatPack {
 
+  // TODO: get rid of cache ejection.  We seem to depend on the cache actually
+  // having certain things.
   private final Cache<RatDropping, ParseCacheEntry> parseCache =
       CacheBuilder.newBuilder()
-      .maximumSize(128)
+      .maximumSize(1024)
       .build();
 
   /**

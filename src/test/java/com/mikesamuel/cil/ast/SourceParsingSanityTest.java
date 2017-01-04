@@ -56,6 +56,8 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
       sources.subList(50, sources.size()).clear();
     }
 
+    List<Exception> failures = Lists.newArrayList();
+
     for (File source : sources) {
       setUp();
       long t0 = System.nanoTime();
@@ -70,6 +72,8 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
             .build(),
             Fuzz.IMPLIED_TOKENS);
         ok = true;
+      } catch (Exception ex) {
+        failures.add(ex);
       } finally {
         long t1 = System.nanoTime();
         totalTime += t1 - t0;
@@ -81,6 +85,11 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
         }
       }
     }
+
+    if (!failures.isEmpty()) {
+      throw failures.get(0);
+    }
+
     System.err.println("Parsed " + nFiles + " in " + (totalTime / 1e6) + " ms");
   }
 
