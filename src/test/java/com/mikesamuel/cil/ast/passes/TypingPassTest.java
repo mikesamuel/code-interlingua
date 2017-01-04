@@ -38,13 +38,12 @@ public final class TypingPassTest extends TestCase {
                 TypeInfoResolver typeInfoResolver = dp.run(cus);
                 DisambiguationPass disambigPass = new DisambiguationPass(
                     typeInfoResolver, logger, false);
-                ImmutableList<CompilationUnitNode> rewritten =
-                    disambigPass.run(cus);
+                cus = disambigPass.run(cus);
                 TypePool typePool = new TypePool(typeInfoResolver);
                 ClassMemberPass classMemberPass = new ClassMemberPass(
                     logger, typePool);
-                classMemberPass.run(rewritten);
-                TypingPass tp = new TypingPass(logger, typePool);
+                classMemberPass.run(cus);
+                TypingPass tp = new TypingPass(logger, typePool, true);
                 tp.run(cus);
                 return cus;
               }
@@ -95,5 +94,24 @@ public final class TypingPassTest extends TestCase {
             "null : <null>",
         });
 
+  }
+
+  @Test
+  public static final void testSimpleUnboxing() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  long i = +Integer.valueOf(\"4\");",
+            "}",
+          }
+        },
+        ExpressionNode.class,
+        new String[] {
+            // TODO: need to cast to long to satisfy initialized type
+            "+Integer.valueOf(\"4\") : int",
+            "\"4\" : /java/lang/String",
+        });
   }
 }

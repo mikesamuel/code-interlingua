@@ -831,10 +831,10 @@ DotKeywordDimsOrCtorRef:
      "::" [TypeArguments] "new"
 SimpleCallPrefix:
      MethodName "("
-MethodInvocation: (@trait=Typed)
+MethodInvocation:
      Primary (@postcond=Postconds.Primary.MethodInvocation) (@name=ExplicitCallee)
      Primary (@postcond=Postconds.Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
-ClassInstanceCreationExpression: (@trait=Typed)
+ClassInstanceCreationExpression:
      Primary (@postcond=Postconds.Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
      Primary (@postcond=Postconds.Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
 UsePrefix:
