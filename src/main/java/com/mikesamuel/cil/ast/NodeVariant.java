@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ast;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.mikesamuel.cil.event.Event;
@@ -47,9 +49,8 @@ public interface NodeVariant extends ParSerable {
   BaseNode.Builder<?, ?> nodeBuilder();
 
   /**
-   * True iff the variant is anonymous meaning that parsing using it should not
-   * result in {@linkplain Event#push push}/{@linkplain Event#pop pop}
-   * events.
+   * True iff the variant is anonymous meaning that the tree builder should
+   * ignore push/pop events corresponding to it and not create an AST node.
    */
   default boolean isAnon() {
     return false;
@@ -67,5 +68,13 @@ public interface NodeVariant extends ParSerable {
    */
   default boolean isIgnorable() {
     return false;
+  }
+
+  /**
+   * For {@literal @intermediate} nodes, the sole non-terminal that can be
+   * contained.
+   */
+  default @Nullable NodeType getDelegate() {
+    return null;
   }
 }

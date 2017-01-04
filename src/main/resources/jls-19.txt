@@ -223,6 +223,15 @@ parsed.
 @nointerp means the production should not be allowed to contain template
 interpolations when parsed in non-standard mode.
 
+(@trait=Ident,Ident,...) attached to a production means that the corresponding
+*Node class implements that trait which might involve creating storage to back
+the trait's setters&getters.
+
+@intermediate variants are those that can be manufactured when interpolating into
+an AST.  @intermediate variants have exactly one non-terminal.
+If a variant consists only of lookaheads and one non-terminal then it is
+implicitly @intermediate.
+
 */
 
 
@@ -713,7 +722,7 @@ EmptyStatement:
 LabeledStatement:
      Label ":" Statement
 ExpressionStatement:
-     StatementExpression ";"
+     StatementExpression ";" @intermediate
 StatementExpression:
      Assignment
      PreExpression
@@ -807,7 +816,7 @@ ExpressionAtom: (@trait=Typed)
      FieldName !!UsePrefix  (@name=FreeField)
      TypeName !!"."  (@name=StaticMember)
      ReferenceType !!"::"  (@name=StaticReference)
-     !CastExpression "(" Expression ")"  (@name=Parenthesized)
+     !CastExpression "(" Expression ")"  (@name=Parenthesized) @intermediate
 Primary: (@trait=Typed)
      Primary "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
      Primary "::" [TypeArguments] MethodName  (@name=MethodReference)

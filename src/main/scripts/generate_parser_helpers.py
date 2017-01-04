@@ -675,6 +675,55 @@ def process_grammar(
         for_each_chapter(prune)
     prune_unreachable()
 
+    def infer_intermediates():
+        """
+        infer @intermediate annotations to variants that are implicitly intermediate
+        and convert @intermediate annotations to @delegate annotations.
+        """
+        def find_delegate(pt, force):
+            name = pt['name']
+            if name == 'ref':
+                delegate = pt['pleaf'][0]
+                if delegate == 'builtin':
+                    return False
+                else:
+                    return delegate
+            elif name == 'lit':
+                if force:
+                    return None
+                else:
+                    return False
+            elif name == 'nla':
+                return None
+            elif name in ('()', '{}', '[]'):
+                delegate = None
+                for sub in pt['ptree']:
+                    found = find_delegate(sub, force)
+                    if found is not None:
+                        if found:
+                            # At most one consumed nonterminal
+                            if delegate is not None:
+                                return False
+                            else:
+                                delegate = found
+                        else:
+                            return False
+                return delegate
+        def infer(c, p, v):
+            annots = [a for a in v['annots'] if a[0] != '@intermediate']
+            # Ignore literals if @intermediate is explicit
+            force = len(annots) != len(v['annots'])
+            delegate = find_delegate({ 'name': '()', 'ptree': v['ptree'] }, force)
+            if force and not delegate:
+                raise Exception('%s.%s has no delegate' % (p['name'], v['name']))
+            if delegate:
+                delegate_annot = '(@delegate=%s)' % delegate
+                annots.append((delegate_annot, (0, 0, 0)))
+                v['annots'] = annots
+                print '%s : %s.%s' % (delegate_annot, p['name'], v['name'])
+        for_each_variant(infer)
+    infer_intermediates()
+
     def create_enum_members():
         enum_members = []
         for chapter in grammar:
@@ -1256,6 +1305,11 @@ public enum NodeType implements ParSerable {
                      'com.mikesamuel.cil.parser.SList',
                      'com.google.common.base.Predicate'),
                     lambda x: x
+                ),
+                'delegate': (
+                    'NodeType',
+                    (),
+                    lambda x: 'NodeType.%s' % x
                 ),
             }
 
