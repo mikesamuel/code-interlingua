@@ -49,7 +49,9 @@ class PassTestHelpers {
       ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
           .parse(new ParseState(inp), new LeftRecursion(),
               ParseErrorReceiver.DEV_NULL);
-      Assert.assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);
+      Assert.assertEquals(
+          inp.content().toString(),
+          ParseResult.Synopsis.SUCCESS, result.synopsis);
       ParseState afterParse = result.next();
       CompilationUnitNode cu = (CompilationUnitNode)
           Trees.of(inp, afterParse.output);
@@ -174,6 +176,11 @@ class PassTestHelpers {
       sb.append(fs.code);
     }
     return sb.toString();
+  }
+
+  static String normalizeCompilationUnitSource(String[][] linesPerFile)
+  throws UnparseVerificationException {
+    return serializeNodes(parseCompilationUnits(linesPerFile), null);
   }
 
   interface PassRunner {
