@@ -379,6 +379,7 @@ final class TypingPass extends AbstractRewritingPass {
                     e, calleeType, typeArguments.build(), name,
                     actualTypes.build());
                 // TODO: associate method descriptor with invokedMethod.
+                // TODO: cast actual parameters
                 exprType = invokedMethod.returnTypeInContext;
                 break type_switch;
               }
