@@ -56,6 +56,7 @@ import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.RelationalExpressionNode;
 import com.mikesamuel.cil.ast.ShiftExpressionNode;
 import com.mikesamuel.cil.ast.ShiftOperatorNode;
+import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.UnannTypeNode;
@@ -361,17 +362,17 @@ final class TypingPass extends AbstractRewritingPass {
                   }
                 }
 
-                ImmutableList.Builder<StaticType> typeArguments =
+                ImmutableList.Builder<TypeBinding> typeArguments =
                     ImmutableList.builder();
                 if (args != null) {
-                  // TODO: how should we handle wildcards?
-                  for (ReferenceTypeNode rt
-                      : args.finder(ReferenceTypeNode.class)
-                        .exclude(NodeType.Annotation, NodeType.TypeArguments)
+                  TypeNameResolver canonResolver = typeNameResolvers.peekLast();
+                  for (TypeArgumentNode arg
+                      : args.finder(TypeArgumentNode.class)
+                        .exclude(NodeType.TypeArguments)
                         .find()) {
-                    StaticType st = rt.getStaticType();
-                    if (st == null) { st = StaticType.ERROR_TYPE; }
-                    typeArguments.add(st);
+                    TypeBinding b = AmbiguousNames.typeBindingOf(
+                        arg, canonResolver, logger);
+                    typeArguments.add(b);
                   }
                 }
 
@@ -865,7 +866,7 @@ final class TypingPass extends AbstractRewritingPass {
   private MethodSearchResult pickCallee(
       BaseNode sourceNode,
       @Nullable StaticType calleeType,
-      ImmutableList<StaticType> typeArguments,
+      ImmutableList<TypeBinding> typeArguments,
       String methodName,
       ImmutableList<StaticType> actualTypes) {
     if (DEBUG) {
@@ -933,7 +934,10 @@ final class TypingPass extends AbstractRewritingPass {
             // Parameter arity check
             int nTypeArguments = typeArguments.size();
             if (nTypeArguments != 0) {  // Type arguments provided explicitly.
-              // TODO: filter based on type argument arity
+              // filter based on type argument arity
+              if (m.member.typeParameters.size() != nTypeArguments) {
+                return false;
+              }
             }
 
             return true;
@@ -972,7 +976,13 @@ final class TypingPass extends AbstractRewritingPass {
                 sourceNode, "Missing info for declaring type " + m.declaringType);
           }
         }
-        // TODO: Take into account type parameters.
+        if (!typeArguments.isEmpty()) {
+          for (int i = 0, n = typeArguments.size(); i < n; ++i) {
+            substMap.put(
+                m.member.typeParameters.get(i),
+                typeArguments.get(i));
+          }
+        }
 
         ImmutableList<TypeSpecification> formalTypes =
             m.member.getFormalTypes();

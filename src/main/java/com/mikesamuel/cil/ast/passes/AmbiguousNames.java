@@ -66,46 +66,51 @@ final class AmbiguousNames {
                  // Don't recurse in the finder.  Recurse via this method.
                  NodeType.TypeArgument)
              .find()) {
-      TypeSpecification argSpec = null;
-      TypeSpecification.Variance variance =
-          TypeSpecification.Variance.INVARIANT;
-      switch (arg.getVariant()) {
-        case ReferenceType:
-          argSpec = typeSpecificationOf(
-              arg.getChildren().get(0), canonResolver, logger);
-          break;
-        case Wildcard:
-          WildcardNode wc = arg.firstChildWithType(WildcardNode.class);
-          if (wc != null) {
-            WildcardBoundsNode wcb = arg.firstChildWithType(
-                WildcardBoundsNode.class);
-            if (wcb != null) {
-              switch (wcb.getVariant()) {
-                case ExtendsReferenceType:
-                  variance = TypeSpecification.Variance.EXTENDS;
-                  break;
-                case SuperReferenceType:
-                  variance = TypeSpecification.Variance.SUPER;
-                  break;
-              }
-              argSpec = typeSpecificationOf(wcb, canonResolver, logger);
-              break;
-            } else {
-              // "?" without bounds.  Assume bounds based on parameter
-              // super-type.
-              variance = TypeSpecification.Variance.EXTENDS;
-              // use null for argSpec
-            }
-          }
-          error(
-              logger, arg.getSourcePosition(),
-              "Missing bounds for type argument");
-          break;
-      }
-
-      bindings.add(new TypeBinding(variance, argSpec));
+      bindings.add(typeBindingOf(arg, canonResolver, logger));
     }
     return new TypeSpecification(canonName, bindings.build());
+  }
+
+  static TypeBinding typeBindingOf(
+      TypeArgumentNode arg, TypeNameResolver canonResolver,
+      Logger logger) {
+    TypeSpecification argSpec = null;
+    TypeSpecification.Variance variance =
+        TypeSpecification.Variance.INVARIANT;
+    switch (arg.getVariant()) {
+      case ReferenceType:
+        argSpec = typeSpecificationOf(
+            arg.getChildren().get(0), canonResolver, logger);
+        break;
+      case Wildcard:
+        WildcardNode wc = arg.firstChildWithType(WildcardNode.class);
+        if (wc != null) {
+          WildcardBoundsNode wcb = arg.firstChildWithType(
+              WildcardBoundsNode.class);
+          if (wcb != null) {
+            switch (wcb.getVariant()) {
+              case ExtendsReferenceType:
+                variance = TypeSpecification.Variance.EXTENDS;
+                break;
+              case SuperReferenceType:
+                variance = TypeSpecification.Variance.SUPER;
+                break;
+            }
+            argSpec = typeSpecificationOf(wcb, canonResolver, logger);
+            break;
+          } else {
+            // "?" without bounds.  Assume bounds based on parameter
+            // super-type.
+            variance = TypeSpecification.Variance.EXTENDS;
+            // use null for argSpec
+          }
+        }
+        error(
+            logger, arg.getSourcePosition(),
+            "Missing bounds for type argument");
+        break;
+    }
+    return new TypeBinding(variance, argSpec);
   }
 
   static @Nullable Name ambiguousNameOf(BaseNode nameNode) {
