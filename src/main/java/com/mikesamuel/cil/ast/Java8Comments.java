@@ -46,13 +46,15 @@ public final class Java8Comments {
   }
 
   private static String blockComment(String open, String body, String close) {
-    StringBuilder sb = new StringBuilder(body.length() + 16);
-    sb.append(open);
     int bodyLength = body.length();
+    StringBuilder sb = new StringBuilder(bodyLength + 16);
+    sb.append(open);
     if (bodyLength != 0) {
-      char ch0 = body.charAt(0);
-      if (ch0 == '/' || ch0 == '*') {
-        sb.append(' ');
+      if (open.endsWith("*")) {
+        char ch0 = body.charAt(0);
+        if (ch0 == '/' || ch0 == '*') {
+          sb.append(' ');
+        }
       }
       sb.append(body.replace("*/", "*\\u200C/"));
     }
