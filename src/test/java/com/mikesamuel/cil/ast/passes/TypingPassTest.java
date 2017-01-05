@@ -195,16 +195,14 @@ public final class TypingPassTest extends TestCase {
         },
         DECORATE_METHOD_NAMES);
 
-    if (false)
     assertTyped(
         new String[][] {
           {
             "class C {",
             "  void f(int i) {}",
             "  String f(Integer i) { return null; }",
-            "  {",
-            "    /*(I)V*/f(42);",
-            "    /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(null);",
+            "  { /*(I)V*/f(42);"
+            +  " /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(null);",
             "    String s = /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(Integer",
             "        ./*(I)Ljava/lang/Integer;*/valueOf(42));",
             "  }",
@@ -231,7 +229,7 @@ public final class TypingPassTest extends TestCase {
             "42 : int",  // actual to first call.
             "null : <null>",  // actual to second call.
             // third call is used as an expression not an expression statement.
-            "this.f(Integer.valueOf(42)) : /java/lang/String",
+            "f(Integer.valueOf(42)) : /java/lang/String",
             // actual to third call.
             "Integer.valueOf(42) : /java/lang/Integer",
             // actual to embedded call.
