@@ -71,7 +71,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
 
     if (node instanceof CallableDeclaration) {
       CallableDeclaration cd = (CallableDeclaration) node;
-      childOuter = outer.method(cd.getMethodName(), cd.getMethodDescriptor());
+      childOuter = outer.method(cd.getMethodName(), cd.getMethodVariant());
     }
 
     if (node instanceof ExpressionNameScope) {

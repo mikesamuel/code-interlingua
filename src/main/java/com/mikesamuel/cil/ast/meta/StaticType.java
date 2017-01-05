@@ -572,7 +572,7 @@ public abstract class StaticType {
 
       @Override
       public String toDescriptor() {
-        return "X";
+        return ERROR_TYPE.toDescriptor();
       }
 
       @Override

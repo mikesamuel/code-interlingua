@@ -80,7 +80,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
     if (node instanceof CallableDeclaration) {
       CallableDeclaration cd = (CallableDeclaration) node;
       Name methodName = childTypeInfo.canonName.method(
-          cd.getMethodName(), cd.getMethodDescriptor());
+          cd.getMethodName(), cd.getMethodVariant());
       CallableInfo info = (CallableInfo) memberWithName(
           childTypeInfo, methodName);
       if (info != null) {

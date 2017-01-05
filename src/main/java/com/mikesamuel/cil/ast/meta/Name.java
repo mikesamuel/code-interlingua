@@ -25,12 +25,13 @@ public final class Name {
    */
   public final String identifier;
   /**
-   * Among overloadable referents, a descriptor which statically specifies the
-   * overloadable.
+   * Among overloadable referents, an index which uniquely identifies the
+   * particular variant.  Until the class member pass runs, we can't use
+   * method descriptors.
    * <p>
-   * See {@link CallableDeclaration#getMethodDescriptor caveat}.
+   * See {@link CallableDeclaration#getMethodVariant caveat}.
    */
-  public final @Nullable String descriptor;
+  public final @Nullable int variant;
   /** The type of thing to which identifier refers. */
   public final Type type;
 
@@ -40,11 +41,11 @@ public final class Name {
    * declaration.
    */
   public static final Name DEFAULT_PACKAGE = new Name(
-      null, "", null, Type.PACKAGE);
+      null, "", 0, Type.PACKAGE);
 
   private Name(
       @Nullable Name parent, String identifier,
-      @Nullable String descriptor, Type type) {
+      @Nullable int variant, Type type) {
     Preconditions.checkArgument(type != null);
     // Packages cannot have non-package parents.
     Preconditions.checkArgument(
@@ -62,15 +63,13 @@ public final class Name {
     // Only the default package can be identifierless.
     Preconditions.checkArgument(
         identifier.length() != 0 || (type == Type.PACKAGE && parent == null));
-    // Only methods have descriptors.  JLS defines field descriptors but they
-    // are not involved in reference resolution.
+    // Only methods are overridable.
     Preconditions.checkArgument(
-        descriptor == null ||
-        (type == Type.METHOD && descriptor.startsWith("(")));
+        (type == Type.METHOD ? variant > 0 : variant == 0));
 
     this.parent = parent;
     this.identifier = Preconditions.checkNotNull(identifier);
-    this.descriptor = descriptor;
+    this.variant = variant;
     this.type = Preconditions.checkNotNull(type);
   }
 
@@ -78,14 +77,14 @@ public final class Name {
    * Constructs a Name with this as the parent name.
    */
   public Name child(String childIdentifier, Type childType) {
-    return new Name(this, childIdentifier, null, childType);
+    return new Name(this, childIdentifier, 0, childType);
   }
 
   /**
    * Constructs a method name with this as the parent name.
    */
-  public Name method(String methodName, @Nullable String methodDescriptor) {
-    return new Name(this, methodName, methodDescriptor, Type.METHOD);
+  public Name method(String methodName, int methodVariant) {
+    return new Name(this, methodName, methodVariant, Type.METHOD);
   }
 
   /**
@@ -94,7 +93,7 @@ public final class Name {
    * or an unqualified class name.
    */
   public static Name root(String childIdentifier, Type childType) {
-    return new Name(null, childIdentifier, null, childType);
+    return new Name(null, childIdentifier, 0, childType);
   }
 
   /**
@@ -102,7 +101,7 @@ public final class Name {
    */
   public Name reparent(@Nullable Name newParent) {
     if (parent == newParent) { return this; }
-    return new Name(newParent, identifier, descriptor, type);
+    return new Name(newParent, identifier, variant, type);
   }
 
   /**
@@ -160,7 +159,7 @@ public final class Name {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((identifier == null) ? 0 : identifier.hashCode());
-    result = prime * result + ((descriptor == null) ? 0 : descriptor.hashCode());
+    result = prime * result + variant;
     result = prime * result + ((parent == null) ? 0 : parent.hashCode());
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
@@ -189,11 +188,7 @@ public final class Name {
     } else if (!identifier.equals(other.identifier)) {
       return false;
     }
-    if (descriptor == null) {
-      if (other.descriptor != null) {
-        return false;
-      }
-    } else if (!descriptor.equals(other.descriptor)) {
+    if (variant != other.variant) {
       return false;
     }
     if (parent == null) {
@@ -272,10 +267,9 @@ public final class Name {
    * {@code /} is used between packages, and between a package and a class.
    * {@code $} is used between classes.
    * {@code .} is used before a field or a method, and a method is followed by
-   * {@code ()}.
+   * {@code ()} are used around a method variant.
    * {@code <...>} surround type parameters.
-   * {@code :} is used between a method descriptor and formal parameters or
-   *    local variables visible scoped to its body.
+   * {@code :} is used between a method and local variables scoped to its body.
    */
   public void appendInternalNameString(StringBuilder sb) {
     if (parent != null) {
@@ -306,7 +300,7 @@ public final class Name {
         if (parent != null) {
           before = ".";
         }
-        after = descriptor != null ? descriptor : "()";
+        after = "(" + variant + ")";
         break;
       case PACKAGE:
         after = "/";

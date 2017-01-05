@@ -164,7 +164,7 @@ public final class ClassNamingPassTest extends TestCase {
           .child("example", PACKAGE)
           .child("parameterized", PACKAGE)
           .child("P", CLASS)
-          .method("bar", "(1)")
+          .method("bar", 1)
           .child("T", TYPE_PARAMETER)
           );
 

@@ -40,9 +40,9 @@ import com.mikesamuel.cil.parser.SourcePosition;
  * type, field, and method references as appropriate and sets
  * {@linkplain TypeReference#setReferencedTypeInfo TypeReference meta-data}.
  * <p>
- * This happens before computing types for expressions which means we don't
- * attach field descriptors to field names yet.  We also don't distinguish yet
- * between enum field references in switch cases yet.
+ * This happens before computing types for expressions which means we can't
+ * attach declaring types to field names yet.  We also don't distinguish yet
+ * between enum field references and constant references in switch cases yet.
  */
 final class DisambiguationPass extends AbstractRewritingPass {
 
@@ -326,7 +326,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
             canonName));
 
         for (; stripped != null; stripped = stripped.prev, --nStripped) {
-          Preconditions.checkState(stripped.x.descriptor == null);
+          Preconditions.checkState(stripped.x.variant == 0);
           IdentifierEtc ietc = d.idents.get(d.idents.size() - nStripped);
           ds.add(new Decomposed(
               d.sourceNode, ImmutableList.of(ietc),

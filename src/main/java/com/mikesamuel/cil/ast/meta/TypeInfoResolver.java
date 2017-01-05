@@ -100,15 +100,14 @@ public interface TypeInfoResolver {
                       String mname = m.getName();
                       int mods = m.getModifiers();
                       if (!Modifier.isPrivate(mods)) {
-                        int index = 0;
+                        int index = 1;
                         for (Method om : methods) {
                           if (m == om) { break; }
                           if (mname.equals(om.getName())) {
                             ++index;
                           }
                         }
-                        Name canonName =
-                            className.method(mname, "(" + index + ")");
+                        Name canonName = className.method(mname, index);
                         CallableInfo ci = new CallableInfo(
                             mods, canonName,
                             typeVars(canonName, m.getTypeParameters()));
@@ -130,9 +129,8 @@ public interface TypeInfoResolver {
                     for (Constructor<?> c : ctors) {
                       int mods = c.getModifiers();
                       if (!Modifier.isPrivate(mods)) {
-                        int index = Arrays.asList(ctors).indexOf(c);
-                        Name canonName = className.method(
-                            "<init>", "(" + index + ")");
+                        int index = Arrays.asList(ctors).indexOf(c) + 1;
+                        Name canonName = className.method("<init>", index);
                         CallableInfo ci = new CallableInfo(
                             mods, canonName,
                             typeVars(canonName, c.getTypeParameters()));
@@ -308,19 +306,20 @@ public interface TypeInfoResolver {
           Method m = (Method) d;
           String mname = m.getName();
           Class<?> dc = m.getDeclaringClass();
-          int index = 0;
+          int index = 1;
           for (Method om : dc.getDeclaredMethods()) {
             if (m == om) { break; }
             if (mname.equals(om.getName())) {
               ++index;
             }
           }
-          parentName = nameForClass(dc).method(mname, "(" + index + ")");
+          parentName = nameForClass(dc).method(mname, index);
         } else if (d instanceof Constructor) {
           Constructor<?> c = (Constructor<?>) d;
           Class<?> dc = c.getDeclaringClass();
-          int index = Arrays.asList(dc.getDeclaredConstructors()).indexOf(c);
-          parentName = nameForClass(dc).method("<init>", "(" + index + ")");
+          int index = Arrays.asList(dc.getDeclaredConstructors())
+              .indexOf(c) + 1;
+          parentName = nameForClass(dc).method("<init>", index);
         } else {
           throw new AssertionError(d + " : " + d.getClass().getName());
         }

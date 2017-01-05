@@ -21,15 +21,16 @@ public final class CallableInfo extends MemberInfo {
   }
 
   /**
-   * The method descriptor.
+   * The JVM method descriptor.
    *
+   * @see <a href="https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3">JVM Spec 4.3.3</a>
    * @return null if not set.  Usually set by the class member pass.
    */
   public String getDescriptor() {
     return descriptor;
   }
 
-  /** */
+  /** @see #getDescriptor() */
   public void setDescriptor(String descriptor) {
     this.descriptor = descriptor;
   }
@@ -37,13 +38,13 @@ public final class CallableInfo extends MemberInfo {
   /**
    * The method's return type.  {@code void} for special methods.
    *
-   * @return null if not set.  Usually set by the descriptor pass.
+   * @return null if not set.  Usually set by the class member pass.
    */
   public TypeSpecification getReturnType() {
     return returnType;
   }
 
-  /** */
+  /** @see #getReturnType() */
   public void setReturnType(TypeSpecification returnType) {
     this.returnType = returnType;
   }
@@ -52,7 +53,7 @@ public final class CallableInfo extends MemberInfo {
    * The method's parameter types.  If {@link #isVariadic()} then the last
    * parameter type will be an array type.
    *
-   * @return null if not set.  Usually set by the descriptor pass.
+   * @return null if not set.  Usually set by the class member pass.
    */
   public ImmutableList<TypeSpecification> getFormalTypes() {
     return formalTypes;
@@ -71,7 +72,7 @@ public final class CallableInfo extends MemberInfo {
     return isVariadic;
   }
 
-  /** */
+  /** @see #isVariadic() */
   public void setVariadic(boolean isVariadic) {
     this.isVariadic = isVariadic;
   }

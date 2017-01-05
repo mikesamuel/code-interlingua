@@ -13,7 +13,7 @@ _TRAITS = {
     'CallableDeclaration': (
         (
             ('ExpressionNameResolver', 'expressionNameResolver'),
-            ('String', 'methodDescriptor'),
+            ('int', 'methodVariant'),
             ('MemberInfo', 'memberInfo'),
         ),
         (
@@ -1435,6 +1435,9 @@ public enum NodeType implements ParSerable {
                     % record
                     )
                 builder_code.append(
+                    # We can't use initializer for metadata fields in builders because the
+                    # super constructors call copyMetaDataFrom which runs before the
+                    # initializers in subclasses so any initial values get clobbered.
                     ('    private %(trait_type)s %(trait_field)s;\n'
                      '\n'
                      '    /** Sets metadata for new instance. */\n'

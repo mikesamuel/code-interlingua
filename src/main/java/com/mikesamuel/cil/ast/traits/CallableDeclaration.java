@@ -34,16 +34,17 @@ extends ExpressionNameScope, MemberDeclaration {
   }
 
   /**
-   * The method descriptor if known.
+   * The method {@linkplain com.mikesamuel.cil.ast.meta.Name#variant variant}
+   * if known.
    * <p>
    * By convention, until parameter types can be resolved to nominal types,
-   * the method descriptor is based on the methods ordinal position among
+   * the method variant is based on the methods ordinal position among
    * methods with the same name declared in the same class.
    */
-  String getMethodDescriptor();
+  int getMethodVariant();
 
   /**
-   * @see #getMethodDescriptor
+   * @see #getMethodVariant
    */
-  void setMethodDescriptor(String newMethodDescriptor);
+  void setMethodVariant(int newMethodVariant);
 }

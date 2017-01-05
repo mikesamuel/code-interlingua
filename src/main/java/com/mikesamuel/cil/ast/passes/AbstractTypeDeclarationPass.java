@@ -58,18 +58,17 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
     if (n instanceof CallableDeclaration) {
       CallableDeclaration cd = ((CallableDeclaration) n);
       String methodName = cd.getMethodName();
-      String methodDescriptor = cd.getMethodDescriptor();
-      if (methodDescriptor == null) {
-        Name nameWithoutDescriptor = childOuter.child(
-            methodName, Name.Type.METHOD);
-        Integer ordinal = methodCounters.get(nameWithoutDescriptor);
+      int methodVariant = cd.getMethodVariant();
+      if (methodVariant == 0) {
+        Name nameWithoutVariant = childOuter.method(methodName, 1);
+        Integer ordinal = methodCounters.get(nameWithoutVariant);
         if (ordinal == null) { ordinal = 0; }
         ordinal += 1;
-        methodCounters.put(nameWithoutDescriptor, ordinal);
-        methodDescriptor = "(" + ordinal + ")";
-        cd.setMethodDescriptor(methodDescriptor);
+        methodCounters.put(nameWithoutVariant, ordinal);
+        methodVariant = ordinal;
+        cd.setMethodVariant(methodVariant);
       }
-      childOuter = childOuter.method(methodName, methodDescriptor);
+      childOuter = childOuter.method(methodName, methodVariant);
     }
 
     switch (nt) {

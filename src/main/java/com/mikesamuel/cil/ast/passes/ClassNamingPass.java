@@ -124,7 +124,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         }
         b.add(new CallableInfo(
             mods,
-            declaringClass.method(cd.getMethodName(), cd.getMethodDescriptor()),
+            declaringClass.method(cd.getMethodName(), cd.getMethodVariant()),
             typeParametersList.build()
             ));
         break;
