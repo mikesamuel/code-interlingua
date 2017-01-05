@@ -720,7 +720,6 @@ def process_grammar(
                 delegate_annot = '(@delegate=%s)' % delegate
                 annots.append((delegate_annot, (0, 0, 0)))
                 v['annots'] = annots
-                print '%s : %s.%s' % (delegate_annot, p['name'], v['name'])
         for_each_variant(infer)
     infer_intermediates()
 
