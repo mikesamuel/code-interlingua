@@ -25,6 +25,7 @@ import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.BaseNode.Builder;
 import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
@@ -290,8 +291,10 @@ final class TypingPass extends AbstractRewritingPass {
               // TODO
               break;
             case This:
-              // TODO
-              break;
+              exprType = typePool.type(
+                  TypeSpecification.autoScoped(containingTypes.peekLast()),
+                  e.getSourcePosition(), logger);
+              break type_switch;
             case UnqualifiedClassInstanceCreationExpression:
               // TODO
               break;
@@ -305,16 +308,18 @@ final class TypingPass extends AbstractRewritingPass {
           PrimaryNode e = (PrimaryNode) node;
           switch (e.getVariant()) {
             case MethodInvocation: {
-              @Nullable Typed callee = e.firstChildWithType(Typed.class);
-              // TODO: box callee if necessary.
-              // TODO: callee could be an expression atom
+              Typed callee = e.firstChildWithType(Typed.class);
 
-              @Nullable TypeArgumentsNode args = e.firstChildWithType(
+              @Nullable TypeArgumentsNode args = node.firstChildWithType(
                   TypeArgumentsNode.class);
+
+              @Nullable Operand actualsOp = firstWithType(
+                  builder, NodeType.ArgumentList);
+              @Nullable ArgumentListNode actuals = actualsOp != null
+                  ? (ArgumentListNode) actualsOp.getNode() : null;
+
               MethodNameNode nameNode = e.firstChildWithType(
                   MethodNameNode.class);
-              @Nullable ArgumentListNode actuals = e.firstChildWithType(
-                  ArgumentListNode.class);
               IdentifierNode nameIdent = nameNode != null
                   ? nameNode.firstChildWithType(IdentifierNode.class) : null;
               String name = nameIdent != null ? nameIdent.getValue() : null;
@@ -322,68 +327,129 @@ final class TypingPass extends AbstractRewritingPass {
               if (name == null) {
                 exprType = StaticType.ERROR_TYPE;
                 error(e, "Cannot determine name of method invoked");
-              } else {
-                StaticType calleeType;
-                if (callee == null) {
-                  // We can't commit to the callee type here because
-                  // class C {
-                  //   void f() {}
-                  //   class D {
-                  //     void g() {}
-                  //     {
-                  //       f();  // callee type is C
-                  //       g();  // callee type is D
-                  //     }
-                  //   }
-                  // }
-                  // We delay method scope checks and the application of
-                  // shadowing rules (JLS 6.4.1) until we've got more info.
-
-                  calleeType = null;
-                } else {
-                  calleeType = callee.getStaticType();
-                  if (calleeType == null) {
-                    calleeType = StaticType.ERROR_TYPE;
-                    error(callee, "Cannot determine type for method target");
-                  }
-                }
-
-                ImmutableList.Builder<StaticType> actualTypes =
-                    ImmutableList.builder();
-                if (actuals != null) {
-                  for (BaseNode actual : actuals.getChildren()) {
-                    if (actual instanceof Typed) {
-                      StaticType actualType = ((Typed) actual).getStaticType();
-                      if (actualType == null) {
-                        actualType = StaticType.ERROR_TYPE;
-                      }
-                      actualTypes.add(actualType);
-                    }
-                  }
-                }
-
-                ImmutableList.Builder<TypeBinding> typeArguments =
-                    ImmutableList.builder();
-                if (args != null) {
-                  TypeNameResolver canonResolver = typeNameResolvers.peekLast();
-                  for (TypeArgumentNode arg
-                      : args.finder(TypeArgumentNode.class)
-                        .exclude(NodeType.TypeArguments)
-                        .find()) {
-                    TypeBinding b = AmbiguousNames.typeBindingOf(
-                        arg, canonResolver, logger);
-                    typeArguments.add(b);
-                  }
-                }
-
-                MethodSearchResult invokedMethod = pickCallee(
-                    e, calleeType, typeArguments.build(), name,
-                    actualTypes.build());
-                // TODO: associate method descriptor with invokedMethod.
-                // TODO: cast actual parameters
-                exprType = invokedMethod.returnTypeInContext;
                 break type_switch;
               }
+              Preconditions.checkNotNull(nameNode);
+
+              StaticType calleeType;
+              if (callee == null) {
+                // We can't commit to the callee type here because
+                // class C {
+                //   void f() {}
+                //   class D {
+                //     void g() {}
+                //     {
+                //       f();  // callee type is C
+                //       g();  // callee type is D
+                //     }
+                //   }
+                // }
+                // We delay method scope checks and the application of
+                // shadowing rules (JLS 6.4.1) until we've got more info.
+
+                calleeType = null;
+              } else {
+                // There's no need to box callee.  For example:
+                //    int i = 0;
+                //    (i).toString();
+                // fails at compile time, because primitive types cannot
+                // be used as left hand sides.
+                calleeType = callee.getStaticType();
+                if (calleeType == null) {
+                  calleeType = StaticType.ERROR_TYPE;
+                  error(callee, "Cannot determine type for method target");
+                  exprType = StaticType.ERROR_TYPE;
+                  break type_switch;
+                } else if (calleeType instanceof PrimitiveType
+                           || typePool.T_NULL.equals(calleeType)) {
+                  error(
+                      callee, calleeType + " cannot be target of invocation");
+                  exprType = StaticType.ERROR_TYPE;
+                  break type_switch;
+                } else if (StaticType.ERROR_TYPE.equals(calleeType)) {
+                  exprType = StaticType.ERROR_TYPE;
+                  break type_switch;
+                }
+              }
+
+              ImmutableList.Builder<StaticType> actualTypes =
+                  ImmutableList.builder();
+              if (actuals != null) {
+                for (BaseNode actual : actuals.getChildren()) {
+                  if (actual instanceof Typed) {
+                    StaticType actualType = ((Typed) actual).getStaticType();
+                    if (actualType == null) {
+                      actualType = StaticType.ERROR_TYPE;
+                    }
+                    actualTypes.add(actualType);
+                  }
+                }
+              }
+
+              ImmutableList.Builder<TypeBinding> typeArguments =
+                  ImmutableList.builder();
+              if (args != null) {
+                TypeNameResolver canonResolver = typeNameResolvers.peekLast();
+                for (TypeArgumentNode arg
+                    : args.finder(TypeArgumentNode.class)
+                      .exclude(NodeType.TypeArguments)
+                      .find()) {
+                  TypeBinding b = AmbiguousNames.typeBindingOf(
+                      arg, canonResolver, logger);
+                  typeArguments.add(b);
+                }
+              }
+
+              MethodSearchResult invokedMethod = pickCallee(
+                  e, calleeType, typeArguments.build(), name,
+                  actualTypes.build());
+              exprType = invokedMethod.returnTypeInContext;
+
+              // Associate method descriptor with invokedMethod.
+              nameNode.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
+
+              // Inject casts for actual parameters.
+              if (this.injectCasts && actuals != null) {
+                Preconditions.checkNotNull(actualsOp);
+                boolean castNeeded = false;
+                for (Cast c : invokedMethod.actualToFormalCasts) {
+                  switch (Compatibility.of(c)) {
+                    case IMPLICIT_CAST:
+                      castNeeded = true;
+                      break;
+                    case COMPATIBLE_AS_IS:
+                    case INCOMPATIBLE:
+                      break;
+                  }
+                }
+                if (castNeeded) {
+                  ArgumentListNode.Builder newActuals = actuals.builder();
+                  int actualIndex = -1;
+                  for (int i = 0, n = newActuals.getNChildren(); i < n; ++i) {
+                    BaseNode actual = newActuals.getChild(i);
+                    if (actual instanceof ExpressionNode) {
+                      ++actualIndex;
+                      ExpressionNode actualExpr = (ExpressionNode) actual;
+                      StaticType actualType =  actualExpr.getStaticType();
+                      StaticType formalType = invokedMethod.formalTypesInContext
+                          .get(actualIndex);
+                      if (Compatibility.of(
+                              invokedMethod.actualToFormalCasts
+                              .get(actualIndex))
+                          == Compatibility.IMPLICIT_CAST) {
+                        Operand op = new Operand(
+                            newActuals, actualIndex, NodeType.Expression);
+                        op.cast(actualType, formalType);
+                      }
+                    }
+                  }
+
+                  actualsOp.parentBuilder.replace(
+                      actualsOp.indexInParent, newActuals.build());
+                }
+              }
+
+              break type_switch;
             }
 
           }
@@ -602,20 +668,14 @@ final class TypingPass extends AbstractRewritingPass {
             }
             if (nDims == 0) {
               Cast c = declarationType.assignableFrom(exprType);
-              switch (c) {
-                case BOX:
-                case CONFIRM_SAFE:
-                case CONFIRM_UNCHECKED:
-                case CONVERTING_LOSSLESS:
-                case UNBOX:
+              switch (Compatibility.of(c)) {
+                case IMPLICIT_CAST:
                   op.cast(exprType, declarationType);
                   exprType = declarationType;
                   break;
-                case SAME:
+                case COMPATIBLE_AS_IS:
                   break;
-                case CONFIRM_CHECKED:
-                case CONVERTING_LOSSY:
-                case DISJOINT:
+                case INCOMPATIBLE:
                   error(
                       unchangedNode,
                       "Cannot use expression of type " + exprType
@@ -846,6 +906,20 @@ final class TypingPass extends AbstractRewritingPass {
     return null;
   }
 
+  private Operand firstWithType(Builder<?, ?> builder, NodeType t) {
+    if (!(builder instanceof BaseNode.InnerBuilder)) {
+      return null;
+    }
+    BaseNode.InnerBuilder<?, ?> ibuilder = (InnerBuilder<?, ?>) builder;
+    for (int i = 0, n = ibuilder.getNChildren(); i < n; ++i) {
+      BaseNode child = ibuilder.getChild(i);
+      if (child.getNodeType() == t) {
+        return new Operand(ibuilder, i, t);
+      }
+    }
+    return null;
+  }
+
   private static final Name JAVA =
       Name.DEFAULT_PACKAGE.child("java", Name.Type.PACKAGE);
 
@@ -1018,17 +1092,11 @@ final class TypingPass extends AbstractRewritingPass {
 
           StaticType.Cast castRequired = formalType.assignableFrom(actualType);
           actualToFormalCasts.add(castRequired);
-          switch (castRequired) {
-            case BOX:
-            case UNBOX:
-            case CONFIRM_SAFE:
-            case CONFIRM_UNCHECKED:
-            case CONVERTING_LOSSLESS:
-            case SAME:
+          switch (Compatibility.of(castRequired)) {
+            case COMPATIBLE_AS_IS:
+            case IMPLICIT_CAST:
               continue;
-            case CONFIRM_CHECKED:
-            case CONVERTING_LOSSY:
-            case DISJOINT:
+            case INCOMPATIBLE:
               // Explicit cast required.
               compatible = false;
               break method_loop;
@@ -1107,5 +1175,31 @@ final class TypingPass extends AbstractRewritingPass {
       this.returnTypeInContext = returnTypeInContext;
       this.actualToFormalCasts = actualToFormalCasts;
     }
+  }
+}
+
+
+enum Compatibility {
+  COMPATIBLE_AS_IS,
+  IMPLICIT_CAST,
+  INCOMPATIBLE,
+  ;
+
+  static Compatibility of(Cast c) {
+    switch (c) {
+      case BOX:
+      case CONFIRM_SAFE:
+      case CONFIRM_UNCHECKED:
+      case CONVERTING_LOSSLESS:
+      case UNBOX:
+        return IMPLICIT_CAST;
+      case SAME:
+        return COMPATIBLE_AS_IS;
+      case CONFIRM_CHECKED:
+      case CONVERTING_LOSSY:
+      case DISJOINT:
+        return INCOMPATIBLE;
+    }
+    throw new AssertionError(c);
   }
 }

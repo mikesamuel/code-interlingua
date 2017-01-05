@@ -34,10 +34,28 @@ public final class Java8Comments {
 
   /** A well-formed Java line comment. */
   public static String blockComment(String text, boolean isJavaDoc) {
-    return new StringBuilder(text.length() + 16)
-        .append(isJavaDoc ? "/** " : "/* ")
-        .append(text.replace("*/", "*\\u200C/"))
-        .append(" */")
-        .toString();
+    return blockComment(isJavaDoc ? "/** " : "/* ", text, " */");
+  }
+
+  /**
+   * A well-formed Java line comment with minimal internal space added.
+   * The token breaker tends to put such comments inline where possible.
+   */
+  public static String blockCommentMinimalSpace(String text) {
+    return blockComment("/*", text, "*/");
+  }
+
+  private static String blockComment(String open, String body, String close) {
+    StringBuilder sb = new StringBuilder(body.length() + 16);
+    sb.append(open);
+    int bodyLength = body.length();
+    if (bodyLength != 0) {
+      char ch0 = body.charAt(0);
+      if (ch0 == '/' || ch0 == '*') {
+        sb.append(' ');
+      }
+      sb.append(body.replace("*/", "*\\u200C/"));
+    }
+    return sb.append(close).toString();
   }
 }

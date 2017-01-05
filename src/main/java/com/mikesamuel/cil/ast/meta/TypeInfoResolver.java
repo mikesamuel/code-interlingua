@@ -392,7 +392,7 @@ public interface TypeInfoResolver {
           bareType = bareType.getComponentType();
         }
         sb.append('L');
-        sb.append(t.getName());
+        sb.append(t.getName().replace('.', '/'));
         sb.append(';');
       }
     }

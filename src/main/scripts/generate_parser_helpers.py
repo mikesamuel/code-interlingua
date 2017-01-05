@@ -55,6 +55,12 @@ _TRAITS = {
         (
             'com.mikesamuel.cil.ast.meta.MemberInfo',
         )),
+    'MethodDescriptorReference': (
+        (
+            ('String', 'methodDescriptor'),
+        ),
+        (
+        )),
     'NamePart': (
         (
             ('Name.Type', 'namePartType'),

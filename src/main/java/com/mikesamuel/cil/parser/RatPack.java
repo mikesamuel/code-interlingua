@@ -5,9 +5,8 @@ import java.util.Map;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.event.Event;
 
@@ -19,12 +18,9 @@ import com.mikesamuel.cil.event.Event;
  */
 public final class RatPack {
 
-  // TODO: get rid of cache ejection.  We seem to depend on the cache actually
-  // having certain things.
-  private final Cache<RatDropping, ParseCacheEntry> parseCache =
-      CacheBuilder.newBuilder()
-      .maximumSize(1024)
-      .build();
+  private final Map<RatDropping, ParseCacheEntry> parseCache =
+      Maps.newHashMap();
+
 
   /**
    * Cache the fact that a parse failed at the given index.
@@ -90,7 +86,7 @@ public final class RatPack {
    */
   public ParseCacheEntry getCachedParse(NodeType nodeType, int index) {
     RatDropping d = new RatDropping(nodeType, index);
-    ParseCacheEntry e = parseCache.getIfPresent(d);
+    ParseCacheEntry e = parseCache.get(d);
     if (e == null) { e = ParseUncached.INSTANCE; }
     return e;
   }
@@ -144,7 +140,7 @@ public final class RatPack {
   public void dump(PrintStream out) {
     out.println("RAT PACK");
     for (Map.Entry<RatDropping, ParseCacheEntry> e
-        : this.parseCache.asMap().entrySet()) {
+        : this.parseCache.entrySet()) {
       RatDropping k = e.getKey();
       ParseCacheEntry v = e.getValue();
       out.println(

@@ -208,11 +208,11 @@ implements TokenBreaker<SList<NodeVariant>> {
     }
 
     if (lc == Classification.BLOCK_COMMENT) {
-      return TokenBreak.SHOULD;
+      return hasSpace(left) ? TokenBreak.SHOULD : TokenBreak.MAY;
     }
     Classification rc = Java8TokenClassifier.classify(right);
     if (rc == Classification.BLOCK_COMMENT) {
-      return TokenBreak.SHOULD;
+      return hasSpace(right) ? TokenBreak.SHOULD : TokenBreak.MAY;
     }
 
     if (lc == Classification.PUNCTUATION) {
@@ -291,5 +291,12 @@ implements TokenBreaker<SList<NodeVariant>> {
 
   private static boolean isUnaryOperator(String tok) {
     return UNARY_OPERATORS.contains(tok);
+  }
+
+  private static final boolean hasSpace(String s) {
+    for (int i = 0, n = s.length(); i < n; ++i) {
+      if (s.charAt(i) <= 0x20) { return true; }
+    }
+    return false;
   }
 }

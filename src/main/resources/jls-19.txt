@@ -363,7 +363,7 @@ Label:
      Identifier
 LocalName: (@trait=ExpressionNameReference)
      Identifier
-MethodName:
+MethodName: (@trait=MethodDescriptorReference)
      Identifier
 SimpleTypeName:
      Identifier

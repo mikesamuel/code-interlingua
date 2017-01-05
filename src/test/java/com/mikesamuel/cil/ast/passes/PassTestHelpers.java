@@ -79,6 +79,12 @@ class PassTestHelpers {
 
     String got = serializeNodes(cus, decorator);
 
+    String want = joinExpectedLines(expectedLines);
+
+    Assert.assertEquals(want, got);
+  }
+
+  static String joinExpectedLines(String[][] expectedLines) {
     StringBuilder sb = new StringBuilder();
     for (String[] linesForOneCu : expectedLines) {
       if (sb.length() != 0) {
@@ -86,9 +92,7 @@ class PassTestHelpers {
       }
       sb.append(Joiner.on('\n').join(linesForOneCu));
     }
-    String want = sb.toString();
-
-    Assert.assertEquals(want, got);
+    return sb.toString();
   }
 
   interface LoggableOperation<T> {
