@@ -136,7 +136,8 @@ public final class TypingPassTest extends TestCase {
         ExpressionNode.class,
         new String[] {
             // TODO: need to cast to long to satisfy initialized type
-            "(long) + (int) Integer.valueOf(\"4\") : int",
+            "(long) (+(int) Integer.valueOf(\"4\")) : long",
+            "+(int) Integer.valueOf(\"4\") : int",
             "\"4\" : /java/lang/String",
         });
   }

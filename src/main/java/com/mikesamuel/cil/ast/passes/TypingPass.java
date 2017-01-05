@@ -36,6 +36,7 @@ import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
+import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InclusiveOrExpressionNode;
@@ -59,6 +60,7 @@ import com.mikesamuel.cil.ast.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
+import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.Name;
@@ -71,6 +73,7 @@ import com.mikesamuel.cil.ast.meta.StaticType.NumericType;
 import com.mikesamuel.cil.ast.meta.StaticType.PrimitiveType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
+import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
@@ -187,10 +190,11 @@ final class TypingPass extends AbstractRewritingPass {
 
   private <N extends BaseNode>
   ProcessingStatus process(
-      N node, @Nullable SList<Parent> pathFromRoot,
+      N unchangedNode, @Nullable SList<Parent> pathFromRoot,
       BaseNode.Builder<N, ?> builder) {
 
-    if (node instanceof Typed) {
+    if (unchangedNode instanceof Typed) {
+      N node = builder.changed() ? builder.build() : unchangedNode;
       Typed t = (Typed) node;
       StaticType exprType;
       type_switch:
@@ -397,90 +401,11 @@ final class TypingPass extends AbstractRewritingPass {
           }
           throw new AssertionError(e);
         }
+
         case Expression:
           exprType = passThru(node);
-          if (pathFromRoot != null
-              && pathFromRoot.x.parent.getNodeType()
-                 == NodeType.VariableInitializer) {
-            SList<Parent> path = pathFromRoot;
-            int nDims = 0;
-            for (; path != null; path = path.prev) {
-              NodeType nt = path.x.parent.getNodeType();
-              System.err.println("nt=" + nt);
-              switch (nt) {
-                case VariableDeclarator:
-                case VariableDeclaratorList:
-                case VariableInitializer:
-                  continue;
-                case ArrayInitializer:
-                  ++nDims;
-                  continue;
-                case FieldDeclaration:
-                case ConstantDeclaration:
-                case LocalVariableDeclaration:
-                  UnannTypeNode declarationTypeNode =
-                      path.x.parent.firstChildWithType(UnannTypeNode.class);
-                  if (declarationTypeNode == null) {
-                    break;
-                  }
-                  StaticType declarationType =
-                      declarationTypeNode.getStaticType();
-                  System.err.println("declarationType=" + declarationType + ", nDims=" + nDims);
-                  if (declarationType == null) {
-                    break;
-                  }
-                  while (nDims != 0) {
-                    if (declarationType instanceof ArrayType) {
-                      declarationType =
-                          ((ArrayType) declarationType).elementType;
-                      --nDims;
-                    } else {
-                      break;
-                    }
-                  }
-                  if (nDims == 0) {
-                    Cast c = declarationType.assignableFrom(exprType);
-                    System.err.println("Cast needed " + c);
-                    switch (c) {
-                      case BOX:
-                      case CONFIRM_SAFE:
-                      case CONFIRM_UNCHECKED:
-                      case CONVERTING_LOSSLESS:
-                      case UNBOX:
-                        BaseNode.InnerBuilder<?, ?> parentBuilder =
-                            (BaseNode.InnerBuilder<?, ?>)
-                            pathFromRoot.x.parentBuilder;
-                        Operand op = new Operand(
-                            parentBuilder,
-                            pathFromRoot.x.indexInParent,
-                            NodeType.Expression);
-                        op.cast(exprType, declarationType);
-                        exprType = declarationType;
-                        break;
-                      case SAME:
-                        break;
-                      case CONFIRM_CHECKED:
-                      case CONVERTING_LOSSY:
-                      case DISJOINT:
-                        error(
-                            node, "Cannot use expression of type " + exprType
-                            + " to initialize declaration of type "
-                            + declarationType);
-                    }
-                  } else {
-                    error(
-                        node,
-                        "array initializer element assigned to non-array type");
-                  }
-                  break;
-                default:
-                  break;
-              }
-              break;
-            }
-          }
-          System.err.println("Path from root " + SList.forwardIterable(pathFromRoot));
           break type_switch;
+
         case Assignment: {
           AssignmentNode e = (AssignmentNode) node;
           switch (e.getVariant()) {
@@ -623,7 +548,89 @@ final class TypingPass extends AbstractRewritingPass {
       if (DEBUG) {
         System.err.println("Got " + exprType + " for " + node.getNodeType());
       }
-      t.setStaticType(exprType);
+      if (builder.changed()) {
+        BaseNode replacement = builder.build();
+        ((Typed) replacement).setStaticType(exprType);
+        return ProcessingStatus.replace(replacement);
+      } else {
+        t.setStaticType(exprType);
+        return ProcessingStatus.CONTINUE;
+      }
+    }
+
+    if (unchangedNode instanceof VariableInitializerNode) {
+      Operand op = nthOperandOf(0, builder, NodeType.Expression);
+      if (op == null) { return ProcessingStatus.CONTINUE; }
+      StaticType exprType = ((Typed) op.getNode()).getStaticType();
+      if (exprType == null) { return ProcessingStatus.CONTINUE; }
+
+      SList<Parent> path = pathFromRoot;
+      int nDims = 0;
+      for (; path != null; path = path.prev) {
+        NodeType nt = path.x.parent.getNodeType();
+        switch (nt) {
+          case VariableDeclarator:
+          case VariableDeclaratorList:
+          case VariableInitializer:
+            continue;
+          case ArrayInitializer:
+            ++nDims;
+            continue;
+          case FieldDeclaration:
+          case ConstantDeclaration:
+          case LocalVariableDeclaration:
+            UnannTypeNode declarationTypeNode =
+            path.x.parent.firstChildWithType(UnannTypeNode.class);
+            if (declarationTypeNode == null) {
+              break;
+            }
+            StaticType declarationType =
+                declarationTypeNode.getStaticType();
+            if (declarationType == null) {
+              break;
+            }
+            while (nDims != 0) {
+              if (declarationType instanceof ArrayType) {
+                declarationType =
+                    ((ArrayType) declarationType).elementType;
+                --nDims;
+              } else {
+                break;
+              }
+            }
+            if (nDims == 0) {
+              Cast c = declarationType.assignableFrom(exprType);
+              switch (c) {
+                case BOX:
+                case CONFIRM_SAFE:
+                case CONFIRM_UNCHECKED:
+                case CONVERTING_LOSSLESS:
+                case UNBOX:
+                  op.cast(exprType, declarationType);
+                  exprType = declarationType;
+                  break;
+                case SAME:
+                  break;
+                case CONFIRM_CHECKED:
+                case CONVERTING_LOSSY:
+                case DISJOINT:
+                  error(
+                      unchangedNode,
+                      "Cannot use expression of type " + exprType
+                      + " to initialize declaration of type "
+                      + declarationType);
+              }
+            } else {
+              error(
+                  unchangedNode,
+                  "array initializer element assigned to non-array type");
+            }
+            break;
+          default:
+            break;
+        }
+        break;
+      }
     }
     return ProcessingStatus.CONTINUE;
   }
@@ -728,6 +735,11 @@ final class TypingPass extends AbstractRewritingPass {
 
     void cast(StaticType sourceType, StaticType targetType) {
       if (!injectCasts) { return; }
+      if (typePool.T_NULL.equals(sourceType)) {
+        if (targetType instanceof ReferenceType) {
+          return;
+        }
+      }
       BaseNode toCast = getNode();
       Optional<BaseNode> castable = Intermediates.wrap(
           toCast, NodeType.UnaryExpression,
@@ -743,7 +755,7 @@ final class TypingPass extends AbstractRewritingPass {
       if (castable.isPresent()) {
         toCast = castable.get();
       } else {
-        error(toCast, "Cannot cast to " + targetType);
+        error(toCast, "Cannot cast " + sourceType + " to " + targetType);
         return;
       }
       CastNode cast;
@@ -777,7 +789,7 @@ final class TypingPass extends AbstractRewritingPass {
             .build();
       } else {
         // TODO: handle +/- unary op ambiguity
-        throw new Error("TODO");
+        throw new Error("TODO " + sourceType + " -> " + targetType);
       }
       CastExpressionNode castExpr = CastExpressionNode.Variant.Expression
           .nodeBuilder()
