@@ -107,9 +107,11 @@ public interface TypeInfoResolver {
                             ++index;
                           }
                         }
+                        Name canonName =
+                            className.method(mname, "(" + index + ")");
                         CallableInfo ci = new CallableInfo(
-                            mods,
-                            className.method(mname, "(" + index + ")"));
+                            mods, canonName,
+                            typeVars(canonName, m.getTypeParameters()));
                         ImmutableList.Builder<TypeSpecification> formalTypes =
                             ImmutableList.builder();
                         for (Type t : m.getGenericParameterTypes()) {
@@ -129,9 +131,11 @@ public interface TypeInfoResolver {
                       int mods = c.getModifiers();
                       if (!Modifier.isPrivate(mods)) {
                         int index = Arrays.asList(ctors).indexOf(c);
+                        Name canonName = className.method(
+                            "<init>", "(" + index + ")");
                         CallableInfo ci = new CallableInfo(
-                            mods,
-                            className.method("<init>", "(" + index + ")"));
+                            mods, canonName,
+                            typeVars(canonName, c.getTypeParameters()));
                         ImmutableList.Builder<TypeSpecification> formalTypes =
                             ImmutableList.builder();
                         for (Type t : c.getGenericParameterTypes()) {
@@ -145,12 +149,8 @@ public interface TypeInfoResolver {
                         members.add(ci);
                       }
                     }
-                    ImmutableList.Builder<Name> parameters =
-                        ImmutableList.builder();
-                    for (TypeVariable<?> v : clazz.getTypeParameters()) {
-                      parameters.add(className.child(
-                          v.getName(), Name.Type.TYPE_PARAMETER));
-                    }
+                    ImmutableList<Name> parameters = typeVars(
+                        className, clazz.getTypeParameters());
 
                     TypeInfo.Builder b = TypeInfo.builder(className)
                         .modifiers(clazz.getModifiers())
@@ -159,7 +159,7 @@ public interface TypeInfoResolver {
                             ? Optional.of(specForType(superType))
                             : Optional.<TypeSpecification>absent())
                         .interfaces(interfaceSpecs.build())
-                        .parameters(parameters.build())
+                        .parameters(parameters)
                         .outerClass(outerClass != null
                             ? Optional.of(nameForClass(outerClass))
                             : Optional.<Name>absent())
@@ -220,6 +220,15 @@ public interface TypeInfoResolver {
       }
       Preconditions.checkNotNull(name.identifier);
       sb.append(name.identifier);
+    }
+
+    private static ImmutableList<Name> typeVars(
+        Name containerName, TypeVariable<?>[] vars) {
+      ImmutableList.Builder<Name> names = ImmutableList.builder();
+      for (TypeVariable<?> v : vars) {
+        names.add(containerName.child(v.getName(), Name.Type.TYPE_PARAMETER));
+      }
+      return names.build();
     }
 
     private static Name nameForClass(Class<?> cl) {

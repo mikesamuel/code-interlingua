@@ -5,15 +5,19 @@ import com.google.common.collect.ImmutableList;
 
 /** Describes a method, constructor, or initializer. */
 public final class CallableInfo extends MemberInfo {
+  /** Type parameters scoped to the named callable. */
+  public final ImmutableList<Name> typeParameters;
   private String descriptor;
   private TypeSpecification returnType;
   private ImmutableList<TypeSpecification> formalTypes;
   private boolean isVariadic;
 
   /** */
-  public CallableInfo(int modifiers, Name canonName) {
+  public CallableInfo(
+      int modifiers, Name canonName, ImmutableList<Name> typeParameters) {
     super(modifiers, canonName);
     Preconditions.checkArgument(canonName.type == Name.Type.METHOD);
+    this.typeParameters = typeParameters;
   }
 
   /**
@@ -74,6 +78,17 @@ public final class CallableInfo extends MemberInfo {
 
   @Override
   protected void appendExtraToString(StringBuilder sb) {
+    if (!typeParameters.isEmpty()) {
+      String sep = "<";
+      for (Name typeParameter : typeParameters) {
+        sb.append(sep);
+        sep = ", ";
+        sb.append(
+            canonName.equals(typeParameter.parent)
+            ? typeParameter.identifier : typeParameter);
+      }
+      sb.append('>');
+    }
     if (descriptor != null) {
       sb.append(" @ ").append(descriptor);
     }

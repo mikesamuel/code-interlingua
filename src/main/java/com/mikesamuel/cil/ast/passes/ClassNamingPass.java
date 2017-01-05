@@ -16,8 +16,11 @@ import com.mikesamuel.cil.ast.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.EnumConstantNode;
 import com.mikesamuel.cil.ast.EnumDeclarationNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
+import com.mikesamuel.cil.ast.MethodHeaderNode;
 import com.mikesamuel.cil.ast.ModifierNode;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.TypeParameterNode;
+import com.mikesamuel.cil.ast.TypeParametersNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
@@ -97,15 +100,32 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
                    && declaration instanceof EnumDeclarationNode) {
           mods |= Modifier.PRIVATE;
         }
+        TypeParametersNode typeParameters = null;
         for (BaseNode child : bodyElement.getChildren()) {
           if (child instanceof ModifierNode) {
             mods |= ModifierNodes.modifierBits(
                 ((ModifierNode) child).getVariant());
+          } else if (child instanceof MethodHeaderNode) {
+            typeParameters = child.firstChildWithType(TypeParametersNode.class);
+          } else if (child instanceof TypeParametersNode) {
+            typeParameters = (TypeParametersNode) child;
+          }
+        }
+        ImmutableList.Builder<Name> typeParametersList =
+            ImmutableList.builder();
+        if (typeParameters != null) {
+          for (TypeParameterNode param
+              : typeParameters.finder(TypeParameterNode.class)
+                .exclude(NodeType.TypeBound, NodeType.Annotation)
+                .find()) {
+            typeParametersList.add(
+                param.getDeclaredTypeInfo().canonName);
           }
         }
         b.add(new CallableInfo(
             mods,
-            declaringClass.method(cd.getMethodName(), cd.getMethodDescriptor())
+            declaringClass.method(cd.getMethodName(), cd.getMethodDescriptor()),
+            typeParametersList.build()
             ));
         break;
       }
