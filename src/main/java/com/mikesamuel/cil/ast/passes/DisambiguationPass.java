@@ -338,7 +338,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
 
     // Else warn.
-    // TODO
+    error(names, "Cannot resolve ambiguous name " + d.name);
     return Optional.absent();
   }
 
