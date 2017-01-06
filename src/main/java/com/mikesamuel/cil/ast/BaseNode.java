@@ -435,13 +435,13 @@ public abstract class BaseNode implements NodeOrBuilder {
   public final class Finder<T> {
     private final Class<? extends T> matchType;
     private Predicate<? super BaseNode> match;
-    private Predicate<? super BaseNode> enter;
+    private Predicate<? super BaseNode> doNotEnter;
     private boolean allowNonStandard = false;
 
     Finder(Class<? extends T> matchType) {
       this.matchType = matchType;
       match = Predicates.instanceOf(matchType);
-      enter = Predicates.alwaysTrue();
+      doNotEnter = Predicates.alwaysFalse();
     }
 
     /**
@@ -461,8 +461,18 @@ public abstract class BaseNode implements NodeOrBuilder {
      * @return {@code this} to enable chaining.
      */
     public Finder<T> exclude(NodeType nt, NodeType... nts) {
-      enter = Predicates.and(
-          enter, Predicates.not(new HasNodeTypeIn(nt, nts)));
+      doNotEnter = Predicates.or(doNotEnter, new HasNodeTypeIn(nt, nts));
+      return this;
+    }
+
+    /**
+     * Restricts nodes recursively searched by excluding them to ones with a
+     * node type among those given.
+     *
+     * @return {@code this} to enable chaining.
+     */
+    public Finder<T> exclude(Class<? extends NodeOrBuilder> cl) {
+      doNotEnter = Predicates.or(doNotEnter, Predicates.instanceOf(cl));
       return this;
     }
 
@@ -489,7 +499,7 @@ public abstract class BaseNode implements NodeOrBuilder {
       if (match.apply(node)) {
         results.add(Preconditions.checkNotNull(matchType.cast(node)));
       }
-      if (enter.apply(node)
+      if (!doNotEnter.apply(node)
           && (allowNonStandard
               || !NodeTypeTables.NONSTANDARD.contains(node.getNodeType()))) {
         for (BaseNode child : node.getChildren()) {
