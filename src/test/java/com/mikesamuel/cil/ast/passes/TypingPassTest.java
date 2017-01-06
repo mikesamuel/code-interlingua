@@ -59,13 +59,20 @@ public final class TypingPassTest extends TestCase {
                     PassTestHelpers.parseCompilationUnits(inputs);
                 DeclarationPass dp = new DeclarationPass(logger);
                 TypeInfoResolver typeInfoResolver = dp.run(cus);
+
+                ExpressionScopePass scopePass = new ExpressionScopePass(
+                    typeInfoResolver, logger);
+                scopePass.run(cus);
+
                 DisambiguationPass disambigPass = new DisambiguationPass(
                     typeInfoResolver, logger, false);
                 cus = disambigPass.run(cus);
+
                 TypePool typePool = new TypePool(typeInfoResolver);
                 ClassMemberPass classMemberPass = new ClassMemberPass(
                     logger, typePool);
                 classMemberPass.run(cus);
+
                 TypingPass tp = new TypingPass(logger, typePool, true);
                 return tp.run(cus);
               }
@@ -356,7 +363,7 @@ public final class TypingPassTest extends TestCase {
   @Test
   public static final void testMethodChosenBasedOnTypeParameters()
   throws Exception {
-    if (false)
+if (false)  // HACK TODO
     assertTyped(
         new String[][] {
           {
@@ -382,7 +389,7 @@ public final class TypingPassTest extends TestCase {
             "    Foo.f(s);",
             "    Foo.<String>f(s);",
             "  }",
-            "}"
+            "}",
           },
         },
         StatementExpressionNode.class,
