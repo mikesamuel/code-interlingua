@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,6 +14,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -42,6 +45,7 @@ import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
+import com.mikesamuel.cil.ast.FieldNameNode;
 import com.mikesamuel.cil.ast.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InclusiveOrExpressionNode;
@@ -75,6 +79,7 @@ import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
+import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool.ParameterizedMember;
 import com.mikesamuel.cil.ast.meta.StaticType;
@@ -94,7 +99,10 @@ import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.ast.traits.Typed;
+import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.SList;
+
+import jdk.nashorn.internal.ir.CaseNode;
 
 /**
  * Attaches types to {@link Typed} expressions.
@@ -266,8 +274,8 @@ final class TypingPass extends AbstractRewritingPass {
               // TODO
               break;
             case FreeField:
-              // TODO
-              break;
+              exprType = processFieldAccess(e, (PrimaryNode.Builder) builder);
+              break type_switch;
             case Literal:
               exprType = passThru(node);
               break type_switch;
@@ -323,6 +331,10 @@ final class TypingPass extends AbstractRewritingPass {
               break type_switch;
             }
 
+            case FieldAccess: {
+              exprType = processFieldAccess(e, (PrimaryNode.Builder) builder);
+              break type_switch;
+            }
           }
           throw new AssertionError(e);
         }
@@ -476,9 +488,20 @@ final class TypingPass extends AbstractRewritingPass {
 
         case CastExpression: {
           CastExpressionNode e = (CastExpressionNode) node;
-          switch (e.getVariant()) {
+          CastNode castNode = e.firstChildWithType(CastNode.class);
+          exprType = null;
+          for (WholeType wt
+               : e.finder(WholeType.class)
+                 .exclude(NodeType.UnaryExpression, NodeType.LambdaExpression)
+                 .exclude(WholeType.class)
+                 .find()) {
+            exprType = wt.getStaticType();
           }
-          throw new AssertionError(e);
+          if (exprType == null) {
+            error(castNode, "Unrecognized target type for cast");
+            exprType = StaticType.ERROR_TYPE;
+          }
+          break type_switch;
         }
 
         default:
@@ -566,6 +589,80 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
     return ProcessingStatus.CONTINUE;
+  }
+
+  private StaticType processFieldAccess(
+      BaseNode e, BaseNode.InnerBuilder<?, ?> builder) {
+    @Nullable Typed container = e.firstChildWithType(Typed.class);
+    StaticType containerType;
+    if (container != null) {
+      containerType = container.getStaticType();
+      if (containerType == null) {
+        error(container, "Missing type for field container");
+        return StaticType.ERROR_TYPE;
+      }
+    } else {
+      containerType = null;
+    }
+    FieldNameNode nameNode = e.firstChildWithType(FieldNameNode.class);
+    IdentifierNode nameIdent = nameNode != null
+        ? nameNode.firstChildWithType(IdentifierNode.class)
+        : null;
+    String fieldName = nameIdent != null ? nameIdent.getValue() : null;
+    if (fieldName == null) {
+      error(e, "Missing field name");
+      return StaticType.ERROR_TYPE;
+    }
+
+    Name sourceType = containingTypes.peekLast().canonName;
+
+    ImmutableList<ParameterizedMember<FieldInfo>> fields =
+        ImmutableList.of();
+    for (TypeSpecification oneContainer : getMemberContainers(containerType)) {
+      fields = memberInfoPool.getMembers(
+          FieldInfo.class,
+          fieldName,
+          sourceType,
+          oneContainer);
+      if (!fields.isEmpty()) {
+        // Implement name shadowing by taking the first that has any accessible
+        // with the right name.
+        break;
+      }
+    }
+
+    if (fields.isEmpty()) {
+      error(
+          e, "Reference to undefined or inaccessible field named " + fieldName);
+    }
+
+    ParameterizedMember<FieldInfo> f = fields.get(0);
+    TypeSpecification typeInDeclaringClass = f.member.getValueType();
+
+    TypeSpecification valueTypeInContext;
+
+    if (f.declaringType.bindings.isEmpty()) {
+      valueTypeInContext = typeInDeclaringClass;
+    } else {
+      Map<Name, TypeBinding> substMap = Maps.newLinkedHashMap();
+      Optional<TypeInfo> tiOpt = typePool.r.resolve(
+          f.declaringType.typeName);
+      if (tiOpt.isPresent()) {
+        TypeInfo ti = tiOpt.get();
+        int nTypeParams = ti.parameters.size();
+        Preconditions.checkState(
+            nTypeParams == f.declaringType.bindings.size());
+        for (int i = 0; i < nTypeParams; ++i) {
+          substMap.put(
+              ti.parameters.get(i), f.declaringType.bindings.get(i));
+        }
+      } else {
+        error(e, "Missing info for declaring type " + f.declaringType);
+      }
+      valueTypeInContext = typeInDeclaringClass.subst(substMap);
+    }
+
+    return typePool.type(valueTypeInContext, e.getSourcePosition(), logger);
   }
 
   private StaticType processMethodInvocation(
@@ -658,9 +755,15 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
 
-    MethodSearchResult invokedMethod = pickCallee(
+    Optional<MethodSearchResult> invokedMethodOpt = pickMethodOverload(
         e, calleeType, typeArguments.build(), name,
         actualTypes.build());
+    if (!invokedMethodOpt.isPresent()) {
+      error(e, "Unresolved use of method " + name);
+      return StaticType.ERROR_TYPE;
+    }
+
+    MethodSearchResult invokedMethod = invokedMethodOpt.get();
 
     // Associate method descriptor with invokedMethod.
     nameNode.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
@@ -930,6 +1033,34 @@ final class TypingPass extends AbstractRewritingPass {
       JAVA_LANG.child("String", Name.Type.CLASS);
 
   /**
+   * The containers to try in order when looking up a member.
+   * <p>
+   * @param explicitContainerType null if the member use is a free use.
+   */
+  private ImmutableList<TypeSpecification> getMemberContainers(
+      @Nullable StaticType explicitContainerType) {
+    if (explicitContainerType != null) {
+      return ImmutableList.of(explicitContainerType.typeSpecification);
+    }
+    TypeInfo last = null;
+    ImmutableList.Builder<TypeSpecification> b = ImmutableList.builder();
+    for (TypeInfo containingType : Lists.reverse(containingTypes)) {
+      if (last != containingType) {
+        ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
+            ImmutableList.builder();
+        for (Name param : containingType.parameters) {
+          bindings.add(new TypeSpecification.TypeBinding(param));
+        }
+        b.add(TypeSpecification.autoScoped(containingType));
+        last = containingType;
+      }
+    }
+    // TODO: Fall back to static imports.
+    // TODO: This will require the member name be passed in.
+    return b.build();
+  }
+
+  /**
    * @param sourceNode
    * @param calleeType
    * @param typeArguments
@@ -937,7 +1068,7 @@ final class TypingPass extends AbstractRewritingPass {
    * @param actualTypes
    * @return
    */
-  private MethodSearchResult pickCallee(
+  private Optional<MethodSearchResult> pickMethodOverload(
       BaseNode sourceNode,
       @Nullable StaticType calleeType,
       ImmutableList<TypeBinding> typeArguments,
@@ -950,25 +1081,8 @@ final class TypingPass extends AbstractRewritingPass {
     }
     Name sourceType = containingTypes.peekLast().canonName;
 
-    ImmutableList<TypeSpecification> calleeTypes;
-    if (calleeType != null) {
-      calleeTypes = ImmutableList.of(calleeType.typeSpecification);
-    } else {
-      TypeInfo last = null;
-      ImmutableList.Builder<TypeSpecification> b = ImmutableList.builder();
-      for (TypeInfo containingType : Lists.reverse(containingTypes)) {
-        if (last != containingType) {
-          ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
-              ImmutableList.builder();
-          for (Name param : containingType.parameters) {
-            bindings.add(new TypeSpecification.TypeBinding(param));
-          }
-          b.add(TypeSpecification.autoScoped(containingType));
-          last = containingType;
-        }
-      }
-      calleeTypes = b.build();
-    }
+    ImmutableList<TypeSpecification> calleeTypes = getMemberContainers(
+        calleeType);
 
     ImmutableList<ParameterizedMember<CallableInfo>> methods =
         ImmutableList.of();
@@ -1075,20 +1189,44 @@ final class TypingPass extends AbstractRewritingPass {
         boolean compatible = true;
         ImmutableList.Builder<Cast> actualToFormalCasts =
             ImmutableList.builder();
+        boolean requiresVariadicArrayConstruction = false;
         method_loop:
         for (int i = 0; i < nActuals; ++i) {
           StaticType formalType;
+          StaticType actualType = actualTypes.get(i);
           if (m.member.isVariadic() && i >= arity - 1) {
             formalType = formalTypesInContext.get(i - 1);
             if (formalType instanceof ArrayType) {
-              formalType = ((ArrayType) formalType).elementType;
+              boolean isCompatibleArrayTypeOrNull = false;
+              if (arity == nActuals) {
+                // Handle the case where an array is passed instead of an array
+                // being implicitly constructed to handle the extra arguments.
+                Cast c = formalType.assignableFrom(actualType);
+                switch (c) {
+                  case BOX:
+                  case CONFIRM_CHECKED:
+                  case CONVERTING_LOSSLESS:
+                  case CONVERTING_LOSSY:
+                  case UNBOX:
+                  case DISJOINT:
+                    break;
+                  case CONFIRM_SAFE:
+                  case CONFIRM_UNCHECKED:  // Array of generics.
+                  case SAME:
+                    isCompatibleArrayTypeOrNull = true;
+                    break;
+                }
+              }
+              if (!isCompatibleArrayTypeOrNull) {
+                requiresVariadicArrayConstruction = true;
+                formalType = ((ArrayType) formalType).elementType;
+              }
             } else {
               // Assume reason for ErrorType already logged.
             }
           } else {
             formalType = formalTypesInContext.get(i);
           }
-          StaticType actualType = actualTypes.get(i);
 
           StaticType.Cast castRequired = formalType.assignableFrom(actualType);
           actualToFormalCasts.add(castRequired);
@@ -1108,7 +1246,8 @@ final class TypingPass extends AbstractRewritingPass {
                 sourceNode.getSourcePosition(), logger);
           results.add(new MethodSearchResult(
               m, formalTypesInContext, returnTypeInContext,
-              actualToFormalCasts.build()));
+              actualToFormalCasts.build(),
+              requiresVariadicArrayConstruction));
         }
       }
     }
@@ -1116,8 +1255,6 @@ final class TypingPass extends AbstractRewritingPass {
     {
       // Now if any required no boxing/unboxing, eliminate any that require
       // boxing/unboxing.
-      boolean oneRequiresUnOrBoxing = false;
-      boolean oneDoesntRequireUnOrBoxing = false;
       // 15.12.2. Compile-Time Step 2: Determine Method Signature says
       // """
       // The first phase (S15.12.2.2) performs overload resolution without
@@ -1125,23 +1262,46 @@ final class TypingPass extends AbstractRewritingPass {
       // arity method invocation. If no applicable method is found during this
       // phase then processing continues to the second phase.
       // """
-      for (MethodSearchResult result : results) {
+      BitSet requiresUnOrBoxing = new BitSet();
+      for (int i = 0, n = results.size(); i < n; ++i) {
+        MethodSearchResult result = results.get(i);
         for (Cast c : result.actualToFormalCasts) {
           if (c == Cast.BOX || c == Cast.UNBOX) {
-            oneRequiresUnOrBoxing = true;
-          } else {
-            oneDoesntRequireUnOrBoxing = true;
+            requiresUnOrBoxing.set(i);
+            break;
           }
         }
       }
+      boolean oneRequiresUnOrBoxing = requiresUnOrBoxing.nextSetBit(0) >= 0;
+      boolean oneDoesntRequireUnOrBoxing =
+          requiresUnOrBoxing.nextClearBit(0) < results.size();
       if (oneRequiresUnOrBoxing && oneDoesntRequireUnOrBoxing) {
-        for (Iterator<MethodSearchResult> it = results.iterator();
-            it.hasNext();) {
-          MethodSearchResult result = it.next();
-          for (Cast c : result.actualToFormalCasts) {
-            if (c == Cast.BOX || c == Cast.UNBOX) {
-              it.remove();
-              break;
+        for (int i = results.size(); --i >= 0;) {
+          if (requiresUnOrBoxing.get(i)) {
+            results.remove(i);
+          }
+        }
+      }
+
+      // The second phase (S15.12.2.3) performs overload resolution while
+      // allowing boxing and unboxing, but still precludes the use of variable
+      // arity method invocation. If no applicable method is found during this
+      // phase then processing continues to the third phase.
+      if (results.size() > 1) {
+        BitSet requiresVariadic = new BitSet();
+        for (int i = 0, n = results.size(); i < n; ++i) {
+          MethodSearchResult result = results.get(i);
+          if (result.constructsVariadicArray) {
+            requiresVariadic.set(i);
+          }
+        }
+        boolean oneRequiresVariadic = requiresVariadic.nextSetBit(0) >= 0;
+        boolean oneDoesntRequireVariadic =
+            requiresVariadic.nextClearBit(0) < results.size();
+        if (oneRequiresVariadic && oneDoesntRequireVariadic) {
+          for (int i = results.size(); --i >= 0;) {
+            if (requiresVariadic.get(i)) {
+              results.remove(i);
             }
           }
         }
@@ -1149,14 +1309,52 @@ final class TypingPass extends AbstractRewritingPass {
     }
 
     // Now compare them to find the most specific.
-    if (results.size() > 1) {
-      throw new Error("TODO");
+    {
+      int nResults = results.size();
+      if (nResults > 1) {
+        MethodSearchResult[] rarr = new MethodSearchResult[results.size()];
+        rarr = results.toArray(rarr);
+
+        // Specificity is a partial ordering so we can't just sort.
+        // Instead we compare pairwise.
+        // The number of overloads in any class should be small, but this
+        // could become expensive for 1000s.
+        specificity_loop:
+        for (int j = 0; j < nResults; ++j) {
+          MethodSearchResult mj = rarr[j];
+          for (int i = 0; i < nResults; ++i) {
+            MethodSearchResult mi = rarr[i];
+            if (i == j || mi == null) { continue; }
+            if (mi.isStrictlyMoreSpecificThan(mj)) {
+              rarr[j] = null;
+              continue specificity_loop;
+            }
+          }
+        }
+
+        results = ImmutableList.copyOf(
+           Iterables.filter(Arrays.asList(rarr), Predicates.notNull()));
+      }
     }
 
-    if (results.size() == 1) {
-      return results.get(0);
+    if (results.isEmpty()) {
+      return Optional.absent();
     }
-    throw new Error("TODO");
+
+    if (results.size() != 1) {
+      StringBuilder sb = new StringBuilder(
+          "Ambiguous invocation of method " + methodName);
+      String sep = ": ";
+      for (MethodSearchResult r : results) {
+        sb.append(sep);
+        sep = ", ";
+
+        sb.append('(').append(r.formalTypesInContext).append(") from ")
+          .append(r.m.declaringType);
+      }
+      error(sourceNode, sb.toString());
+    }
+    return Optional.of(results.get(0));
   }
 
   static final class MethodSearchResult {
@@ -1164,16 +1362,160 @@ final class TypingPass extends AbstractRewritingPass {
     final ImmutableList<StaticType> formalTypesInContext;
     final StaticType returnTypeInContext;
     final ImmutableList<Cast> actualToFormalCasts;
+    final boolean constructsVariadicArray;
 
     MethodSearchResult(
         ParameterizedMember<CallableInfo> m,
         ImmutableList<StaticType> formalTypesInContext,
         StaticType returnTypeInContext,
-        ImmutableList<Cast> actualToFormalCasts) {
+        ImmutableList<Cast> actualToFormalCasts,
+        boolean constructsVariadicArray) {
       this.m = m;
       this.formalTypesInContext = formalTypesInContext;
       this.returnTypeInContext = returnTypeInContext;
       this.actualToFormalCasts = actualToFormalCasts;
+      this.constructsVariadicArray = constructsVariadicArray;
+    }
+
+    public boolean isStrictlyMoreSpecificThan(MethodSearchResult that) {
+      ImmutableList<StaticType> aTypes = this.formalTypesInContext;
+      ImmutableList<StaticType> bTypes = that.formalTypesInContext;
+
+      boolean aIsVariadic = this.m.member.isVariadic();
+      boolean bIsVariadic = that.m.member.isVariadic();
+
+      int aArity = aTypes.size();
+      int bArity = bTypes.size();
+
+      StaticType aMarginalFormalType = null;
+      if (aIsVariadic) {
+        // The array type representing a variadic parameter should not be a
+        // template variable that extends an array type since the array type
+        // is manufactured.
+        aMarginalFormalType = ((ArrayType) aTypes.get(aArity - 1)).elementType;
+      }
+      StaticType bMarginalFormalType = null;
+      if (aIsVariadic) {
+        // The array type representing a variadic parameter should not be a
+        // template variable that extends an array type since the array type
+        // is manufactured.
+        bMarginalFormalType = ((ArrayType) bTypes.get(bArity - 1)).elementType;
+      }
+
+      int nonVarArgsArity = Math.min(
+          aArity - (aIsVariadic ? 1 : 0),
+          bArity - (bIsVariadic ? 1 : 0));
+
+      boolean oneMoreSpecificThan = false;
+      for (int i = 0; i < nonVarArgsArity; ++i) {
+        Boolean b = parameterSpecificity(aTypes.get(i), bTypes.get(i));
+        if (b == null) {
+          continue;
+        } else if (b) {
+          oneMoreSpecificThan = true;
+        } else {
+          return false;
+        }
+      }
+
+      if (!(aIsVariadic || bIsVariadic)) {
+        return oneMoreSpecificThan && aArity == bArity;
+      }
+
+      // These are the cases for dealing with varargs specificity where
+      // a could be more specific than b.
+
+      // B VARIADIC, A has extra non-variadic arguments whether variadic or not
+      //   (A0, A1)
+      //   (B...)
+
+      //   (A0, A1, A2[])
+      //   (B...)
+
+      //   (A0, A1, A2...)
+      //   (B...)
+      // where A0...n are as or more specific than B
+
+      // We deal with these three cases by running through the extra arguments
+      // and then delegating to handlers for the cases below.
+      int aIndex = nonVarArgsArity;
+      int bIndex = nonVarArgsArity;
+      for (int aNonVariadicLimit = aArity - (aIsVariadic ? 1 : 0);
+           aIndex < aNonVariadicLimit; ++aIndex) {
+        Boolean b = parameterSpecificity(
+            aTypes.get(aIndex), bMarginalFormalType);
+        if (b == null) {
+          // This is the case because the required min arity is now more
+          // specific.
+          oneMoreSpecificThan = true;
+        } else if (b) {
+          oneMoreSpecificThan = true;
+        } else {
+          return false;
+        }
+      }
+      oneMoreSpecificThan = true;
+
+      // A has no more, b accepts more.
+      //   ()
+      //   (B...)
+      if (aIndex == aArity && !aIsVariadic && bIndex + 1 == bArity) {
+        return true;
+      }
+
+      if (aIndex + 1 == aArity && bIndex + 1 == bArity) {
+        Preconditions.checkState(bIsVariadic);  // Checked above.
+        // BOTH VARIADIC, SAME COUNT
+        //   (A...)
+        //   (B...)
+        // -> A is more specific than B
+        Boolean specificity;
+        if (aIsVariadic) {
+          specificity = parameterSpecificity(
+              aMarginalFormalType, bMarginalFormalType);
+        } else {
+          // B VARIADIC, A has Array type.
+          //   (A[])
+          //   (B...)
+          // -> A is as or more specific as B
+          specificity = parameterSpecificity(
+              aTypes.get(aArity - 1), bTypes.get(bArity - 1));
+        }
+        return specificity != null ? specificity : oneMoreSpecificThan;
+      }
+
+      // We can safely return false here because the cases below do not
+      // establish specificity.
+      //   (A...)
+      //   (Object)
+      //
+      //   (Object...)
+      //   (Serializable)
+      //
+      //   (Object...)
+      //   (Cloneable)
+      // because in these cases B has a more specific arity than A.
+      return false;
+    }
+
+    private static Boolean parameterSpecificity(
+        StaticType aType, StaticType bType) {
+      Cast c = bType.assignableFrom(aType);
+      switch (c) {
+        case CONFIRM_SAFE:
+        case CONFIRM_UNCHECKED:
+        case CONVERTING_LOSSLESS:
+          return true;
+        case CONVERTING_LOSSY:
+        case BOX:
+        case UNBOX:
+        case DISJOINT:
+        case CONFIRM_CHECKED:
+          return false;
+        case SAME:
+          return null;
+      }
+      throw new AssertionError(c);
     }
   }
 
