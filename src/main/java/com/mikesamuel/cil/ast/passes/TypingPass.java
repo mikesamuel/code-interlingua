@@ -23,6 +23,7 @@ import com.mikesamuel.cil.ast.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.AndExpressionNode;
 import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
+import com.mikesamuel.cil.ast.ArrayTypeNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.BaseNode.Builder;
@@ -30,10 +31,13 @@ import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
 import com.mikesamuel.cil.ast.ClassLiteralNode;
+import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.ConditionalAndExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalOrExpressionNode;
+import com.mikesamuel.cil.ast.ConfirmCastNode;
 import com.mikesamuel.cil.ast.ConvertCastNode;
+import com.mikesamuel.cil.ast.DimNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
@@ -57,12 +61,16 @@ import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.RelationalExpressionNode;
 import com.mikesamuel.cil.ast.ShiftExpressionNode;
 import com.mikesamuel.cil.ast.ShiftOperatorNode;
+import com.mikesamuel.cil.ast.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
+import com.mikesamuel.cil.ast.TypeNode;
 import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
+import com.mikesamuel.cil.ast.WildcardBoundsNode;
+import com.mikesamuel.cil.ast.WildcardNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.Name;
@@ -75,6 +83,7 @@ import com.mikesamuel.cil.ast.meta.StaticType.NumericType;
 import com.mikesamuel.cil.ast.meta.StaticType.PrimitiveType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
+import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ClassOrInterfaceType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
@@ -824,36 +833,25 @@ final class TypingPass extends AbstractRewritingPass {
       }
       CastNode cast;
       if (targetType instanceof PrimitiveType) {
-        PrimitiveTypeNode targetTypeNode;
-        if (StaticType.T_BOOLEAN.equals(targetType)) {
-          targetTypeNode = PrimitiveTypeNode.Variant.AnnotationBoolean
-              .nodeBuilder()
-              .build();
-        } else {
-          NumericType nt = (NumericType) targetType;
-
-          @SuppressWarnings("synthetic-access")
-          NodeVariant v = NUMERIC_TYPE_TO_VARIANT.get(nt);
-          NumericTypeNode numericTypeNode =
-              (nt.isFloaty ? NumericTypeNode.Variant.FloatingPointType
-              : NumericTypeNode.Variant.IntegralType)
-              .nodeBuilder()
-              .add(v.nodeBuilder().build())
-              .build();
-
-          targetTypeNode = PrimitiveTypeNode.Variant.AnnotationNumericType
-              .nodeBuilder()
-              .add(numericTypeNode)
-              .build();
-        }
+        PrimitiveTypeNode targetTypeNode = toPrimitiveTypeNode(
+            (PrimitiveType) targetType);
         cast = CastNode.Variant.ConvertCast.nodeBuilder()
             .add(ConvertCastNode.Variant.PrimitiveType.nodeBuilder()
                 .add(targetTypeNode)
                 .build())
             .build();
       } else {
-        // TODO: handle +/- unary op ambiguity
-        throw new Error("TODO " + sourceType + " -> " + targetType);
+        // TODO: handle +/- unary op ambiguity.
+        // Maybe, if it's not an ExpressionAtom.Parenthesized, then
+        // wrap it.
+        ReferenceTypeNode targetTypeNode = toReferenceTypeNode(
+            (ReferenceType) targetType);
+        cast = CastNode.Variant.ConfirmCast.nodeBuilder()
+            .add(ConfirmCastNode.Variant.ReferenceTypeAdditionalBound
+                .nodeBuilder()
+                .add(targetTypeNode)
+                .build())
+            .build();
       }
       CastExpressionNode castExpr = CastExpressionNode.Variant.Expression
           .nodeBuilder()
@@ -1176,6 +1174,156 @@ final class TypingPass extends AbstractRewritingPass {
       this.formalTypesInContext = formalTypesInContext;
       this.returnTypeInContext = returnTypeInContext;
       this.actualToFormalCasts = actualToFormalCasts;
+    }
+  }
+
+
+  private static PrimitiveTypeNode toPrimitiveTypeNode(PrimitiveType typ) {
+    if (StaticType.T_BOOLEAN.equals(typ)) {
+      return PrimitiveTypeNode.Variant.AnnotationBoolean
+          .nodeBuilder()
+          .setStaticType(typ)
+          .build();
+    }
+
+    NumericType nt = (NumericType) typ;
+
+    NodeVariant v = NUMERIC_TYPE_TO_VARIANT.get(nt);
+    NumericTypeNode numericTypeNode =
+        (nt.isFloaty ? NumericTypeNode.Variant.FloatingPointType
+        : NumericTypeNode.Variant.IntegralType)
+        .nodeBuilder()
+        .setStaticType(typ)
+        .add(v.nodeBuilder().build())
+        .build();
+
+    return PrimitiveTypeNode.Variant.AnnotationNumericType
+        .nodeBuilder()
+        .setStaticType(typ)
+        .add(numericTypeNode)
+        .build();
+  }
+
+  private ReferenceTypeNode toReferenceTypeNode(ReferenceType typ) {
+    Preconditions.checkArgument(!typePool.T_NULL.equals(typ));
+    Preconditions.checkArgument(!StaticType.ERROR_TYPE.equals(typ));
+    if (typ instanceof TypePool.ArrayType) {
+      TypePool.ArrayType at = (ArrayType) typ;
+      StaticType baseElementType = at.baseElementType;
+      TypeNode typeNode = toTypeNode(at.baseElementType);
+
+      StaticType ct = baseElementType;
+      Preconditions.checkState(at.dimensionality > 0);
+      for (int nDims = at.dimensionality; --nDims >= 1;) {
+        ct = typePool.type(ct.typeSpecification.arrayOf(), null, logger);
+        typeNode = TypeNode.Variant.ReferenceType.nodeBuilder()
+            .add(
+                ReferenceTypeNode.Variant.ArrayType.nodeBuilder()
+                .add(
+                    ArrayTypeNode.Variant.TypeAnnotationDim.nodeBuilder()
+                    .add(typeNode)
+                    .add(DimNode.Variant.LsRs.nodeBuilder().build())
+                    .setStaticType(ct)
+                    .build())
+                .setStaticType(ct)
+                .build())
+            .build();
+      }
+      return ReferenceTypeNode.Variant.ArrayType.nodeBuilder()
+          .add(
+              ArrayTypeNode.Variant.TypeAnnotationDim.nodeBuilder()
+              .add(typeNode)
+              .add(DimNode.Variant.LsRs.nodeBuilder().build())
+              .setStaticType(at)
+              .build())
+          .setStaticType(at)
+          .build();
+    } else if (typ instanceof TypePool.ClassOrInterfaceType) {
+      TypePool.ClassOrInterfaceType ct = (ClassOrInterfaceType) typ;
+      ClassOrInterfaceTypeNode ciNode = toClassOrInterfaceTypeNode(
+          ct.typeSpecification.typeName, ct.typeParameterBindings);
+      ciNode.setStaticType(typ);
+      return ReferenceTypeNode.Variant.ClassOrInterfaceType.nodeBuilder()
+          .add(ciNode)
+          .setStaticType(typ)
+          .build();
+    } else {
+      throw new AssertionError(typ);
+    }
+  }
+
+  private ClassOrInterfaceTypeNode toClassOrInterfaceTypeNode(
+      Name nm, ImmutableList<TypeBinding> bindings) {
+    ClassOrInterfaceTypeNode parent = nm.parent.equals(Name.DEFAULT_PACKAGE)
+        ? null
+        : toClassOrInterfaceTypeNode(nm.parent, ImmutableList.of());
+    IdentifierNode ident = IdentifierNode.Variant.Builtin.nodeBuilder()
+        .leaf(nm.identifier)
+        .setNamePartType(nm.type)
+        .build();
+    TypeArgumentsNode arguments = null;
+    if (!bindings.isEmpty()) {
+      TypeArgumentListNode.Builder typeArgumentList =
+          TypeArgumentListNode.Variant.TypeArgumentComTypeArgument
+          .nodeBuilder();
+      for (TypeBinding b : bindings) {
+        ReferenceTypeNode rt = toReferenceTypeNode(
+            (ReferenceType) typePool.type(b.typeSpec, null, logger));
+        WildcardBoundsNode.Variant boundsVariant = null;
+        switch (b.variance) {
+          case EXTENDS:
+            boundsVariant = WildcardBoundsNode.Variant.ExtendsReferenceType;
+            break;
+          case INVARIANT:
+            break;
+          case SUPER:
+            boundsVariant = WildcardBoundsNode.Variant.SuperReferenceType;
+            break;
+        }
+        if (boundsVariant == null) {
+          typeArgumentList.add(
+              TypeArgumentNode.Variant.ReferenceType.nodeBuilder()
+              .add(rt)
+              .build());
+        } else {
+          typeArgumentList.add(
+              TypeArgumentNode.Variant.Wildcard.nodeBuilder()
+              .add(WildcardNode.Variant.AnnotationQmWildcardBounds
+                  .nodeBuilder()
+                  .add(boundsVariant.nodeBuilder()
+                     .add(rt)
+                     .build())
+                 .build())
+            .build());
+        }
+      }
+      arguments = TypeArgumentsNode.Variant.LtTypeArgumentListGt.nodeBuilder()
+          .add(typeArgumentList.build())
+          .build();
+    }
+    ClassOrInterfaceTypeNode.Builder b =
+        ClassOrInterfaceTypeNode.Variant
+        .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments.nodeBuilder();
+    if (parent != null) {
+      b.add(parent);
+    }
+    b.add(ident);
+    if (arguments != null) {
+      b.add(arguments);
+    }
+    return b.build();
+  }
+
+  private TypeNode toTypeNode(StaticType typ) {
+    if (typ instanceof PrimitiveType) {
+      return TypeNode.Variant.PrimitiveType.nodeBuilder()
+          .add(toPrimitiveTypeNode((PrimitiveType) typ))
+          .build();
+    } else {
+      Preconditions.checkArgument(typ instanceof ReferenceType);
+      return TypeNode.Variant.ReferenceType.nodeBuilder()
+          .add(toReferenceTypeNode((ReferenceType) typ))
+          .build();
     }
   }
 }

@@ -208,11 +208,11 @@ implements TokenBreaker<SList<NodeVariant>> {
     }
 
     if (lc == Classification.BLOCK_COMMENT) {
-      return hasSpace(left) ? TokenBreak.SHOULD : TokenBreak.MAY;
+      if (hasSpace(left)) { return TokenBreak.SHOULD; }
     }
     Classification rc = Java8TokenClassifier.classify(right);
     if (rc == Classification.BLOCK_COMMENT) {
-      return hasSpace(right) ? TokenBreak.SHOULD : TokenBreak.MAY;
+      if (hasSpace(right)) { return TokenBreak.SHOULD; }
     }
 
     if (lc == Classification.PUNCTUATION) {

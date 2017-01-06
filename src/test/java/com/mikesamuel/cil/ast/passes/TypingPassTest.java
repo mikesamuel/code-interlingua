@@ -9,10 +9,10 @@ import org.junit.Test;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
-import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -141,7 +141,6 @@ public final class TypingPassTest extends TestCase {
         },
         ExpressionNode.class,
         new String[] {
-            // TODO: need to cast to long to satisfy initialized type
             "(long) (+(int) Integer.valueOf(\"4\")) : long",
             "+(int) Integer.valueOf(\"4\") : int",
             "\"4\" : /java/lang/String",
@@ -201,8 +200,9 @@ public final class TypingPassTest extends TestCase {
             "class C {",
             "  void f(int i) {}",
             "  String f(Integer i) { return null; }",
-            "  { /*(I)V*/f(42);"
-            +  " /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(null);",
+            "  {",
+            "    /*(I)V*/f(42);",
+            "    /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(null);",
             "    String s = /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(Integer",
             "        ./*(I)Ljava/lang/Integer;*/valueOf(42));",
             "  }",
@@ -236,6 +236,67 @@ public final class TypingPassTest extends TestCase {
             "42 : int",
         },
         DECORATE_METHOD_NAMES);
+  }
+
+  @Test
+  public static final void testMethodDispatchWithBoxyCasts()
+  throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  void f(Integer i) {}",
+            "  void g(int i) {}",
+            "  {",
+            "    /*(Ljava/lang/Integer;)V*/f((java.lang.Integer) (0));",
+            "    /*(Ljava/lang/Integer;)V*/f("
+            +          "Integer./*(I)Ljava/lang/Integer;*/valueOf(0));",
+            "    /*(I)V*/g(0);",
+            "    /*(I)V*/g((int) ("
+            +          "Integer./*(I)Ljava/lang/Integer;*/valueOf(0)));",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  void f(Integer i) {}",
+            "  void g(int i) {}",
+            "  {",
+            "    f(0);",
+            "    f(Integer.valueOf(0));",
+            "    g(0);",
+            "    g(Integer.valueOf(0));",
+            "  }",
+            "}",
+          },
+        },
+        CastExpressionNode.class,
+        new String[] {
+            "(java.lang.Integer) (0) : null",
+            "(int) (Integer.valueOf(0)) : null",
+        },
+        DECORATE_METHOD_NAMES);
+  }
+
+  @Test
+  public static final void testMethodDispatchWithPromotingCasts()
+  throws Exception {
+    // TODO
+  }
+
+  @Test
+  public static final void testMethodChosenBasedOnTypeParameters()
+  throws Exception {
+    // TODO
+  }
+
+  @Test
+  public static final void testMethodChosenBasedOnParameterizedSuperType()
+  throws Exception {
+    // TODO
   }
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
