@@ -431,21 +431,128 @@ public final class TypingPassTest extends TestCase {
   }
 
   @Test
-  public static final void testStaticMethodImport()
+  public static final void testSubtraction()
   throws Exception {
     assertTyped(
         new String[][] {
           {
+            "public class Foo {",
+            "  static void f(byte b) {",
+            "    System.err./*(Ljava/lang/String;)V*/println(\"b\");",
+            "  }",
+            "  static void f(short s) { System.err./*(Ljava/lang/String;)V*/println(\"s\"); }",
+            "  static void f(char c) { System.err./*(Ljava/lang/String;)V*/println(\"c\"); }",
+            "  static void f(int i) { System.err./*(Ljava/lang/String;)V*/println(\"i\"); }",
+            "  static void f(long j) { System.err./*(Ljava/lang/String;)V*/println(\"j\"); }",
+            "  static void f(float f) { System.err./*(Ljava/lang/String;)V*/println(\"f\"); }",
+            "  static void f(double d) { System.err./*(Ljava/lang/String;)V*/println(\"d\"); }",
+            "  public static void main(String... argv) {",
+            "    byte b = (byte) 0;",
+            "    short s = (short) 0;",
+            "    char c = (char) 0;",
+            "    int i = 0;",
+            "    long j = (long) (0);",
+            "    float f = (float) (0);",
+            "    double d = (double) (0);",
+            "    /*(I)V*/f((int) b - (int) b);",
+            "    /*(I)V*/f((int) b - i);",
+            "    /*(I)V*/f((int) s - (int) s);",
+            "    /*(I)V*/f(i - (int) s);",
+            "    /*(I)V*/f((int) c - (int) c);",
+            "    /*(I)V*/f((int) c - i);",
+            "    /*(I)V*/f(i - i);",
+            "    /*(J)V*/f(j - j);",
+            "    /*(J)V*/f((long) i - j);",
+            "    /*(F)V*/f(f - f);",
+            "    /*(F)V*/f(f - (float) i);",
+            "    /*(D)V*/f(d - d);",
+            "    /*(D)V*/f((double) i - d);",
+            "  }",
+            "}",
           },
         },
         new String[][] {
           {
+            "public class Foo {",
+            "  static void f(byte b)   { System.err.println(\"b\"); }",
+            "  static void f(short s)  { System.err.println(\"s\"); }",
+            "  static void f(char c)   { System.err.println(\"c\"); }",
+            "  static void f(int i)    { System.err.println(\"i\"); }",
+            "  static void f(long j)   { System.err.println(\"j\"); }",
+            "  static void f(float f)  { System.err.println(\"f\"); }",
+            "  static void f(double d) { System.err.println(\"d\"); }",
+            "",
+            "  public static void main(String... argv) {",
+            "    byte b = (byte) 0;",
+            "    short s = (short) 0;",
+            "    char c = (char) 0;",
+            "    int i = 0;",
+            "    long j = 0;",
+            "    float f = 0;",
+            "    double d = 0;",
+            "",
+            "    f(b - b);",
+            "    f(b - i);",
+            "    f(s - s);",
+            "    f(i - s);",
+            "    f(c - c);",
+            "    f(c - i);",
+            "    f(i - i);",
+            "    f(j - j);",
+            "    f(i - j);",
+            "    f(f - f);",
+            "    f(f - i);",
+            "    f(d - d);",
+            "    f(i - d);",
+            "  }",
+            "}",
+          }
+        },
+        null,
+        null,
+        DECORATE_METHOD_NAMES);
+  }
+
+  @Test
+  public static final void testStaticMethodImport()
+  throws Exception {
+if (false)
+    assertTyped(
+        new String[][] {
+          {
+
           },
         },
-        StatementExpressionNode.class,
-        new String[] {
-
+        new String[][] {
+          {
+            "package foo;",
+            "import static bar.Bar.f;",
+            "import static bar.Baz.f;",
+            "",
+            "public class C {",
+            "  {",
+            "    f(0);",
+            "    f(null);",
+            "  }",
+            "}",
+          },
+          {
+            "//Bar",
+            "package bar;",
+            "public class Bar {",
+            "  public static int f(int i) { return 0; }",
+            "}",
+          },
+          {
+            "//Baz",
+            "package bar;",
+            "public class Baz {",
+            "  public static int f(Integer i) { return 0; }",
+            "}",
+          },
         },
+        null,
+        null,
         DECORATE_METHOD_NAMES
         );
   }
@@ -566,7 +673,6 @@ public final class TypingPassTest extends TestCase {
   @Test
   public static final void testVariadicAndIterated()
   throws Exception {
-    // TODO: Test multiple order of method declarations.
     assertTyped(
         new String[][] {
           {
@@ -593,6 +699,51 @@ public final class TypingPassTest extends TestCase {
             "  void f(int... is) {}",
             "  void f(int a, int... rest) {}",
             "  void f(int a, int b, int c) {}",
+            "  {",
+            "    f();",  // ?
+            "    f(0);",
+            "    f(0, 1);",
+            "    f(0, 1, 2);",
+            "    f(0, 1, 2, 3);", // ?
+            "    f(null);", // ?
+            "    f(new int[] { 1, 2, 3 });",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        DECORATE_METHOD_NAMES
+        );
+
+    // Same test but with opposite method declaration order to flush out errors
+    // due to fixating on order of declaration.
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  void f(int a, int b, int c) {}",
+            "  void f(int a, int... rest) {}",
+            "  void f(int... is) {}",
+            "  {",
+            "    /*([I)V*/f();",
+            "    /*(I[I)V*/f(0);",
+            "    /*(I[I)V*/f(0, 1);",
+            "    /*(III)V*/f(0, 1, 2);",
+            "    /*(I[I)V*/f(0, 1, 2, 3);",
+            "    /*([I)V*/f(null);",
+            "    /*([I)V*/f(new int[] { 1, 2, 3, });",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  void f(int a, int b, int c) {}",
+            "  void f(int a, int... rest) {}",
+            "  void f(int... is) {}",
             "  {",
             "    f();",  // ?
             "    f(0);",

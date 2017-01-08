@@ -539,8 +539,8 @@ final class TypingPass extends AbstractRewritingPass {
           // Otherwise, the type of each of the operands of the + operator must
           // be a type that is convertible (S5.1.8) to a primitive numeric
           // type, or a compile-time error occurs.
-          StaticType leftType = left.getNode() instanceof Typed ? ((Typed) left.getNode()).getStaticType() : passThru(left);  // TODO: fix this horrot
-          StaticType rightType = right.getNode() instanceof Typed ? ((Typed) right.getNode()).getStaticType() : passThru(right);
+          StaticType leftType = maybePassThru(left);
+          StaticType rightType = maybePassThru(right);
           StaticType stringType = typePool.type(
               new TypeSpecification(JAVA_LANG_STRING), null, logger);
           boolean isStringConcat = operator != null
@@ -555,16 +555,14 @@ final class TypingPass extends AbstractRewritingPass {
           if (isStringConcat) {
             exprType = stringType;
           } else {
-            throw new Error("TODO");  // TODO
+            exprType = promoteNumericBinary(left, leftType, right, rightType);
           }
-          break;
+          break type_switch;
         }
 
         case MultiplicativeExpression: {
-          MultiplicativeExpressionNode e = (MultiplicativeExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
+          exprType = processNumericBinary(builder);
+          break type_switch;
         }
 
         case UnaryExpression: {
@@ -933,6 +931,22 @@ final class TypingPass extends AbstractRewritingPass {
     return passThru(op.getNode());
   }
 
+  private StaticType maybePassThru(Operand op) {
+    return maybePassThru(op.getNode());
+  }
+
+  private StaticType maybePassThru(BaseNode node) {
+    if (node instanceof Typed) {
+      StaticType t = ((Typed) node).getStaticType();
+      if (t == null) {
+        error(node, "Untyped");
+        return StaticType.ERROR_TYPE;
+      }
+      return t;
+    }
+    return passThru(node);
+  }
+
   private StaticType passThru(BaseNode node) {
     for (BaseNode child : node.getChildren()) {
       if (NodeTypeTables.NONSTANDARD.contains(child.getNodeType())) {
@@ -1033,6 +1047,13 @@ final class TypingPass extends AbstractRewritingPass {
         if (targetType instanceof ReferenceType) {
           return;
         }
+      }
+      if (sourceType.equals(targetType)) {
+        return;
+      }
+      if (StaticType.ERROR_TYPE.equals(targetType)
+          || StaticType.ERROR_TYPE.equals(sourceType)) {
+        return;
       }
       BaseNode toCast = getNode();
       Optional<BaseNode> castable = Intermediates.wrap(
@@ -1143,6 +1164,65 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
     return null;
+  }
+
+  private static final ImmutableSet<StaticType> PROMOTE_TO_INT =
+      ImmutableSet.of(
+          StaticType.T_BYTE, StaticType.T_CHAR, StaticType.T_SHORT);
+
+  private StaticType processNumericBinary(BaseNode.Builder<?, ?> builder) {
+    Operand left = nthOperandOf(
+        0, builder, NodeType.AdditiveExpression);
+    Operand right = nthOperandOf(
+        1, builder, NodeType.MultiplicativeExpression);
+    if (left == null || right == null) {
+      error(builder, "Missing operand");
+      return StaticType.ERROR_TYPE;
+    } else {
+      return promoteNumericBinary(
+          left, maybePassThru(left), right, maybePassThru(right));
+    }
+  }
+
+  private StaticType promoteNumericBinary(
+      Operand left, StaticType leftType, Operand right, StaticType rightType) {
+    StaticType lt = unboxNumericAsNecessary(left, leftType);
+    StaticType rt = unboxNumericAsNecessary(right, rightType);
+    Cast c = lt.assignableFrom(rt);
+    switch (c) {
+      case BOX:
+      case CONFIRM_CHECKED:
+      case CONFIRM_SAFE:
+      case CONFIRM_UNCHECKED:
+      case UNBOX:
+        throw new AssertionError("Should already be unboxed");
+      case CONVERTING_LOSSLESS:
+        // left is wider.
+        if (PROMOTE_TO_INT.contains(lt)) {
+          left.cast(lt, StaticType.T_INT);
+          lt = StaticType.T_INT;
+        }
+        right.cast(rt, lt);
+        return lt;
+      case CONVERTING_LOSSY:
+        // right is wider
+        if (PROMOTE_TO_INT.contains(rt)) {
+          right.cast(rt, StaticType.T_INT);
+          rt = StaticType.T_INT;
+        }
+        left.cast(lt, rt);
+        return rt;
+      case DISJOINT:
+        return StaticType.ERROR_TYPE;
+      case SAME:
+        if (PROMOTE_TO_INT.contains(lt)) {
+          left.cast(lt, StaticType.T_INT);
+          right.cast(rt, StaticType.T_INT);
+          return StaticType.T_INT;
+        }
+        return lt;
+    }
+    throw new AssertionError(c);
   }
 
   private static final Name JAVA =
@@ -1686,7 +1766,9 @@ final class TypingPass extends AbstractRewritingPass {
       //   (Object...)
       //   (Cloneable)
       // because in these cases B has a more specific arity than A.
-      System.err.println("\tRan out of more specific cases");
+      if (DEBUG) {
+        System.err.println("\tRan out of more specific cases");
+      }
       return false;
     }
 
