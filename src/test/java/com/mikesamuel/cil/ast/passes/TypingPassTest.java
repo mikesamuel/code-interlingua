@@ -622,44 +622,71 @@ public final class TypingPassTest extends TestCase {
   }
 
   @Test
-  public static final void testStaticMethodImportMaskedByLocalDeclaration()
-  throws Exception {
-    assertTyped(
-        new String[][] {
-          {
-            // TODO
-          },
-        },
-        new String[][] {
-          {
-          },
-        },
-        StatementExpressionNode.class,
-        new String[] {
-
-        },
-        DECORATE_METHOD_NAMES
-        );
-  }
-
-  @Test
   public static final void testStaticWildcardImports()
   throws Exception {
     assertTyped(
         new String[][] {
           {
-            // TODO
+            "package foo;",
+            "import static foo.Boo.*;",
+            "public class Foo {",
+            "  public static void main(String... argv) {",
+            "    /* /foo/Boo(I)V*/",
+            "    f(0);",
+            "    /* /foo/Boo(Ljava/lang/Object;)V*/",
+            "    f((java.lang.Object) (x));",
+            "  }",
+            "}",
+          },
+          {
+            "package foo;",
+            "import static java.lang.System.err;",
+            "public class Boo {",
+            "  static final Integer x = null;",
+            "  static void f(int i) {",
+            "    err.",
+            "    /* /java/io/PrintStream(Ljava/lang/String;)V*/",
+            "    println(\"int\");",
+            "  }",
+            "  static void f(Object o) {",
+            "    err.",
+            "    /* /java/io/PrintStream(Ljava/lang/Object;)V*/",
+            "    println(o);",
+            "  }",
+            "}",
           },
         },
         new String[][] {
           {
+            "//Foo",
+            "package foo;",
+            "import static foo.Boo.*;",
+            "",
+            "public class Foo {",
+            "  public static void main(String... argv) {",
+            "    f(0);",
+            "    f(x);",
+            "  }",
+            "}",
+          },
+          {
+            "//Boo",
+            "package foo;",
+            "import static java.lang.System.err;",
+            "",
+            "public class Boo {",
+            "  static final Integer x = null;",
+            "  static void f(int i) {",
+            "    err.println(\"int\");",
+            "  }",
+            "  static void f(Object o) {",
+            "    err.println(o);",
+            "  }",
+            "}",
           },
         },
-        StatementExpressionNode.class,
-        new String[] {
-
-        },
-        DECORATE_METHOD_NAMES
+        null, null,
+        DECORATE_METHOD_NAMES_INCL_CONTAINER
         );
   }
 
