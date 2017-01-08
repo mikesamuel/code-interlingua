@@ -44,8 +44,8 @@ public final class TypingPassTest extends TestCase {
   private static void assertTyped(
       @Nullable String[][] expectedWithCasts,
       String[][] inputs,
-      Class<? extends BaseNode> target,
-      String[] expectedTypes,
+      @Nullable Class<? extends BaseNode> target,
+      @Nullable String[] expectedTypes,
       @Nullable Decorator decorator,
       String... expectedErrors)
   throws UnparseVerificationException {
@@ -89,47 +89,49 @@ public final class TypingPassTest extends TestCase {
       assertEquals(want, got);
     }
 
-    List<BaseNode> typed = Lists.newArrayList();
-    for (CompilationUnitNode cu : processedCus) {
-      for (BaseNode n : cu.finder(target).find()) {
-        if (n instanceof Typed) {
-          typed.add(n);
-        } else if (n instanceof WholeType) {
-          typed.add(n);
-        } else {
-          boolean found = false;
-          for (Typed t
-               : n.finder(Typed.class)
-                 .exclude(WholeType.class).exclude(Typed.class)
-                 .find()) {
-            typed.add((BaseNode) t);
-            found = true;
-          }
-          if (!found) {
-            for (WholeType t
-                 : n.finder(WholeType.class)
-                   .exclude(WholeType.class)
+    if (target != null) {
+      List<BaseNode> typed = Lists.newArrayList();
+      for (CompilationUnitNode cu : processedCus) {
+        for (BaseNode n : cu.finder(target).find()) {
+          if (n instanceof Typed) {
+            typed.add(n);
+          } else if (n instanceof WholeType) {
+            typed.add(n);
+          } else {
+            boolean found = false;
+            for (Typed t
+                   : n.finder(Typed.class)
+                   .exclude(WholeType.class).exclude(Typed.class)
                    .find()) {
               typed.add((BaseNode) t);
               found = true;
             }
+            if (!found) {
+              for (WholeType t
+                     : n.finder(WholeType.class)
+                     .exclude(WholeType.class)
+                     .find()) {
+                typed.add((BaseNode) t);
+                found = true;
+              }
+            }
           }
         }
       }
-    }
-    ImmutableList.Builder<String> got = ImmutableList.builder();
-    for (BaseNode t : typed) {
-      StaticType typ = (t instanceof Typed)
+      ImmutableList.Builder<String> got = ImmutableList.builder();
+      for (BaseNode t : typed) {
+        StaticType typ = (t instanceof Typed)
           ? ((Typed)     t).getStaticType()
           : ((WholeType) t).getStaticType();
-      got.add(
-          PassTestHelpers.serializeNodes(ImmutableList.of(t), null)
-          + " : " + typ);
-    }
+        got.add(
+            PassTestHelpers.serializeNodes(ImmutableList.of(t), null)
+            + " : " + typ);
+      }
 
-    assertEquals(
-        Joiner.on("\n\n").join(expectedTypes),
-        Joiner.on("\n\n").join(got.build()));
+      assertEquals(
+          Joiner.on("\n\n").join(expectedTypes),
+          Joiner.on("\n\n").join(got.build()));
+    }
   }
 
 
@@ -363,19 +365,41 @@ public final class TypingPassTest extends TestCase {
   @Test
   public static final void testMethodChosenBasedOnTypeParameters()
   throws Exception {
-if (false)  // HACK TODO
     assertTyped(
         new String[][] {
           {
-            // TODO
+            "public class Foo {",
+            "  static <T> T f(T x) {",
+            "    System.err./*(Ljava/lang/String;)V*/println(\"T\" + x);",
+            "    return x;",
+            "  }",
+            "  static <T> T f(CharSequence x) {",
+            "    System.err./*(Ljava/lang/String;)V*/println(\"CharSequence \" + x);",
+            "    return null;",
+            "  }",
+            "  public static void main(String... argv) {",
+            "    CharSequence c = (java.lang.CharSequence) (\"c\");",
+            "    String s = \"s\";",
+            "    Foo./*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f(c);",
+            "    Foo./*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f((java.lang",
+            "            .CharSequence) (s));",
+            // Per experiment with javac, this binds to the second overload
+            // despite the fact that, with type variable substitution,
+            // the String formal type is more specific than CharSequence.
+            "    Foo.<String> /*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f((java.lang",
+            "            .CharSequence) (s));",
+            "  }",
+            "}",
           },
         },
         new String[][] {
           {
             "//Foo",
             "public class Foo {",
+            // TODO: I believe this passes spuriously because (T x) is rejected
+            // out of hand before it gets to checking specificity.
             "  static <T> T f(T x) {",
-            "    System.err.println(\"T \" + x);",
+            "    System.err.println(\"T\" + x);",
             "    return x;",
             "  }",
             "  static <T> T f(CharSequence x) {",
@@ -387,6 +411,8 @@ if (false)  // HACK TODO
             "    String s = \"s\";",
             "    Foo.f(c);",
             "    Foo.f(s);",
+            // This goes to f(CharSequence) despite <T> being more specific
+            // when bound to String
             "    Foo.<String>f(s);",
             "  }",
             "}",
@@ -394,7 +420,11 @@ if (false)  // HACK TODO
         },
         StatementExpressionNode.class,
         new String[] {
-
+            "System.err.println(\"T\" + x) : void",
+            "System.err.println(\"CharSequence \" + x) : void",
+            "Foo.f(c) : /Foo.f(2).<T>",
+            "Foo.f((java.lang.CharSequence) (s)) : /Foo.f(2).<T>",
+            "Foo.<String> f((java.lang.CharSequence) (s)) : /Foo.f(2).<T>",
         },
         DECORATE_METHOD_NAMES
         );
@@ -536,12 +566,50 @@ if (false)  // HACK TODO
   @Test
   public static final void testVariadicAndIterated()
   throws Exception {
-    // TODO
-    // void f(int... is) {}
-    // void f(int a, int... rest) {}
-    // void f(int a, int b, int c) {}
-    // { f(); f(0); f(0, 1); f(0, 1, 2); f(0, 1, 2, 3); }
-    // Test multiple order of method declarations.
+    // TODO: Test multiple order of method declarations.
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  void f(int... is) {}",
+            "  void f(int a, int... rest) {}",
+            "  void f(int a, int b, int c) {}",
+            "  {",
+            "    /*([I)V*/f();",
+            "    /*(I[I)V*/f(0);",
+            "    /*(I[I)V*/f(0, 1);",
+            "    /*(III)V*/f(0, 1, 2);",
+            "    /*(I[I)V*/f(0, 1, 2, 3);",
+            "    /*([I)V*/f(null);",
+            "    /*([I)V*/f(new int[] { 1, 2, 3, });",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  void f(int... is) {}",
+            "  void f(int a, int... rest) {}",
+            "  void f(int a, int b, int c) {}",
+            "  {",
+            "    f();",  // ?
+            "    f(0);",
+            "    f(0, 1);",
+            "    f(0, 1, 2);",
+            "    f(0, 1, 2, 3);", // ?
+            "    f(null);", // ?
+            "    f(new int[] { 1, 2, 3 });",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        DECORATE_METHOD_NAMES
+        );
+
   }
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {

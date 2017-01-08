@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -23,9 +24,11 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AdditiveExpressionNode;
+import com.mikesamuel.cil.ast.AdditiveOperatorNode;
 import com.mikesamuel.cil.ast.AndExpressionNode;
 import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
+import com.mikesamuel.cil.ast.ArrayElementTypeNode;
 import com.mikesamuel.cil.ast.ArrayTypeNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.BaseNode;
@@ -40,6 +43,7 @@ import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalOrExpressionNode;
 import com.mikesamuel.cil.ast.ConfirmCastNode;
 import com.mikesamuel.cil.ast.ConvertCastNode;
+import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
@@ -51,6 +55,7 @@ import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.IntegralTypeNode;
 import com.mikesamuel.cil.ast.Intermediates;
+import com.mikesamuel.cil.ast.LocalNameNode;
 import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.MultiplicativeExpressionNode;
 import com.mikesamuel.cil.ast.NodeType;
@@ -72,6 +77,7 @@ import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.TypeNode;
 import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
+import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.WildcardNode;
@@ -102,8 +108,6 @@ import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.SList;
 
-import jdk.nashorn.internal.ir.CaseNode;
-
 /**
  * Attaches types to {@link Typed} expressions.
  */
@@ -127,7 +131,18 @@ final class TypingPass extends AbstractRewritingPass {
       = Lists.newLinkedList();
   private final LinkedList<TypeInfo> containingTypes = Lists.newLinkedList();
 
+  private final Map<Name, StaticType> locals = Maps.newLinkedHashMap();
+
   static final boolean DEBUG = false;
+
+  // TODO: Should this be done via a trait.  The container for the UnannType
+  // for a local declaration?
+  private static final ImmutableSet<NodeType> LOCAL_DECLARATIONS =
+      ImmutableSet.of(
+          NodeType.ReceiverParameter, NodeType.FormalParameter,
+          NodeType.LastFormalParameter, NodeType.LocalVariableDeclaration,
+          NodeType.EnhancedForStatement, NodeType.Resource,
+          NodeType.CatchFormalParameter);
 
   TypingPass(Logger logger, TypePool typePool, boolean injectCasts) {
     super(logger);
@@ -178,6 +193,26 @@ final class TypingPass extends AbstractRewritingPass {
         typeInfo = containingTypes.peekLast();
       }
       containingTypes.add(typeInfo);
+    }
+
+    if (node instanceof VariableDeclaratorIdNode) {
+      VariableDeclaratorIdNode id = (VariableDeclaratorIdNode) node;
+      Name name = id.getDeclaredExpressionName();
+      if (name != null && name.type == Name.Type.LOCAL) {
+        for (SList<Parent> p = pathFromRoot; p != null; p = p.prev) {
+          if (LOCAL_DECLARATIONS.contains(p.x.parent.getNodeType())) {
+            BaseNode localDecl = p.x.parent;
+            UnannTypeNode typ = localDecl.firstChildWithType(
+                UnannTypeNode.class);
+            // TODO: Try CatchType if no UnannType.
+            if (typ != null) {
+              StaticType styp = typ.getStaticType();
+              this.locals.put(name, styp);
+            }
+            break;
+          }
+        }
+      }
     }
 
     // TODO: propagate expected type information based on initializers and
@@ -265,8 +300,8 @@ final class TypingPass extends AbstractRewritingPass {
               // TODO
               break;
             case ArrayCreationExpression:
-              // TODO
-              break;
+              exprType = passThru(node);
+              break type_switch;
             case ClassLiteral:
               // TODO
               break;
@@ -279,9 +314,22 @@ final class TypingPass extends AbstractRewritingPass {
             case Literal:
               exprType = passThru(node);
               break type_switch;
-            case Local:
-              // TODO
-              break;
+            case Local: {
+              LocalNameNode nameNode = e.firstChildWithType(
+                  LocalNameNode.class);
+              Name exprName = nameNode.getReferencedExpressionName();
+              if (exprName == null) {
+                error(e, "Ambiguous local " + nameNode.getTextContent("."));
+                exprType = StaticType.ERROR_TYPE;
+                break type_switch;
+              }
+              exprType = locals.get(exprName);
+              if (exprType == null) {
+                error(e, "Missing type for local " + exprName);
+                exprType = StaticType.ERROR_TYPE;
+              }
+              break type_switch;
+            }
             case MethodInvocation:
               exprType = processMethodInvocation(
                   e, (ExpressionAtomNode.Builder) builder);
@@ -348,9 +396,42 @@ final class TypingPass extends AbstractRewritingPass {
 
         case ArrayCreationExpression: {
           ArrayCreationExpressionNode e = (ArrayCreationExpressionNode) node;
-          switch (e.getVariant()) {
+
+          ArrayElementTypeNode elementTypeNode = e.firstChildWithType(
+              ArrayElementTypeNode.class);
+          WholeType wholeElementType = elementTypeNode != null
+              ? elementTypeNode.firstChildWithType(WholeType.class) : null;
+          StaticType elementType = wholeElementType != null
+              ? wholeElementType.getStaticType()
+                  : null;
+          if (elementType == null) { elementType = StaticType.ERROR_TYPE; }
+          int nExtraDims = 0;
+          for (@SuppressWarnings("unused") DimNode dimNode
+              : e.finder(DimNode.class)
+                .exclude(
+                    NodeType.Annotation, NodeType.DimExpr,
+                    NodeType.ArrayInitializer, NodeType.ArrayElementType)
+                .find()) {
+            ++nExtraDims;
           }
-          throw new AssertionError(e);
+          for (@SuppressWarnings("unused") DimExprNode dimExprNode
+              : e.finder(DimExprNode.class)
+                .exclude(
+                    NodeType.Annotation, NodeType.DimExpr,
+                    NodeType.ArrayInitializer, NodeType.ArrayElementType)
+                .find()) {
+            ++nExtraDims;
+          }
+          Preconditions.checkNotNull(elementType);
+          if (StaticType.ERROR_TYPE.equals(elementType)) {
+            exprType = StaticType.ERROR_TYPE;
+          } else {
+            exprType = typePool.type(
+                elementType.typeSpecification.withNDims(
+                    elementType.typeSpecification.nDims + nExtraDims),
+                e.getSourcePosition(), logger);
+          }
+          break type_switch;
         }
 
         case Expression:
@@ -437,9 +518,46 @@ final class TypingPass extends AbstractRewritingPass {
 
         case AdditiveExpression: {
           AdditiveExpressionNode e = (AdditiveExpressionNode) node;
-          switch (e.getVariant()) {
+          Preconditions.checkState(
+              e.getVariant() ==
+              AdditiveExpressionNode.Variant.
+              AdditiveExpressionAdditiveOperatorMultiplicativeExpression);
+          Operand left = nthOperandOf(
+              0, builder, NodeType.AdditiveExpression);
+          Operand right = nthOperandOf(
+              1, builder, NodeType.MultiplicativeExpression);
+          if (left == null || right == null) {
+            error(e, "Missing operand");
+            exprType = StaticType.ERROR_TYPE;
+            break type_switch;
           }
-          throw new AssertionError(e);
+          AdditiveOperatorNode operator = e.firstChildWithType(
+              AdditiveOperatorNode.class);
+          // JLS S15.18 says
+          // If the type of either operand of a + operator is String, then the
+          // operation is string concatenation.
+          // Otherwise, the type of each of the operands of the + operator must
+          // be a type that is convertible (S5.1.8) to a primitive numeric
+          // type, or a compile-time error occurs.
+          StaticType leftType = left.getNode() instanceof Typed ? ((Typed) left.getNode()).getStaticType() : passThru(left);  // TODO: fix this horrot
+          StaticType rightType = right.getNode() instanceof Typed ? ((Typed) right.getNode()).getStaticType() : passThru(right);
+          StaticType stringType = typePool.type(
+              new TypeSpecification(JAVA_LANG_STRING), null, logger);
+          boolean isStringConcat = operator != null
+              && operator.getVariant() == AdditiveOperatorNode.Variant.Pls
+              && (
+                  leftType != null
+                      && (Compatibility.of(stringType.assignableFrom(leftType))
+                          != Compatibility.INCOMPATIBLE)
+                  || rightType != null
+                      && (Compatibility.of(stringType.assignableFrom(rightType))
+                          != Compatibility.INCOMPATIBLE));
+          if (isStringConcat) {
+            exprType = stringType;
+          } else {
+            throw new Error("TODO");  // TODO
+          }
+          break;
         }
 
         case MultiplicativeExpression: {
@@ -936,6 +1054,7 @@ final class TypingPass extends AbstractRewritingPass {
       }
       CastNode cast;
       if (targetType instanceof PrimitiveType) {
+        @SuppressWarnings("synthetic-access")
         PrimitiveTypeNode targetTypeNode = toPrimitiveTypeNode(
             (PrimitiveType) targetType);
         cast = CastNode.Variant.ConvertCast.nodeBuilder()
@@ -946,7 +1065,10 @@ final class TypingPass extends AbstractRewritingPass {
       } else {
         // TODO: handle +/- unary op ambiguity.
         // Maybe, if it's not an ExpressionAtom.Parenthesized, then
-        // wrap it.
+        // wrap it.  This may already necessarily happen due to the
+        // Intermediates call below, but it's non-obvious and a maintenance
+        // hazard as-is.
+        @SuppressWarnings("synthetic-access")
         ReferenceTypeNode targetTypeNode = toReferenceTypeNode(
             (ReferenceType) targetType);
         cast = CastNode.Variant.ConfirmCast.nodeBuilder()
@@ -1115,6 +1237,11 @@ final class TypingPass extends AbstractRewritingPass {
             }
 
             int nActuals = actualTypes.size();
+            if (DEBUG) {
+              System.err.println(
+                  "For " + m.member.getDescriptor() + ", minArity=" + minArity
+                  + ", maxArity=" + maxArity + ", nActuals=" + nActuals);
+            }
             if (nActuals < minArity || nActuals > maxArity) {
               return false;
             }
@@ -1133,8 +1260,10 @@ final class TypingPass extends AbstractRewritingPass {
 
         }));
     if (DEBUG) {
+      System.err.println("\n* " + sourceNode.getSourcePosition());
       for (ParameterizedMember<CallableInfo> m : methods) {
-        System.err.println("METHOD " + m.declaringType
+        System.err.println(
+            "METHOD " + m.declaringType
             + " : " + m.member.canonName + " : " + m.member.getDescriptor());
       }
     }
@@ -1195,7 +1324,7 @@ final class TypingPass extends AbstractRewritingPass {
           StaticType formalType;
           StaticType actualType = actualTypes.get(i);
           if (m.member.isVariadic() && i >= arity - 1) {
-            formalType = formalTypesInContext.get(i - 1);
+            formalType = formalTypesInContext.get(arity - 1);
             if (formalType instanceof ArrayType) {
               boolean isCompatibleArrayTypeOrNull = false;
               if (arity == nActuals) {
@@ -1228,6 +1357,9 @@ final class TypingPass extends AbstractRewritingPass {
             formalType = formalTypesInContext.get(i);
           }
 
+          // TODO: This castRequired check fails when either formalType or
+          // actualType are parameterized forms.  Actually implement
+          // https://docs.oracle.com/javase/specs/jls/se8/html/jls-18.html#jls-18.5
           StaticType.Cast castRequired = formalType.assignableFrom(actualType);
           actualToFormalCasts.add(castRequired);
           switch (Compatibility.of(castRequired)) {
@@ -1244,10 +1376,22 @@ final class TypingPass extends AbstractRewritingPass {
           StaticType returnTypeInContext = typePool.type(
                 m.member.getReturnType().subst(substMap),
                 sourceNode.getSourcePosition(), logger);
+          ImmutableList<Cast> casts = actualToFormalCasts.build();
+          if (DEBUG) {
+            System.err.println("For " + m.member.getDescriptor()
+                + ", formalTypesInContext=" + formalTypesInContext
+                + ", casts=" + casts
+                + ", requiresVariadicArrayConstruction="
+                + requiresVariadicArrayConstruction);
+          }
           results.add(new MethodSearchResult(
               m, formalTypesInContext, returnTypeInContext,
-              actualToFormalCasts.build(),
-              requiresVariadicArrayConstruction));
+              casts, requiresVariadicArrayConstruction));
+        } else {
+          if (DEBUG) {
+            System.err.println(
+                "Method " + m.member.canonName + " not compatible");
+          }
         }
       }
     }
@@ -1271,6 +1415,9 @@ final class TypingPass extends AbstractRewritingPass {
             break;
           }
         }
+      }
+      if (DEBUG) {
+        System.err.println("requiresUnOrBoxing=" + requiresUnOrBoxing);
       }
       boolean oneRequiresUnOrBoxing = requiresUnOrBoxing.nextSetBit(0) >= 0;
       boolean oneDoesntRequireUnOrBoxing =
@@ -1326,6 +1473,13 @@ final class TypingPass extends AbstractRewritingPass {
             MethodSearchResult mi = rarr[i];
             if (i == j || mi == null) { continue; }
             if (mi.isStrictlyMoreSpecificThan(mj)) {
+              if (DEBUG) {
+                System.err.println(
+                    "Eliminated " + rarr[j].m.member.canonName
+                    + "#" + rarr[j].m.member.getDescriptor()
+                    + "(" + Joiner.on(", ").join(rarr[j].formalTypesInContext)
+                    + ")");
+              }
               rarr[j] = null;
               continue specificity_loop;
             }
@@ -1378,6 +1532,10 @@ final class TypingPass extends AbstractRewritingPass {
     }
 
     public boolean isStrictlyMoreSpecificThan(MethodSearchResult that) {
+      // TODO: JLS S 15.12 does not use parameters after explicit replacement to
+      // infer bounds.  We need to take the actual expressions too.
+      // For e.g., test f(byte) vs f(int) given integral constants that fit in
+      // [-128,127].
       ImmutableList<StaticType> aTypes = this.formalTypesInContext;
       ImmutableList<StaticType> bTypes = that.formalTypesInContext;
 
@@ -1406,6 +1564,20 @@ final class TypingPass extends AbstractRewritingPass {
           aArity - (aIsVariadic ? 1 : 0),
           bArity - (bIsVariadic ? 1 : 0));
 
+      if (DEBUG) {
+        System.err.println(
+            "Testing " + this.m.member.canonName.identifier + "\n"
+            + this.m.member.getDescriptor()
+            + "(" + Joiner.on(", ").join(this.formalTypesInContext) + ")\n"
+            + "more specific than\n"
+            + that.m.member.getDescriptor()
+            + "(" + Joiner.on(", ").join(that.formalTypesInContext) + ")\n"
+            + "aArity=" + aArity + ", bArity=" + bArity + "\n"
+            + "aMarginalFormalType=" + aMarginalFormalType
+            + ", bMarginalFormalType=" + bMarginalFormalType + "\n"
+            + "nonVarArgsArity=" + nonVarArgsArity);
+      }
+
       boolean oneMoreSpecificThan = false;
       for (int i = 0; i < nonVarArgsArity; ++i) {
         Boolean b = parameterSpecificity(aTypes.get(i), bTypes.get(i));
@@ -1414,11 +1586,19 @@ final class TypingPass extends AbstractRewritingPass {
         } else if (b) {
           oneMoreSpecificThan = true;
         } else {
+          if (DEBUG) {
+            System.err.println("\tparameterSpecificity " + i + " = false");
+          }
           return false;
         }
       }
 
       if (!(aIsVariadic || bIsVariadic)) {
+        if (DEBUG) {
+          System.err.println(
+              "\tNeither variadic oneMoreSpecificThan=" + oneMoreSpecificThan
+              + ", same arity=" + (aArity == bArity));
+        }
         return oneMoreSpecificThan && aArity == bArity;
       }
 
@@ -1451,6 +1631,9 @@ final class TypingPass extends AbstractRewritingPass {
         } else if (b) {
           oneMoreSpecificThan = true;
         } else {
+          if (DEBUG) {
+            System.err.println("\tExtra arg not more specific " + aIndex);
+          }
           return false;
         }
       }
@@ -1460,6 +1643,9 @@ final class TypingPass extends AbstractRewritingPass {
       //   ()
       //   (B...)
       if (aIndex == aArity && !aIsVariadic && bIndex + 1 == bArity) {
+        if (DEBUG) {
+          System.err.println("\tMore specific due to empty variadic match");
+        }
         return true;
       }
 
@@ -1481,6 +1667,11 @@ final class TypingPass extends AbstractRewritingPass {
           specificity = parameterSpecificity(
               aTypes.get(aArity - 1), bTypes.get(bArity - 1));
         }
+        if (DEBUG) {
+          System.err.println(
+              "\tBoth variadic specificity=" + specificity
+              + ", oneMoreSpecificThan=" + oneMoreSpecificThan);
+        }
         return specificity != null ? specificity : oneMoreSpecificThan;
       }
 
@@ -1495,6 +1686,7 @@ final class TypingPass extends AbstractRewritingPass {
       //   (Object...)
       //   (Cloneable)
       // because in these cases B has a more specific arity than A.
+      System.err.println("\tRan out of more specific cases");
       return false;
     }
 
