@@ -336,7 +336,8 @@ final class TypingPass extends AbstractRewritingPass {
               // TODO
               break;
             case FreeField:
-              exprType = processFieldAccess(e, (PrimaryNode.Builder) builder);
+              exprType = processFieldAccess(
+                  e, (ExpressionAtomNode.Builder) builder);
               break type_switch;
             case Literal:
               exprType = passThru(node);
