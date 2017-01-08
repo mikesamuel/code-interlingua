@@ -830,7 +830,8 @@ public abstract class StaticType {
             }
           }
 
-          // TODO: Do we need to work on the
+          // TODO: Do we need to work on the case where this is a type parameter
+          // and use its upper bound above?
           return Cast.DISJOINT;
         }
         if (t instanceof PrimitiveType) {
