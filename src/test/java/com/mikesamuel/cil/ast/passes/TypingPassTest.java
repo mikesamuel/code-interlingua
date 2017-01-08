@@ -523,12 +523,15 @@ public final class TypingPassTest extends TestCase {
             "package foo;",
             "import static bar.Bar.f;",
             "import static bar.Baz.f;",
+            "import static bar.Boo.*;",
             "public class Foo {",
             "  public static void main(String... argv) {",
             "    /* /bar/Bar(I)I*/",
             "    f(0);",
             "    /* /bar/Baz(Ljava/lang/Integer;)I*/",
             "    f(null);",
+            "    /* /bar/Bar(I)I*/",
+            "    f((int) ((short) 0));",
             "  }",
             "}",
           },
@@ -554,17 +557,30 @@ public final class TypingPassTest extends TestCase {
             "  }",
             "}",
           },
+          {
+            "package bar;",
+            "public class Boo {",
+            "  public static int f(short i) {",
+            "    System.err.",
+            "    /* /java/io/PrintStream(Ljava/lang/String;)V*/",
+            "    println(\"Boo.f\");",
+            "    return 0;",
+            "  }",
+            "}",
+          },
         },
         new String[][] {
           {
             "package foo;",
             "import static bar.Bar.f;",
             "import static bar.Baz.f;",
+            "import static bar.Boo.*;",  // Masked by explicit
             "",
             "public class Foo {",
             "  public static void main(String... argv) {",
             "    f(0);",
             "    f(null);",
+            "    f((short) 0);",  // Does not resolve to Boo.
             "  }",
             "}",
           },
@@ -588,6 +604,16 @@ public final class TypingPassTest extends TestCase {
             "  }",
             "}",
           },
+          {
+            "//Boo",
+            "package bar;",
+            "public class Boo {",
+            "  public static int f(short i) {",
+            "    System.err.println(\"Boo.f\");",
+            "    return 0;",
+            "  }",
+            "}",
+          },
         },
         null,
         null,
@@ -597,6 +623,27 @@ public final class TypingPassTest extends TestCase {
 
   @Test
   public static final void testStaticMethodImportMaskedByLocalDeclaration()
+  throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            // TODO
+          },
+        },
+        new String[][] {
+          {
+          },
+        },
+        StatementExpressionNode.class,
+        new String[] {
+
+        },
+        DECORATE_METHOD_NAMES
+        );
+  }
+
+  @Test
+  public static final void testStaticWildcardImports()
   throws Exception {
     assertTyped(
         new String[][] {
