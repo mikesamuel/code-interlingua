@@ -185,7 +185,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
               //   }
 
               seed = ExpressionAtomNode.Variant.StaticMember.nodeBuilder()
-                  .add(buildTypeNameNode(seedDecomp))
+                  .add(buildTypeNameNode(seedDecomp, names))
                   .build();
               break;
             case AMBIGUOUS:
@@ -217,7 +217,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
       case TypeName: {
         Decomposed d = Decomposed.of(names);
         if (d != null) {
-          return ProcessingStatus.replace(buildTypeNameNode(d));
+          TypeNameNode typeName = buildTypeNameNode(d, parent);
+          return ProcessingStatus.replace(typeName);
         }
         break;
       }
@@ -514,7 +515,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
   }
 
-  private TypeNameNode buildTypeNameNode(Decomposed d) {
+  private TypeNameNode buildTypeNameNode(Decomposed d, BaseNode orig) {
     ImmutableList<IdentifierEtc> idents = d.idents;
     if (useLongNames) {
       ImmutableList.Builder<IdentifierEtc> b = ImmutableList.builder();
@@ -556,6 +557,11 @@ final class DisambiguationPass extends AbstractRewritingPass {
       b = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier.nodeBuilder()
           .add(child)
           .add(idents.get(nIdents - 1).identifier);
+    }
+    if (orig instanceof TypeNameNode) {
+      b.copyMetadataFrom((TypeNameNode) orig);
+    } else {
+      b.setSourcePosition(orig.getSourcePosition());
     }
     if (d.name.type != Name.Type.AMBIGUOUS) {
       Optional<TypeInfo> tiOpt = typeInfoResolver.resolve(d.name);

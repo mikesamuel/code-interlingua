@@ -145,6 +145,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
       if (tiOpt.isPresent()) {
         String possibleFieldName = fieldOrMethodName.getValue();
         TypeInfo ti = tiOpt.get();
+        typeName.setReferencedTypeInfo(ti);
         boolean hasAccessibleStaticFieldNamed = ti.memberMatching(
             this.typeInfoResolver,
             new Predicate<MemberInfo>() {
@@ -180,7 +181,9 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
       }
       Optional<TypeInfo> tiOpt = lookupType(typeName);
       if (tiOpt.isPresent()) {
-        wildcards.add(tiOpt.get());
+        TypeInfo ti = tiOpt.get();
+        typeName.setReferencedTypeInfo(ti);
+        wildcards.add(ti);
       } else {
         error(
             typeName,

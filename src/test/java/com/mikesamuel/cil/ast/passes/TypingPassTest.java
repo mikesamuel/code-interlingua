@@ -21,6 +21,7 @@ import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
+import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
 import com.mikesamuel.cil.ast.traits.MethodDescriptorReference;
 import com.mikesamuel.cil.ast.traits.Typed;
@@ -516,11 +517,42 @@ public final class TypingPassTest extends TestCase {
   @Test
   public static final void testStaticMethodImport()
   throws Exception {
-if (false)
     assertTyped(
         new String[][] {
           {
-
+            "package foo;",
+            "import static bar.Bar.f;",
+            "import static bar.Baz.f;",
+            "public class Foo {",
+            "  public static void main(String... argv) {",
+            "    /* /bar/Bar(I)I*/",
+            "    f(0);",
+            "    /* /bar/Baz(Ljava/lang/Integer;)I*/",
+            "    f(null);",
+            "  }",
+            "}",
+          },
+          {
+            "package bar;",
+            "public class Bar {",
+            "  public static int f(int i) {",
+            "    System.err.",
+            "    /* /java/io/PrintStream(Ljava/lang/String;)V*/",
+            "    println(\"Bar.f\");",
+            "    return 0;",
+            "  }",
+            "}",
+          },
+          {
+            "package bar;",
+            "public class Baz {",
+            "  public static int f(Integer i) {",
+            "    System.err.",
+            "    /* /java/io/PrintStream(Ljava/lang/String;)V*/",
+            "    println(\"Baz.f\");",
+            "    return 0;",
+            "  }",
+            "}",
           },
         },
         new String[][] {
@@ -529,8 +561,8 @@ if (false)
             "import static bar.Bar.f;",
             "import static bar.Baz.f;",
             "",
-            "public class C {",
-            "  {",
+            "public class Foo {",
+            "  public static void main(String... argv) {",
             "    f(0);",
             "    f(null);",
             "  }",
@@ -540,20 +572,26 @@ if (false)
             "//Bar",
             "package bar;",
             "public class Bar {",
-            "  public static int f(int i) { return 0; }",
+            "  public static int f(int i) {",
+            "    System.err.println(\"Bar.f\");",
+            "    return 0;",
+            "  }",
             "}",
           },
           {
             "//Baz",
             "package bar;",
             "public class Baz {",
-            "  public static int f(Integer i) { return 0; }",
+            "  public static int f(Integer i) {",
+            "    System.err.println(\"Baz.f\");",
+            "    return 0;",
+            "  }",
             "}",
           },
         },
         null,
         null,
-        DECORATE_METHOD_NAMES
+        DECORATE_METHOD_NAMES_INCL_CONTAINER
         );
   }
 
@@ -778,4 +816,32 @@ if (false)
     }
 
   };
+
+  private static final Decorator DECORATE_METHOD_NAMES_INCL_CONTAINER =
+      new Decorator() {
+
+        @Override
+        public String decorate(BaseNode node) {
+          if (node instanceof MethodDescriptorReference) {
+            MethodDescriptorReference desc = (MethodDescriptorReference) node;
+
+            StringBuilder sb = new StringBuilder();
+
+            TypeSpecification declType = desc.getMethodDeclaringType();
+            if (declType != null) {
+              sb.append(declType.toString());
+            }
+
+            String descriptor = desc.getMethodDescriptor();
+            if (descriptor != null) {
+              sb.append(descriptor);
+            }
+            if (sb.length() != 0) {
+              return Java8Comments.blockCommentMinimalSpace(sb.toString());
+            }
+          }
+          return null;
+        }
+
+      };
 }

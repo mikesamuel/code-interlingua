@@ -2,7 +2,7 @@ package com.mikesamuel.cil.ast.passes;
 
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.Iterator;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -16,12 +16,14 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.AdditiveOperatorNode;
@@ -57,7 +59,6 @@ import com.mikesamuel.cil.ast.IntegralTypeNode;
 import com.mikesamuel.cil.ast.Intermediates;
 import com.mikesamuel.cil.ast.LocalNameNode;
 import com.mikesamuel.cil.ast.MethodNameNode;
-import com.mikesamuel.cil.ast.MultiplicativeExpressionNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
@@ -70,6 +71,8 @@ import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.RelationalExpressionNode;
 import com.mikesamuel.cil.ast.ShiftExpressionNode;
 import com.mikesamuel.cil.ast.ShiftOperatorNode;
+import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
+import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
@@ -86,6 +89,7 @@ import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
+import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool.ParameterizedMember;
 import com.mikesamuel.cil.ast.meta.StaticType;
@@ -131,6 +135,10 @@ final class TypingPass extends AbstractRewritingPass {
       = Lists.newLinkedList();
   private final LinkedList<TypeInfo> containingTypes = Lists.newLinkedList();
 
+  private final Multimap<String, TypeInfo> staticImports =
+      ArrayListMultimap.create();
+  private final List<TypeInfo> staticWildcardImports = Lists.newArrayList();
+
   private final Map<Name, StaticType> locals = Maps.newLinkedHashMap();
 
   static final boolean DEBUG = false;
@@ -156,6 +164,25 @@ final class TypingPass extends AbstractRewritingPass {
   protected <N extends BaseNode> ProcessingStatus previsit(
       N node, @Nullable SList<Parent> pathFromRoot,
       BaseNode.Builder<N, ?> builder) {
+
+    if (node instanceof SingleStaticImportDeclarationNode) {
+      TypeNameNode typ = node.firstChildWithType(TypeNameNode.class);
+      TypeInfo ti = typ != null ? typ.getReferencedTypeInfo() : null;
+
+      IdentifierNode memberNameNode = node.firstChildWithType(
+          IdentifierNode.class);
+      String memberName = memberNameNode != null ? memberNameNode.getValue()
+          : null;
+      if (ti != null && memberName != null) {
+        staticImports.put(memberName, ti);
+      }
+    } else if (node instanceof StaticImportOnDemandDeclarationNode) {
+      TypeNameNode typ = node.firstChildWithType(TypeNameNode.class);
+      TypeInfo ti = typ != null ? typ.getReferencedTypeInfo() : null;
+      if (ti != null) {
+        staticWildcardImports.add(ti);
+      }
+    }
 
     if (node instanceof ExpressionNameScope) {
       ExpressionNameScope scope = (ExpressionNameScope) node;
@@ -732,20 +759,32 @@ final class TypingPass extends AbstractRewritingPass {
 
     Name sourceType = containingTypes.peekLast().canonName;
 
-    ImmutableList<ParameterizedMember<FieldInfo>> fields =
+    ImmutableList<ParameterizedMember<FieldInfo>> fields = findMembers(
+        fieldName,
+        containerType,
+        new Function<
+            TypeSpecification,
+            Optional<ImmutableList<ParameterizedMember<FieldInfo>>>>() {
+
+          @Override
+          public
+          Optional<ImmutableList<ParameterizedMember<FieldInfo>>> apply(
+              TypeSpecification oneContainer) {
+            ImmutableList<ParameterizedMember<FieldInfo>> fieldsFound =
+                memberInfoPool.getMembers(
+                    FieldInfo.class,
+                    fieldName,
+                    sourceType,
+                    oneContainer);
+            if (!fieldsFound.isEmpty()) {
+              // Implement name shadowing by taking the first that has any accessible
+              // with the right name.
+              return Optional.of(fieldsFound);
+            }
+            return Optional.absent();
+          }
+        });
         ImmutableList.of();
-    for (TypeSpecification oneContainer : getMemberContainers(containerType)) {
-      fields = memberInfoPool.getMembers(
-          FieldInfo.class,
-          fieldName,
-          sourceType,
-          oneContainer);
-      if (!fields.isEmpty()) {
-        // Implement name shadowing by taking the first that has any accessible
-        // with the right name.
-        break;
-      }
-    }
 
     if (fields.isEmpty()) {
       error(
@@ -883,6 +922,7 @@ final class TypingPass extends AbstractRewritingPass {
 
     // Associate method descriptor with invokedMethod.
     nameNode.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
+    nameNode.setMethodDeclaringType(invokedMethod.m.declaringType);
 
     // Inject casts for actual parameters.
     if (this.injectCasts && actuals != null) {
@@ -1239,13 +1279,17 @@ final class TypingPass extends AbstractRewritingPass {
    * <p>
    * @param explicitContainerType null if the member use is a free use.
    */
-  private ImmutableList<TypeSpecification> getMemberContainers(
-      @Nullable StaticType explicitContainerType) {
+  private <T extends MemberInfo>
+  ImmutableList<ParameterizedMember<T>> findMembers(
+      String memberSimpleName,
+      @Nullable StaticType explicitContainerType,
+      Function<TypeSpecification,
+               Optional<ImmutableList<ParameterizedMember<T>>>> searchOne) {
     if (explicitContainerType != null) {
-      return ImmutableList.of(explicitContainerType.typeSpecification);
+      return searchOne.apply(explicitContainerType.typeSpecification)
+          .or(ImmutableList.of());
     }
     TypeInfo last = null;
-    ImmutableList.Builder<TypeSpecification> b = ImmutableList.builder();
     for (TypeInfo containingType : Lists.reverse(containingTypes)) {
       if (last != containingType) {
         ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
@@ -1253,13 +1297,44 @@ final class TypingPass extends AbstractRewritingPass {
         for (Name param : containingType.parameters) {
           bindings.add(new TypeSpecification.TypeBinding(param));
         }
-        b.add(TypeSpecification.autoScoped(containingType));
+        Optional<ImmutableList<ParameterizedMember<T>>> results =
+            searchOne.apply(TypeSpecification.autoScoped(containingType));
+        if (results.isPresent()) {
+          return results.get();
+        }
         last = containingType;
       }
     }
-    // TODO: Fall back to static imports.
-    // TODO: This will require the member name be passed in.
-    return b.build();
+    // Fall back to static imports.
+    Collection<TypeInfo> staticImportsForMember = staticImports.get(
+        memberSimpleName);
+    if (!staticImportsForMember.isEmpty()) {
+      ImmutableList.Builder<ParameterizedMember<T>> staticallyImported =
+          ImmutableList.builder();
+      for (TypeInfo imported : staticImportsForMember) {
+        Optional<ImmutableList<ParameterizedMember<T>>> results =
+            searchOne.apply(TypeSpecification.autoScoped(imported));
+        if (results.isPresent()) {
+          staticallyImported.addAll(results.get());
+        }
+      }
+      ImmutableList<ParameterizedMember<T>> fromStaticImports =
+          staticallyImported.build();
+      if (!fromStaticImports.isEmpty()) {
+        return fromStaticImports;
+      }
+    }
+    // Fall back to wildcard imports.
+    ImmutableList.Builder<ParameterizedMember<T>> staticallyImported =
+        ImmutableList.builder();
+    for (TypeInfo imported : staticWildcardImports) {
+      Optional<ImmutableList<ParameterizedMember<T>>> results =
+          searchOne.apply(TypeSpecification.autoScoped(imported));
+      if (results.isPresent()) {
+        staticallyImported.addAll(results.get());
+      }
+    }
+    return staticallyImported.build();
   }
 
   /**
@@ -1283,23 +1358,30 @@ final class TypingPass extends AbstractRewritingPass {
     }
     Name sourceType = containingTypes.peekLast().canonName;
 
-    ImmutableList<TypeSpecification> calleeTypes = getMemberContainers(
-        calleeType);
-
-    ImmutableList<ParameterizedMember<CallableInfo>> methods =
-        ImmutableList.of();
-    for (TypeSpecification oneContainingType : calleeTypes) {
-      methods = memberInfoPool.getMembers(
-          CallableInfo.class,
-          methodName,
-          sourceType,
-          oneContainingType);
-      if (!methods.isEmpty()) {
-        // Implement name shadowing by taking the first that has any accessible
-        // with the right name.
-        break;
-      }
-    }
+    ImmutableList<ParameterizedMember<CallableInfo>> methods = findMembers(
+        methodName,
+        calleeType,
+        new Function<
+            TypeSpecification,
+            Optional<ImmutableList<ParameterizedMember<CallableInfo>>>>() {
+          @Override
+          public
+          Optional<ImmutableList<ParameterizedMember<CallableInfo>>> apply(
+              TypeSpecification oneContainingType) {
+            ImmutableList<ParameterizedMember<CallableInfo>> methodsFound =
+                memberInfoPool.getMembers(
+                    CallableInfo.class,
+                    methodName,
+                    sourceType,
+                    oneContainingType);
+            if (!methodsFound.isEmpty()) {
+              // Non-private field declarations mask all super-type
+              // declarations of the same name.
+              return Optional.of(methodsFound);
+            }
+            return Optional.absent();
+          }
+        });
 
     // After we've found the methods, filter by arity and signature.
     methods = ImmutableList.copyOf(Iterables.filter(

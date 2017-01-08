@@ -58,8 +58,10 @@ _TRAITS = {
     'MethodDescriptorReference': (
         (
             ('String', 'methodDescriptor'),
+            ('TypeSpecification', 'methodDeclaringType'),
         ),
         (
+            'com.mikesamuel.cil.ast.meta.TypeSpecification',
         )),
     'NamePart': (
         (
