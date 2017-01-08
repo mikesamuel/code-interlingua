@@ -144,13 +144,14 @@ final class ClassMemberPass extends AbstractPass<Void> {
             if (staticType == null) {
               staticType = StaticType.ERROR_TYPE;
             }
-            formalTypes.add(staticType.typeSpecification);
             if (isVariadic) {
               // Promote T... formals to arrays.
               staticType = typePool.type(
                   staticType.typeSpecification.arrayOf(),
                   formal.getSourcePosition(), logger);
+              info.setVariadic(true);
             }
+            formalTypes.add(staticType.typeSpecification);
             String tdesc = staticType.toDescriptor();
             if (tdesc.endsWith(errorDesc)) {  // [X is an array of errors.
               hasErrorType = true;
