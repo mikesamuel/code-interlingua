@@ -34,6 +34,9 @@ public final class ClassMemberPassTest extends TestCase {
               Logger logger, ImmutableList<CompilationUnitNode> cus) {
             DeclarationPass declPass = new DeclarationPass(logger);
             TypeInfoResolver typeInfoResolver = declPass.run(cus);
+            ExpressionScopePass esp = new ExpressionScopePass(
+                typeInfoResolver, logger);
+            esp.run(cus);
             DisambiguationPass disambigPass = new DisambiguationPass(
                 typeInfoResolver, logger, false);
             ImmutableList<CompilationUnitNode> rewritten =
