@@ -833,7 +833,6 @@ LeftHandSide:
      Primary (@postcond=Postconds.Primary.Ambiguous)                (@name=Ambiguous)
 DotKeywordDimsOrCtorRef:
      "." "class"
-     "." "new"
      "." "super"
      "." "this"
      Dims
