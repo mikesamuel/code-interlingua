@@ -1289,7 +1289,7 @@ public enum NodeType implements ParSerable {
         else:
             ctor_formals = 'String literalValue'
             builder_kind = 'Leaf'
-            builder_actuals = 'getLiteralValue()'
+            builder_actuals = 'getValue()'
             super_ctor_actuals = 'ImmutableList.of(), literalValue'
             extra_imports.add('com.google.common.collect.ImmutableList')
             builder_code.append('''
