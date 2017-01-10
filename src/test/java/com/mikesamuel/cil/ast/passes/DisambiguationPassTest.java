@@ -14,6 +14,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.PrimaryNode;
@@ -443,15 +444,59 @@ public final class DisambiguationPassTest extends TestCase {
         TYPE_AND_NAME_DECORATOR);
   }
 
+  @Test
+  public static void testQualifiedNew() {
+    for (boolean longNames : new boolean[] { false, true }) {
+      assertDisambiguated(
+          new String[][] {
+            {
+              "ArgumentList.ExpressionComExpression",
+              "  Expression.ConditionalExpression",
+              "    Primary.InnerClassCreation",
+              "      ExpressionAtom.FreeField",
+              "        FieldName.Identifier : /C.d",
+              "          Identifier.Builtin d",
+              "      UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
+              "        ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
+              "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+              "            Identifier.Builtin E : CLASS",
+            },
+          },
+          new String[][] {
+            {
+              "//C",
+              "class C {",
+              "  D d = new D();",
+              "  {",
+              "    System.err.println(d.new E());",
+              "  }",
+              "}"
+            },
+            {
+              "//D",
+              "class D {",
+              "  class E {",
+              "  }",
+              "}",
+            },
+          },
+          nth(0, with(NodeType.ArgumentList)),
+          longNames,
+          TYPE_AND_NAME_DECORATOR);
+    }
+  }
+
   static void assertDisambiguated(
       String[] want,
       String[] input,
       NodeMatcher nodeMatcher,
       boolean useLongNames,
-      @Nullable Function<? super BaseNode, ? extends String> decorator) {
+      @Nullable Function<? super NodeOrBuilder, ? extends String> decorator,
+      String... expectedErrors) {
     assertDisambiguated(
         new String[][] { want },
-        new String[][] { input }, nodeMatcher, useLongNames, decorator);
+        new String[][] { input }, nodeMatcher, useLongNames, decorator,
+        expectedErrors);
   }
 
   static void assertDisambiguated(
@@ -459,21 +504,33 @@ public final class DisambiguationPassTest extends TestCase {
       String[][] inputs,
       NodeMatcher nodeMatcher,
       boolean useLongNames,
-      @Nullable Function<? super BaseNode, ? extends String> decorator) {
-    Logger logger = Logger.getAnonymousLogger();
-    ImmutableList<CompilationUnitNode> cuNodes =
-        PassTestHelpers.parseCompilationUnits(inputs);
-
-    DeclarationPass declarationPass = new DeclarationPass(logger);
-    TypeInfoResolver typeInfoResolver = declarationPass.run(cuNodes);
-
-    ExpressionScopePass scopePass = new ExpressionScopePass(
-        typeInfoResolver, logger);
-    scopePass.run(cuNodes);
-
+      @Nullable Function<? super NodeOrBuilder, ? extends String> decorator,
+      String... expectedErrors) {
     ImmutableList<CompilationUnitNode> disambiguated =
-        new DisambiguationPass(typeInfoResolver, logger, useLongNames)
-        .run(cuNodes);
+        PassTestHelpers.expectErrors(
+            new PassTestHelpers
+            .LoggableOperation<ImmutableList<CompilationUnitNode>>() {
+
+              @Override
+              public ImmutableList<CompilationUnitNode> run(Logger logger) {
+                ImmutableList<CompilationUnitNode> cuNodes =
+                    PassTestHelpers.parseCompilationUnits(inputs);
+
+                DeclarationPass declarationPass = new DeclarationPass(logger);
+                TypeInfoResolver typeInfoResolver =
+                    declarationPass.run(cuNodes);
+
+                ExpressionScopePass scopePass = new ExpressionScopePass(
+                    typeInfoResolver, logger);
+                scopePass.run(cuNodes);
+
+                return new DisambiguationPass(
+                        typeInfoResolver, logger, useLongNames)
+                    .run(cuNodes);
+              }
+
+            },
+            expectedErrors);
     ImmutableList.Builder<BaseNode> matches = ImmutableList.builder();
     nodeMatcher.match(disambiguated, matches);
 
@@ -593,11 +650,11 @@ public final class DisambiguationPassTest extends TestCase {
   }
 
 
-  static final Function<BaseNode, String> TYPE_AND_NAME_DECORATOR =
-      new Function<BaseNode, String>() {
+  static final Function<NodeOrBuilder, String> TYPE_AND_NAME_DECORATOR =
+      new Function<NodeOrBuilder, String>() {
 
         @Override
-        public String apply(BaseNode n) {
+        public String apply(NodeOrBuilder n) {
           Name canonName = null;
           if (n instanceof TypeDeclaration) {
             TypeInfo ti = ((TypeDeclaration) n).getDeclaredTypeInfo();

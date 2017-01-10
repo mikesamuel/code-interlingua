@@ -40,6 +40,7 @@ import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
 import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.ConditionalAndExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalOrExpressionNode;
@@ -80,6 +81,7 @@ import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.TypeNode;
 import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
+import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.WildcardBoundsNode;
@@ -390,10 +392,19 @@ final class TypingPass extends AbstractRewritingPass {
                   e.getSourcePosition(), logger);
               break type_switch;
             case UnqualifiedClassInstanceCreationExpression:
-              // TODO
-              break;
-            default:
-              break;
+              Optional<ClassOrInterfaceTypeNode> type = node.finder(
+                  ClassOrInterfaceTypeNode.class)
+                  .exclude(NodeType.TypeArguments)
+                  .exclude(NodeType.ArgumentList)
+                  .exclude(NodeType.ClassBody)
+                  .findOne();
+              if (type.isPresent()) {
+                exprType = type.get().getStaticType();
+              } else {
+                error(node, "Class to instantiate unspecified");
+                exprType = StaticType.ERROR_TYPE;
+              }
+              break type_switch;
           }
           throw new AssertionError(e);
         }
@@ -409,6 +420,58 @@ final class TypingPass extends AbstractRewritingPass {
 
             case FieldAccess: {
               exprType = processFieldAccess(e, (PrimaryNode.Builder) builder);
+              break type_switch;
+            }
+
+            case InnerClassCreation: {
+              Operand outerInstance = nthOperandOf(
+                  0, builder, NodeType.Primary);
+              StaticType outerType = outerInstance != null
+                  ? maybePassThru(outerInstance)
+                  : null;
+
+              UnqualifiedClassInstanceCreationExpressionNode instantiation =
+                  node.firstChildWithType(
+                      UnqualifiedClassInstanceCreationExpressionNode.class);
+              ClassOrInterfaceTypeToInstantiateNode typeToInstantiate =
+                  instantiation != null
+                  ? instantiation.firstChildWithType(
+                      ClassOrInterfaceTypeToInstantiateNode.class)
+                  : null;
+              ClassOrInterfaceTypeNode type = typeToInstantiate != null
+                  ? typeToInstantiate.firstChildWithType(
+                      ClassOrInterfaceTypeNode.class)
+                  : null;
+              Name innerName = AmbiguousNames.ambiguousNameOf(type);
+              if (outerType != null && innerName != null) {
+                TypeSpecification outerSpec = outerType.typeSpecification;
+                if (outerSpec.nDims == 0
+                    && outerSpec.typeName.type == Name.Type.CLASS) {
+                  SList<Name> names = null;
+                  for (Name nm = innerName; nm != null; nm = nm.parent) {
+                    Preconditions.checkState(nm.type == Name.Type.CLASS);
+                    names = SList.append(names, nm);
+                  }
+
+                  Name fullInnerTypeName = outerSpec.typeName;
+                  for (SList<Name> nm = names; nm != null; nm = nm.prev) {
+                    fullInnerTypeName = fullInnerTypeName.child(
+                        nm.x.identifier, nm.x.type);
+                  }
+
+                  // TODO: grab from ClassOrInterfaceTypeToInstantiate
+                  // or infer for diamond.
+                  ImmutableList<TypeBinding> bindings = ImmutableList.of();
+                  TypeSpecification innerTypeSpec = new TypeSpecification(
+                      fullInnerTypeName, bindings);
+                  exprType = typePool.type(
+                      innerTypeSpec, e.getSourcePosition(), logger);
+                  Preconditions.checkNotNull(type).setStaticType(exprType);
+                  break type_switch;
+                }
+              }
+              error(node, "Inner class to instantiate unspecified");
+              exprType = StaticType.ERROR_TYPE;
               break type_switch;
             }
           }

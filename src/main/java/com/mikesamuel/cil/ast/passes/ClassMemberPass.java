@@ -10,6 +10,7 @@ import com.google.common.collect.Iterables;
 import com.mikesamuel.cil.ast.ArrayTypeNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.ClassTypeNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ConstantDeclarationNode;
@@ -22,7 +23,9 @@ import com.mikesamuel.cil.ast.IntegralTypeNode;
 import com.mikesamuel.cil.ast.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.NumericTypeNode;
+import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.ResultNode;
@@ -44,6 +47,7 @@ import com.mikesamuel.cil.ast.traits.MemberDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.ast.traits.WholeType;
+import com.mikesamuel.cil.parser.SList;
 
 /**
  * Attaches descriptor and return type info to callables and attaches type
@@ -58,13 +62,32 @@ final class ClassMemberPass extends AbstractPass<Void> {
     this.typePool = typePool;
   }
 
-  void run(BaseNode node, @Nullable TypeInfo typeInfo, TypeNameResolver nr) {
+  void run(
+      BaseNode node, @Nullable TypeInfo typeInfo, TypeNameResolver nr,
+      @Nullable SList<NodeVariant> ancestors) {
     TypeNameResolver childResolver = nr;
     TypeInfo childTypeInfo = typeInfo;
     if (node instanceof TypeScope) {
       childResolver = ((TypeScope) node).getTypeNameResolver();
     }
-    if (node instanceof WholeType) {
+    if (node instanceof WholeType
+        // Skip partial types like those in (expr).new Partial.Inner.Type()
+        && !(ancestors != null
+             && ancestors.x ==
+             ClassOrInterfaceTypeToInstantiateNode.Variant
+             .ClassOrInterfaceTypeDiamond
+             && ancestors.prev != null
+             && ancestors.prev.prev != null
+             && ancestors.prev.prev.x ==
+             // TODO: Rethink inner class creation in the grammer.
+             // ClassOrInterfaceTypeToInstantiate delegates to
+             // ClassOrInterfaceType which is a WholeType which is awkward.
+             // Option 1: separate inner class creation from static class
+             //     creation
+             // Option 2: rework ClassOrInterfaceToInstantiate so that it does
+             //     not delegate and rely on the StaticType of the whole
+             //     creation expression to specify the type created.
+             PrimaryNode.Variant.InnerClassCreation)) {
       ((WholeType) node).setStaticType(toStaticType(node, nr));
       return;
     }
@@ -73,8 +96,10 @@ final class ClassMemberPass extends AbstractPass<Void> {
     }
 
     // Compute whole types for method results and field types.
+    SList<NodeVariant> ancestorsAndNode = SList.append(
+        ancestors, node.getVariant());
     for (BaseNode child : node.getChildren()) {
-      run(child, childTypeInfo, childResolver);
+      run(child, childTypeInfo, childResolver, ancestorsAndNode);
     }
 
     if (node instanceof CallableDeclaration) {
@@ -415,7 +440,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
   @Override
   Void run(Iterable<? extends CompilationUnitNode> compilationUnits) {
     for (CompilationUnitNode cu : compilationUnits) {
-      run(cu, null, cu.getTypeNameResolver());
+      run(cu, null, cu.getTypeNameResolver(), null);
     }
     return null;
   }

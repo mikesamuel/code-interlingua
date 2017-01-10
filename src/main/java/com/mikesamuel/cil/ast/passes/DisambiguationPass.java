@@ -19,6 +19,7 @@ import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.LocalNameNode;
+import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
@@ -42,7 +43,18 @@ import com.mikesamuel.cil.parser.SourcePosition;
  * <p>
  * This happens before computing types for expressions which means we can't
  * attach declaring types to field names yet.  We also don't distinguish yet
- * between enum field references and constant references in switch cases yet.
+ * between
+ * <ol>
+ *   <li>enum field references and constant references in switch cases.
+ *     <pre>switch (x) { case FOO; case BAR; }</pre>
+ *     because the names {@code FOO} and {@code BAR} could appear in multiple
+ *     {@code enum}s and also be constant local or field accesses in scope.
+ *   <li>qualified class instance creation expressions.
+ *     <pre>foo.new Bar()</pre>
+ *     because multiple classes might have inner class {@code Bar}s, and we need
+ *     to know the parameterization of type variables of {@code foo} to type
+ *     methods and fields in the created instance.
+ * <ol>
  */
 final class DisambiguationPass extends AbstractRewritingPass {
 
@@ -101,6 +113,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
     Preconditions.checkState(!typeScopes.isEmpty());
     TypeScope scope = typeScopes.get(typeScopes.size() - 1);
+
     TypeNameResolver resolver = scope.getTypeNameResolver();
     if (resolver == null) {
       error(
@@ -115,32 +128,61 @@ final class DisambiguationPass extends AbstractRewritingPass {
         Preconditions.checkState(
             parent.getVariant() ==
             ClassOrInterfaceTypeNode.Variant.ContextFreeNames);
-        // Decide whether it's a class type or an interface type.
-        ImmutableList<Name> canonNames =
-            resolver.lookupTypeName(decomposed.name);
-        switch (canonNames.size()) {
-          case 1:
-            Name canonName = canonNames.get(0);
-            Optional<TypeInfo> typeInfoOpt =
-                typeInfoResolver.resolve(canonName);
-            if (typeInfoOpt.isPresent()) {
-              TypeInfo typeInfo = typeInfoOpt.get();
-              ClassOrInterfaceTypeNode.Builder b =
-                  (ClassOrInterfaceTypeNode.Builder) parentBuilder;
-              b.remove(0);
-              buildClassOrInterfaceType(
-                  typeInfo, canonName, decomposed, b);
-            } else {
-              error(names, "Unrecognized type " + canonName);
-            }
-            break;
-          case 0:
-            error(names, "Cannot resolve name " + decomposed.name);
-            break;
-          default:
-            error(
-                names, "Ambiguous name " + decomposed.name
-                + " : " + canonNames);
+        ClassOrInterfaceTypeNode.Builder b =
+            (ClassOrInterfaceTypeNode.Builder) parentBuilder;
+        if (pathFromRoot != null
+            && pathFromRoot.prev != null
+            && pathFromRoot.prev.prev != null
+            && pathFromRoot.prev.prev.x.parent.getVariant()
+               == PrimaryNode.Variant.InnerClassCreation) {
+          // Special case (expression.new ClassOrInterfaceTypeToInstantiate)
+          // because we need to type expression before we can resolve the
+          // rest of the type.
+          b.remove(0);
+          // 15.9.1 says
+          // """
+          // * If the class instance creation expression is qualified:
+          //
+          //   The ClassOrInterfaceTypeToInstantiate must unambiguously denote
+          //   an inner class that is accessible, non-abstract, not an enum
+          //   type, and a member of the compile-time type of the Primary
+          //   expression or the ExpressionName.
+          // """
+          // so we know all the names are class names.
+          Name allClasses = null;
+          for (IdentifierEtc ietc : decomposed.idents) {
+            String ident = ietc.identifier.getValue();
+            allClasses = allClasses == null
+                ? Name.root(ident, Name.Type.CLASS)
+                : allClasses.child(ident, Name.Type.CLASS);
+          }
+          buildClassOrInterfaceType(null, allClasses, decomposed, b);
+        } else {
+          // Decide whether it's a class type or an interface type.
+          ImmutableList<Name> canonNames =
+              resolver.lookupTypeName(decomposed.name);
+          switch (canonNames.size()) {
+            case 1:
+              Name canonName = canonNames.get(0);
+              Optional<TypeInfo> typeInfoOpt =
+                  typeInfoResolver.resolve(canonName);
+              if (typeInfoOpt.isPresent()) {
+                TypeInfo typeInfo = typeInfoOpt.get();
+                b.remove(0);
+                buildClassOrInterfaceType(
+                    typeInfo, canonName, decomposed, b);
+              } else {
+                error(names, "Unrecognized type " + canonName);
+              }
+              break;
+            case 0:
+              error(names, "Cannot resolve name " + decomposed.name);
+              break;
+            default:
+              error(
+                  names, "Ambiguous name " + decomposed.name
+                  + " : " + canonNames);
+          }
         }
         break;
       }
@@ -252,7 +294,6 @@ final class DisambiguationPass extends AbstractRewritingPass {
     // TODO: adjust variant if a child was a context free names node
     return ProcessingStatus.CONTINUE;
   }
-
 
   @SuppressWarnings("synthetic-access")
   private Optional<ImmutableList<Decomposed>> expressionNameOf(
@@ -462,13 +503,15 @@ final class DisambiguationPass extends AbstractRewritingPass {
   }
 
   private void buildClassOrInterfaceType(
-      TypeInfo typeInfo, Name name, Decomposed d,
+      @Nullable TypeInfo typeInfo, Name name, Decomposed d,
       ClassOrInterfaceTypeNode.Builder ctype) {
     buildClassOrInterfaceType(name, d, d.idents.size() - 1, ctype);
     ctype.variant(
         ClassOrInterfaceTypeNode.Variant
         .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments);
-    ctype.setReferencedTypeInfo(typeInfo);
+    if (typeInfo != null) {
+      ctype.setReferencedTypeInfo(typeInfo);
+    }
     SourcePosition p = d.sourceNode.getSourcePosition();
     if (p != null) {
       ctype.setSourcePosition(p);

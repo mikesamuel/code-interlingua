@@ -18,6 +18,7 @@ import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.StatementExpressionNode;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -691,21 +692,109 @@ public final class TypingPassTest extends TestCase {
   }
 
   @Test
-  public static final void testMethodChosenBasedOnParameterizedSuperType()
+  public static final void testQualifiedNew() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  { System.err.println((java.lang.Object) (d.new E()));",
+            "  }",
+            "  static D d = new D();",
+            "}"
+          },
+          {
+            "class D { class E {} }",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  {",
+            "    System.err.println(d.new E());",
+            "  }",
+            "  static D d = new D();",
+            "}"
+          },
+          {
+            "//D",
+            "class D {",
+            "  class E {",
+            "  }",
+            "}",
+          },
+        },
+        UnqualifiedClassInstanceCreationExpressionNode.class,
+        new String[] {
+            "E : /D$E",
+            "D : /D",
+        },
+        null);
+
+  }
+
+  @Test
+  public static final void testMethodSpecificityIgnoresParameterizedSuperType()
   throws Exception {
     assertTyped(
         new String[][] {
           {
-            // TODO
+            "public class Foo extends Bar<String> {",
+            "  public static void main(String[] args) {",
+            // Even though the signature, post template variable substitution,
+            // of the first f is f(String) which is more specific than
+            // f(CharSequence), java still chooses the latter.
+            "    new Foo()./*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f("
+            +           "(java.lang",
+            "            .CharSequence) (\"\"));",
+            "  }",
+            "}",
+          },
+          {
+            "class Bar<T> {",
+            "  <T> T f(T x) {",
+            "    System.err."
+            +   "/*(Ljava/lang/String;)V*/println(\"Bar.f(T)\");",
+            "    return null;",
+            "  }",
+            "  <T> T f(CharSequence cs) {",
+            "    System.err."
+            +   "/*(Ljava/lang/String;)V*/println(\"Bar.f(CharSequence)\");",
+            "    return null;",
+            "  }",
+            "}",
           },
         },
         new String[][] {
           {
+            "//Foo",
+            "public class Foo extends Bar<String> {",
+            "  public static void main(String[] args) {",
+            "    new Foo().f(\"\");",
+            "  }",
+            "}",
+          },
+          {
+            "class Bar<T> {",
+            "",
+            "  <T> T f(T x) {",
+            "    System.err.println(\"Bar.f(T)\");",
+            "    return null;",
+            "  }",
+            "",
+            "  <T> T f(CharSequence cs) {",
+            "    System.err.println(\"Bar.f(CharSequence)\");",
+            "    return null;",
+            "  }",
+            "}",
           },
         },
         StatementExpressionNode.class,
         new String[] {
-
+            // TODO: infer type for <T> and use that.
+            "new Foo().f((java.lang.CharSequence) (\"\")) : /Bar.f(2).<T>",
+            "System.err.println(\"Bar.f(T)\") : void",
+            "System.err.println(\"Bar.f(CharSequence)\") : void",
         },
         DECORATE_METHOD_NAMES
         );

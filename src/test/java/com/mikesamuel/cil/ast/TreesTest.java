@@ -139,9 +139,9 @@ public final class TreesTest extends TestCase {
         golden,
         root.toAsciiArt(
             "",
-            new Function<BaseNode, String>() {
+            new Function<NodeOrBuilder, String>() {
               @Override
-              public String apply(@Nonnull BaseNode node) {
+              public String apply(@Nonnull NodeOrBuilder node) {
                 SourcePosition pos = node.getSourcePosition();
                 if (pos != null) {
                   return pos.toString();
