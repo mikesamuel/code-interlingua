@@ -5,13 +5,10 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -57,25 +54,14 @@ public abstract class BaseNode implements NodeOrBuilder {
     return children;
   }
 
-  /** The first child with the given type or null. */
-  public @Nullable BaseNode firstChildWithType(NodeType nt) {
-    for (BaseNode child : children) {
-      if (child.getNodeType() == nt) {
-        return child;
-      }
-    }
-    return null;
+  @Override
+  public final int getNChildren() {
+    return children.size();
   }
 
-  /** The first child with the given type or null. */
-  public @Nullable <T>
-  T firstChildWithType(Class<? extends T> cl) {
-    for (BaseNode child : children) {
-      if (cl.isInstance(child)) {
-        return cl.cast(child);
-      }
-    }
-    return null;
+  @Override
+  public final BaseNode getChild(int i) {
+    return children.get(i);
   }
 
   /** The value if any. */
@@ -101,50 +87,6 @@ public abstract class BaseNode implements NodeOrBuilder {
   public final BaseNode toBaseNode() {
     return this;
   }
-
-  /**
-   * The content of descendant leaf nodes separated by the given string.
-   */
-  public String getTextContent(String separator) {
-    StringBuilder sb = new StringBuilder();
-    appendTextContent(sb, separator);
-    return sb.toString();
-  }
-
-  private void appendTextContent(StringBuilder sb, String sep) {
-    if (!Strings.isNullOrEmpty(literalValue)) {
-      if (sep != null && sb.length() != 0) {
-        sb.append(sep);
-      }
-      sb.append(literalValue);
-    } else {
-      for (BaseNode child : getChildren()) {
-        child.appendTextContent(sb, sep);
-      }
-    }
-  }
-
-
-  @Override
-  public final String toString() {
-    StringBuilder sb = new StringBuilder();
-    appendToStringBuilder(sb);
-    return sb.toString();
-  }
-
-  protected void appendToStringBuilder(StringBuilder sb) {
-    sb.append('(');
-    sb.append(variant);
-    if (literalValue != null) {
-      sb.append(" `").append(literalValue).append('`');
-    }
-    for (BaseNode child : children) {
-      sb.append(' ');
-      child.appendToStringBuilder(sb);
-    }
-    sb.append(')');
-  }
-
 
   /**
    * Allows building nodes.
@@ -279,11 +221,13 @@ public abstract class BaseNode implements NodeOrBuilder {
     }
 
     /** The count of children thus far. */
+    @Override
     public int getNChildren() {
       return newNodeChildren.size();
     }
 
     /** The child at index i */
+    @Override
     public BaseNode getChild(int i) {
       return newNodeChildren.get(i);
     }
@@ -350,19 +294,26 @@ public abstract class BaseNode implements NodeOrBuilder {
       newLiteralValue = Optional.fromNullable(source.getValue());
     }
 
-    protected String getLiteralValue() {
-      return newLiteralValue.orNull();
-    }
-
     @Override
     public final String getValue() {
-      return getLiteralValue();
+      return newLiteralValue.orNull();
     }
 
     @Override
     public ImmutableList<BaseNode> getChildren() {
       return ImmutableList.of();
     }
+
+    @Override
+    public final int getNChildren() {
+      return 0;
+    }
+
+    @Override
+    public final BaseNode getChild(int i) {
+      throw new IndexOutOfBoundsException("" + i);
+    }
+
 
     /** Specifies the value. */
     public LeafBuilder<N, V> leaf(String leafLiteralValue) {
@@ -375,6 +326,12 @@ public abstract class BaseNode implements NodeOrBuilder {
     }
   }
 
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    appendToStringBuilder(sb);
+    return sb.toString();
+  }
 
   @Override
   public final int hashCode() {
@@ -423,22 +380,26 @@ public abstract class BaseNode implements NodeOrBuilder {
     return true;
   }
 
+
   /**
    * A finder rooted at this that returns results of the given node type or
    * trait.
    */
   public <T> Finder<T> finder(Class<T> resultType) {
-    return new Finder<>(resultType);
+    return new Finder<>(this, resultType);
   }
 
+
   /** Searches the subtree rooted at {@code BaseNode.this}. */
-  public final class Finder<T> {
+  public static final class Finder<T> {
+    private final BaseNode root;
     private final Class<? extends T> matchType;
     private Predicate<? super BaseNode> match;
     private Predicate<? super BaseNode> doNotEnter;
     private boolean allowNonStandard = false;
 
-    Finder(Class<? extends T> matchType) {
+    Finder(BaseNode root, Class<? extends T> matchType) {
+      this.root = root;
       this.matchType = matchType;
       match = Predicates.instanceOf(matchType);
       doNotEnter = Predicates.alwaysFalse();
@@ -491,8 +452,24 @@ public abstract class BaseNode implements NodeOrBuilder {
      */
     public ImmutableList<T> find() {
       ImmutableList.Builder<T> results = ImmutableList.builder();
-      find(BaseNode.this, results);
+      find(root, results);
       return results.build();
+    }
+
+    /**
+     * Performs a search and returns the sole result or panics if there is more
+     * than one result.
+     * <p>
+     * With the default assumption that find does not descend into template
+     * instructions, this helps with assumptions that there is one node.
+     */
+    public Optional<T> findOne() {
+      ImmutableList<T> results = find();
+      if (results.size() == 1) {
+        return Optional.of(results.get(0));
+      }
+      Preconditions.checkState(results.isEmpty(), results);
+      return Optional.absent();
     }
 
     private void find(BaseNode node, ImmutableList.Builder<T> results) {
@@ -502,62 +479,11 @@ public abstract class BaseNode implements NodeOrBuilder {
       if (!doNotEnter.apply(node)
           && (allowNonStandard
               || !NodeTypeTables.NONSTANDARD.contains(node.getNodeType()))) {
-        for (BaseNode child : node.getChildren()) {
+        for (int i = 0, n = node.getNChildren(); i < n; ++i) {
+          BaseNode child = node.getChild(i);
           find(child, results);
         }
       }
-    }
-  }
-
-  /**
-   * A diagnostic string describing the structure of the tree.
-   *
-   * @param prefix a string to place to the left on each line.
-   *     Can be used to indent.
-   * @param decorator called for each node to return a string that is displayed
-   *     to the right on the same line.  A return value of null means no
-   *     decoration to display.  A value of null is equivalent to
-   *     {@code Functions.constant(null)}.
-   */
-  public String toAsciiArt(
-      String prefix,
-      @Nullable Function<? super BaseNode, ? extends String> decorator) {
-    StringBuilder out = new StringBuilder();
-    StringBuilder indentation = new StringBuilder();
-    indentation.append(prefix);
-    appendAsciiArt(indentation, out, decorator);
-    return out.toString();
-  }
-
-  /**
-   * Like {@link #toAsciiArt(String, Function)} but does not decorate.
-   */
-  public String toAsciiArt(String prefix) {
-    return toAsciiArt(prefix, Functions.constant(null));
-  }
-
-  private void appendAsciiArt(
-      StringBuilder prefix, StringBuilder out,
-      @Nullable Function<? super BaseNode, ? extends String> decorator) {
-    out.append(prefix);
-    appendNodeHeader(out);
-    String decoration = decorator != null ? decorator.apply(this) : null;
-    if (decoration != null) {
-      out.append(" : ").append(decoration);
-    }
-    int prefixLength = prefix.length();
-    prefix.append("  ");
-    for (BaseNode child : children) {
-      out.append('\n');
-      child.appendAsciiArt(prefix, out, decorator);
-    }
-    prefix.setLength(prefixLength);
-  }
-
-  private void appendNodeHeader(StringBuilder out) {
-    out.append(variant);
-    if (literalValue != null) {
-      out.append(' ').append(literalValue);
     }
   }
 
