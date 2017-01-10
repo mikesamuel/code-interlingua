@@ -195,8 +195,25 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
     Multimap<Name, Name> parameters = ArrayListMultimap.create();
     for (Name declName : declaredTypes.keySet()) {
       Name outerTypeName = declName.getOuterType();
-      (declName.type == Name.Type.CLASS ? innerTypes : parameters)
-          .put(outerTypeName, declName);
+      if (outerTypeName != null) {
+        switch (declName.type) {
+          case CLASS:
+            innerTypes.put(outerTypeName, declName);
+            continue;
+          case TYPE_PARAMETER:
+            if (declName.parent == outerTypeName) {
+              parameters.put(outerTypeName, declName);
+            }
+            continue;
+          case AMBIGUOUS:
+          case FIELD:
+          case LOCAL:
+          case METHOD:
+          case PACKAGE:
+            break;
+        }
+        throw new AssertionError(declName);
+      }
     }
 
     for (Map.Entry<Name, UnresolvedTypeDeclaration> e
