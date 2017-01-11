@@ -600,7 +600,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         }
         break;
       case 0:
-        error(orig, "Unrecognized name " + d.name);
+        error(orig, "Unrecognized type " + d.name);
         break;
     }
     newTypeNameNode.setSourcePosition(d.sourceNode.getSourcePosition());
