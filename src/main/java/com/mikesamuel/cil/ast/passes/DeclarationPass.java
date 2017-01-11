@@ -289,7 +289,10 @@ final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
               // java.lang.* is implicitly visible.
               TypeNameResolver.Resolvers.wildcardLookup(
-                  ImmutableList.of(JAVA_LANG), canonicalizer));
+                  ImmutableList.of(JAVA_LANG), canonicalizer),
+
+              // Fully qualified names should resolve to themselves.
+              canonicalizer);
       return typeNameResolver;
     }
 
