@@ -103,6 +103,7 @@ final class AmbiguousNames {
             // super-type.
             variance = TypeSpecification.Variance.EXTENDS;
             // use null for argSpec
+            break;
           }
         }
         error(
