@@ -1,6 +1,7 @@
 package com.mikesamuel.cil.ast.traits;
 
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.UnannTypeNode;
@@ -14,6 +15,10 @@ public interface LocalDeclaration extends NodeI {
   /**
    * The type of the local variables.
    * If the defragment type pass has run, the type is whole.
+   * <p>
+   * CAVEAT: if the local declaration is a {@link LastFormalParameterNode},
+   * as in {@code UnannType... lastFormalParameterName},
+   * then the type is the element type of the array.
    *
    * @return null if no type is available which may be the case for a
    *     well-formed template.  Typically this is a {@link UnannTypeNode} but
