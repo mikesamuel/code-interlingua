@@ -143,16 +143,23 @@ class PassTestHelpers {
       }
     }
     if (!(logRecords.isEmpty() && unsatisfied.isEmpty())) {
-      Assert.fail(
-          "Expected errors " + unsatisfied + "\ngot " +
-              Lists.transform(
-                  logRecords,
-                  new Function<LogRecord, String>() {
-                    @Override
-                    public String apply(LogRecord r) {
-                      return r.getMessage();
-                    }
-                  }));
+      Joiner tj = Joiner.on("\n\t");
+      Joiner nj = Joiner.on('\n');
+      List<String> got = Lists.transform(
+          logRecords,
+          new Function<LogRecord, String>() {
+            @Override
+            public String apply(LogRecord r) {
+              return r.getMessage();
+            }
+          });
+      String wantStr = unsatisfied.isEmpty()
+          ? "" : "\n\t" + tj.join(unsatisfied) + "\n";
+      String gotStr = got.isEmpty()
+          ? "" : "\n\t" + tj.join(got) + "\n";
+      String msg = "Expected errors [" + wantStr + "] got [" + gotStr + "]";
+      Assert.assertEquals(msg, nj.join(unsatisfied), nj.join(got));
+      Assert.fail(msg);
     }
     return result;
   }
