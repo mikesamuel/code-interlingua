@@ -514,12 +514,12 @@ FormalParameterList:
 FormalParameters:
      FormalParameter {"," FormalParameter}
      ReceiverParameter {"," FormalParameter}
-FormalParameter:
+FormalParameter: (@trait=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType VariableDeclaratorId (@name=Declaration)
 VariableModifier:
      Annotation
      "final"
-LastFormalParameter:
+LastFormalParameter: (@trait=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType {Annotation} "..." VariableDeclaratorId  (@name=Variadic)
      FormalParameter @anon
 ReceiverParameter:
@@ -698,7 +698,7 @@ BlockStatement: (@trait=LimitedScopeElement)
      Statement
 LocalVariableDeclarationStatement:
      LocalVariableDeclaration ";"
-LocalVariableDeclaration:
+LocalVariableDeclaration: (@trait=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType VariableDeclaratorList (@name=Declaration)
 Statement:
      Block
@@ -765,7 +765,7 @@ ForUpdate:
      StatementExpressionList
 StatementExpressionList:
      StatementExpression {"," StatementExpression}
-EnhancedForStatement:
+EnhancedForStatement: (@trait=LocalDeclaration)
      "for" "(" {!!VariableModifier Modifier} UnannType VariableDeclaratorId ":" Expression ")" Statement (@name=EnhancedForStatement)
 BreakStatement:
      "break" [Label] ";"
@@ -785,7 +785,7 @@ Catches:
      CatchClause {CatchClause}
 CatchClause:
      "catch" "(" CatchFormalParameter ")" Block
-CatchFormalParameter:
+CatchFormalParameter: (@trait=LocalDeclaration)
      {!!VariableModifier Modifier} CatchType VariableDeclaratorId (@name=CatchFormalParameter)
 CatchType:
      ClassType {"|" ClassType}
@@ -797,7 +797,7 @@ ResourceSpecification:
      "(" ResourceList [";"] ")"
 ResourceList:
      Resource {";" Resource}
-Resource:
+Resource: (@trait=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType VariableDeclaratorId "=" Expression (@name=Resource)
 
 // Expressions
