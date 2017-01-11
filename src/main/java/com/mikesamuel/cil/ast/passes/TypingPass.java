@@ -37,9 +37,11 @@ import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
+import com.mikesamuel.cil.ast.CatchTypeNode;
 import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
+import com.mikesamuel.cil.ast.ClassTypeNode;
 import com.mikesamuel.cil.ast.ConditionalAndExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalOrExpressionNode;
@@ -107,6 +109,7 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
+import com.mikesamuel.cil.ast.traits.LocalDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.ast.traits.Typed;
@@ -143,15 +146,6 @@ final class TypingPass extends AbstractRewritingPass {
   private final Map<Name, StaticType> locals = Maps.newLinkedHashMap();
 
   static final boolean DEBUG = false;
-
-  // TODO: Should this be done via a trait.  The container for the UnannType
-  // for a local declaration?
-  private static final ImmutableSet<NodeType> LOCAL_DECLARATIONS =
-      ImmutableSet.of(
-          NodeType.ReceiverParameter, NodeType.FormalParameter,
-          NodeType.LastFormalParameter, NodeType.LocalVariableDeclaration,
-          NodeType.EnhancedForStatement, NodeType.Resource,
-          NodeType.CatchFormalParameter);
 
   TypingPass(Logger logger, TypePool typePool, boolean injectCasts) {
     super(logger);
@@ -227,14 +221,32 @@ final class TypingPass extends AbstractRewritingPass {
       Name name = id.getDeclaredExpressionName();
       if (name != null && name.type == Name.Type.LOCAL) {
         for (SList<Parent> p = pathFromRoot; p != null; p = p.prev) {
-          if (LOCAL_DECLARATIONS.contains(p.x.parent.getNodeType())) {
-            BaseNode localDecl = p.x.parent;
-            UnannTypeNode typ = localDecl.firstChildWithType(
-                UnannTypeNode.class);
-            // TODO: Try CatchType if no UnannType.
-            if (typ != null) {
-              StaticType styp = typ.getStaticType();
+          BaseNode anc = p.x.parent;
+          if (anc instanceof LocalDeclaration) {
+            LocalDeclaration localDecl = (LocalDeclaration) anc;
+            BaseNode typ = localDecl.getDeclaredTypeNode();
+            if (typ instanceof UnannTypeNode) {
+              UnannTypeNode typeNode = (UnannTypeNode) typ;
+              StaticType styp = typeNode.getStaticType();
               this.locals.put(name, styp);
+            } else if (typ != null) {
+              CatchTypeNode ctyp = (CatchTypeNode) typ;
+              StaticType excType = null;
+              for (BaseNode child : ctyp.getChildren()) {
+                if (child instanceof ClassTypeNode) {
+                  if (excType != null) {
+                    // TODO: use common super type.
+                    excType = typePool.type(
+                        JAVA_LANG_THROWABLE, child.getSourcePosition(),
+                        logger);
+                  } else {
+                    excType = ((ClassTypeNode) child).getStaticType();
+                    if (excType == null) {
+                      excType = StaticType.ERROR_TYPE;
+                    }
+                  }
+                }
+              }
             }
             break;
           }
@@ -313,24 +325,22 @@ final class TypingPass extends AbstractRewritingPass {
           break type_switch;
         case StringLiteral:
           exprType = typePool.type(
-              new TypeSpecification(JAVA_LANG_STRING),
-              node.getSourcePosition(), logger);
+              JAVA_LANG_STRING, node.getSourcePosition(), logger);
           break type_switch;
         case ExpressionAtom: {
           ExpressionAtomNode e = (ExpressionAtomNode) node;
           switch (e.getVariant()) {
             case ArrayConstructorReference:
-              // TODO
-              break;
+            case ConstructorReference:
+            case StaticReference:
+              exprType = StaticType.ERROR_TYPE;  // Skip LAMBDA
+              break type_switch;
             case ArrayCreationExpression:
               exprType = passThru(node);
               break type_switch;
             case ClassLiteral:
-              // TODO
-              break;
-            case ConstructorReference:
-              // TODO
-              break;
+              exprType = passThru(node);
+              break type_switch;
             case FreeField:
               exprType = processFieldAccess(e);
               break type_switch;
@@ -357,8 +367,8 @@ final class TypingPass extends AbstractRewritingPass {
               exprType = processMethodInvocation(e);
               break type_switch;
             case Parenthesized:
-              // TODO
-              break;
+              exprType = passThru(e);
+              break type_switch;
             case StaticMember: {
               TypeNameNode tn = e.firstChildWithType(TypeNameNode.class);
               TypeInfo ti = tn != null ? tn.getReferencedTypeInfo() : null;
@@ -372,12 +382,20 @@ final class TypingPass extends AbstractRewritingPass {
               }
               break type_switch;
             }
-            case StaticReference:
-              // TODO
-              break;
             case Super:
-              // TODO
-              break;
+              // TODO: can we just fall through to This or do we need to handle
+              // cases like
+              // class C { Object f() { ... } }
+              // class D extends C {
+              //   @Override
+              //   String f() { ... }
+              //   {
+              //     super.f();  // Object or String?
+              //   }
+              // }
+              //$FALL-THROUGH$
+              // Maybe we can handle this by skipping the first element in
+              // findMembers.
             case This:
               exprType = typePool.type(
                   TypeSpecification.autoScoped(containingTypes.peekLast()),
@@ -471,9 +489,66 @@ final class TypingPass extends AbstractRewritingPass {
 
         case ClassLiteral: {
           ClassLiteralNode e = (ClassLiteralNode) node;
-          switch (e.getVariant()) {
+          int dimensionality = 0;
+          for (BaseNode child : e.getChildren()) {
+            if (child instanceof DimNode) {
+              ++dimensionality;
+            }
           }
-          throw new AssertionError(e);
+          TypeSpecification spec = null;
+          switch (e.getVariant()) {
+            case BooleanDimDotClass:
+              spec = dimensionality == 0
+                  ? new TypeSpecification(StaticType.T_BOOLEAN.wrapperType)
+                  : StaticType.T_BOOLEAN.typeSpecification
+                    .withNDims(dimensionality);
+              break;
+            case NumericTypeDimDotClass:
+              NumericTypeNode nt = e.firstChildWithType(NumericTypeNode.class);
+              if (nt != null) {
+                StaticType st = nt.getStaticType();
+                if (st instanceof NumericType) {
+                  spec = new TypeSpecification(
+                      ((NumericType) st).wrapperType,
+                      dimensionality);
+                  NumericType numType = (NumericType) st;
+                  spec = dimensionality == 0
+                      ? new TypeSpecification(numType.wrapperType)
+                      : numType.typeSpecification.withNDims(dimensionality);
+                }
+              }
+              break;
+            case TypeNameDimDotClass:
+              TypeNameNode tn = e.firstChildWithType(TypeNameNode.class);
+              if (tn != null) {
+                TypeInfo ti = tn.getReferencedTypeInfo();
+                if (ti != null) {
+                  ImmutableList.Builder<TypeBinding> bindings =
+                      ImmutableList.builder();
+                  for (@SuppressWarnings("unused") Name param : ti.parameters) {
+                    bindings.add(TypeBinding.WILDCARD);
+                  }
+                  spec = new TypeSpecification(
+                      ti.canonName, bindings.build(), dimensionality);
+                }
+              }
+              break;
+            case VoidDotClass:
+              Preconditions.checkState(dimensionality == 0);
+              spec = JAVA_LANG_VOID;
+              break;
+          }
+          if (spec != null) {
+            TypeSpecification classSpec = new TypeSpecification(
+                JAVA_LANG_CLASS.typeName,
+                ImmutableList.of(new TypeBinding(spec)));
+            exprType = typePool.type(
+                classSpec, e.getSourcePosition(), logger);
+          } else {
+            error(e, "Missing class in class literal");
+            exprType = StaticType.ERROR_TYPE;
+          }
+          break type_switch;
         }
 
         case ArrayCreationExpression: {
@@ -623,8 +698,7 @@ final class TypingPass extends AbstractRewritingPass {
           // type, or a compile-time error occurs.
           StaticType leftType = maybePassThru(left);
           StaticType rightType = maybePassThru(right);
-          StaticType stringType = typePool.type(
-              new TypeSpecification(JAVA_LANG_STRING), null, logger);
+          StaticType stringType = typePool.type(JAVA_LANG_STRING, null, logger);
           boolean isStringConcat = operator != null
               && operator.getVariant() == AdditiveOperatorNode.Variant.Pls
               && (
@@ -1304,8 +1378,19 @@ final class TypingPass extends AbstractRewritingPass {
   private static final Name JAVA_LANG =
       JAVA.child("lang", Name.Type.PACKAGE);
 
-  private static final Name JAVA_LANG_STRING =
-      JAVA_LANG.child("String", Name.Type.CLASS);
+  private static final TypeSpecification JAVA_LANG_STRING =
+      new TypeSpecification(JAVA_LANG.child("String", Name.Type.CLASS));
+
+  private static final TypeSpecification JAVA_LANG_CLASS =
+      new TypeSpecification(
+          JAVA_LANG.child("Class", Name.Type.CLASS),
+          ImmutableList.of(TypeBinding.WILDCARD));
+
+  private static final TypeSpecification JAVA_LANG_THROWABLE =
+      new TypeSpecification(JAVA_LANG.child("Throwable", Name.Type.CLASS));
+
+  private static final TypeSpecification JAVA_LANG_VOID =
+      new TypeSpecification(JAVA.child("Void", Name.Type.CLASS));
 
   /**
    * The containers to try in order when looking up a member.

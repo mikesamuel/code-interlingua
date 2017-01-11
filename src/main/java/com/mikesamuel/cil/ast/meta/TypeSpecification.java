@@ -159,6 +159,12 @@ public final class TypeSpecification {
      */
     public final @Nullable TypeSpecification typeSpec;
 
+    /**
+     * The non-canonical {@code ?} binding.
+     */
+    public static final TypeBinding WILDCARD = new TypeBinding(
+        Variance.EXTENDS, null);
+
     /** */
     public TypeBinding(
         Variance variance, @Nullable TypeSpecification typeSpec) {

@@ -13,6 +13,7 @@ import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
+import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
@@ -730,7 +731,6 @@ public final class TypingPassTest extends TestCase {
             "D : /D",
         },
         null);
-
   }
 
   @Test
@@ -979,6 +979,37 @@ public final class TypingPassTest extends TestCase {
     }
 
   };
+
+  @Test
+  public static final void testMoreExpressionAtoms() throws Exception {
+    assertTyped(
+        null,
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  Class<?> tc = C.class;",
+            "  Class<?> tac = C[].class;",
+            "  Class<?> nc = ((int.class));",
+            "  Class<?> nac = double[][].class;",
+            "  Class<?> bc = boolean.class;",
+            "  Class<?> bac = boolean[].class;",
+            "  Class<?> vc = (void.class);",
+            "}",
+          },
+        },
+        ClassLiteralNode.class,
+        new String[] {
+            "C.class : /java/lang/Class</C>",
+            "C[].class : /java/lang/Class</C[]>",
+            "int.class : /java/lang/Class</java/lang/Integer>",
+            "double[][].class : /java/lang/Class</java/lang/Double.TYPE[][]>",
+            "boolean.class : /java/lang/Class</java/lang/Boolean>",
+            "boolean[].class : /java/lang/Class</java/lang/Boolean.TYPE[]>",
+            "void.class : /java/lang/Class</java/Void>",
+        },
+        null);
+  }
 
   private static final Decorator DECORATE_METHOD_NAMES_INCL_CONTAINER =
       new Decorator() {
