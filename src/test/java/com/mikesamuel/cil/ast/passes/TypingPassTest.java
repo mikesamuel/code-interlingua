@@ -17,6 +17,7 @@ import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
+import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.StatementExpressionNode;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
@@ -964,22 +965,6 @@ public final class TypingPassTest extends TestCase {
 
   }
 
-  private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
-
-    @Override
-    public String decorate(BaseNode node) {
-      if (node instanceof MethodDescriptorReference) {
-        String descriptor = ((MethodDescriptorReference) node)
-            .getMethodDescriptor();
-        if (descriptor != null) {
-          return Java8Comments.blockCommentMinimalSpace(descriptor);
-        }
-      }
-      return null;
-    }
-
-  };
-
   @Test
   public static final void testMoreExpressionAtoms() throws Exception {
     assertTyped(
@@ -1010,6 +995,51 @@ public final class TypingPassTest extends TestCase {
         },
         null);
   }
+
+  @Test
+  public static final void testArrayAccess() throws Exception {
+    assertTyped(
+        null,
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  int f(int[] is) { return is[0]; }",
+            "  int f(int[][] is) { return is[0]; }",
+            "  int f(Object... os) { return os[Integer.valueOf(0)]; }",
+            "}",
+          },
+        },
+        PrimaryNode.class,
+        new String[] {
+            "is[0] : int",
+            "is[0] : int[]",
+            // The index is unboxed.
+            "os[(int) (Integer.valueOf(0))] : /java/lang/Object",
+            "Integer.valueOf(0) : /java/lang/Integer",
+        },
+        null);
+  }
+
+  // TODO: &&, ||, ^, &, | operators
+  // TODO: <<, >>, >>> operators
+  // TODO: !=, ==, instanceof operators
+
+  private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
+
+    @Override
+    public String decorate(BaseNode node) {
+      if (node instanceof MethodDescriptorReference) {
+        String descriptor = ((MethodDescriptorReference) node)
+            .getMethodDescriptor();
+        if (descriptor != null) {
+          return Java8Comments.blockCommentMinimalSpace(descriptor);
+        }
+      }
+      return null;
+    }
+
+  };
 
   private static final Decorator DECORATE_METHOD_NAMES_INCL_CONTAINER =
       new Decorator() {

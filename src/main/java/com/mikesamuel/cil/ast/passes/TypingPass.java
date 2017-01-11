@@ -27,7 +27,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.AdditiveOperatorNode;
-import com.mikesamuel.cil.ast.AndExpressionNode;
 import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
 import com.mikesamuel.cil.ast.ArrayElementTypeNode;
@@ -42,23 +41,19 @@ import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.ClassTypeNode;
-import com.mikesamuel.cil.ast.ConditionalAndExpressionNode;
 import com.mikesamuel.cil.ast.ConditionalExpressionNode;
-import com.mikesamuel.cil.ast.ConditionalOrExpressionNode;
 import com.mikesamuel.cil.ast.ConfirmCastNode;
 import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimNode;
-import com.mikesamuel.cil.ast.EqualityExpressionNode;
-import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
 import com.mikesamuel.cil.ast.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.InclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.IntegralTypeNode;
 import com.mikesamuel.cil.ast.Intermediates;
+import com.mikesamuel.cil.ast.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.LocalNameNode;
 import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.NodeType;
@@ -70,9 +65,6 @@ import com.mikesamuel.cil.ast.PreExpressionNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
-import com.mikesamuel.cil.ast.RelationalExpressionNode;
-import com.mikesamuel.cil.ast.ShiftExpressionNode;
-import com.mikesamuel.cil.ast.ShiftOperatorNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
@@ -228,6 +220,12 @@ final class TypingPass extends AbstractRewritingPass {
             if (typ instanceof UnannTypeNode) {
               UnannTypeNode typeNode = (UnannTypeNode) typ;
               StaticType styp = typeNode.getStaticType();
+              if (anc.getVariant()
+                  == LastFormalParameterNode.Variant.Variadic) {
+                styp = typePool.type(
+                    styp.typeSpecification.arrayOf(), typ.getSourcePosition(),
+                    logger);
+              }
               this.locals.put(name, styp);
             } else if (typ != null) {
               CatchTypeNode ctyp = (CatchTypeNode) typ;
@@ -422,8 +420,35 @@ final class TypingPass extends AbstractRewritingPass {
         case Primary: {
           PrimaryNode e = (PrimaryNode) node;
           switch (e.getVariant()) {
+            case Ambiguous:  // Should not reach here.
+            case ExpressionAtom:  // @anon
+            case MethodReference:  // Skip LAMBDA
+              exprType = StaticType.ERROR_TYPE;
+              break type_switch;
+
             case MethodInvocation: {
               exprType = processMethodInvocation(e);
+              break type_switch;
+            }
+
+            case ArrayAccess: {
+              Operand arr = nthOperandOf(0, e, NodeType.Primary);
+              Operand index = nthOperandOf(1, e, NodeType.Expression);
+              if (index != null) {
+                index.cast(passThru(index), StaticType.T_INT);
+              }
+              if (arr != null) {
+                StaticType arrayType = maybePassThru(arr);
+                // Array types can't be used as bounds for type parameters
+                // so we can test directly here.
+                if (arrayType instanceof ArrayType) {
+                  StaticType elementType = ((ArrayType) arrayType).elementType;
+                  exprType = elementType;
+                  break type_switch;
+                }
+              }
+              error(e, "Cannot find array type for left of array access");
+              exprType = StaticType.ERROR_TYPE;
               break type_switch;
             }
 
@@ -597,81 +622,83 @@ final class TypingPass extends AbstractRewritingPass {
 
         case Assignment: {
           AssignmentNode e = (AssignmentNode) node;
-          switch (e.getVariant()) {
-            // TODO
-          }
+          // TODO
           throw new AssertionError(e);
         }
 
         case ConditionalExpression: {
           ConditionalExpressionNode e = (ConditionalExpressionNode) node;
           switch (e.getVariant()) {
+            case ConditionalOrExpression:
+              throw new AssertionError("@anon");
+            case ConditionalOrExpressionQmExpressionClnConditionalExpression:
+              // TODO
+              break;
+            case ConditionalOrExpressionQmExpressionClnLambdaExpression:
+              exprType = StaticType.ERROR_TYPE;  // Lambda
+              break type_switch;
           }
           throw new AssertionError(e);
         }
 
-        case ConditionalOrExpression: {
-          ConditionalOrExpressionNode e = (ConditionalOrExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
-
-        case ConditionalAndExpression: {
-          ConditionalAndExpressionNode e = (ConditionalAndExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
-
-        case InclusiveOrExpression: {
-          InclusiveOrExpressionNode e = (InclusiveOrExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
-
-        case ExclusiveOrExpression: {
-          ExclusiveOrExpressionNode e = (ExclusiveOrExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
-
-        case AndExpression: {
-          AndExpressionNode e = (AndExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
-
-        case EqualityExpression: {
-          EqualityExpressionNode e = (EqualityExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
-
+        case ConditionalOrExpression:
+        case ConditionalAndExpression:
+        case EqualityExpression:
         case RelationalExpression: {
-          RelationalExpressionNode e = (RelationalExpressionNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
+          // The pass thru kind are all @anon so we only have to deal with the
+          // operation case.
+          exprType = StaticType.T_BOOLEAN;
+          // TODO: unbox operands to boolean
+          break type_switch;
         }
 
-        case ShiftExpression: {
-          ShiftExpressionNode e = (ShiftExpressionNode) node;
-          switch (e.getVariant()) {
+
+        case InclusiveOrExpression:
+        case ExclusiveOrExpression:
+        case AndExpression: {
+          NodeType rightType;
+          switch (node.getNodeType()) {
+            case InclusiveOrExpression:
+              rightType = NodeType.ExclusiveOrExpression;
+              break;
+            case ExclusiveOrExpression:
+              rightType = NodeType.AndExpression;
+              break;
+            case AndExpression:
+              rightType = NodeType.EqualityExpression;
+              break;
+            default: throw new AssertionError(node);
           }
-          throw new AssertionError(e);
+          Operand left = nthOperandOf(0, node, node.getNodeType());
+          Operand right = nthOperandOf(1, node, rightType);
+          if (left != null && right != null) {
+            // If the left is boolean, the right is boolean.
+            StaticType leftType = maybePassThru(left);
+            switch (Compatibility.of(
+                StaticType.T_BOOLEAN.assignableFrom(leftType))) {
+              case IMPLICIT_CAST:
+                left.cast(leftType, StaticType.T_BOOLEAN);
+                //$FALL-THROUGH$
+              case COMPATIBLE_AS_IS:
+                exprType = StaticType.T_BOOLEAN;
+                right.cast(maybePassThru(right), StaticType.T_BOOLEAN);
+                break type_switch;
+              case INCOMPATIBLE:
+                break;
+            }
+            // Otherwise it should be an integral type.
+            exprType = promoteNumericBinary(
+                left, leftType, right, maybePassThru(right));
+          } else {
+            error(node, "Missing operand");
+            exprType = StaticType.ERROR_TYPE;
+          }
+          break type_switch;
         }
 
-        case ShiftOperator: {
-          ShiftOperatorNode e = (ShiftOperatorNode) node;
-          switch (e.getVariant()) {
-          }
-          throw new AssertionError(e);
-        }
+        case ShiftExpression:
+          exprType = processNumericBinary(node);
+          break type_switch;
 
         case AdditiveExpression: {
           AdditiveExpressionNode e = (AdditiveExpressionNode) node;
@@ -746,15 +773,13 @@ final class TypingPass extends AbstractRewritingPass {
 
         case PreExpression: {
           PreExpressionNode e = (PreExpressionNode) node;
-          switch (e.getVariant()) {
-          }
+          // TODO
           throw new AssertionError(e);
         }
 
         case PostExpression: {
           PostExpressionNode e = (PostExpressionNode) node;
-          switch (e.getVariant()) {
-          }
+          // TODO
           throw new AssertionError(e);
         }
 
