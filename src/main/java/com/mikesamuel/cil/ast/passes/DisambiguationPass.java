@@ -218,7 +218,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
               //   }
 
               seed = ExpressionAtomNode.Variant.StaticMember.buildNode(
-                  buildTypeNameNode(seedDecomp, names));
+                  buildTypeNameNode(seedDecomp, names, resolver));
               break;
             case AMBIGUOUS:
             case METHOD:
@@ -247,7 +247,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
       case TypeName: {
         Decomposed d = Decomposed.of(names);
         if (d != null) {
-          TypeNameNode typeName = buildTypeNameNode(d, parent);
+          TypeNameNode typeName = buildTypeNameNode(d, parent, resolver);
           return ProcessingStatus.replace(typeName);
         }
         break;
@@ -545,7 +545,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
   }
 
-  private TypeNameNode buildTypeNameNode(Decomposed d, BaseNode orig) {
+  private TypeNameNode buildTypeNameNode(
+      Decomposed d, BaseNode orig, TypeNameResolver resolver) {
     ImmutableList<IdentifierEtc> idents = d.idents;
     if (useLongNames) {
       ImmutableList.Builder<IdentifierEtc> b = ImmutableList.builder();
@@ -586,9 +587,21 @@ final class DisambiguationPass extends AbstractRewritingPass {
           .buildNode(child, idents.get(nIdents - 1).identifier);
     }
     newTypeNameNode.copyMetadataFrom(orig);
-    if (d.name.type != Name.Type.AMBIGUOUS) {
-      Optional<TypeInfo> tiOpt = typeInfoResolver.resolve(d.name);
-      newTypeNameNode.setReferencedTypeInfo(tiOpt.orNull());
+    ImmutableList<Name> canonNames = resolver.lookupTypeName(d.name);
+    switch (canonNames.size()) {
+      default:
+        error(orig, "Ambiguous name " + d.name + ": " + canonNames);
+        //$FALL-THROUGH$
+      case 1:
+        Name canonName = canonNames.get(0);
+        if (canonName.type != Name.Type.AMBIGUOUS) {
+          Optional<TypeInfo> tiOpt = typeInfoResolver.resolve(canonName);
+          newTypeNameNode.setReferencedTypeInfo(tiOpt.orNull());
+        }
+        break;
+      case 0:
+        error(orig, "Unrecognized name " + d.name);
+        break;
     }
     newTypeNameNode.setSourcePosition(d.sourceNode.getSourcePosition());
     return newTypeNameNode;
