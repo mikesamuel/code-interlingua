@@ -493,9 +493,11 @@ public abstract class StaticType {
               if (!ts.typeName.type.isType) {
                 // Primitive types should not reach here due to cache seeding
                 // above, but malformed types like int<String> might.
-                logger.severe(
-                    (pos != null ? pos + ": " : "")
-                    + " type name " + ts.typeName + " does not specify a type");
+                if (logger != null) {
+                  logger.severe(
+                      (pos != null ? pos + ": " : "") + " type name "
+                      + ts.typeName + " does not specify a type");
+                }
                 if (!ts.bindings.isEmpty()) {
                   TypeSpecification withoutBindings = new TypeSpecification(
                       ts.typeName);
@@ -508,10 +510,11 @@ public abstract class StaticType {
 
               Optional<TypeInfo> tiOpt = r.resolve(ts.typeName);
               if (!tiOpt.isPresent()) {
-                Thread.dumpStack();
-                logger.severe(
-                    (pos != null ? pos + ": " : "")
-                    + " type name " + ts.typeName + " does not specify a type");
+                if (logger != null) {
+                  logger.severe(
+                      (pos != null ? pos + ": " : "") + " type name "
+                      + ts.typeName + " does not specify a type");
+                }
                 return ERROR_TYPE;
               }
               TypeInfo ti = tiOpt.get();
@@ -520,10 +523,12 @@ public abstract class StaticType {
               if (!ts.bindings.isEmpty()) {
                 // Not a raw type
                 if (ts.bindings.size() != ti.parameters.size()) {
-                  logger.severe(
-                      (pos != null ? pos + ": " : "")
-                      + " type " + ts
-                      + " has the wrong number of type parameters");
+                  if (logger != null) {
+                    logger.severe(
+                        (pos != null ? pos + ": " : "")
+                        + " type " + ts
+                        + " has the wrong number of type parameters");
+                  }
                   bindingsOk = false;
                 } else {
                   // TODO: figure out how to check type bounds
