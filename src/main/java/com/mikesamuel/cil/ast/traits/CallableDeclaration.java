@@ -45,6 +45,7 @@ extends ExpressionNameScope, MemberDeclaration {
 
   /**
    * @see #getMethodVariant
+   * @return this
    */
-  void setMethodVariant(int newMethodVariant);
+  CallableDeclaration setMethodVariant(int newMethodVariant);
 }

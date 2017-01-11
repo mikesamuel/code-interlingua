@@ -3,12 +3,12 @@ package com.mikesamuel.cil.ast.passes;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
-import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.ClassBodyNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
@@ -106,7 +106,7 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       }
       case EnumConstant:
       case UnqualifiedClassInstanceCreationExpression: {
-        ImmutableList<BaseNode> children = n.getChildren();
+        List<BaseNode> children = n.getChildren();
         int nChildren = children.size();
         BaseNode last = children.get(nChildren - 1);
         Name outerClass = (outer != null ? outer : pkg);

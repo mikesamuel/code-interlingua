@@ -4,7 +4,7 @@ import javax.annotation.Nullable;
 
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.NodeOrBuilder;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.meta.Name;
 
@@ -12,7 +12,7 @@ import com.mikesamuel.cil.ast.meta.Name;
  * Corresponds to the declaration of a name within an
  * {@link ExpressionNameScope}.
  */
-public interface ExpressionNameDeclaration extends NodeOrBuilder {
+public interface ExpressionNameDeclaration extends NodeI {
   /**
    * The name declared.
    */
@@ -20,8 +20,10 @@ public interface ExpressionNameDeclaration extends NodeOrBuilder {
 
   /**
    * Sets the name declared.
+   * @return this
    */
-  void setDeclaredExpressionName(Name newDeclaredExpressionName);
+  ExpressionNameDeclaration setDeclaredExpressionName(
+      Name newDeclaredExpressionName);
 
   /**
    * The text of the declared symbol.

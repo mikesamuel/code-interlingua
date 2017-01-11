@@ -5,7 +5,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.NodeOrBuilder;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /** A compiler pass. */
@@ -17,7 +17,7 @@ abstract class AbstractPass<T> {
     this.logger = logger;
   }
 
-  protected void error(@Nullable NodeOrBuilder node, String message) {
+  protected void error(@Nullable NodeI node, String message) {
     SourcePosition pos = node != null ? node.getSourcePosition() : null;
     String fullMessage = pos != null ? pos + ": " + message : message;
     logger.severe(fullMessage);

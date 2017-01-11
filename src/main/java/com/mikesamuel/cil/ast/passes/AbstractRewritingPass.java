@@ -1,13 +1,14 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.BaseNode.Builder;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.parser.SList;
 
@@ -26,8 +27,8 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
     static ProcessingStatus CONTINUE = new ProcessingStatus("continue");
     /**
      * Cease processing the subtree rooted at the current node.
-     * In the post-processing phase, this means use the state of the builder
-     * as the replacement.
+     * In the post-processing phase, this means use the current state of the
+     * node as the replacement.
      */
     static ProcessingStatus BREAK = new ProcessingStatus("break");
     /**
@@ -78,7 +79,6 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
    *     || ls.prev.x.parent.getChildren().get(ls.x.indexInParent)
    *         == ls.x.parent}
    *   holds for all {@code ls} in the chain.
-   * @param builder a builder seeded from node.
    * @return {@link ProcessingStatus#BREAK} to skip processing children and
    *     {@linkplain #postvisit post-processing}.
    *     {@link ProcessingStatus#CONTINUE} to continue with those steps
@@ -86,9 +86,8 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
    *     rewritten AST.
    */
   @SuppressWarnings("static-method")  // may be overridden
-  protected <N extends BaseNode> ProcessingStatus previsit(
-      N node, @Nullable SList<Parent> pathFromRoot,
-      BaseNode.Builder<N, ?> builder) {
+  protected ProcessingStatus previsit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     return ProcessingStatus.CONTINUE;
   }
 
@@ -106,35 +105,29 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
    *     || ls.prev.x.parent.getChildren().get(ls.x.indexInParent)
    *         == ls.x.parent}
    *   holds for all {@code ls} in the chain.
-   * @param builder a builder seeded from node.
    * @return {@link ProcessingStatus#BREAK} or
-   *     {@link ProcessingStatus#CONTINUE} to use the builder's state as a
-   *     replacement for node in the rewritten AST
-   *     or another status to specify what to use the node's package with
-   *     the status as the replacements in the rewritten AST.
+   *     {@link ProcessingStatus#CONTINUE} to leave node in its current position
+   *     in the AST, or another status to specify what to use the node's package
+   *     with the status as the replacements in the rewritten AST.
    */
   @SuppressWarnings("static-method")  // may be overridden
-  protected <N extends BaseNode> ProcessingStatus postvisit(
-      N node, @Nullable SList<Parent> pathFromRoot,
-      BaseNode.Builder<N, ?> builder) {
+  protected ProcessingStatus postvisit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     return ProcessingStatus.CONTINUE;
   }
 
-  protected final <N extends BaseNode> ProcessingStatus visit(
-      N node, @Nullable SList<Parent> pathFromRoot) {
-    @SuppressWarnings("unchecked")  // Unsound but safe by convention.
-    BaseNode.Builder<N, ?> builder = (Builder<N, ?>) node.builder();
-    ProcessingStatus status = previsit(node, pathFromRoot, builder);
+  protected final ProcessingStatus visit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+    ProcessingStatus status = previsit(node, pathFromRoot);
     if (status == ProcessingStatus.CONTINUE) {
-      ImmutableList<BaseNode> children = node.getChildren();
-      if (!children.isEmpty()) {
-        BaseNode.InnerBuilder<N, ?> ibuilder =
-            (BaseNode.InnerBuilder<N, ?>) builder;
+      if (node instanceof BaseInnerNode) {
+        BaseInnerNode inode = (BaseInnerNode) node;
+        List<BaseNode> children = ImmutableList.copyOf(inode.getChildren());
         int j = 0;
         for (int i = 0, n = children.size(); i < n; ++i, ++j) {
           BaseNode child = children.get(i);
           ProcessingStatus childStatus = visit(
-              child, SList.append(pathFromRoot, makeParent(i, node, builder)));
+              child, SList.append(pathFromRoot, makeParent(i, inode)));
           ImmutableList<BaseNode> replacements;
           if (childStatus == ProcessingStatus.BREAK
               || childStatus == ProcessingStatus.CONTINUE) {
@@ -143,30 +136,26 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
             replacements = childStatus.replacements;
           }
 
-          Preconditions.checkState(ibuilder.getChild(j) == child);
+          Preconditions.checkState(inode.getChild(j) == child);
 
           if (replacements.isEmpty()) {
-            ibuilder.remove(j);
+            inode.remove(j);
             --j;
           } else {
-            ibuilder.replace(j, replacements.get(0));
+            inode.replace(j, replacements.get(0));
             for (BaseNode extraReplacement
                  : replacements.subList(1, replacements.size())) {
-              ibuilder.add(++j, extraReplacement);
+              inode.add(++j, extraReplacement);
             }
           }
         }
 
       }
-      status = postvisit(node, pathFromRoot, builder);
+      status = postvisit(node, pathFromRoot);
     }
     if (status == ProcessingStatus.BREAK
         || status == ProcessingStatus.CONTINUE) {
-      if (builder.changed()) {
-        return ProcessingStatus.replace(builder.build());
-      } else {
-        return ProcessingStatus.replace(node);
-      }
+      return ProcessingStatus.replace(node);
     } else {
       return status;
     }
@@ -191,24 +180,19 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
   }
 
   @SuppressWarnings("static-method")
-  protected <N extends BaseNode> Parent makeParent(
-      int indexInParent, N parent, BaseNode.Builder<N, ?> parentBuilder) {
-    return new Parent(indexInParent, parent, parentBuilder);
+  protected Parent makeParent(int indexInParent, BaseInnerNode parent) {
+    return new Parent(indexInParent, parent);
   }
 
 
   static class Parent {
     /** Index in parent's child list of the current node. */
     final int indexInParent;
-    final BaseNode parent;
-    final BaseNode.Builder<?, ?> parentBuilder;
+    final BaseInnerNode parent;
 
-    Parent(
-        int indexInParent, BaseNode parent,
-        BaseNode.Builder<?, ?> parentBuilder) {
+    Parent(int indexInParent, BaseInnerNode parent) {
       this.indexInParent = indexInParent;
       this.parent = parent;
-      this.parentBuilder = parentBuilder;
     }
 
     @Override

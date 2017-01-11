@@ -10,29 +10,18 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * A node in a Java AST.
  */
-public abstract class BaseNode implements NodeOrBuilder {
-  private final NodeVariant variant;
-  private final ImmutableList<BaseNode> children;
-  private final @Nullable String literalValue;
+public abstract class BaseNode implements NodeI {
+  private NodeVariant variant;
   private @Nullable SourcePosition sourcePosition;
 
-  BaseNode(
-      NodeVariant variant,
-      Iterable<? extends BaseNode> children, @Nullable String literalValue) {
-    this.variant = Preconditions.checkNotNull(variant);
-
-    NodeType type = variant.getNodeType();
-    Preconditions.checkState(type.getNodeBaseType().isInstance(this));
-
-    this.children = ImmutableList.copyOf(children);
-    this.literalValue = literalValue;
+  BaseNode(NodeVariant variant) {
+    setVariant(variant);
   }
 
 
@@ -42,32 +31,19 @@ public abstract class BaseNode implements NodeOrBuilder {
     return variant;
   }
 
+  /**
+   * Sets the node variant.
+   */
+  public void setVariant(NodeVariant newVariant) {
+    NodeType type = newVariant.getNodeType();
+    Preconditions.checkArgument(type.getNodeBaseType().isInstance(this));
+    this.variant = Preconditions.checkNotNull(newVariant);
+  }
+
   /** The production's node type. */
   @Override
   public final NodeType getNodeType() {
     return getVariant().getNodeType();
-  }
-
-  /** Child nodes. */
-  @Override
-  public final ImmutableList<BaseNode> getChildren() {
-    return children;
-  }
-
-  @Override
-  public final int getNChildren() {
-    return children.size();
-  }
-
-  @Override
-  public final BaseNode getChild(int i) {
-    return children.get(i);
-  }
-
-  /** The value if any. */
-  @Override
-  public final @Nullable String getValue() {
-    return literalValue;
   }
 
   /** The source position.  Non-normative. */
@@ -79,252 +55,39 @@ public abstract class BaseNode implements NodeOrBuilder {
   /**
    * @see #getSourcePosition()
    */
+  @Override
   public final void setSourcePosition(SourcePosition newSourcePosition) {
     this.sourcePosition = newSourcePosition;
   }
 
+  /** Copies all parse and trait metadata from the given node. */
   @Override
-  public final BaseNode toBaseNode() {
-    return this;
-  }
-
-  /**
-   * Allows building nodes.
-   */
-  public static abstract
-  class Builder<N extends BaseNode, V extends NodeVariant>
-  implements NodeOrBuilder {
-    private V newNodeVariant;
-    private SourcePosition sourcePosition;
-    /** True if it changed from its parent. */
-    private boolean changed;
-
-    protected Builder(V variant) {
-      this.newNodeVariant = Preconditions.checkNotNull(variant);
-      this.changed = true;
-    }
-
-    protected Builder(N source) {
-      @SuppressWarnings("unchecked")
-      // Unsound but safe is subclassing follows discipline.  For this reason
-      // we keep constructors package-private.
-      V sourceVariant = (V) source.getVariant();
-      this.newNodeVariant = sourceVariant;
-      this.sourcePosition = source.getSourcePosition();
-      this.copyMetadataFrom(source);
-      this.changed = false;
-    }
-
-    protected Builder(Builder<N, V> source) {
-      // Unsound but safe is subclassing follows discipline.  For this reason
-      // we keep constructors package-private.
-      V sourceVariant = source.getVariant();
-      this.newNodeVariant = sourceVariant;
-      this.sourcePosition = source.getSourcePosition();
-      this.copyMetadataFrom(source);
-      this.changed = source.changed;
-    }
-
-    @Override
-    public V getVariant() {
-      return newNodeVariant;
-    }
-
-    @Override
-    public @Nullable SourcePosition getSourcePosition() {
-      return sourcePosition;
-    }
-
-    /**
-     * Specifies the variant that will be built.
-     */
-    public Builder<N, V> variant(V newVariant) {
-      if (newVariant != this.newNodeVariant) {
-        this.newNodeVariant = Preconditions.checkNotNull(newVariant);
-        markChanged();
-      }
-      return this;
-    }
-
-    /** Any nodes built will have the same meta-data as the given node. */
-    public Builder<N, V> copyMetadataFrom(N source) {
-      SourcePosition pos = source.getSourcePosition();
-      if (pos != null) {
-        setSourcePosition(pos);
-      }
-      return this;
-    }
-
-    /** Any nodes built will have the same meta-data as the given node. */
-    public Builder<N, V> copyMetadataFrom(Builder<N, V> source) {
-      SourcePosition pos = source.getSourcePosition();
-      if (pos != null) {
-        setSourcePosition(pos);
-      }
-      return this;
-    }
-
-    /**
-     * Specifies the source position for the built node.
-     */
-    public Builder<N, V> setSourcePosition(SourcePosition newSourcePosition) {
-      if (!(sourcePosition == null ? newSourcePosition == null
-          : sourcePosition.equals(newSourcePosition))) {
-        this.sourcePosition = newSourcePosition;
-        markChanged();
-      }
-      return this;
-    }
-
-    /** Builds a complete node. */
-    public abstract N build();
-
-    @Override
-    public final N toBaseNode() {
-      return build();
-    }
-
-
-    protected void markChanged() {
-      this.changed = true;
-    }
-
-    /**
-     * True iff the builder was derived from a node and no changes were
-     * made to that node.
-     */
-    public boolean changed() {
-      return this.changed;
+  public void copyMetadataFrom(BaseNode source) {
+    SourcePosition pos = source.getSourcePosition();
+    if (pos != null) {
+      setSourcePosition(pos);
     }
   }
 
-  /**
-   * A builder for inner nodes.
-   */
-  public static abstract
-  class InnerBuilder<N extends BaseNode, V extends NodeVariant>
-  extends Builder<N, V> {
-    private final List<BaseNode> newNodeChildren = Lists.newArrayList();
+  /** A clone that has the same children. */
+  public abstract BaseNode shallowClone();
 
-    protected InnerBuilder(V variant) {
-      super(variant);
-    }
+  /** A clone whose children are deep clones of this node's children. */
+  public abstract BaseNode deepClone();
 
-    protected InnerBuilder(N source) {
-      super(source);
-      newNodeChildren.addAll(source.getChildren());
-    }
-
-    protected InnerBuilder(Builder<N, V> source) {
-      super(source);
-      newNodeChildren.addAll(source.getChildren());
-    }
-
-    /** The count of children thus far. */
-    @Override
-    public int getNChildren() {
-      return newNodeChildren.size();
-    }
-
-    /** The child at index i */
-    @Override
-    public BaseNode getChild(int i) {
-      return newNodeChildren.get(i);
-    }
-
-    @Override
-    public ImmutableList<BaseNode> getChildren() {
-      return ImmutableList.copyOf(newNodeChildren);
-    }
-
-    @Override
-    public @Nullable String getValue() {
-      return null;
-    }
-
-    /** Adds a child node. */
-    public InnerBuilder<N, V> add(BaseNode child) {
-      return add(newNodeChildren.size(), child);
-    }
-
-    /** Adds a child node at the given index. */
-    public InnerBuilder<N, V> add(int index, BaseNode child) {
-      this.newNodeChildren.add(index, Preconditions.checkNotNull(child));
-      this.markChanged();
-      return this;
-    }
-
-    /** Adds a child node at the given index. */
-    public InnerBuilder<N, V> replace(int index, BaseNode child) {
-      BaseNode old = this.newNodeChildren.set(
-          index, Preconditions.checkNotNull(child));
-      if (old != child) {
-        this.markChanged();
+  protected static <T extends BaseNode> T deepCopyChildren(T node) {
+    int n = node.getNChildren();
+    if (node instanceof BaseInnerNode) {
+      BaseInnerNode inode = (BaseInnerNode) node;
+      for (int i = 0; i < n; ++i) {
+        inode.replace(i, inode.getChild(i).deepClone());
       }
-      return this;
+    } else {
+      Preconditions.checkArgument(n == 0);
     }
-
-    /** Adds a child node at the given index. */
-    public InnerBuilder<N, V> remove(int index) {
-      this.newNodeChildren.remove(index);
-      this.markChanged();
-      return this;
-    }
+    return node;
   }
 
-  /**
-   * A builder for inner nodes.
-   */
-  public static abstract
-  class LeafBuilder<N extends BaseNode, V extends NodeVariant>
-  extends Builder<N, V> {
-    private Optional<String> newLiteralValue = Optional.absent();
-
-    protected LeafBuilder(V variant) {
-      super(variant);
-    }
-
-    protected LeafBuilder(N source) {
-      super(source);
-      newLiteralValue = Optional.fromNullable(source.getValue());
-    }
-
-    protected LeafBuilder(Builder<N, V> source) {
-      super(source);
-      newLiteralValue = Optional.fromNullable(source.getValue());
-    }
-
-    @Override
-    public final String getValue() {
-      return newLiteralValue.orNull();
-    }
-
-    @Override
-    public ImmutableList<BaseNode> getChildren() {
-      return ImmutableList.of();
-    }
-
-    @Override
-    public final int getNChildren() {
-      return 0;
-    }
-
-    @Override
-    public final BaseNode getChild(int i) {
-      throw new IndexOutOfBoundsException("" + i);
-    }
-
-
-    /** Specifies the value. */
-    public LeafBuilder<N, V> leaf(String leafLiteralValue) {
-      Optional<String> newValueOpt = Optional.of(leafLiteralValue);
-      if (!newLiteralValue.equals(newValueOpt)) {
-        this.newLiteralValue = newValueOpt;
-        this.markChanged();
-      }
-      return this;
-    }
-  }
 
   @Override
   public String toString() {
@@ -335,6 +98,9 @@ public abstract class BaseNode implements NodeOrBuilder {
 
   @Override
   public final int hashCode() {
+    List<BaseNode> children = getChildren();
+    String literalValue = getValue();
+
     final int prime = 31;
     int result = 1;
     result = prime * result + ((children == null) ? 0 : children.hashCode());
@@ -358,24 +124,24 @@ public abstract class BaseNode implements NodeOrBuilder {
       return false;
     }
     BaseNode other = (BaseNode) obj;
-    if (children == null) {
-      if (other.children != null) {
-        return false;
-      }
-    } else if (!children.equals(other.children)) {
-      return false;
-    }
     if (!variant.equals(other.variant)) {
       return false;
     }
+    String thisValue = this.getValue();
+    String otherValue = other.getValue();
     if (!variant.isIgnorable()) {
-      if (literalValue == null) {
-        if (other.literalValue != null) {
+      if (thisValue == null) {
+        if (otherValue != null) {
           return false;
         }
-      } else if (!literalValue.equals(other.literalValue)) {
+      } else if (!thisValue.equals(otherValue)) {
         return false;
       }
+    }
+    List<BaseNode> thisChildren = getChildren();
+    List<BaseNode> otherChildren = other.getChildren();
+    if (!thisChildren.equals(otherChildren)) {
+      return false;
     }
     return true;
   }
@@ -432,7 +198,7 @@ public abstract class BaseNode implements NodeOrBuilder {
      *
      * @return {@code this} to enable chaining.
      */
-    public Finder<T> exclude(Class<? extends NodeOrBuilder> cl) {
+    public Finder<T> exclude(Class<? extends NodeI> cl) {
       doNotEnter = Predicates.or(doNotEnter, Predicates.instanceOf(cl));
       return this;
     }

@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -8,6 +9,8 @@ import org.junit.Test;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
@@ -43,27 +46,36 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         "class Foo implements A, B,    D, E {}",
         new AbstractRewritingPass(logger) {
+          final List<BaseNode> stack = Lists.newArrayList();
+
           @Override
-          protected <N extends BaseNode> ProcessingStatus
-          postvisit(N node, @Nullable SList<Parent> pathFromRoot,
-              BaseNode.Builder<N, ?> builder) {
+          protected ProcessingStatus previsit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+            stack.add(node.deepClone());
+            return ProcessingStatus.CONTINUE;
+          }
+
+          @Override
+          protected ProcessingStatus postvisit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+            BaseNode original = stack.remove(stack.size() - 1);
+            boolean changed = !original.equals(node);
+
             switch (node.getNodeType()) {
               case ContextFreeName:
                 // If we see the name D, turn it into a C via the builder.
                 String name = node.getTextContent(".");
                 if (name.equals("D")) {
-                  ((BaseNode.InnerBuilder<N, ?>) builder).replace(
+                  ((BaseInnerNode) node).replace(
                       0,
-                      IdentifierNode.Variant.Builtin.nodeBuilder()
-                          .leaf("C")
-                          .build());
+                      IdentifierNode.Variant.Builtin.buildNode("C"));
                 }
                 break;
               case InterfaceType:
-                if (builder.changed()) {
+                if (changed) {
                   // If some descendant changed, then insert the built node
                   // before the original.
-                  return ProcessingStatus.replace(builder.build(), node);
+                  return ProcessingStatus.replace(node, original);
                 }
                 break;
               default:
@@ -82,15 +94,17 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         new AbstractRewritingPass(logger) {
           @Override
-          protected <N extends BaseNode> ProcessingStatus
-          previsit(N node, @Nullable SList<Parent> pathFromRoot,
-              BaseNode.Builder<N, ?> builder) {
+          protected ProcessingStatus previsit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case Identifier:
                 String ident = node.getValue();
                 if (ident.length() == 1 && !"C".equals(ident)) {
+                  IdentifierNode copy = new IdentifierNode(
+                      (IdentifierNode) node);
+                  copy.setValue("G");
                   return ProcessingStatus.replace(
-                      ((IdentifierNode) node).builder().leaf("G").build());
+                      copy);
                 }
                 break;
               default:
@@ -109,9 +123,8 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         new AbstractRewritingPass(logger) {
           @Override
-          protected <N extends BaseNode> ProcessingStatus
-          previsit(N node, @Nullable SList<Parent> pathFromRoot,
-              BaseNode.Builder<N, ?> builder) {
+          protected ProcessingStatus
+ previsit(         BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceType:
                 if ("C".equals(node.getTextContent("^"))) {
@@ -134,9 +147,8 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         new AbstractRewritingPass(logger) {
           @Override
-          protected <N extends BaseNode> ProcessingStatus
-          postvisit(N node, @Nullable SList<Parent> pathFromRoot,
-              BaseNode.Builder<N, ?> builder) {
+          protected ProcessingStatus postvisit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceType:
                 if ("C".equals(node.getTextContent("^"))) {
@@ -154,32 +166,24 @@ public final class AbstractRewritingPassTest extends TestCase {
 
   @Test
   public void testOutOfBandChangesAndContinue() throws Exception {
-    boolean threw;
-    try {
-      assertRewrite(
-          "NEVER COMPARED TO EXPECTED VALUE",
-          "class Foo implements A, B, C, D, E {}",
-          new AbstractRewritingPass(logger) {
-            @Override
-            protected <N extends BaseNode> ProcessingStatus
-            previsit(N node, @Nullable SList<Parent> pathFromRoot,
-                BaseNode.Builder<N, ?> builder) {
-              switch (node.getNodeType()) {
-                case InterfaceTypeList:
-                  ((InterfaceTypeListNode.Builder) builder).remove(1);
-                  break;
-                default:
-                  break;
-              }
-              return ProcessingStatus.CONTINUE;
+    assertRewrite(
+        "class Foo implements A, C, D, E {}",
+        "class Foo implements A, B, C, D, E {}",
+        new AbstractRewritingPass(logger) {
+          @Override
+          protected ProcessingStatus previsit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+            switch (node.getNodeType()) {
+              case InterfaceTypeList:
+                ((InterfaceTypeListNode) node).remove(1);
+                break;
+              default:
+                break;
             }
-          },
-          null);
-      threw = false;
-    } catch (@SuppressWarnings("unused") IllegalStateException ex) {
-      threw = true;
-    }
-    assertTrue(threw);
+            return ProcessingStatus.CONTINUE;
+          }
+        },
+        null);
   }
 
   @Test
@@ -189,12 +193,11 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         new AbstractRewritingPass(logger) {
           @Override
-          protected <N extends BaseNode> ProcessingStatus
-          previsit(N node, @Nullable SList<Parent> pathFromRoot,
-              BaseNode.Builder<N, ?> builder) {
+          protected ProcessingStatus previsit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceTypeList:
-                ((InterfaceTypeListNode.Builder) builder).remove(1);
+                ((InterfaceTypeListNode) node).remove(1);
                 return ProcessingStatus.BREAK;
               default:
                 break;
@@ -212,12 +215,11 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         new AbstractRewritingPass(logger) {
           @Override
-          protected <N extends BaseNode> ProcessingStatus
-          postvisit(N node, @Nullable SList<Parent> pathFromRoot,
-              BaseNode.Builder<N, ?> builder) {
+          protected ProcessingStatus postvisit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceTypeList:
-                ((InterfaceTypeListNode.Builder) builder).remove(1);
+                ((InterfaceTypeListNode) node).remove(1);
                 break;
               default:
                 break;

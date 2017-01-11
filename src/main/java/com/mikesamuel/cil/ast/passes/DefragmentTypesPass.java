@@ -12,13 +12,12 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AnnotationNode;
 import com.mikesamuel.cil.ast.ArrayTypeNode;
+import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.BlockStatementNode;
-import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.ast.DimNode;
 import com.mikesamuel.cil.ast.DimsNode;
 import com.mikesamuel.cil.ast.LocalVariableDeclarationStatementNode;
-import com.mikesamuel.cil.ast.NodeOrBuilder;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
@@ -56,16 +55,15 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   }
 
   @Override
-  protected <N extends BaseNode> ProcessingStatus postvisit(
-      N node, @Nullable SList<Parent> pathFromRoot,
-      BaseNode.Builder<N, ?> builder) {
-    if (!COMMON_ANCESTOR.contains(builder.getNodeType())) {
+  protected ProcessingStatus postvisit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+    if (!COMMON_ANCESTOR.contains(node.getNodeType())) {
       return ProcessingStatus.CONTINUE;
     }
-    ImmutableList<? extends NodeOrBuilder> declList = splitDecls(builder);
+    ImmutableList<? extends BaseNode> declList = splitDecls(node);
     ImmutableList.Builder<BaseNode> replacements = ImmutableList.builder();
     boolean foundOne = false;
-    for (NodeOrBuilder decl : declList) {
+    for (BaseNode decl : declList) {
       DimsNode dims = getDims(decl);
       if (dims != null) {
         BaseNode type = getType(decl);
@@ -79,7 +77,7 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
               "Floating array dimensions [] could not be reattached to a type");
         }
       }
-      replacements.add(decl.toBaseNode());
+      replacements.add(decl);
     }
     return foundOne
         ? ProcessingStatus.replace(replacements.build())
@@ -186,9 +184,9 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           );
 
   static <T> T processAlongPath(
-      NodeOrBuilder node, ImmutableSet<NodeType> between,
+      BaseNode node, ImmutableSet<NodeType> between,
       ImmutableSet<NodeType> target, FindOp<T> op) {
-    ImmutableList<BaseNode> children = node.getChildren();
+    List<BaseNode> children = node.getChildren();
     for (int i = 0, n = children.size(); i < n; ++i) {
       BaseNode child = children.get(i);
       NodeType nt = child.getNodeType();
@@ -204,74 +202,63 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
     return null;
   }
 
-  static ImmutableList<? extends NodeOrBuilder> splitDecls(
-      NodeOrBuilder start) {
+  static ImmutableList<? extends BaseNode> splitDecls(BaseNode start) {
     ImmutableList<BaseNode> ls = processAlongPath(
         start, BETWEEN_COMMON_ANCESTOR_AND_DIMS, VAR_DECL_LIST_NODE_TYPES,
         new FindOp<ImmutableList<BaseNode>>() {
 
           @SuppressWarnings("synthetic-access")
           @Override
-          public ImmutableList<BaseNode> found(NodeOrBuilder node) {
+          public ImmutableList<BaseNode> found(BaseNode node) {
             ImmutableList.Builder<BaseNode> split = null;
 
             VariableDeclaratorListNode declList =
                 (VariableDeclaratorListNode) node;
             int lastSplitIndex = 0;
             int lastDimCount = -1;
-            ImmutableList<BaseNode> children = declList.getChildren();
-            for (int i = 0, n = children.size(); i < n; ++i) {
-              BaseNode child = children.get(i);
-              if (child instanceof VariableDeclaratorNode) {
-                DimsNode dims = getDims(child);
-                int childDimCount = countDims(dims);
-                if (lastDimCount != -1 && childDimCount != lastDimCount) {
-                  if (split == null) {
-                    split = ImmutableList.builder();
+            for (int i = 0, n = declList.getNChildren(); i <= n; ++i) {
+              boolean needToAdd = false;
+              if (i == n) {
+                needToAdd = split != null;
+              } else {
+                BaseNode child = declList.getChild(i);
+                if (child instanceof VariableDeclaratorNode) {
+                  DimsNode dims = getDims(child);
+                  int childDimCount = countDims(dims);
+                  if (lastDimCount != -1 && childDimCount != lastDimCount) {
+                    needToAdd = true;
                   }
-                  VariableDeclaratorListNode.Builder lsBuilder =
-                      declList.builder();
-                  while (lsBuilder.getNChildren() != 0) {
-                    lsBuilder.remove(0);
-                  }
-                  for (int j = lastSplitIndex; j < i; ++j) {
-                    BaseNode splitChild = children.get(j);
-                    if (j != lastSplitIndex) {
-                      // Remove redundant DimsNodes since later passes assume
-                      // that there is a 1:1 relationship between DimsNodes
-                      // and TypeNodes.
-                      splitChild = removeDims(splitChild);
-                    }
-                    lsBuilder.add(splitChild);
-                  }
-                  split.add(lsBuilder.build());
-                  lastSplitIndex = i;
+                  lastDimCount = childDimCount;
                 }
-                lastDimCount = childDimCount;
+              }
+              if (needToAdd) {
+                if (split == null) {
+                  split = ImmutableList.builder();
+                }
+                VariableDeclaratorListNode lsCopy =
+                    declList.getVariant().buildNode(ImmutableList.of());
+                lsCopy.copyMetadataFrom(declList);
+                for (int j = lastSplitIndex; j < i; ++j) {
+                  BaseNode splitChild = declList.getChild(j);
+                  if (j != lastSplitIndex) {
+                    // Remove redundant DimsNodes since later passes assume
+                    // that there is a 1:1 relationship between DimsNodes
+                    // and TypeNodes.
+                    splitChild = removeDims(splitChild);
+                  }
+                  lsCopy.add(splitChild);
+                }
+                split.add(lsCopy);
+                lastSplitIndex = i;
               }
             }
-            if (split != null) {
-              VariableDeclaratorListNode.Builder lsBuilder = declList.builder();
-              while (lsBuilder.getNChildren() != 0) {
-                lsBuilder.remove(0);
-              }
-              for (int j = lastSplitIndex; j < children.size(); ++j) {
-                BaseNode splitChild = children.get(j);
-                if (j != lastSplitIndex) {
-                  splitChild = removeDims(splitChild);
-                }
-                lsBuilder.add(splitChild);
-              }
-              split.add(lsBuilder.build());
-            }
-
             return split != null ? split.build() : null;
           }
 
           @SuppressWarnings("synthetic-access")
           @Override
           public ImmutableList<BaseNode> intermediate(
-              NodeOrBuilder node, int indexOfChild, BaseNode child,
+              BaseNode node, int indexOfChild, BaseNode child,
               ImmutableList<BaseNode> splitChildren) {
             if (splitChildren == null) {
               return null;
@@ -287,23 +274,23 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
                   && i + 1 < n) {
                 wrappedChild = splitChild;
               } else {
-                BaseNode.InnerBuilder<?, ?> builder =
-                    ((BaseNode.InnerBuilder<?, ?>) node.builder());
                 if (node.getNodeType() == NodeType.BlockStatement
                     && splitChild.getNodeType()
                        == NodeType.LocalVariableDeclaration) {
-                  ((BlockStatementNode.Builder) builder).variant(
-                      BlockStatementNode.Variant
-                      .LocalVariableDeclarationStatement);
+                  wrappedChild = BlockStatementNode.Variant
+                      .LocalVariableDeclarationStatement
+                      .buildNode(node.getChildren());
+                  wrappedChild.copyMetadataFrom(node);
 
                   splitChild =
                       LocalVariableDeclarationStatementNode
-                      .Variant.LocalVariableDeclarationSem.nodeBuilder()
-                      .add(splitChild)
-                      .build();
+                      .Variant.LocalVariableDeclarationSem.buildNode(
+                          ImmutableList.of(splitChild));
+                } else {
+                  wrappedChild = ((BaseInnerNode) node).shallowClone();
                 }
-                builder.replace(indexOfChild, splitChild);
-                wrappedChild = builder.build();
+                ((BaseInnerNode) wrappedChild).replace(
+                    indexOfChild, splitChild);
               }
               splitNodes.add(wrappedChild);
             }
@@ -318,20 +305,20 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   }
 
   static <T extends BaseNode> T find(
-      NodeOrBuilder start, ImmutableSet<NodeType> between,
+      BaseNode start, ImmutableSet<NodeType> between,
       ImmutableSet<NodeType> target, Class<T> cl) {
     return processAlongPath(
         start, between, target,
         new FindOp<T>() {
 
           @Override
-          public T found(NodeOrBuilder node) {
+          public T found(BaseNode node) {
             return cl.cast(node);
           }
 
           @Override
           public T intermediate(
-              NodeOrBuilder node, int indexOfChild, BaseNode child, T x) {
+              BaseNode node, int indexOfChild, BaseNode child, T x) {
             return x;
           }
 
@@ -339,25 +326,25 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   }
 
   interface FindOp<T> {
-    T found(NodeOrBuilder node);
+    T found(BaseNode node);
 
-    T intermediate(NodeOrBuilder node, int indexOfChild, BaseNode child, T x);
+    T intermediate(BaseNode node, int indexOfChild, BaseNode child, T x);
   }
 
-  private static DimsNode getDims(NodeOrBuilder node) {
+  private static DimsNode getDims(BaseNode node) {
     return find(
         node, BETWEEN_COMMON_ANCESTOR_AND_DIMS, DIMS_NODE_TYPES,
         DimsNode.class);
   }
 
-  private static BaseNode getType(NodeOrBuilder node) {
+  private static BaseNode getType(BaseNode node) {
     return find(
         node, BETWEEN_COMMON_ANCESTOR_AND_TYPE, TYPE_NODE_TYPES,
         BaseNode.class);
   }
 
   private static BaseNode removeDimsAndAddDimsToType(
-      NodeOrBuilder start, DimsNode dims, BaseNode type) {
+      BaseNode start, DimsNode dims, BaseNode type) {
     Preconditions.checkNotNull(dims);
     Preconditions.checkNotNull(type);
     // First, replace
@@ -367,29 +354,27 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
         new FindOp<BaseNode>() {
 
           @Override
-          public TypeNode found(NodeOrBuilder node) {
+          public TypeNode found(BaseNode node) {
             TypeNode typeNode = (TypeNode) node;
             // There could be template nodes on this too.
             List<BaseNode> annotationsEtc = Lists.newArrayList();
             for (BaseNode child : dims.getChildren()) {
               if (child instanceof DimNode) {
-                ArrayTypeNode.Builder arrayTypeBuilder =
-                    ArrayTypeNode.Variant.TypeAnnotationDim.nodeBuilder()
-                    .add(typeNode);
+                ArrayTypeNode newArrayType =
+                    ArrayTypeNode.Variant.TypeAnnotationDim.buildNode(
+                        ImmutableList.of(typeNode));
 
                 for (BaseNode annotationEtc : annotationsEtc) {
-                  arrayTypeBuilder.add(annotationEtc);
+                  newArrayType.add(annotationEtc);
                 }
                 annotationsEtc.clear();
 
-                arrayTypeBuilder.add(child);
+                newArrayType.add(child);
 
-                typeNode = TypeNode.Variant.ReferenceType.nodeBuilder()
-                    .add(
-                        ReferenceTypeNode.Variant.ArrayType.nodeBuilder()
-                        .add(arrayTypeBuilder.build())
-                        .build())
-                    .build();
+                typeNode = TypeNode.Variant.ReferenceType.buildNode(
+                    ImmutableList.of(
+                        ReferenceTypeNode.Variant.ArrayType.buildNode(
+                            ImmutableList.of(newArrayType))));
               } else {
                 Preconditions.checkState(
                     child instanceof AnnotationNode
@@ -403,16 +388,15 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
           @Override
           public BaseNode intermediate(
-              NodeOrBuilder node, int indexOfChild, BaseNode child,
+              BaseNode node, int indexOfChild, BaseNode child,
               BaseNode newChild) {
             Preconditions.checkState(
                 child.getNodeType() == newChild.getNodeType(),
                 "%s != %s",
                 child, newChild);
-            BaseNode.InnerBuilder<?, ?> b = (BaseNode.InnerBuilder<?, ?>)
-                node.builder();
-            b.replace(indexOfChild, newChild);
-            return b.build();
+            BaseInnerNode copy = ((BaseInnerNode) node).shallowClone();
+            copy.replace(indexOfChild, newChild);
+            return copy;
           }
 
         });
@@ -427,22 +411,21 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
         new FindOp<BaseNode>() {
 
           @Override
-          public BaseNode found(NodeOrBuilder node) {
+          public BaseNode found(BaseNode node) {
             return null;
           }
 
           @Override
           public BaseNode intermediate(
-              NodeOrBuilder node, int indexOfChild, BaseNode child,
+              BaseNode node, int indexOfChild, BaseNode child,
               @Nullable BaseNode newChild) {
-            BaseNode.InnerBuilder<?, ?> builder = (InnerBuilder<?, ?>)
-                node.builder();
+            BaseInnerNode copy = (BaseInnerNode) node.shallowClone();
             if (newChild == null) {
-              builder.remove(indexOfChild);
+              copy.remove(indexOfChild);
             } else {
-              builder.replace(indexOfChild, newChild);
+              copy.replace(indexOfChild, newChild);
             }
-            return builder.build();
+            return copy;
           }
 
         });

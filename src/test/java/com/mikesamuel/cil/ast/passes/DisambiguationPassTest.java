@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -14,7 +15,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.NodeOrBuilder;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.PrimaryNode;
@@ -491,7 +492,7 @@ public final class DisambiguationPassTest extends TestCase {
       String[] input,
       NodeMatcher nodeMatcher,
       boolean useLongNames,
-      @Nullable Function<? super NodeOrBuilder, ? extends String> decorator,
+      @Nullable Function<? super NodeI, ? extends String> decorator,
       String... expectedErrors) {
     assertDisambiguated(
         new String[][] { want },
@@ -504,7 +505,7 @@ public final class DisambiguationPassTest extends TestCase {
       String[][] inputs,
       NodeMatcher nodeMatcher,
       boolean useLongNames,
-      @Nullable Function<? super NodeOrBuilder, ? extends String> decorator,
+      @Nullable Function<? super NodeI, ? extends String> decorator,
       String... expectedErrors) {
     ImmutableList<CompilationUnitNode> disambiguated =
         PassTestHelpers.expectErrors(
@@ -611,7 +612,7 @@ public final class DisambiguationPassTest extends TestCase {
 
       @Override
       public void match(
-          ImmutableList<? extends BaseNode> nodes,
+          List<? extends BaseNode> nodes,
           ImmutableList.Builder<BaseNode> out) {
 
         for (BaseNode node : nodes) {
@@ -636,7 +637,7 @@ public final class DisambiguationPassTest extends TestCase {
 
       @Override
       public void match(
-          ImmutableList<? extends BaseNode> nodes,
+          List<? extends BaseNode> nodes,
           ImmutableList.Builder<BaseNode> out) {
         for (BaseNode node : nodes) {
           if (p.apply(node)) {
@@ -650,11 +651,11 @@ public final class DisambiguationPassTest extends TestCase {
   }
 
 
-  static final Function<NodeOrBuilder, String> TYPE_AND_NAME_DECORATOR =
-      new Function<NodeOrBuilder, String>() {
+  static final Function<NodeI, String> TYPE_AND_NAME_DECORATOR =
+      new Function<NodeI, String>() {
 
         @Override
-        public String apply(NodeOrBuilder n) {
+        public String apply(NodeI n) {
           Name canonName = null;
           if (n instanceof TypeDeclaration) {
             TypeInfo ti = ((TypeDeclaration) n).getDeclaredTypeInfo();
@@ -683,7 +684,7 @@ public final class DisambiguationPassTest extends TestCase {
 
   interface NodeMatcher {
     void match(
-        ImmutableList<? extends BaseNode> nodes,
+        List<? extends BaseNode> nodes,
         ImmutableList.Builder<BaseNode> out);
   }
 }

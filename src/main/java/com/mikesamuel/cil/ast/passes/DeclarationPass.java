@@ -22,7 +22,7 @@ import com.google.common.collect.Multimaps;
 import com.mikesamuel.cil.ast.AdditionalBoundNode;
 import com.mikesamuel.cil.ast.AnnotationNode;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.BasePackageNode;
+import com.mikesamuel.cil.ast.Chapter;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
@@ -303,7 +303,7 @@ final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
       TypeDeclaration decl = d.decl;
       BaseNode node = (BaseNode) decl;
-      ImmutableList<BaseNode> children = node.getChildren();
+      List<BaseNode> children = node.getChildren();
       // Collect the declared type after resolving its super-types.
       Name typeName = decl.getDeclaredTypeInfo().canonName;
 
@@ -431,7 +431,7 @@ final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       return wildcardImports.build();
     }
 
-    void collectImports(BasePackageNode node) {
+    void collectImports(BaseNode node) {
       switch (node.getVariant().getNodeType()) {
         case PackageDeclaration:
           this.currentPackage = toName(node, Type.PACKAGE);
@@ -478,8 +478,8 @@ final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           break;
         default:
           for (BaseNode child : node.getChildren()) {
-            if (child instanceof BasePackageNode) {
-              collectImports((BasePackageNode) child);
+            if (child.getNodeType().getChapter() == Chapter.Package) {
+              collectImports(child);
             }
           }
           break;

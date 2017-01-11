@@ -1,9 +1,10 @@
 package com.mikesamuel.cil.parser;
 
+import java.util.List;
+
 import org.junit.Test;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.Trees;
@@ -55,8 +56,8 @@ public final class InputTest extends TestCase {
       assertEquals(a.getTextContent(" "), apos, bpos);
     }
 
-    ImmutableList<BaseNode> achildren = a.getChildren();
-    ImmutableList<BaseNode> bchildren = b.getChildren();
+    List<BaseNode> achildren = a.getChildren();
+    List<BaseNode> bchildren = b.getChildren();
     int n = achildren.size();
     assertEquals(bchildren.size(), n);  // Structure checked before entry.
     for (int i = 0; i < n; ++i) {

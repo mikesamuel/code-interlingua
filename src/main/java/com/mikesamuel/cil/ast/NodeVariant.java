@@ -42,11 +42,30 @@ public interface NodeVariant extends ParSerable {
   Lookahead1 getLookahead1();
 
   /**
-   * A builder that produces nodes with this variant.
+   * Produces a new node with this variant.
    *
-   * @return a builder, b,  such that {@code b.build().getVariant() == this}.
+   * @param value the built nodes initial value.
+   * @return a leaf node, n,  such that {@code n.getVariant() == this}.
+   * @throws IllegalArgumentException if trying to build an inner node with a
+   *     leaf value.
    */
-  BaseNode.Builder<?, ?> nodeBuilder();
+  default BaseLeafNode buildNode(String value) {
+    // TODO: maybe have two variants of NodeVariant for leaf/inner
+    throw new IllegalArgumentException(this + " is an inner node type");
+  }
+
+  /**
+   * Produces a new node with this variant.
+   *
+   * @param children the built nodes initial children.
+   * @return an inner node, n,  such that {@code n.getVariant() == this}.
+   * @throws IllegalArgumentException if trying to build an inner node with a
+   *     leaf value.
+   */
+  default BaseInnerNode buildNode(Iterable<? extends BaseNode> children) {
+    // TODO: maybe have two variants of NodeVariant for leaf/inner
+    throw new IllegalArgumentException(this + " is a leaf node type");
+  }
 
   /**
    * True iff the variant is anonymous meaning that the tree builder should

@@ -68,9 +68,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
   private static ImmutableList<MemberInfo> findMembers(
       Name declaringClass, TypeDeclaration declaration) {
-    ImmutableList<BaseNode> declarationChildren = ((BaseNode) declaration)
-        .getChildren();
-    BaseNode body = declarationChildren.get(declarationChildren.size() - 1);
+    BaseNode body = declaration.getChild(declaration.getNChildren() - 1);
 
     ImmutableList.Builder<MemberInfo> b = ImmutableList.builder();
 

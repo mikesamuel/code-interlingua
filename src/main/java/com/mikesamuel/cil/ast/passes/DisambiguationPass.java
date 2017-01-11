@@ -10,7 +10,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.AnnotationNode;
-import com.mikesamuel.cil.ast.BaseExpressionNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
@@ -72,9 +71,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
   }
 
   @Override
-  protected <N extends BaseNode> ProcessingStatus previsit(
-      N node, @Nullable SList<Parent> pathFromRoot,
-      BaseNode.Builder<N, ?> builder) {
+  protected ProcessingStatus previsit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     if (node instanceof TypeScope) {
       typeScopes.add((TypeScope) node);
     }
@@ -89,12 +87,12 @@ final class DisambiguationPass extends AbstractRewritingPass {
       nameScopes.add(nameScope);
     }
 
-    ImmutableList<BaseNode> children = node.getChildren();
+    List<BaseNode> children = node.getChildren();
     if (children.size() == 1) {
       BaseNode child = children.get(0);
       if (child instanceof ContextFreeNamesNode) {
         return rewriteContextFreeNames(
-            pathFromRoot, node, (ContextFreeNamesNode) child, builder);
+            pathFromRoot, node, (ContextFreeNamesNode) child);
       }
     }
     // By inspection of the grammar, context free names
@@ -105,8 +103,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   private ProcessingStatus rewriteContextFreeNames(
       @Nullable SList<Parent> pathFromRoot,
-      BaseNode parent, ContextFreeNamesNode names,
-      BaseNode.Builder<?, ?> parentBuilder) {
+      BaseNode parent, ContextFreeNamesNode names) {
     Decomposed decomposed = Decomposed.of(names);
     if (decomposed == null) {
       return ProcessingStatus.BREAK;  // Logged within.
@@ -128,8 +125,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         Preconditions.checkState(
             parent.getVariant() ==
             ClassOrInterfaceTypeNode.Variant.ContextFreeNames);
-        ClassOrInterfaceTypeNode.Builder b =
-            (ClassOrInterfaceTypeNode.Builder) parentBuilder;
+        ClassOrInterfaceTypeNode b = (ClassOrInterfaceTypeNode) parent;
         if (pathFromRoot != null
             && pathFromRoot.prev != null
             && pathFromRoot.prev.prev != null
@@ -194,29 +190,24 @@ final class DisambiguationPass extends AbstractRewritingPass {
         if (!dsOpt.isPresent()) { break; }
         ImmutableList<Decomposed> ds = dsOpt.get();
         // The left hand side is the LR seed and the rest are fields.
-        BaseExpressionNode seed = null;
+        BaseNode seed = null;
         {
           Decomposed seedDecomp = ds.get(0);
           switch (seedDecomp.name.type) {
             case LOCAL:
               Preconditions.checkState(seedDecomp.idents.size() == 1);
-              seed = ExpressionAtomNode.Variant.Local.nodeBuilder()
-                  .add(
-                      LocalNameNode.Variant.Identifier.nodeBuilder()
-                      .setReferencedExpressionName(seedDecomp.name)
-                      .add(seedDecomp.idents.get(0).identifier)
-                      .build())
-                  .build();
+              LocalNameNode localName =
+                  LocalNameNode.Variant.Identifier.buildNode(
+                      seedDecomp.idents.get(0).identifier);
+              localName.setReferencedExpressionName(seedDecomp.name);
+              seed = ExpressionAtomNode.Variant.Local.buildNode(localName);
               break;
             case FIELD:
               Preconditions.checkState(seedDecomp.idents.size() == 1);
-              seed = ExpressionAtomNode.Variant.FreeField.nodeBuilder()
-                  .add(
-                      FieldNameNode.Variant.Identifier.nodeBuilder()
-                      .setReferencedExpressionName(seedDecomp.name)
-                      .add(seedDecomp.idents.get(0).identifier)
-                      .build())
-                  .build();
+              FieldNameNode fieldName = FieldNameNode.Variant.Identifier
+                  .buildNode(seedDecomp.idents.get(0).identifier);
+              fieldName.setReferencedExpressionName(seedDecomp.name);
+              seed = ExpressionAtomNode.Variant.FreeField.buildNode(fieldName);
               break;
             case CLASS:
             case TYPE_PARAMETER:
@@ -226,9 +217,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
               //     { System.err.println(T.ENGLISH); }
               //   }
 
-              seed = ExpressionAtomNode.Variant.StaticMember.nodeBuilder()
-                  .add(buildTypeNameNode(seedDecomp, names))
-                  .build();
+              seed = ExpressionAtomNode.Variant.StaticMember.buildNode(
+                  buildTypeNameNode(seedDecomp, names));
               break;
             case AMBIGUOUS:
             case METHOD:
@@ -241,16 +231,14 @@ final class DisambiguationPass extends AbstractRewritingPass {
         int nParts = ds.size();
 
         // Primary.ExpressionStatement is @anon.
-        BaseExpressionNode expr = seed;
+        BaseNode expr = seed;
 
         for (Decomposed d : ds.subList(1, nParts)) {
           Preconditions.checkState(d.idents.size() == 1);
-          expr = PrimaryNode.Variant.FieldAccess.nodeBuilder()
-              .add(expr)
-              .add(FieldNameNode.Variant.Identifier.nodeBuilder()
-                  .add(d.idents.get(0).identifier)
-                  .build())
-              .build();
+          expr = PrimaryNode.Variant.FieldAccess.buildNode(
+              expr,
+              FieldNameNode.Variant.Identifier.buildNode(
+                  d.idents.get(0).identifier));
         }
 
         expr.setSourcePosition(parent.getSourcePosition());
@@ -279,9 +267,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
   }
 
   @Override
-  protected <N extends BaseNode> ProcessingStatus postvisit(
-      N node, @Nullable SList<Parent> pathFromRoot,
-      BaseNode.Builder<N, ?> builder) {
+  protected ProcessingStatus postvisit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     if (node instanceof TypeScope) {
       TypeScope popped = typeScopes.remove(typeScopes.size() - 1);
       Preconditions.checkState(popped == node);
@@ -470,7 +457,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
       IdentifierNode identifier;
       TypeArgumentsNode arguments;
 
-      ImmutableList<BaseNode> children = node.getChildren();
+      List<BaseNode> children = node.getChildren();
       int nChildren = children.size();
       if (nChildren == 0) { return null; }
       int index = nChildren - 1;
@@ -504,11 +491,11 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   private void buildClassOrInterfaceType(
       @Nullable TypeInfo typeInfo, Name name, Decomposed d,
-      ClassOrInterfaceTypeNode.Builder ctype) {
-    buildClassOrInterfaceType(name, d, d.idents.size() - 1, ctype);
-    ctype.variant(
+      ClassOrInterfaceTypeNode ctype) {
+    ctype.setVariant(
         ClassOrInterfaceTypeNode.Variant
         .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments);
+    buildClassOrInterfaceType(name, d, d.idents.size() - 1, ctype);
     if (typeInfo != null) {
       ctype.setReferencedTypeInfo(typeInfo);
     }
@@ -520,19 +507,19 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   private void buildClassOrInterfaceType(
       Name name, Decomposed d, int identIndex,
-      ClassOrInterfaceTypeNode.Builder ctype) {
+      ClassOrInterfaceTypeNode ctype) {
     IdentifierEtc ietc = identIndex >= 0 ? d.idents.get(identIndex) : null;
     boolean hasParent = name.parent != null
         && !Name.DEFAULT_PACKAGE.equals(name.parent)
         && (identIndex > 0 || useLongNames);
 
     if (hasParent) {
-      ClassOrInterfaceTypeNode.Builder subctype =
+      ClassOrInterfaceTypeNode subctype =
           ClassOrInterfaceTypeNode.Variant
           .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments
-          .nodeBuilder();
+          .buildNode();
       buildClassOrInterfaceType(name.parent, d, identIndex - 1, subctype);
-      ctype.add(subctype.build());
+      ctype.add(subctype);
     }
     if (ietc != null) {
       ctype.setSourcePosition(ietc.node.getSourcePosition());
@@ -544,12 +531,12 @@ final class DisambiguationPass extends AbstractRewritingPass {
       }
     }
 
-    IdentifierNode.Builder identBuilder = ietc != null
-        ? ietc.identifier.builder()
-        : IdentifierNode.Variant.Builtin.nodeBuilder();
-    identBuilder.leaf(name.identifier);
-    identBuilder.setNamePartType(name.type);
-    ctype.add(identBuilder.build());
+    IdentifierNode newIdent = ietc != null
+        ? ietc.identifier.shallowClone()
+        : IdentifierNode.Variant.Builtin.buildNode(name.identifier);
+    newIdent.setNamePartType(name.type)
+        .setValue(name.identifier);
+    ctype.add(newIdent);
 
     if (ietc != null) {
       if (ietc.arguments != null) {
@@ -579,10 +566,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
         @SuppressWarnings("synthetic-access")
         IdentifierEtc ietc = new IdentifierEtc(
             null, ImmutableList.of(),
-            IdentifierNode.Variant.Builtin.nodeBuilder()
-                .leaf(n.identifier)
-                .setNamePartType(n.type)
-                .build(),
+            IdentifierNode.Variant.Builtin.buildNode(n.identifier)
+                .setNamePartType(n.type),
             null);
         b.add(ietc);
       }
@@ -590,28 +575,23 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
 
     int nIdents = idents.size();
-    TypeNameNode.Builder b;
+    TypeNameNode newTypeNameNode;
     if (nIdents == 1) {
-      b = TypeNameNode.Variant.Identifier.nodeBuilder()
-          .add(idents.get(0).identifier);
+      newTypeNameNode = TypeNameNode.Variant.Identifier.buildNode(
+          idents.get(0).identifier);
     } else {
       PackageOrTypeNameNode child = buildPackageOrTypeNameNode(
           idents, 0, nIdents - 1);
-      b = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier.nodeBuilder()
-          .add(child)
-          .add(idents.get(nIdents - 1).identifier);
+      newTypeNameNode = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
+          .buildNode(child, idents.get(nIdents - 1).identifier);
     }
-    if (orig instanceof TypeNameNode) {
-      b.copyMetadataFrom((TypeNameNode) orig);
-    } else {
-      b.setSourcePosition(orig.getSourcePosition());
-    }
+    newTypeNameNode.copyMetadataFrom(orig);
     if (d.name.type != Name.Type.AMBIGUOUS) {
       Optional<TypeInfo> tiOpt = typeInfoResolver.resolve(d.name);
-      b.setReferencedTypeInfo(tiOpt.orNull());
+      newTypeNameNode.setReferencedTypeInfo(tiOpt.orNull());
     }
-    b.setSourcePosition(d.sourceNode.getSourcePosition());
-    return b.build();
+    newTypeNameNode.setSourcePosition(d.sourceNode.getSourcePosition());
+    return newTypeNameNode;
   }
 
   private PackageOrTypeNameNode buildPackageOrTypeNameNode(Decomposed d) {
@@ -635,10 +615,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
         @SuppressWarnings("synthetic-access")
         IdentifierEtc ietc = new IdentifierEtc(
             null, ImmutableList.of(),
-            IdentifierNode.Variant.Builtin.nodeBuilder()
-                .leaf(n.identifier)
-                .setNamePartType(n.type)
-                .build(),
+            IdentifierNode.Variant.Builtin.buildNode(n.identifier)
+                .setNamePartType(n.type),
             null);
         b.add(ietc);
       }
@@ -646,36 +624,31 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
 
     int nIdents = idents.size();
-    PackageOrTypeNameNode.Builder b;
+    PackageOrTypeNameNode newPackageOrTypeName;
     if (nIdents == 1) {
-      b = PackageOrTypeNameNode.Variant.Identifier.nodeBuilder()
-          .add(idents.get(0).identifier);
+      newPackageOrTypeName = PackageOrTypeNameNode.Variant.Identifier.buildNode(
+          idents.get(0).identifier);
     } else {
       PackageOrTypeNameNode child = buildPackageOrTypeNameNode(
           idents, 0, nIdents - 1);
-      b = PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .nodeBuilder()
-          .add(child)
-          .add(idents.get(nIdents - 1).identifier);
+      newPackageOrTypeName =
+          PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
+          .buildNode(child, idents.get(nIdents - 1).identifier);
     }
-    b.setSourcePosition(d.sourceNode.getSourcePosition());
-    return b.build();
+    newPackageOrTypeName.setSourcePosition(d.sourceNode.getSourcePosition());
+    return newPackageOrTypeName;
   }
 
   private PackageOrTypeNameNode buildPackageOrTypeNameNode(
       ImmutableList<IdentifierEtc> idents, int left, int right) {
     Preconditions.checkArgument(left < right);
     if (left + 1 == right) {
-      return PackageOrTypeNameNode.Variant.Identifier.nodeBuilder()
-          .add(idents.get(left).identifier)
-          .build();
+      return PackageOrTypeNameNode.Variant.Identifier.buildNode(
+          idents.get(left).identifier);
     }
     PackageOrTypeNameNode child = buildPackageOrTypeNameNode(
         idents, left, right - 1);
     return PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-        .nodeBuilder()
-        .add(child)
-        .add(idents.get(right - 1).identifier)
-        .build();
+        .buildNode(child, idents.get(right - 1).identifier);
   }
 }

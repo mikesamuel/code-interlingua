@@ -30,10 +30,7 @@ public final class TreesTest extends TestCase {
         Event.content("foo", 2),
         Event.pop()));
 
-    IdentifierNode want =
-        IdentifierNode.Variant.Builtin.nodeBuilder()
-        .leaf("foo")
-        .build();
+    IdentifierNode want = IdentifierNode.Variant.Builtin.buildNode("foo");
 
     assertEquals(want, got);
 
@@ -70,19 +67,12 @@ public final class TreesTest extends TestCase {
         Event.pop()
         ));
 
-    BaseNode want =
-        ClassLiteralNode.Variant.NumericTypeDimDotClass.nodeBuilder()
-        .add(
-            NumericTypeNode.Variant.IntegralType.nodeBuilder()
-            .add(
-                IntegralTypeNode.Variant.Int.nodeBuilder()
-                .build()
-                )
-            .build()
-            )
-        .add(DimNode.Variant.LsRs.nodeBuilder().build())
-        .add(DimNode.Variant.LsRs.nodeBuilder().build())
-        .build();
+    BaseNode want = ClassLiteralNode.Variant.NumericTypeDimDotClass.buildNode(
+        ImmutableList.of(
+            NumericTypeNode.Variant.IntegralType.buildNode(ImmutableList.of(
+                IntegralTypeNode.Variant.Int.buildNode(ImmutableList.of()))),
+            DimNode.Variant.LsRs.buildNode(ImmutableList.of()),
+            DimNode.Variant.LsRs.buildNode(ImmutableList.of())));
 
     assertEquals(got.toString(), want.toString());
     assertEquals(got, want);
@@ -139,9 +129,9 @@ public final class TreesTest extends TestCase {
         golden,
         root.toAsciiArt(
             "",
-            new Function<NodeOrBuilder, String>() {
+            new Function<NodeI, String>() {
               @Override
-              public String apply(@Nonnull NodeOrBuilder node) {
+              public String apply(@Nonnull NodeI node) {
                 SourcePosition pos = node.getSourcePosition();
                 if (pos != null) {
                   return pos.toString();

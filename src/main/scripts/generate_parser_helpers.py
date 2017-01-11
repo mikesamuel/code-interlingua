@@ -183,6 +183,9 @@ def _classify_token((text, _)):
         return _TOK_ANNOT
     return _TOK_OTHER
 
+def _first_upper(s):
+    return '%s%s' % (s[0].upper(), s[1:])
+
 
 # Short names for punctuation strings arranges as a Trie.
 # This is used to derive descriptive variant names.
@@ -646,6 +649,32 @@ def process_grammar(
     prods_by_name = {}
     for_each_prod(lambda c, p: assignforlambda(prods_by_name, p['name'], p))
 
+    def write_chapter_list():
+        members = []
+        def add_member(c):
+            members.append('  /** */\n  %s,' % c['name'])
+        for_each_chapter(add_member)
+
+        emit_java_file(
+            'Chapter',
+            '''package %(package)s;
+
+/**
+ * The JLS chapter in which a node is defined.
+ * Some productions have been moved around, so this is approximate.
+ */
+@javax.annotation.Generated(%(generator)s)
+public enum Chapter {
+%(members)s
+}
+''' % {
+    'package': _JAVA_PACKAGE,
+    'generator': generator,
+    'members': '\n'.join(members),
+})
+
+    write_chapter_list()
+
     def compute_reachable():
         reachable = set()
         def compute_reachable_from(pn):
@@ -734,19 +763,18 @@ def process_grammar(
     def create_enum_members():
         enum_members = []
         for chapter in grammar:
-            base_type = 'Base%sNode.class' % chapter['name']
             for prod in chapter['prods']:
                 enum_members.append(
                     '''
   /**
    * <pre>%(jsdoc)s</pre>
    */
-  %(name)s(%(base_type)s, %(name)sNode.Variant.class),
+  %(name)s(%(name)sNode.class, %(name)sNode.Variant.class, Chapter.%(chapter_name)s),
 ''' % {
     'jsdoc': _jsdoc_of(_tokens_to_text(prod['toks']), prefix = '   * '),
     'name': prod['name'],
     'name_str': _java_str_lit(prod['name']),
-    'base_type': base_type,
+    'chapter_name': chapter['name'],
     })
         return enum_members
 
@@ -772,13 +800,16 @@ public enum NodeType implements ParSerable {
   private final Class<? extends BaseNode> nodeBaseType;
   private final Class<? extends Enum<? extends NodeVariant>> variantType;
   private final ParSerable parSerable;
+  private final Chapter chapter;
 
   NodeType(
       Class<? extends BaseNode> nodeBaseType,
-      Class<? extends Enum<? extends NodeVariant>> variantType) {
+      Class<? extends Enum<? extends NodeVariant>> variantType,
+      Chapter chapter) {
     this.nodeBaseType = nodeBaseType;
     this.variantType = variantType;
     this.parSerable = PTree.nodeWrapper(this);
+    this.chapter = chapter;
   }
 
   /**
@@ -794,7 +825,15 @@ public enum NodeType implements ParSerable {
    */
   public Class<? extends Enum<? extends NodeVariant>> getVariantType() {
     return variantType;
-   }
+  }
+  /**
+   * The JLS chapter in which this node is defined.
+   * Approximate as some things have moved about.
+   */
+  public Chapter getChapter() {
+    return chapter;
+  }
+
   /**
    * A parser/serializer instance that operates on nodes of this kind.
    */
@@ -803,7 +842,7 @@ public enum NodeType implements ParSerable {
     return parSerable.getParSer();
   }
 }
-        ''' % {
+''' % {
             'package': _JAVA_PACKAGE,
             'generator': generator,
             'members': ''.join(create_enum_members()),
@@ -1240,7 +1279,6 @@ public enum NodeType implements ParSerable {
             'com.mikesamuel.cil.parser.Lookahead1',
             'com.mikesamuel.cil.parser.ParSer',
             'com.mikesamuel.cil.parser.ParSerable',
-            'com.mikesamuel.cil.parser.SourcePosition',
             'com.mikesamuel.cil.ptree.PTree',
         ))
 
@@ -1252,52 +1290,35 @@ public enum NodeType implements ParSerable {
         extra_code.append(custom_code)
         extra_imports.update(custom_code_imports)
 
-        builder_rtype = '%s.Builder' % node_class_name
-
-        # extra code for the custom builder body.
-        builder_code = []
-
-        # extra code for the custom builder's copyMetadataFrom method
-        builder_copy_code = []
-
-        # extra code for the custom builder's build method
-        builder_build_code = []
+        # extra code for the custom copyMetadataFrom method
+        copy_code = []
 
         if is_inner_node:
             ctor_formals = 'Iterable<? extends BaseNode> children'
-            builder_kind = 'Inner'
-            builder_actuals = 'getChildren()'
-            super_ctor_actuals = 'children, null'
-            builder_code.append('''
-    @Override public %(builder_rtype)s add(BaseNode child) {
-      super.add(child);
-      return this;
+            super_ctor_actuals = 'children'
+            copy_ctor_actuals = 'source.getVariant(), source.getChildren()'
+            build_node_calls = '''
+    @Override
+    public %(node_class_name)s buildNode(Iterable<? extends BaseNode> children) {
+      return new %(node_class_name)s(this, children);
     }
-    @Override public %(builder_rtype)s add(int index, BaseNode child) {
-      super.add(index, child);
-      return this;
+
+    /** Constructs a node with this variant and the given children. */
+    public %(node_class_name)s buildNode(BaseNode... children) {
+      return buildNode(Arrays.asList(children));
     }
-    @Override public %(builder_rtype)s replace(int index, BaseNode child) {
-      super.replace(index, child);
-      return this;
-    }
-    @Override public %(builder_rtype)s remove(int index) {
-      super.remove(index);
-      return this;
-    }
-''' % { 'builder_rtype': builder_rtype })
+''' % { 'node_class_name': node_class_name }
+            extra_imports.add('java.util.Arrays');
         else:
-            ctor_formals = 'String literalValue'
-            builder_kind = 'Leaf'
-            builder_actuals = 'getValue()'
-            super_ctor_actuals = 'ImmutableList.of(), literalValue'
-            extra_imports.add('com.google.common.collect.ImmutableList')
-            builder_code.append('''
-    @Override public %(builder_rtype)s leaf(String newValue) {
-      super.leaf(newValue);
-      return this;
+            ctor_formals = 'String value'
+            super_ctor_actuals = 'value'
+            copy_ctor_actuals = 'source.getVariant(), source.getValue()'
+            build_node_calls = '''
+    @Override
+    public %(node_class_name)s buildNode(String value) {
+      return new %(node_class_name)s(this, value);
     }
-''' % { 'builder_rtype': builder_rtype })
+''' % { 'node_class_name': node_class_name }
 
         def create_variant_members():
             variant_code = []
@@ -1368,7 +1389,7 @@ public enum NodeType implements ParSerable {
                             annot_type, annot_extra_imports, annot_value_conv = annot_converter
                             override = {
                                 'type': annot_type,
-                                'name': 'get%s%s' % (annot_name[0].upper(), annot_name[1:]),
+                                'name': 'get%s' % _first_upper(annot_name),
                                 'value': annot_value_conv(annot_value),
                             }
                             extra_imports.update(annot_extra_imports)
@@ -1376,7 +1397,7 @@ public enum NodeType implements ParSerable {
                         annot_name = annot_text[1:]
                         override = {
                             'type': 'boolean',
-                            'name': 'is%s%s' % (annot_name[0].upper(), annot_name[1:]),
+                            'name': 'is%s' % _first_upper(annot_name),
                             'value': 'true'
                             }
                     if override is not None:
@@ -1414,19 +1435,22 @@ public enum NodeType implements ParSerable {
             extra_imports.add('%s.traits.%s' % (_JAVA_PACKAGE, trait))
             trait_fields, trait_imports = _TRAITS.get(trait, ((), ()))
             extra_imports.update(trait_imports)
+            copy_calls = []
             for trait_type, trait_field in trait_fields:
                 record = {
+                    'node_class_name': node_class_name,
+                    'trait': trait,
                     'trait_field': trait_field,
-                    'utrait_field': '%s%s' % (trait_field[0].upper(), trait_field[1:]),
+                    'utrait_field': _first_upper(trait_field),
                     'trait_type': trait_type,
-                    'builder_rtype': builder_rtype,
                 }
                 extra_code.append(
                     ('  private %(trait_type)s %(trait_field)s;\n'
                      '\n'
                      '  @Override\n'
-                     '  public final void set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
+                     '  public final %(node_class_name)s set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
                      '    this.%(trait_field)s = new%(utrait_field)s;\n'
+                     '    return this;\n'
                      '  }\n'
                      '\n'
                      '  @Override\n'
@@ -1434,33 +1458,16 @@ public enum NodeType implements ParSerable {
                      '    return this.%(trait_field)s;\n'
                      '  }\n')
                     % record)
-                builder_copy_code.append(
-                    ('      set%(utrait_field)s(source.get%(utrait_field)s());')
+                copy_calls.append(
+                    ('      set%(utrait_field)s('
+                     '((%(trait)s) source).get%(utrait_field)s());')
                     % record
                     )
-                builder_build_code.append(
-                    ('      newNode.set%(utrait_field)s(this.%(trait_field)s);')
-                    % record
-                    )
-                builder_code.append(
-                    # We can't use initializer for metadata fields in builders because the
-                    # super constructors call copyMetaDataFrom which runs before the
-                    # initializers in subclasses so any initial values get clobbered.
-                    ('    private %(trait_type)s %(trait_field)s;\n'
-                     '\n'
-                     '    /** Sets metadata for new instance. */\n'
-                     '    public final %(builder_rtype)s\n'
-                     '    set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
-                     '      if (!Objects.equal(this.%(trait_field)s, new%(utrait_field)s)) {\n'
-                     '        this.%(trait_field)s = new%(utrait_field)s;\n'
-                     '        markChanged();\n'
-                     '      }\n'
-                     '      return this;\n'
-                     '    }\n'
-                     '\n'
-                     '    final %(trait_type)s get%(utrait_field)s() { return %(trait_field)s; }\n'
-                    ) % record)
-                extra_imports.add('com.google.common.base.Objects')
+            if len(copy_calls):
+                copy_code.append('    %s {\n%s\n    }' % (
+                    'if (source instanceof %(trait)s)' % record,
+                    '\n'.join(copy_calls)))
+
         trait_ifaces = ''
         if traits:
             trait_ifaces = '\nimplements %s' % (', '.join(traits))
@@ -1484,12 +1491,28 @@ package %(package)s;
 @javax.annotation.Generated(%(generator)s)
 public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces)s {
 
-  private %(node_class_name)s(
-      Variant v, %(ctor_formals)s) {
+  /** */
+  public %(node_class_name)s(Variant v, %(ctor_formals)s) {
     super(v, %(super_ctor_actuals)s);
   }
 
+  /** Copy constructor. */
+  public %(node_class_name)s(%(node_class_name)s source) {
+    super(%(copy_ctor_actuals)s);
+    copyMetadataFrom(source);
+  }
+
 %(extra_code)s
+
+  @Override
+  public %(node_class_name)s shallowClone() {
+    return new %(node_class_name)s(this);
+  }
+
+  @Override
+  public %(node_class_name)s deepClone() {
+    return deepCopyChildren(shallowClone());
+  }
 
   @Override
   public Variant getVariant() {
@@ -1497,10 +1520,9 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
   }
 
   @Override
-  public Builder builder() {
-    @SuppressWarnings("synthetic-access")
-    Builder b = new Builder(this);
-    return b;
+  public void copyMetadataFrom(BaseNode source) {
+%(copy_code)s
+    super.copyMetadataFrom(source);
   }
 
   /** Variants of this node. */
@@ -1523,7 +1545,7 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
 
     @Override
     public NodeType getNodeType() { return NodeType.%(name)s; }
-
+%(build_node_calls)s
     @Override
     public boolean isLeftRecursive() { return isLeftRecursive; }
 
@@ -1531,66 +1553,8 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     public Lookahead1 getLookahead1() { return lookahead1; }
 
     @Override
-    public %(node_class_name)s.Builder nodeBuilder() {
-      @SuppressWarnings("synthetic-access")
-      %(node_class_name)s.Builder b = new %(node_class_name)s.Builder(this);
-      return b;
-    }
-
-    @Override
     public String toString() {
       return getNodeType().name() + "." + name();
-    }
-  }
-
-  /** A builder for %(node_class_name)ss */
-  public static final class Builder
-  extends BaseNode.%(builder_kind)sBuilder<%(node_class_name)s, Variant> {
-    private Builder(Variant v) {
-      super(v);
-    }
-
-    private Builder(%(node_class_name)s source) {
-      super(source);
-    }
-
-    private Builder(%(node_class_name)s.Builder source) {
-      super(source);
-    }
-
-    @Override
-    public Builder builder() {
-      return new Builder(this);
-    }
-
-%(builder_code)s
-
-    @Override
-    public Builder copyMetadataFrom(%(node_class_name)s source) {
-%(builder_copy_code)s
-      super.copyMetadataFrom(source);
-      return this;
-    }
-
-    @Override
-    public Builder copyMetadataFrom(BaseNode.Builder<%(node_class_name)s, Variant> src) {
-      Builder source = (Builder) src;
-%(builder_copy_code)s
-      super.copyMetadataFrom(source);
-      return this;
-    }
-
-    @Override
-    @SuppressWarnings("synthetic-access")
-    public %(node_class_name)s build() {
-      %(node_class_name)s newNode = new %(node_class_name)s(
-          getVariant(), %(builder_actuals)s);
-%(builder_build_code)s
-      SourcePosition sourcePosition = getSourcePosition();
-      if (sourcePosition != null) {
-        newNode.setSourcePosition(sourcePosition);
-      }
-      return newNode;
     }
   }
 }
@@ -1601,17 +1565,15 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     'grammar_jsdoc': _jsdoc_of(_tokens_to_text(prod['toks'])),
     'node_class_name': node_class_name,
     'name': prod['name'],
-    'base_node_class': 'Base%sNode' % chapter['name'],
+    'base_node_class': is_inner_node and 'BaseInnerNode' or 'BaseLeafNode',
     'variant_members': variant_members,
     'ctor_formals': ctor_formals,
     'super_ctor_actuals': super_ctor_actuals,
-    'builder_kind': builder_kind,
-    'builder_actuals': builder_actuals,
+    'copy_ctor_actuals': copy_ctor_actuals,
     'extra_code': '\n'.join(extra_code),
-    'builder_code': '\n'.join(builder_code),
-    'builder_copy_code': '\n'.join(builder_copy_code),
-    'builder_build_code': '\n'.join(builder_build_code),
+    'copy_code': '\n'.join(copy_code),
     'trait_ifaces': trait_ifaces,
+    'build_node_calls': build_node_calls,
     })
 
     for_each_prod(write_node_class_for_production)
@@ -1766,7 +1728,7 @@ public final class IdentifierWrappers {
         imports = set()
         table_defs = []
         for (table_name, prod_to_value) in tables.iteritems():
-            annot_name = '%s%s' % (table_name[0].lower(), table_name[1:])
+            annot_name = _first_upper(table_name)
             is_set = tuple(set(prod_to_value.itervalues())) == ('true',)
             if is_set:
                 imports.add('com.google.common.collect.ImmutableSet')
@@ -1845,123 +1807,6 @@ public final class NodeTypeTables {
 })
 
     write_prod_annotations()
-
-    def write_visitor_classes():
-        def write_visitor(c):
-            cn = c['name']
-            class_name = '%sVisitor' % cn
-            node_type = 'Base%sNode' % cn
-
-            visit_methods = [
-                ('  protected @Nullable T\n'
-                 '  visit%(name)s(@Nullable T x, %(name)sNode node) {\n'
-                 '    return visitDefault(x, node);\n'
-                 '  }')
-                % p for p in c['prods']]
-            visit_cases = [
-                ('      case %(name)s:\n'
-                 '        return visit%(name)s(x, (%(name)sNode) node);')
-                % p for p in c['prods']]
-
-            emit_java_file(
-                class_name,
-            '''
-package %(package)s;
-
-import javax.annotation.Nullable;
-
-/**
- * Allows taking some production-specific action for a %(class_name)s.
- * <p>
- * Unless overridden, each visit* method returns
- * {@link %(class_name)s#visitDefault}.
- */
-@javax.annotation.Generated(%(generator)s)
-public abstract class %(class_name)s<T> {
-
-  /**
-   * Dispatches node to the appropriate visit* method.
-   */
-  public @Nullable T visit(@Nullable T x, %(node_type)s node) {
-    NodeType nt = node.getVariant().getNodeType();
-    switch (nt) {
-%(visit_cases)s
-      default:
-        throw new AssertionError(nt);
-    }
-  }
-
-  /** Called by visit* methods that are not overridden to do otherwise. */
-  protected abstract @Nullable T
-  visitDefault(@Nullable T x, %(node_type)s node);
-
-%(visit_methods)s
-}
-''' % {
-    'package': _JAVA_PACKAGE,
-    'generator': generator,
-    'class_name': class_name,
-    'node_type': node_type,
-    'visit_methods': '\n\n'.join(visit_methods),
-    'visit_cases': '\n'.join(visit_cases),
-})
-        for_each_chapter(write_visitor)
-
-        visit_methods = [
-            ('  protected @Nullable T\n'
-             '  visit%(name)s(@Nullable T x, Base%(name)sNode node) {\n'
-             '    return visitDefault(x, node);\n'
-             '  }')
-            % c
-            for c in grammar]
-        visit_ifs = [
-            ('    if (node instanceof Base%(name)sNode) {\n'
-             '      return visit%(name)s(x, (Base%(name)sNode) node);\n'
-             '    }')
-            % c
-            for c in grammar]
-
-        emit_java_file(
-            'BaseNodeVisitor',
-            '''
-package %(package)s;
-
-import javax.annotation.Nullable;
-
-/**
- * Allows taking some production-specific action for a %(class_name)s.
- * <p>
- * Unless overridden, each visit* method returns
- * {@link %(class_name)s#visitDefault}.
- */
-@javax.annotation.Generated(%(generator)s)
-public abstract class %(class_name)s<T> {
-
-  /**
-   * Dispatches node to the appropriate visit* method.
-   */
-  public @Nullable T visit(@Nullable T x, %(node_type)s node) {
-%(visit_ifs)s
-    throw new AssertionError(node.getClass());
-  }
-
-  /** Called by visit* methods that are not overridden to do otherwise. */
-  protected abstract @Nullable T
-  visitDefault(@Nullable T x, %(node_type)s node);
-
-%(visit_methods)s
-}
-''' % {
-    'package': _JAVA_PACKAGE,
-    'generator': generator,
-    'class_name': 'BaseNodeVisitor',
-    'node_type': 'BaseNode',
-    'visit_methods': '\n\n'.join(visit_methods),
-    'visit_ifs': '\n'.join(visit_ifs),
-})
-
-    write_visitor_classes()
-
 
     if verbose:
         # Dump the "Public API" of each chapter -- those productions that are

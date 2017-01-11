@@ -8,13 +8,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.BaseStatementNode;
+import com.mikesamuel.cil.ast.BlockNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageDeclarationNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
+import com.mikesamuel.cil.ast.SwitchBlockNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
@@ -76,7 +77,8 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
 
     if (node instanceof ExpressionNameScope) {
       if (node instanceof CallableDeclaration
-          || node instanceof BaseStatementNode) {
+          || node instanceof BlockNode
+          || node instanceof SwitchBlockNode) {
         Preconditions.checkState(childResolver == r);
         childResolver = new BlockExpressionNameResolver();
         currentMarker = DeclarationPositionMarker.EARLIEST;

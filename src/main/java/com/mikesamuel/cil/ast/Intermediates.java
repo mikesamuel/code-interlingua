@@ -10,6 +10,7 @@ import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.parser.SList;
@@ -165,9 +166,8 @@ public final class Intermediates {
          path != null; path = path.prev) {
       IntermediateGraphNode g = path.x;
       if (!g.via.isAnon()) {
-        result = ((BaseNode.InnerBuilder<?, ?>) g.via.nodeBuilder())
-            .add(result)
-            .build();
+        result = g.via.buildNode(ImmutableList.of(result));
+        result.setSourcePosition(inner.getSourcePosition());
       }
       createdNodeReceiver.apply(result);
     }

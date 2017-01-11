@@ -1,17 +1,23 @@
 package com.mikesamuel.cil.ast;
 
+import java.util.List;
+
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
- * An interface that allows examination of the content of a node.
+ * Base interface for nodes and node traits.
  */
-public interface NodeOrBuilder {
+public interface NodeI {
+
+  /**
+   * Copies metadata from the source node.
+   */
+  void copyMetadataFrom(BaseNode node);
 
   /**
    * The variant of the node.
@@ -24,6 +30,11 @@ public interface NodeOrBuilder {
   @Nullable SourcePosition getSourcePosition();
 
   /**
+   * @see #getSourcePosition()
+   */
+  void setSourcePosition(SourcePosition newSourcePosition);
+
+  /**
    * The type of node.
    */
   default NodeType getNodeType() {
@@ -31,30 +42,20 @@ public interface NodeOrBuilder {
   }
 
   /**
-   * The children of this node.  Empty if a leaf.
+   * Immutable list of children of this node.  Empty if a leaf.
    */
-  ImmutableList<BaseNode> getChildren();
+  List<BaseNode> getChildren();
 
-  /** Like {@code getChildren().size()} but more efficient for builders. */
+  /** Like {@code getChildren().size()} but doesn't require wrapping. */
   int getNChildren();
 
-  /** Like {@code getChildren().get(i)} but more efficient for builders. */
+  /** Like {@code getChildren().get(i)} but doesn't require wrapping. */
   BaseNode getChild(int i);
 
   /**
    * The value if any.  {@code null} if an inner node.
    */
   String getValue();
-
-  /**
-   * A builder that currently has the state of this node allowing modification.
-   */
-  BaseNode.Builder<?, ?> builder();
-
-  /**
-   * This as a base node.
-   */
-  BaseNode toBaseNode();
 
 
 
@@ -86,7 +87,7 @@ public interface NodeOrBuilder {
    */
   public default String getTextContent(String separator) {
     StringBuilder sb = new StringBuilder();
-    NodeOrBuilderHelpers.appendTextContent(this, sb, separator);
+    NodeIHelpers.appendTextContent(this, sb, separator);
     return sb.toString();
   }
 
@@ -120,11 +121,11 @@ public interface NodeOrBuilder {
    */
   public default String toAsciiArt(
       String prefix,
-      @Nullable Function<? super NodeOrBuilder, ? extends String> decorator) {
+      @Nullable Function<? super NodeI, ? extends String> decorator) {
     StringBuilder out = new StringBuilder();
     StringBuilder indentation = new StringBuilder();
     indentation.append(prefix);
-    NodeOrBuilderHelpers.appendAsciiArt(this, indentation, out, decorator);
+    NodeIHelpers.appendAsciiArt(this, indentation, out, decorator);
     return out.toString();
   }
 
@@ -137,10 +138,10 @@ public interface NodeOrBuilder {
 
 }
 
-final class NodeOrBuilderHelpers {
+final class NodeIHelpers {
 
   static void appendTextContent(
-      NodeOrBuilder node, StringBuilder sb, String sep) {
+      NodeI node, StringBuilder sb, String sep) {
     String literalValue = node.getValue();
     if (!Strings.isNullOrEmpty(literalValue)) {
       if (sep != null && sb.length() != 0) {
@@ -155,8 +156,8 @@ final class NodeOrBuilderHelpers {
   }
 
   static void appendAsciiArt(
-      NodeOrBuilder node, StringBuilder prefix, StringBuilder out,
-      @Nullable Function<? super NodeOrBuilder, ? extends String> decorator) {
+      NodeI node, StringBuilder prefix, StringBuilder out,
+      @Nullable Function<? super NodeI, ? extends String> decorator) {
     out.append(prefix);
     appendNodeHeader(node, out);
     String decoration = decorator != null ? decorator.apply(node) : null;
@@ -173,7 +174,7 @@ final class NodeOrBuilderHelpers {
     prefix.setLength(prefixLength);
   }
 
-  private static void appendNodeHeader(NodeOrBuilder node, StringBuilder out) {
+  private static void appendNodeHeader(NodeI node, StringBuilder out) {
     out.append(node.getVariant());
     String literalValue = node.getValue();
     if (literalValue != null) {

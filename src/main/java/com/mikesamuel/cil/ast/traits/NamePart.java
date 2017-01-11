@@ -1,12 +1,12 @@
 package com.mikesamuel.cil.ast.traits;
 
-import com.mikesamuel.cil.ast.NodeOrBuilder;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.meta.Name;
 
 /**
  * A part of a {@linkplain Name name}.
  */
-public interface NamePart extends NodeOrBuilder {
+public interface NamePart extends NodeI {
   /**
    * The type of the name part.
    */
@@ -14,6 +14,7 @@ public interface NamePart extends NodeOrBuilder {
 
   /**
    * Sets the type of the name part.
+   * @return this
    */
-  public void setNamePartType(Name.Type newNamePartType);
+  public NamePart setNamePartType(Name.Type newNamePartType);
 }

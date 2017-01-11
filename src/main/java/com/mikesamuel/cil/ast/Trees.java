@@ -1,12 +1,12 @@
 package com.mikesamuel.cil.ast;
 
 import java.util.Iterator;
+import java.util.List;
 
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode.InnerBuilder;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Ignorables;
@@ -106,45 +106,26 @@ public final class Trees {
             Preconditions.checkState(nodeContent.nodes.size() == 1);
             nodes.addAll(nodeContent.nodes);
           } else {
-            BaseNode.Builder<?, ?> nodeBuilder = pushVariant.nodeBuilder();
-            if (nodeBuilder instanceof BaseNode.LeafBuilder<?, ?>) {
-              if (nodeContent.content != null) {
-                Preconditions.checkState(nodeContent.nodes.isEmpty());
-                ((BaseNode.LeafBuilder<?, ?>) nodeBuilder)
-                    .leaf(nodeContent.content);
-              } else {
-                throw new IllegalArgumentException(
-                    "Leaf node " + nodeBuilder.getVariant()
-                    + " parsed from " + tier.startPosition
-                    + " is missing content");
-              }
+            BaseNode nodeBuilt;
+            if (nodeContent.content != null) {
+              Preconditions.checkState(nodeContent.nodes.isEmpty());
+              nodeBuilt = pushVariant.buildNode(nodeContent.content);
               if (!nodeContent.nodes.isEmpty()) {
                 throw new IllegalArgumentException(
-                    "Leaf node " + nodeBuilder.getVariant()
+                    "Leaf node " + pushVariant
                     + " parsed from " + tier.startPosition
                     + " should not have children");
               }
             } else {
-              BaseNode.InnerBuilder<?, ?> innerBuilder =
-                  (InnerBuilder<?, ?>) nodeBuilder;
-              for (BaseNode child : nodeContent.nodes) {
-                innerBuilder.add(child);
-              }
-              if (nodeContent.content != null) {
-                throw new IllegalArgumentException(
-                    "Inner node " + nodeBuilder.getVariant()
-                    + " parsed from " + tier.contentPosition
-                    + " should not have content");
-              }
+              nodeBuilt = pushVariant.buildNode(nodeContent.nodes);
             }
-            BaseNode node = nodeBuilder.build();
             if (nodeContent.content != null) {
-              node.setSourcePosition(nodeContent.contentPosition);
+              nodeBuilt.setSourcePosition(nodeContent.contentPosition);
             } else if (nodeContent.startPosition != null) {
-              node.setSourcePosition(SourcePosition.spanning(
+              nodeBuilt.setSourcePosition(SourcePosition.spanning(
                   nodeContent.startPosition, nodeContent.lastPosition));
             }
-            nodes.add(node);
+            nodes.add(nodeBuilt);
           }
           if (tier.startPosition == null) {
             tier.startPosition = nodeContent.startPosition;
@@ -249,7 +230,7 @@ public final class Trees {
 
 
     String value = node.getValue();
-    ImmutableList<? extends BaseNode> children = node.getChildren();
+    List<? extends BaseNode> children = node.getChildren();
 
     SourcePosition pos = node.getSourcePosition();
     SList<Event> beforeContent = maybeAppendPos(
