@@ -65,6 +65,7 @@ import com.mikesamuel.cil.ast.PreExpressionNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
+import com.mikesamuel.cil.ast.RelationalExpressionNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
@@ -669,9 +670,47 @@ final class TypingPass extends AbstractRewritingPass {
 
         case RelationalExpression: {
           exprType = StaticType.T_BOOLEAN;
-          // TODO: handle like the primitive branch in Equality expression
-          // but handle instanceof separately.
-          break type_switch;
+          RelationalExpressionNode e = (RelationalExpressionNode) node;
+          switch (e.getVariant()) {
+            case RelationalExpressionInstanceofReferenceType: {
+              Operand left = nthOperandOf(0, e, NodeType.RelationalExpression);
+              StaticType leftType = left != null ? maybePassThru(left) : null;
+              WholeType right = e.firstChildWithType(WholeType.class);
+              StaticType rightType = right != null
+                  ? right.getStaticType()
+                  : null;
+              if (left != null && leftType != null
+                  && !StaticType.ERROR_TYPE.equals(leftType)
+                  && right != null && rightType != null
+                  && !StaticType.ERROR_TYPE.equals(rightType)) {
+                switch (leftType.assignableFrom(rightType)) {
+                  case BOX:
+                  case UNBOX:
+                  case CONVERTING_LOSSLESS:
+                  case CONVERTING_LOSSY:
+                  case DISJOINT:
+                    error(
+                        left.getNode(),
+                        "instanceof not applicable to " + leftType);
+                    break type_switch;
+                  case CONFIRM_CHECKED:
+                  case CONFIRM_SAFE:
+                  case CONFIRM_UNCHECKED:
+                  case SAME:
+                    break type_switch;
+                }
+              } else {
+                error(e, "Missing operand or type info");
+              }
+              break type_switch;
+            }
+            case RelationalExpressionRelationalOperatorShiftExpression:
+              processNumericBinary(e);
+              break type_switch;
+            case ShiftExpression:
+              throw new IllegalArgumentException("@anon");
+          }
+          throw new AssertionError(e);
         }
 
         case EqualityExpression: {
@@ -1482,7 +1521,13 @@ final class TypingPass extends AbstractRewritingPass {
   private StaticType promoteNumericBinary(
       Operand left, StaticType leftType, Operand right, StaticType rightType) {
     StaticType lt = unboxNumericAsNecessary(left, leftType);
+    if (StaticType.ERROR_TYPE.equals(lt)) {
+      return StaticType.ERROR_TYPE;
+    }
     StaticType rt = unboxNumericAsNecessary(right, rightType);
+    if (StaticType.ERROR_TYPE.equals(rt)) {
+      return StaticType.ERROR_TYPE;
+    }
     Cast c = lt.assignableFrom(rt);
     switch (c) {
       case BOX:

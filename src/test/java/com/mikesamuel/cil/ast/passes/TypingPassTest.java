@@ -1352,8 +1352,165 @@ public final class TypingPassTest extends TestCase {
         "//C:66+7-13: Incompatible types for comparison boolean * int");
   }
 
-  // TODO: test && and ||
-  // TODO: test <, >, <, >=, instanceof
+  @Test
+  public static final void testRelationalOperators() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "//C",
+            "import java.io.Serializable;",
+            "",
+            "public class C {",
+            "  static void f(boolean z) { System.err.println('z'); }",
+            "  static void f(Object o)  { System.err.println('o'); }",
+            "",
+            "  public static void main(String... argv) {",
+            "    boolean z = true;",
+            "    byte b = (byte) 0;",  // L10
+            "    short s = (short) 0;",
+            "    char c = '\0';",
+            "    int i = 0;",
+            "    long j = (long) (0);",
+            "    float f = (float) (0);",
+            "    double d = (double) (0);",
+            "    Long J = new Long(1);",
+            "    Integer I = new Integer(0);",
+            "    Boolean Z = new Boolean(true);",
+            "",  // L20
+            "    f(z < z);",  // L21 incomparable
+            "    f((int) b > (int) b);",
+            "    f((int) s <= (int) s);",
+            "    f((int) c >= (int) c);",
+            "    f(i < i);",
+            "    f(j > j);",
+            "    f(f <= f);",
+            "    f(d >= d);",
+            "    f((long) J < (long) J);",
+            "    f(null > null);",  // L30 incomparable
+            "",
+            "    f(i >= (int) b);",
+            "    f(i <= (int) s);",
+            "    f(i > (int) c);",
+            "    f((long) i < j);",
+            "    f((float) i >= f);",
+            "    f((double) i <= d);",
+            "    f((long) i > (long) J);",
+            "    f(i < null);",  // L39 incomporable
+            "",  // L40
+            "    f((int) b >= i);",
+            "    f((int) s <= i);",
+            "    f((int) c > i);",
+            "    f(j < (long) i);",
+            "    f(f >= (float) i);",
+            "    f(d <= (double) i);",
+            "    f((long) J > (long) i);",
+            "    f(null < i);",  // L48 incomparable
+            "",
+            "    f(null <= z);",  // L50 incomparable
+            "    f(z < J);",  // L51 incomparable
+            "",
+            "    f(null <= J);",  // L53 incomparable
+            "    f((long) J < null);",  // Don't care about cast
+            "",
+            "    f((int) I >= i);",
+            "    f((long) J < j);",
+            "    f(f((java.lang.Object) (J)) > j);",  // Don't care about cast
+            "",
+            "    f(null instanceof Serializable);",  // L60
+            "    f(i instanceof Serializable);",  // L61 primitive
+            "    f(I instanceof Serializable);",
+            "    f(Z instanceof Serializable);",
+            "    f(I instanceof String);",  // L64 not assignable
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "import java.io.Serializable;",
+            "",
+            "public class C {",
+            "  static void f(boolean z) { System.err.println('z'); }",
+            "  static void f(Object o)  { System.err.println('o'); }",
+            "",
+            "  public static void main(String... argv) {",
+            "    boolean z = true;",
+            "    byte b = (byte) 0;",  // L10
+            "    short s = (short) 0;",
+            "    char c = '\0';",
+            "    int i = 0;",
+            "    long j = 0;",
+            "    float f = 0;",
+            "    double d = 0;",
+            "    Long J = new Long(1);",
+            "    Integer I = new Integer(0);",
+            "    Boolean Z = new Boolean(true);",
+            "",  // L20
+            "    f(z < z);",  // L21 incomparable
+            "    f(b > b);",
+            "    f(s <= s);",
+            "    f(c >= c);",
+            "    f(i < i);",
+            "    f(j > j);",
+            "    f(f <= f);",
+            "    f(d >= d);",
+            "    f(J < J);",
+            "    f(null > null);",  // L30 incomparable
+            "",
+            "    f(i >= b);",
+            "    f(i <= s);",
+            "    f(i > c);",
+            "    f(i < j);",
+            "    f(i >= f);",
+            "    f(i <= d);",
+            "    f(i > J);",
+            "    f(i < null);",  // L39 incomporable
+            "",  // L40
+            "    f(b >= i);",
+            "    f(s <= i);",
+            "    f(c > i);",
+            "    f(j < i);",
+            "    f(f >= i);",
+            "    f(d <= i);",
+            "    f(J > i);",
+            "    f(null < i);",  // L48 incomparable
+            "",
+            "    f(null <= z);",  // L50 incomparable
+            "    f(z < J);",  // L51 incomparable
+            "",
+            "    f(null <= J);",  // L53 incomparable
+            "    f(J < null);",  // L54 incomparable
+            "",
+            "    f(I >= i);",
+            "    f(J < j);",
+            "    f(f(J) > j);",  // L58 incomparable
+            "",
+            "    f(null instanceof Serializable);",  // L60
+            "    f(i instanceof Serializable);",  // L61 primitive
+            "    f(I instanceof Serializable);",
+            "    f(Z instanceof Serializable);",
+            "    f(I instanceof String);",  // L64 not assignable
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        null,
+        "//C:21+",
+        "//C:30+",
+        "//C:39+",
+        "//C:48+",
+        "//C:50+",
+        "//C:51+",
+        "//C:53+",
+        "//C:54+",
+        "//C:58+",
+        "//C:61+",
+        "//C:64+"
+        );
+  }
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 
