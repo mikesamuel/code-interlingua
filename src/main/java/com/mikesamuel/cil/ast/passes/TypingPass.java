@@ -45,6 +45,7 @@ import com.mikesamuel.cil.ast.ConfirmCastNode;
 import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimNode;
+import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
@@ -641,16 +642,96 @@ final class TypingPass extends AbstractRewritingPass {
         }
 
         case ConditionalOrExpression:
-        case ConditionalAndExpression:
-        case EqualityExpression:
-        case RelationalExpression: {
+        case ConditionalAndExpression: {
           // The pass thru kind are all @anon so we only have to deal with the
           // operation case.
           exprType = StaticType.T_BOOLEAN;
-          // TODO: unbox operands to boolean
+          Operand left = nthOperandOf(0, node, node.getNodeType());
+          Operand right = nthOperandOf(
+              1, node,
+              node.getNodeType() == NodeType.ConditionalOrExpression
+              ? NodeType.ConditionalAndExpression
+              : NodeType.InclusiveOrExpression);
+          if (left != null && right != null) {
+            StaticType leftType = maybePassThru(left);
+            StaticType rightType = maybePassThru(right);
+            if (leftType != null && rightType != null) {
+              Predicate<Object> isBoolean = Predicates.equalTo(
+                  StaticType.T_BOOLEAN);
+              leftType = maybeUnbox(left, leftType, isBoolean);
+              rightType = maybeUnbox(right, rightType, isBoolean);
+              break type_switch;
+            }
+          }
+          error(node, "Missing operand or type info");
           break type_switch;
         }
 
+        case RelationalExpression: {
+          exprType = StaticType.T_BOOLEAN;
+          // TODO: handle like the primitive branch in Equality expression
+          // but handle instanceof separately.
+          break type_switch;
+        }
+
+        case EqualityExpression: {
+          EqualityExpressionNode e = (EqualityExpressionNode) node;
+          exprType = StaticType.T_BOOLEAN;
+          // no operand boxing, but check that the types are not disjoint.
+          Operand left = nthOperandOf(0, e, NodeType.EqualityExpression);
+          Operand right = nthOperandOf(1, e, NodeType.RelationalExpression);
+          if (left != null && right != null) {
+            StaticType leftType = maybePassThru(left);
+            StaticType rightType = maybePassThru(right);
+            if (leftType != null && rightType != null) {
+              if (leftType instanceof PrimitiveType
+                  || rightType instanceof PrimitiveType) {
+                leftType = unboxAsNecessary(left, leftType);
+                rightType = unboxAsNecessary(right, rightType);
+                if (!(leftType instanceof PrimitiveType
+                      && rightType instanceof PrimitiveType)) {
+                  // Failure to unbox already reported.
+                  break type_switch;
+                }
+                int numericCount =
+                    (leftType instanceof NumericType ? 1 : 0)
+                    + (rightType instanceof NumericType ? 1 : 0);
+                if (numericCount == 2) {
+                  promoteNumericBinary(
+                      left, leftType, right, rightType);
+                } else if (!leftType.equals(rightType)) {
+                  error(
+                      e,
+                      "Incompatible types for comparison "
+                      + leftType + " * " + rightType);
+                }
+                break type_switch;
+              }
+              Cast c = leftType.assignableFrom(rightType);
+              switch (c) {
+                case BOX:
+                case CONVERTING_LOSSLESS:
+                case CONVERTING_LOSSY:
+                case DISJOINT:
+                case UNBOX:
+                  error(
+                      e,
+                      "Incompatible types for comparison "
+                          + leftType + " * " + rightType);
+                  break type_switch;
+                case CONFIRM_CHECKED:
+                case CONFIRM_SAFE:
+                case CONFIRM_UNCHECKED:
+                case SAME:
+                  // OK
+                  break type_switch;
+              }
+              throw new AssertionError(c);
+            }
+          }
+          error(e, "Missing operand or type info");
+          break type_switch;
+        }
 
         case InclusiveOrExpression:
         case ExclusiveOrExpression:
@@ -1191,18 +1272,37 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
   private StaticType unboxNumericAsNecessary(Operand op, StaticType t) {
-    if (t instanceof NumericType) {
+    return maybeUnbox(op, t, Predicates.instanceOf(NumericType.class));
+  }
+
+  private StaticType unboxAsNecessary(Operand op, StaticType t) {
+    return maybeUnbox(
+        op, t,
+        new Predicate<PrimitiveType>() {
+
+          @Override
+          public boolean apply(PrimitiveType pt) {
+            return pt != null && !StaticType.T_VOID.equals(pt);
+          }
+
+        });
+  }
+
+  private StaticType maybeUnbox(
+      Operand op, StaticType t, Predicate<? super PrimitiveType> ok) {
+    if (t instanceof PrimitiveType && ok.apply((PrimitiveType) t)) {
       return t;
     } else if (t instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) t;
       PrimitiveType pt = TO_WRAPPED.get(ct.info.canonName);
-      if (pt != null && pt instanceof NumericType) {
+      if (pt != null && ok.apply(pt)) {
         op.cast(ct, pt);
         return pt;
       }
     }
-    error(op.getNode(), "Cannot unbox " + t + " to a numeric type");
+    error(op.getNode(), "Cannot unbox " + t);
     return StaticType.ERROR_TYPE;
+
   }
 
   private static final ImmutableMap<NumericType, NodeVariant>
