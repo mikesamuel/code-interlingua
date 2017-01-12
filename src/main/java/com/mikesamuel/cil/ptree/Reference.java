@@ -606,6 +606,8 @@ final class Reference extends PTParSer {
       switch (e.getKind()) {
         case POP:
           ++popDepth;
+          // TODO: make this non-recursive so the max length of the file we
+          // can parse is not linear with the stack size.
           pushedBack = SList.append(pushback(out.prev), e);
           break;
         case PUSH:
@@ -626,6 +628,8 @@ final class Reference extends PTParSer {
             pushback.clear();
             pushedBack = SList.append(pushedBack, e);
           } else {
+            // TODO: make this non-recursive so the max length of the file we
+            // can parse is not linear with the stack size.
             pushedBack = SList.append(pushback(out.prev), e);
           }
           break;
@@ -645,6 +649,8 @@ final class Reference extends PTParSer {
                   Preconditions.checkState(pushCount >= popCount);
                   popDepth += popCount - pushCount;
                   Preconditions.checkState(popDepth >= 0);
+                  // TODO: make this non-recursive so the max length of the file we
+                  // can parse is not linear with the stack size.
                   pushedBack = pushback(c.prev);
                   foundStart = true;
                   break pb_loop;
@@ -677,6 +683,8 @@ final class Reference extends PTParSer {
         case LR_START:
         case POSITION_MARK:
         case TOKEN:
+          // TODO: make this non-recursive so the max length of the file we
+          // can parse is not linear with the stack size.
           pushedBack = SList.append(pushback(out.prev), e);
           break;
       }

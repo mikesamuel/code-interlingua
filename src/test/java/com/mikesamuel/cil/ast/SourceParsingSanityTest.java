@@ -39,7 +39,7 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
   }
 
   @Test
-  public void testThemAll() throws Exception {
+  public void testThemAll() throws Throwable {
     long totalTime = 0;
     int nFiles = 0;
     List<File> sources = Lists.newArrayList();
@@ -56,7 +56,7 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
       sources.subList(50, sources.size()).clear();
     }
 
-    List<Exception> failures = Lists.newArrayList();
+    List<Throwable> failures = Lists.newArrayList();
 
     for (File source : sources) {
       setUp();
@@ -72,6 +72,11 @@ public final class SourceParsingSanityTest extends AbstractParSerTestCase {
             .build(),
             Fuzz.IMPLIED_TOKENS);
         ok = true;
+      } catch (StackOverflowError e) {
+        System.err.println(source);
+        e.printStackTrace();
+        System.err.flush();
+        failures.add(e);
       } catch (Exception ex) {
         failures.add(ex);
       } finally {
