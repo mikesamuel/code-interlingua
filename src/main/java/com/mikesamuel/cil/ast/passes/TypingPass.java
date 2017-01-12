@@ -24,7 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.AdditiveOperatorNode;
 import com.mikesamuel.cil.ast.ArgumentListNode;
@@ -656,21 +655,21 @@ final class TypingPass extends AbstractRewritingPass {
         case InclusiveOrExpression:
         case ExclusiveOrExpression:
         case AndExpression: {
-          NodeType rightType;
+          NodeType rightNodeType;
           switch (node.getNodeType()) {
             case InclusiveOrExpression:
-              rightType = NodeType.ExclusiveOrExpression;
+              rightNodeType = NodeType.ExclusiveOrExpression;
               break;
             case ExclusiveOrExpression:
-              rightType = NodeType.AndExpression;
+              rightNodeType = NodeType.AndExpression;
               break;
             case AndExpression:
-              rightType = NodeType.EqualityExpression;
+              rightNodeType = NodeType.EqualityExpression;
               break;
             default: throw new AssertionError(node);
           }
           Operand left = nthOperandOf(0, node, node.getNodeType());
-          Operand right = nthOperandOf(1, node, rightType);
+          Operand right = nthOperandOf(1, node, rightNodeType);
           if (left != null && right != null) {
             // If the left is boolean, the right is boolean.
             StaticType leftType = maybePassThru(left);
@@ -687,8 +686,10 @@ final class TypingPass extends AbstractRewritingPass {
                 break;
             }
             // Otherwise it should be an integral type.
-            exprType = promoteNumericBinary(
-                left, leftType, right, maybePassThru(right));
+            StaticType rightType = maybePassThru(right);
+            leftType = unboxNumericAsNecessary(left, leftType);
+            rightType = unboxNumericAsNecessary(right, rightType);
+            exprType = promoteNumericBinary(left, leftType, right, rightType);
           } else {
             error(node, "Missing operand");
             exprType = StaticType.ERROR_TYPE;
@@ -696,9 +697,44 @@ final class TypingPass extends AbstractRewritingPass {
           break type_switch;
         }
 
-        case ShiftExpression:
-          exprType = processNumericBinary(node);
+        case ShiftExpression: {
+          // docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.19
+          // Shift expressions do not do binary numeric promotion.
+          // The bit field and the shift amount are promoted independently
+          // and are then required to be integral.
+          Operand left = nthOperandOf(0, node, NodeType.ShiftExpression);
+          Operand right = nthOperandOf(1, node, NodeType.AdditiveExpression);
+          exprType = null;
+          if (left != null && right != null) {
+            StaticType leftType = maybePassThru(left);
+            StaticType rightType = maybePassThru(right);
+            leftType = unboxNumericAsNecessary(left, leftType);
+            rightType = unboxNumericAsNecessary(right, rightType);
+            if (leftType instanceof NumericType
+                && rightType instanceof NumericType) {
+              leftType = promoteNumericUnary(left, leftType);
+              rightType = promoteNumericUnary(right, rightType);
+              if (leftType instanceof NumericType
+                  && rightType instanceof NumericType) {
+                if (leftType instanceof NumericType
+                    && !((NumericType) leftType).isFloaty
+                    && rightType instanceof NumericType
+                    && !((NumericType) rightType).isFloaty) {
+                  exprType = leftType;
+                } else {
+                  error(
+                      node,
+                      "Expected integral shift operands not "
+                      + leftType + " * " + rightType);
+                }
+              }
+            }
+          }
+          if (exprType == null) {
+            exprType = StaticType.ERROR_TYPE;
+          }
           break type_switch;
+        }
 
         case AdditiveExpression: {
           AdditiveExpressionNode e = (AdditiveExpressionNode) node;
@@ -1195,19 +1231,6 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
 
-  private static final ImmutableSet<NodeType> OPERATOR_NODE_TYPES =
-      Sets.immutableEnumSet(
-          NodeType.AdditiveOperator,
-          NodeType.AmbiguousBinaryUnaryOperator,
-          NodeType.AssignmentOperator,
-          NodeType.EqualityOperator,
-          NodeType.IncrDecrOperator,
-          NodeType.MultiplicativeOperator,
-          NodeType.PrefixOperator,
-          NodeType.RelationalOperator,
-          NodeType.ShiftOperator
-          );
-
   final class Operand {
     final BaseInnerNode parent;
     final int indexInParent;
@@ -1312,7 +1335,7 @@ final class TypingPass extends AbstractRewritingPass {
       for (int i = 0; i < nChildren; ++i) {
         BaseNode child = inode.getChild(i);
         NodeType childNodeType = child.getNodeType();
-        if (OPERATOR_NODE_TYPES.contains(childNodeType)) {
+        if (NodeTypeTables.OPERATOR.contains(childNodeType)) {
           continue;
         }
         if (nLeft == 0) {
@@ -1375,7 +1398,7 @@ final class TypingPass extends AbstractRewritingPass {
           lt = StaticType.T_INT;
         }
         right.cast(rt, lt);
-        return lt;
+        return requireNumeric(left, lt);
       case CONVERTING_LOSSY:
         // right is wider
         if (PROMOTE_TO_INT.contains(rt)) {
@@ -1383,8 +1406,11 @@ final class TypingPass extends AbstractRewritingPass {
           rt = StaticType.T_INT;
         }
         left.cast(lt, rt);
-        return rt;
+        return requireNumeric(right, rt);
       case DISJOINT:
+        error(
+            left.getNode(),
+            "Cannot reconcile operand types " + left + " and " + right);
         return StaticType.ERROR_TYPE;
       case SAME:
         if (PROMOTE_TO_INT.contains(lt)) {
@@ -1392,9 +1418,33 @@ final class TypingPass extends AbstractRewritingPass {
           right.cast(rt, StaticType.T_INT);
           return StaticType.T_INT;
         }
-        return lt;
+        return requireNumeric(left, lt);
     }
     throw new AssertionError(c);
+  }
+
+  private StaticType promoteNumericUnary(Operand op, StaticType type) {
+    StaticType ut = unboxNumericAsNecessary(op, type);
+    // left is wider.
+    if (PROMOTE_TO_INT.contains(ut)) {
+      op.cast(ut, StaticType.T_INT);
+      ut = StaticType.T_INT;
+    }
+
+    return requireNumeric(op, ut);
+  }
+
+  private StaticType requireNumeric(Operand op, StaticType typ) {
+    return requireNumeric(op.getNode(), typ);
+  }
+
+  private StaticType requireNumeric(BaseNode node, StaticType typ) {
+    if (typ instanceof NumericType) {
+      return typ;
+    } else {
+      error(node, "Expected numeric type not " + typ);
+      return StaticType.ERROR_TYPE;
+    }
   }
 
   private static final Name JAVA =

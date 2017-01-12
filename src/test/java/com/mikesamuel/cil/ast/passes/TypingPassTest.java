@@ -17,6 +17,7 @@ import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.StatementExpressionNode;
 import com.mikesamuel.cil.ast.Trees.Decorator;
@@ -26,6 +27,7 @@ import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
+import com.mikesamuel.cil.ast.traits.BinaryOp;
 import com.mikesamuel.cil.ast.traits.MethodDescriptorReference;
 import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
@@ -38,7 +40,7 @@ public final class TypingPassTest extends TestCase {
 
   private static void assertTyped(
       String[][] inputs,
-      Class<? extends BaseNode> target,
+      Class<? extends NodeI> target,
       String[] expectedTypes,
       String... expectedErrors)
   throws UnparseVerificationException {
@@ -48,7 +50,7 @@ public final class TypingPassTest extends TestCase {
   private static void assertTyped(
       @Nullable String[][] expectedWithCasts,
       String[][] inputs,
-      @Nullable Class<? extends BaseNode> target,
+      @Nullable Class<? extends NodeI> target,
       @Nullable String[] expectedTypes,
       @Nullable Decorator decorator,
       String... expectedErrors)
@@ -94,9 +96,9 @@ public final class TypingPassTest extends TestCase {
     }
 
     if (target != null) {
-      List<BaseNode> typed = Lists.newArrayList();
+      List<NodeI> typed = Lists.newArrayList();
       for (CompilationUnitNode cu : processedCus) {
-        for (BaseNode n : cu.finder(target).find()) {
+        for (NodeI n : cu.finder(target).find()) {
           if (n instanceof Typed) {
             typed.add(n);
           } else if (n instanceof WholeType) {
@@ -104,31 +106,32 @@ public final class TypingPassTest extends TestCase {
           } else {
             boolean found = false;
             for (Typed t
-                   : n.finder(Typed.class)
+                   : ((BaseNode) n).finder(Typed.class)
                    .exclude(WholeType.class).exclude(Typed.class)
                    .find()) {
-              typed.add((BaseNode) t);
+              typed.add(t);
               found = true;
+              break;
             }
             if (!found) {
               for (WholeType t
-                     : n.finder(WholeType.class)
+                     : ((BaseNode) n).finder(WholeType.class)
                      .exclude(WholeType.class)
                      .find()) {
-                typed.add((BaseNode) t);
-                found = true;
+                typed.add(t);
+                break;
               }
             }
           }
         }
       }
       ImmutableList.Builder<String> got = ImmutableList.builder();
-      for (BaseNode t : typed) {
+      for (NodeI t : typed) {
         StaticType typ = (t instanceof Typed)
           ? ((Typed)     t).getStaticType()
           : ((WholeType) t).getStaticType();
         got.add(
-            PassTestHelpers.serializeNodes(ImmutableList.of(t), null)
+            PassTestHelpers.serializeNodes(ImmutableList.of((BaseNode) t), null)
             + " : " + typ);
       }
 
@@ -1021,8 +1024,175 @@ public final class TypingPassTest extends TestCase {
         null);
   }
 
-  // TODO: &&, ||, ^, &, | operators
-  // TODO: <<, >>, >>> operators
+  @Test
+  public static final void testLogicalOperators() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  {",
+            "    boolean f = false, t = true,",
+            "        b = ((f || t && f) | t & Boolean.TRUE) ^ f,",
+            "        c = Boolean.FALSE | b;",
+            "  }",
+            "}",
+          },
+        },
+        BinaryOp.class,
+        new String[] {
+            "((f || t && f) | t & (boolean) Boolean.TRUE) ^ f : boolean",
+            "(f || t && f) | t & (boolean) Boolean.TRUE : boolean",
+            "f || t && f : boolean",
+            "t && f : boolean",
+            "t & (boolean) Boolean.TRUE : boolean",
+            "(boolean) Boolean.FALSE | b : boolean",
+        });
+  }
+
+  @Test
+  public static final void testBitwiseOperators() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  {",
+            "    int i = 0, x = 4, n = -1,",
+            "        k = (i | x & Integer.valueOf(0)) ^ n,",
+            "        c = Integer.valueOf(3) | k;",
+            "  }",
+            "}",
+          },
+        },
+        BinaryOp.class,
+        new String[] {
+            "(i | x & (int) Integer.valueOf(0)) ^ n : int",
+            "i | x & (int) Integer.valueOf(0) : int",
+            "x & (int) Integer.valueOf(0) : int",
+            "(int) Integer.valueOf(3) | k : int",
+        });
+    // TODO: byte, char, short, long
+  }
+
+  @Test
+  public static final void testShiftOperators() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  void f(byte b) {}",
+            "  void f(char c) {}",
+            "  void f(short s) {}",
+            "  void f(int i) {}",
+            "  void f(long j) {}",
+            "  void f(float f) {}",
+            "  void f(double d) {}",
+            "  {",
+            "    byte b = (byte) 0;",
+            "    short s = (short) 0;",
+            "    char c = '\\0';",
+            "    int i = 0;",
+            "    long j = (long) (0);",
+            "    float f = (float) (0);",
+            "    double d = (double) (0);",
+            "    f((int) b << (int) b);",
+            "    f((int) c >> (int) c);",
+            "    f((int) s >>> (int) s);",
+            "    f(i << i);",
+            "    f(j << j);",
+            "    f(f << f);",
+            "    f(d << d);",
+            "    f(i << (int) b);",
+            "    f(i >> (int) c);",
+            "    f(i << (int) s);",
+            "    f(i << j);",
+            "    f(i >>> f);",
+            "    f(i << d);",
+            "    f((int) b << i);",
+            "    f((int) c << i);",
+            "    f((int) s << i);",
+            "    f(j << i);",
+            "    f(f >> i);",
+            "    f(d >>> i);",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  void f(byte b) {}",
+            "  void f(char c) {}",
+            "  void f(short s) {}",
+            "  void f(int i) {}",
+            "  void f(long j) {}",
+            "  void f(float f) {}",
+            "  void f(double d) {}",
+            "  {",
+            "    byte b = (byte) 0;",
+            "    short s = (short) 0;",
+            "    char c = '\\0';",
+            "    int i = 0;",
+            "    long j = 0;",
+            "    float f = 0;",
+            "    double d = 0;",
+            "",
+            "    f(b << b);",
+            "    f(c >> c);",
+            "    f(s >>> s);",
+            "    f(i << i);",
+            "    f(j << j);",
+            "    f(f << f);",
+            "    f(d << d);",
+            "",
+            "    f(i << b);",
+            "    f(i >> c);",
+            "    f(i << s);",
+            "    f(i << j);",
+            "    f(i >>> f);",
+            "    f(i << d);",
+            "",
+            "    f(b << i);",
+            "    f(c << i);",
+            "    f(s << i);",
+            "    f(j << i);",
+            "    f(f >> i);",
+            "    f(d >>> i);",
+            "  }",
+            "}",
+          },
+        },
+        BinaryOp.class,
+        new String[] {
+          "(int) b << (int) b : int",
+          "(int) c >> (int) c : int",
+          "(int) s >>> (int) s : int",
+          "i << i : int",
+          "j << j : long",
+          "f << f : /error/ErrorType.TYPE",
+          "d << d : /error/ErrorType.TYPE",
+          "i << (int) b : int",
+          "i >> (int) c : int",
+          "i << (int) s : int",
+          "i << j : int",
+          "i >>> f : /error/ErrorType.TYPE",
+          "i << d : /error/ErrorType.TYPE",
+          "(int) b << i : int",
+          "(int) c << i : int",
+          "(int) s << i : int",
+          "j << i : long",
+          "f >> i : /error/ErrorType.TYPE",
+          "d >>> i : /error/ErrorType.TYPE",
+        },
+        null,
+        "//C:24+7-13: Expected integral shift operands not float * float",
+        "//C:25+7-13: Expected integral shift operands not double * double",
+        "//C:31+7-14: Expected integral shift operands not int * float",
+        "//C:32+7-13: Expected integral shift operands not int * double",
+        "//C:38+7-13: Expected integral shift operands not float * int",
+        "//C:39+7-14: Expected integral shift operands not double * int");
+  }
+
   // TODO: !=, ==, instanceof operators
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
