@@ -126,6 +126,19 @@ class PassTestHelpers {
 
     T result = op.run(logger);
 
+    boolean showAllMessages = false;
+    if (showAllMessages) {
+      List<String> all = Lists.transform(
+          logRecords,
+          new Function<LogRecord, String>() {
+            @Override
+            public String apply(LogRecord r) {
+              return r.getMessage();
+            }
+          });
+      System.err.println(Joiner.on('\n').join(all));
+    }
+
     List<String> unsatisfied = Lists.newArrayList();
     for (String expectedError : expectedErrors) {
       Iterator<LogRecord> it = logRecords.iterator();
