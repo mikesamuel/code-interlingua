@@ -897,7 +897,7 @@ LambdaBody:
      Block
 Assignment: (@trait=Typed)
      LeftHandSide AssignmentOperator Expression
-AssignmentOperator:
+AssignmentOperator: @operator
      "="
      "*="
      "/="
@@ -914,53 +914,53 @@ ConditionalExpression: (@trait=Typed)
      ConditionalOrExpression "?" Expression ":" LambdaExpression
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
      ConditionalOrExpression @anon
-ConditionalOrExpression: (@trait=Typed)
+ConditionalOrExpression: (@trait=Typed,BinaryOp)
      ConditionalOrExpression "||" ConditionalAndExpression
      ConditionalAndExpression @anon
-ConditionalAndExpression: (@trait=Typed)
+ConditionalAndExpression: (@trait=Typed,BinaryOp)
      ConditionalAndExpression "&&" InclusiveOrExpression
      InclusiveOrExpression @anon
-InclusiveOrExpression: (@trait=Typed)
+InclusiveOrExpression: (@trait=Typed,BinaryOp)
      InclusiveOrExpression "|" ExclusiveOrExpression
      ExclusiveOrExpression @anon
-ExclusiveOrExpression: (@trait=Typed)
+ExclusiveOrExpression: (@trait=Typed,BinaryOp)
      ExclusiveOrExpression "^" AndExpression
      AndExpression @anon
-AndExpression: (@trait=Typed)
+AndExpression: (@trait=Typed,BinaryOp)
      AndExpression "&" EqualityExpression
      EqualityExpression @anon
-EqualityExpression: (@trait=Typed)
+EqualityExpression: (@trait=Typed,BinaryOp)
      EqualityExpression EqualityOperator RelationalExpression
      RelationalExpression @anon
-EqualityOperator:
+EqualityOperator: @operator
      "=="
      "!="
-RelationalExpression: (@trait=Typed)
+RelationalExpression: (@trait=Typed,BinaryOp)
      RelationalExpression RelationalOperator ShiftExpression
      RelationalExpression "instanceof" ReferenceType
      ShiftExpression @anon
-RelationalOperator:
+RelationalOperator: @operator
      "<="
      ">="
      "<"
      ">"
-ShiftExpression: (@trait=Typed)
+ShiftExpression: (@trait=Typed,BinaryOp)
      ShiftExpression ShiftOperator AdditiveExpression
      AdditiveExpression @anon
-ShiftOperator:
+ShiftOperator: @operator
      "<<"
      ">>>"
      ">>"
-AdditiveExpression: (@trait=Typed)
+AdditiveExpression: (@trait=Typed,BinaryOp)
      AdditiveExpression AdditiveOperator MultiplicativeExpression
      MultiplicativeExpression @anon
-AdditiveOperator:
+AdditiveOperator: @operator
      "+"
      "-"
-MultiplicativeExpression: (@trait=Typed)
+MultiplicativeExpression: (@trait=Typed,BinaryOp)
      MultiplicativeExpression MultiplicativeOperator UnaryExpression
      UnaryExpression @anon
-MultiplicativeOperator:
+MultiplicativeOperator: @operator
      "*"
      "/"
      "%"
@@ -970,12 +970,12 @@ UnaryExpression: (@trait=Typed)
      PostExpression
      PrefixOperator UnaryExpression
      Primary @anon
-PrefixOperator:
+PrefixOperator: @operator
      "+"
      "-"
      "~"
      "!"
-IncrDecrOperator:
+IncrDecrOperator: @operator
      "++"
      "--"
 PreExpression: (@trait=Typed)
@@ -995,7 +995,7 @@ ConfirmCast:
      ReferenceType {AdditionalBound}
 ConvertCast:
      PrimitiveType
-AmbiguousBinaryUnaryOperator:
+AmbiguousBinaryUnaryOperator: @operator
      "+"
      "-"
 ConstantExpression:
