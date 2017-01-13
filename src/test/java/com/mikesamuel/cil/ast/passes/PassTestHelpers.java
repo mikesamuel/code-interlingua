@@ -126,18 +126,14 @@ class PassTestHelpers {
 
     T result = op.run(logger);
 
-    boolean showAllMessages = false;
-    if (showAllMessages) {
-      List<String> all = Lists.transform(
-          logRecords,
-          new Function<LogRecord, String>() {
-            @Override
-            public String apply(LogRecord r) {
-              return r.getMessage();
-            }
-          });
-      System.err.println(Joiner.on('\n').join(all));
-    }
+    Function<LogRecord, String> getMessage = new Function<LogRecord, String>() {
+      @Override
+      public String apply(LogRecord r) {
+        return r.getMessage();
+      }
+    };
+    ImmutableList<String> allMessages = ImmutableList.copyOf(Lists.transform(
+          logRecords, getMessage));
 
     List<String> unsatisfied = Lists.newArrayList();
     for (String expectedError : expectedErrors) {
@@ -171,7 +167,7 @@ class PassTestHelpers {
       String gotStr = got.isEmpty()
           ? "" : "\n\t" + tj.join(got) + "\n";
       String msg = "Expected errors [" + wantStr + "] got [" + gotStr + "]";
-      Assert.assertEquals(msg, nj.join(unsatisfied), nj.join(got));
+      Assert.assertEquals(nj.join(allMessages), nj.join(unsatisfied), nj.join(got));
       Assert.fail(msg);
     }
     return result;
