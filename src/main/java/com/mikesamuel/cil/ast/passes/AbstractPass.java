@@ -17,10 +17,17 @@ abstract class AbstractPass<T> {
     this.logger = logger;
   }
 
-  protected void error(@Nullable NodeI node, String message) {
+  private static String fullMessage(@Nullable NodeI node, String message) {
     SourcePosition pos = node != null ? node.getSourcePosition() : null;
-    String fullMessage = pos != null ? pos + ": " + message : message;
-    logger.severe(fullMessage);
+    return pos != null ? pos + ": " + message : message;
+  }
+
+  protected void error(@Nullable NodeI node, String message) {
+    logger.severe(fullMessage(node, message));
+  }
+
+  protected void warn(@Nullable NodeI node, String message) {
+    logger.warning(fullMessage(node, message));
   }
 
   /** Applies the pass to the given compilation units. */
