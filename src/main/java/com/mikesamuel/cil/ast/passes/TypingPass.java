@@ -3,6 +3,7 @@ package com.mikesamuel.cil.ast.passes;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -26,11 +27,13 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.mikesamuel.cil.ast.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.AdditiveOperatorNode;
+import com.mikesamuel.cil.ast.AndExpressionNode;
 import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
 import com.mikesamuel.cil.ast.ArrayElementTypeNode;
 import com.mikesamuel.cil.ast.ArrayTypeNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
+import com.mikesamuel.cil.ast.AssignmentOperatorNode;
 import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CastExpressionNode;
@@ -46,16 +49,20 @@ import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
+import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
 import com.mikesamuel.cil.ast.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
+import com.mikesamuel.cil.ast.InclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.IntegralTypeNode;
 import com.mikesamuel.cil.ast.Intermediates;
 import com.mikesamuel.cil.ast.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.LocalNameNode;
 import com.mikesamuel.cil.ast.MethodNameNode;
+import com.mikesamuel.cil.ast.MultiplicativeExpressionNode;
+import com.mikesamuel.cil.ast.MultiplicativeOperatorNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
@@ -66,6 +73,8 @@ import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.RelationalExpressionNode;
+import com.mikesamuel.cil.ast.ShiftExpressionNode;
+import com.mikesamuel.cil.ast.ShiftOperatorNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
@@ -100,6 +109,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.ast.traits.BinaryOp;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.traits.LocalDeclaration;
@@ -139,6 +149,13 @@ final class TypingPass extends AbstractRewritingPass {
   private final Map<Name, StaticType> locals = Maps.newLinkedHashMap();
 
   static final boolean DEBUG = false;
+  private static final Predicate<PrimitiveType> IS_INTEGRAL_NUMERIC =
+      new Predicate<PrimitiveType>() {
+        @Override
+        public boolean apply(PrimitiveType pt) {
+          return (pt instanceof NumericType) && !((NumericType) pt).isFloaty;
+        }
+      };
 
   TypingPass(Logger logger, TypePool typePool, boolean injectCasts) {
     super(logger);
@@ -261,7 +278,7 @@ final class TypingPass extends AbstractRewritingPass {
   @Override
   protected ProcessingStatus postvisit(
       BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-    ProcessingStatus result = process(node, pathFromRoot);
+    process(node, pathFromRoot);
 
     if (node instanceof ExpressionNameScope) {
       expressionNameResolvers.removeLast();
@@ -276,11 +293,10 @@ final class TypingPass extends AbstractRewritingPass {
       containingTypes.removeLast();
     }
 
-    return result;
+    return ProcessingStatus.CONTINUE;
   }
 
-  private ProcessingStatus process(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+  private void process(BaseNode node, @Nullable SList<Parent> pathFromRoot) {
 
     if (node instanceof Typed) {
       Typed t = (Typed) node;
@@ -623,8 +639,82 @@ final class TypingPass extends AbstractRewritingPass {
 
         case Assignment: {
           AssignmentNode e = (AssignmentNode) node;
-          // TODO
-          throw new AssertionError(e);
+          Operand left = nthOperandOf(0, e, NodeType.LeftHandSide);
+          Operand right = nthOperandOf(1, e, NodeType.Expression);
+          AssignmentOperatorNode operator = e.firstChildWithType(
+              AssignmentOperatorNode.class);
+
+          if (left == null || right == null || operator == null) {
+            error(e, "Missing operand or operator");
+            exprType = StaticType.ERROR_TYPE;
+            break;
+          }
+
+          StaticType leftType = maybePassThru(left);
+          StaticType rightType = maybePassThru(right);
+
+          exprType = leftType;
+
+          // If a compound assignment like x += y, rewrite using
+          AssignmentOperatorNode.Variant opVariant = operator.getVariant();
+          OpVariants effectiveRightHandSideVariants =
+              COMPLEX_ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT.get(
+                  opVariant);
+
+          if (effectiveRightHandSideVariants == null) {
+            Preconditions.checkState(
+                opVariant == AssignmentOperatorNode.Variant.Eq);
+            switch (Compatibility.of(leftType.assignableFrom(rightType))) {
+              case COMPATIBLE_AS_IS:
+                break;
+              case IMPLICIT_CAST:
+                right.cast(rightType, leftType);
+                break;
+              case INCOMPATIBLE:
+                error(e, "Incompatible types for assignment: "
+                    + leftType + " * " + rightType);
+                break;
+            }
+
+          } else {
+            // Insert any casts needed to unbox the right hand side.
+            BaseNode leftClone = left.getNode().shallowClone();
+            Operand leftExpr = nthOperandOf(0, leftClone, NodeType.Primary);
+            BaseNode completeRightHandSideOp =
+                effectiveRightHandSideVariants.buildNode(
+                        leftExpr.getNode(), right.getNode());
+            completeRightHandSideOp.setSourcePosition(node.getSourcePosition());
+            process(completeRightHandSideOp, null);
+            StaticType completeRightType = maybePassThru(
+                completeRightHandSideOp);
+            if (StaticType.ERROR_TYPE.equals(completeRightType)) {
+              break type_switch;
+            }
+
+            BinaryOp completeRightHandSideBinOp =
+                (BinaryOp) completeRightHandSideOp;
+            BaseNode adjustedLeft =
+                completeRightHandSideBinOp.getLeftOperand();
+            BaseNode adjustedRight =
+                completeRightHandSideBinOp.getRightOperand();
+
+            StaticType adjustedLeftType = maybePassThru(adjustedLeft);
+            StaticType adjustedRightType = maybePassThru(adjustedRight);
+
+            if (!rightType.equals(adjustedRightType)) {
+              right.cast(rightType, adjustedRightType);
+            }
+
+            if (!completeRightType.equals(leftType)
+                || !adjustedLeftType.equals(leftType)) {
+              warn(
+                  left.getNode(),
+                  "Cast needed before assigning "
+                  + leftType + " * " + rightType
+                  + " -> " + completeRightType + " -> " + leftType);
+            }
+          }
+          break type_switch;
         }
 
         case ConditionalExpression: {
@@ -807,13 +897,19 @@ final class TypingPass extends AbstractRewritingPass {
             }
             // Otherwise it should be an integral type.
             StaticType rightType = maybePassThru(right);
-            leftType = unboxNumericAsNecessary(left, leftType);
-            rightType = unboxNumericAsNecessary(right, rightType);
-            exprType = promoteNumericBinary(left, leftType, right, rightType);
+            leftType = maybeUnbox(left, leftType, IS_INTEGRAL_NUMERIC);
+            if (!StaticType.ERROR_TYPE.equals(leftType)) {
+              rightType = maybeUnbox(right, rightType, IS_INTEGRAL_NUMERIC);
+              if (!StaticType.ERROR_TYPE.equals(rightType)) {
+                exprType = promoteNumericBinary(
+                    left, leftType, right, rightType);
+                break type_switch;
+              }
+            }
           } else {
             error(node, "Missing operand");
-            exprType = StaticType.ERROR_TYPE;
           }
+          exprType = StaticType.ERROR_TYPE;
           break type_switch;
         }
 
@@ -964,14 +1060,14 @@ final class TypingPass extends AbstractRewritingPass {
         System.err.println("Got " + exprType + " for " + node.getNodeType());
       }
       t.setStaticType(exprType);
-      return ProcessingStatus.CONTINUE;
+      return;
     }
 
     if (node instanceof VariableInitializerNode) {
       Operand op = nthOperandOf(0, node, NodeType.Expression);
-      if (op == null) { return ProcessingStatus.CONTINUE; }
+      if (op == null) { return; }
       StaticType exprType = ((Typed) op.getNode()).getStaticType();
-      if (exprType == null) { return ProcessingStatus.CONTINUE; }
+      if (exprType == null) { return; }
 
       SList<Parent> path = pathFromRoot;
       int nDims = 0;
@@ -1035,7 +1131,6 @@ final class TypingPass extends AbstractRewritingPass {
         break;
       }
     }
-    return ProcessingStatus.CONTINUE;
   }
 
   private StaticType processFieldAccess(BaseNode e) {
@@ -1338,8 +1433,10 @@ final class TypingPass extends AbstractRewritingPass {
         op.cast(ct, pt);
         return pt;
       }
+      error(op.getNode(), "Cannot unbox " + t);
+    } else {
+      error(op.getNode(), "Invalid operand of type " + t);
     }
-    error(op.getNode(), "Cannot unbox " + t);
     return StaticType.ERROR_TYPE;
 
   }
@@ -1367,6 +1464,97 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
     TO_WRAPPED = b.build();
+  }
+
+
+  private static final ImmutableMap<AssignmentOperatorNode.Variant, OpVariants>
+      COMPLEX_ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT;
+
+  private static final class OpVariants {
+    final NodeVariant operationVariant;
+    final @Nullable NodeVariant operatorVariant;
+
+    OpVariants(
+        NodeVariant operationVariant,
+        @Nullable NodeVariant operatorVariant) {
+      this.operationVariant = operationVariant;
+      this.operatorVariant = operatorVariant;
+    }
+
+    BaseNode buildNode(BaseNode leftOperand, BaseNode rightOperand) {
+      ImmutableList.Builder<BaseNode> children = ImmutableList.builder();
+      children.add(leftOperand);
+      if (operatorVariant != null) {
+        children.add(operatorVariant.buildNode(ImmutableList.of()));
+      }
+      children.add(rightOperand);
+      return operationVariant.buildNode(children.build());
+    }
+  }
+
+  static {
+    EnumMap<AssignmentOperatorNode.Variant, OpVariants> m = new EnumMap<>(
+        AssignmentOperatorNode.Variant.class);
+
+    // TODO: It would be nice to be able to infer this by reflecting over the
+    // ptree.
+    m.put(AssignmentOperatorNode.Variant.AmpEq,
+        new OpVariants(
+            AndExpressionNode.Variant.AndExpressionAmpEqualityExpression,
+            null));
+    m.put(AssignmentOperatorNode.Variant.DshEq,
+        new OpVariants(
+            AdditiveExpressionNode.Variant
+            .AdditiveExpressionAdditiveOperatorMultiplicativeExpression,
+            AdditiveOperatorNode.Variant.Dsh));
+    m.put(AssignmentOperatorNode.Variant.PlsEq,
+        new OpVariants(
+            AdditiveExpressionNode.Variant
+            .AdditiveExpressionAdditiveOperatorMultiplicativeExpression,
+            AdditiveOperatorNode.Variant.Pls));
+    m.put(AssignmentOperatorNode.Variant.FwdEq,
+        new OpVariants(
+            MultiplicativeExpressionNode.Variant
+            .MultiplicativeExpressionMultiplicativeOperatorUnaryExpression,
+            MultiplicativeOperatorNode.Variant.Fwd));
+    m.put(AssignmentOperatorNode.Variant.PctEq,
+        new OpVariants(
+            MultiplicativeExpressionNode.Variant
+            .MultiplicativeExpressionMultiplicativeOperatorUnaryExpression,
+            MultiplicativeOperatorNode.Variant.Pct));
+    m.put(AssignmentOperatorNode.Variant.StrEq,
+        new OpVariants(
+            MultiplicativeExpressionNode.Variant
+            .MultiplicativeExpressionMultiplicativeOperatorUnaryExpression,
+            MultiplicativeOperatorNode.Variant.Str));
+    m.put(AssignmentOperatorNode.Variant.Gt2Eq,
+        new OpVariants(
+            ShiftExpressionNode.Variant
+            .ShiftExpressionShiftOperatorAdditiveExpression,
+            ShiftOperatorNode.Variant.Gt2));
+    m.put(AssignmentOperatorNode.Variant.Gt3Eq,
+        new OpVariants(
+            ShiftExpressionNode.Variant
+            .ShiftExpressionShiftOperatorAdditiveExpression,
+            ShiftOperatorNode.Variant.Gt3));
+    m.put(AssignmentOperatorNode.Variant.Lt2Eq,
+        new OpVariants(
+            ShiftExpressionNode.Variant
+            .ShiftExpressionShiftOperatorAdditiveExpression,
+            ShiftOperatorNode.Variant.Lt2));
+    m.put(AssignmentOperatorNode.Variant.HatEq,
+        new OpVariants(
+            ExclusiveOrExpressionNode.Variant
+            .ExclusiveOrExpressionHatAndExpression,
+            null));
+    m.put(AssignmentOperatorNode.Variant.PipEq,
+        new OpVariants(
+            InclusiveOrExpressionNode.Variant
+            .InclusiveOrExpressionPipExclusiveOrExpression,
+            null));
+
+    COMPLEX_ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT =
+        Maps.immutableEnumMap(m);
   }
 
 

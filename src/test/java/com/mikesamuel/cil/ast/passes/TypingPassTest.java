@@ -1070,7 +1070,7 @@ public final class TypingPassTest extends TestCase {
             "x & (int) Integer.valueOf(0) : int",
             "(int) Integer.valueOf(3) | k : int",
         });
-    // TODO: byte, char, short, long
+    // TODO: byte, char, short, long, double, float, boolean
   }
 
   @Test
@@ -1342,10 +1342,10 @@ public final class TypingPassTest extends TestCase {
         null,
         null,
         "//C:45+12-13: Cannot unbox /java/lang/Object",
-        "//C:46+12-16: Cannot unbox <null>",
+        "//C:46+12-16: Invalid operand of type <null>",
         "//C:54+7-8: Cannot unbox /java/lang/Object",
-        "//C:55+7-11: Cannot unbox <null>",
-        "//C:57+7-11: Cannot unbox <null>",
+        "//C:55+7-11: Invalid operand of type <null>",
+        "//C:57+7-11: Invalid operand of type <null>",
         "//C:58+12-13: Cannot unbox /java/lang/Object",
         "//C:65+7-13: Incompatible types for comparison"
         + " /java/lang/Integer * /java/lang/Boolean",
@@ -1510,6 +1510,118 @@ public final class TypingPassTest extends TestCase {
         "//C:61+",
         "//C:64+"
         );
+  }
+
+  @Test
+  public static void testAssignmentOperators() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "//C",
+            "import java.io.Serializable;",
+            "",
+            "public class C {",
+            "",
+            "  public static void main(String... argv) {",
+            "    boolean z = true;",
+            "    byte b = (byte) 0;",
+            "    short s = (short) 0;",
+            "    char c = '\\0';",  // L10
+            "    int i = 0;",
+            "    long j = (long) (0);",
+            "    float f = (float) (0);",
+            "    double d = (double) (0);",
+            "",
+            "    Long J = new Long(1);",
+            "    Integer I = new Integer(0);",
+            "    Boolean Z = new Boolean(true);",
+            "    String T = \"T\";",
+            "",  // L20
+            "    i = (int) (s);",
+            "    i = 1;",
+            "    T = f;",  // L23 bad operand types
+            "",
+            "    b += (long) (J);",
+            "    T += i;",
+            "    T -= T;",  // L27 bad operand types
+            "    T += I;",
+            "",
+            "    s -= i;",  // L30 RHS is promoted to int then lossily to short
+            "    c *= i;",  // L31 RHS is promoted to int then lossily to char
+            "    d /= (double) (J);",
+            "    i %= i;",
+            "    i <<= i;",
+            "    i >>>= j;",
+            "    d >>>= i;",  // L36 bad operand types.
+            "    j >>= i;",
+            "    i &= i;",
+            "    z &= z;",
+            "    J |= (long) (b);",  // L40 needs reboxing cast
+            "    f |= c;",  // L41 bad operand types
+            "    j ^= j;",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "import java.io.Serializable;",
+            "",
+            "public class C {",
+            "",
+            "  public static void main(String... argv) {",
+            "    boolean z = true;",
+            "    byte b = (byte) 0;",
+            "    short s = (short) 0;",
+            "    char c = '\\0';",  // L10
+            "    int i = 0;",
+            "    long j = 0;",
+            "    float f = 0;",
+            "    double d = 0;",
+            "",
+            "    Long J = new Long(1);",
+            "    Integer I = new Integer(0);",
+            "    Boolean Z = new Boolean(true);",
+            "    String T = \"T\";",
+            "",  // L20
+            "    i = s;",
+            "    i = 1;",
+            "    T = f;",  // L23 bad operand types
+            "",
+            "    b += J;",
+            "    T += i;",
+            "    T -= T;",  // L27 bad operand types
+            "    T += I;",
+            "",
+            "    s -= i;",  // L30 RHS is promoted to int then lossily to short
+            "    c *= i;",  // L31 RHS is promoted to int then lossily to char
+            "    d /= J;",
+            "    i %= i;",
+            "    i <<= i;",
+            "    i >>>= j;",
+            "    d >>>= i;",  // L36 bad operand types
+            "    j >>= i;",
+            "    i &= i;",
+            "    z &= z;",
+            "    J |= b;",  // L40 missing cast
+            "    f |= c;",  // L41 bad operand types
+            "    j ^= j;",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        null,
+        "//C:23+5-10: Incompatible types for assignment: /java/lang/String * float",
+        "//C:25+5-6: Cast needed before assigning byte * /java/lang/Long -> long -> byte",
+        "//C:27+5-6: Cannot unbox /java/lang/String",
+        "//C:30+5-6: Cast needed before assigning short * int -> int -> short",
+        "//C:31+5-6: Cast needed before assigning char * int -> int -> char",
+        "//C:36+5-13: Expected integral shift operands not double * int",
+        "//C:40+5-6: Cast needed before assigning /java/lang/Long * byte -> long -> /java/lang/Long",
+        "//C:41+");
   }
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
