@@ -31,6 +31,7 @@ import com.mikesamuel.cil.ast.AndExpressionNode;
 import com.mikesamuel.cil.ast.ArgumentListNode;
 import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
 import com.mikesamuel.cil.ast.ArrayElementTypeNode;
+import com.mikesamuel.cil.ast.ArrayInitializerNode;
 import com.mikesamuel.cil.ast.ArrayTypeNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
@@ -48,6 +49,7 @@ import com.mikesamuel.cil.ast.ConfirmCastNode;
 import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimNode;
+import com.mikesamuel.cil.ast.DimsNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
@@ -86,6 +88,7 @@ import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
 import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.WildcardNode;
@@ -247,22 +250,32 @@ final class TypingPass extends AbstractRewritingPass {
               this.locals.put(name, styp);
             } else if (typ != null) {
               CatchTypeNode ctyp = (CatchTypeNode) typ;
-              StaticType excType = null;
+              ImmutableList.Builder<ReferenceType> excTypes =
+                  ImmutableList.builder();
+              boolean isError = false;
               for (BaseNode child : ctyp.getChildren()) {
                 if (child instanceof ClassTypeNode) {
-                  if (excType != null) {
-                    // TODO: use common super type.
-                    excType = typePool.type(
-                        JAVA_LANG_THROWABLE, child.getSourcePosition(),
-                        logger);
+                  StaticType childType =
+                      ((ClassTypeNode) child).getStaticType();
+                  if (childType instanceof ReferenceType) {
+                    excTypes.add((ReferenceType) childType);
                   } else {
-                    excType = ((ClassTypeNode) child).getStaticType();
-                    if (excType == null) {
-                      excType = StaticType.ERROR_TYPE;
+                    if (!isError && !StaticType.ERROR_TYPE.equals(childType)) {
+                      error(
+                          ctyp,
+                          "Catch type " + childType + " is not a reference type"
+                          );
                     }
+                    isError = true;
+                    break;
                   }
                 }
               }
+              this.locals.put(
+                  name,
+                  isError
+                  ? StaticType.ERROR_TYPE
+                  : typePool.leastUpperBound(excTypes.build()));
             }
             break;
           }
@@ -718,13 +731,122 @@ final class TypingPass extends AbstractRewritingPass {
         }
 
         case ConditionalExpression: {
+
           ConditionalExpressionNode e = (ConditionalExpressionNode) node;
           switch (e.getVariant()) {
             case ConditionalOrExpression:
               throw new AssertionError("@anon");
             case ConditionalOrExpressionQmExpressionClnConditionalExpression:
-              // TODO
-              break;
+              Operand condition = nthOperandOf(
+                  0, e, NodeType.ConditionalOrExpression);
+              Operand thenClause = nthOperandOf(
+                  1, e, NodeType.Expression);
+              Operand elseClause = nthOperandOf(
+                  2, e, NodeType.ConditionalOrExpression);
+
+              if (condition == null
+                  || thenClause == null || elseClause == null) {
+                exprType = StaticType.ERROR_TYPE;
+                break type_switch;
+              }
+
+              StaticType conditionType = maybePassThru(condition);
+              StaticType thenType = maybePassThru(thenClause);
+              StaticType elseType = maybePassThru(elseClause);
+              if (conditionType == null
+                  || thenType == null || elseType == null) {
+                exprType = StaticType.ERROR_TYPE;
+                break type_switch;
+              }
+
+              boolean bothNull =
+                  typePool.T_NULL.equals(thenType)
+                  && typePool.T_NULL.equals(elseType);
+
+              conditionType = maybeUnbox(
+                  condition, conditionType,
+                  Predicates.equalTo(StaticType.T_BOOLEAN));
+
+              // Boolean branch.
+              if (!bothNull
+                  && Compatibility.INCOMPATIBLE != Compatibility.of(
+                      StaticType.T_BOOLEAN.assignableFrom(thenType))
+                  && Compatibility.INCOMPATIBLE != Compatibility.of(
+                      StaticType.T_BOOLEAN.assignableFrom(elseType))) {
+                exprType = StaticType.T_BOOLEAN;
+                maybeUnbox(
+                    thenClause, thenType,
+                    Predicates.equalTo(StaticType.T_BOOLEAN));
+                maybeUnbox(
+                    elseClause, elseType,
+                    Predicates.equalTo(StaticType.T_BOOLEAN));
+                break type_switch;
+              }
+
+              @Nullable StaticType contextTypeHint =
+                  getPolyExprTypeFromContext(pathFromRoot);
+
+              // Numeric type branch
+              if (!bothNull
+                  && convertibleToNumeric(thenType)
+                  && convertibleToNumeric(elseType)) {
+                if (contextTypeHint != null) {
+                  if (!convertibleToNumeric(contextTypeHint)) {
+                    warn(e, "(?:) has numeric operands " + thenType + " * "
+                        + elseType + " but used in a non-numeric context: "
+                        + contextTypeHint);
+                    contextTypeHint = null;
+                  } else {
+                    contextTypeHint = unboxedType(
+                        e, contextTypeHint,
+                        Predicates.instanceOf(NumericType.class));
+                  }
+                }
+                thenType = unboxNumericAsNecessary(thenClause, thenType);
+                elseType = unboxNumericAsNecessary(elseClause, elseType);
+                // TODO: if either argument is a numeric literal, check whether
+                // it fits in the other type
+                if (contextTypeHint instanceof NumericType) {
+                  thenClause.cast(thenType, contextTypeHint);
+                  elseClause.cast(elseType, contextTypeHint);
+                  exprType = contextTypeHint;
+                } else {
+                  exprType = promoteNumericBinary(
+                      thenClause, thenType, elseClause, elseType, false);
+                }
+                break type_switch;
+              }
+
+              // Reference type branch
+              if (contextTypeHint != null) {
+                contextTypeHint = boxedType(e, contextTypeHint);
+                if (StaticType.ERROR_TYPE.equals(contextTypeHint)) {
+                  contextTypeHint = null;
+                }
+              }
+              if (contextTypeHint != null) {
+                exprType = contextTypeHint;
+              } else if (typePool.T_NULL.equals(thenType)) {
+                exprType = elseType;
+              } else if (typePool.T_NULL.equals(elseType)) {
+                exprType = thenType;
+              } else {
+                thenType = boxedType(thenClause.getNode(), thenType);
+                elseType = boxedType(elseClause.getNode(), elseType);
+                if (StaticType.ERROR_TYPE.equals(elseType)
+                    || StaticType.ERROR_TYPE.equals(thenType)) {
+                  exprType = StaticType.ERROR_TYPE;
+                } else if (thenType instanceof ReferenceType
+                           && elseType instanceof ReferenceType) {
+                  exprType = typePool.leastUpperBound(ImmutableList.of(
+                      (ReferenceType) thenType,
+                      (ReferenceType) elseType));
+                } else {
+                  exprType = StaticType.ERROR_TYPE;
+                }
+              }
+              break type_switch;
+
             case ConditionalOrExpressionQmExpressionClnLambdaExpression:
               exprType = StaticType.ERROR_TYPE;  // Lambda
               break type_switch;
@@ -826,8 +948,7 @@ final class TypingPass extends AbstractRewritingPass {
                     (leftType instanceof NumericType ? 1 : 0)
                     + (rightType instanceof NumericType ? 1 : 0);
                 if (numericCount == 2) {
-                  promoteNumericBinary(
-                      left, leftType, right, rightType);
+                  promoteNumericBinary(left, leftType, right, rightType);
                 } else if (!leftType.equals(rightType)) {
                   error(
                       e,
@@ -1050,6 +1171,13 @@ final class TypingPass extends AbstractRewritingPass {
             error(castNode, "Unrecognized target type for cast");
             exprType = StaticType.ERROR_TYPE;
           }
+          break type_switch;
+        }
+
+        case ArrayInitializer: {
+          // Look rootwards for the type.
+          StaticType typeHint = getPolyExprTypeFromContext(pathFromRoot);
+          exprType = typeHint != null ? typeHint : StaticType.ERROR_TYPE;
           break type_switch;
         }
 
@@ -1296,13 +1424,17 @@ final class TypingPass extends AbstractRewritingPass {
         ImmutableList.builder();
     if (args != null) {
       TypeNameResolver canonResolver = typeNameResolvers.peekLast();
-      for (TypeArgumentNode arg
-          : args.finder(TypeArgumentNode.class)
+      TypeArgumentListNode argListNode = args.firstChildWithType(
+          TypeArgumentListNode.class);
+      if (argListNode != null) {
+        for (TypeArgumentNode arg
+            : argListNode.finder(TypeArgumentNode.class)
             .exclude(NodeType.TypeArguments)
             .find()) {
-        TypeBinding b = AmbiguousNames.typeBindingOf(
-            arg, canonResolver, logger);
-        typeArguments.add(b);
+          TypeBinding b = AmbiguousNames.typeBindingOf(
+              arg, canonResolver, logger);
+          typeArguments.add(b);
+        }
       }
     }
 
@@ -1424,21 +1556,146 @@ final class TypingPass extends AbstractRewritingPass {
 
   private StaticType maybeUnbox(
       Operand op, StaticType t, Predicate<? super PrimitiveType> ok) {
+    StaticType unboxed = unboxedType(op.getNode(), t, ok);
+    if (!StaticType.ERROR_TYPE.equals(unboxed)) {
+      op.cast(t, unboxed);
+    }
+    return unboxed;
+  }
+
+  private StaticType unboxedType(
+      BaseNode context, StaticType t, Predicate<? super PrimitiveType> ok) {
     if (t instanceof PrimitiveType && ok.apply((PrimitiveType) t)) {
       return t;
     } else if (t instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) t;
       PrimitiveType pt = TO_WRAPPED.get(ct.info.canonName);
       if (pt != null && ok.apply(pt)) {
-        op.cast(ct, pt);
         return pt;
       }
-      error(op.getNode(), "Cannot unbox " + t);
+      error(context, "Cannot unbox " + t);
     } else {
-      error(op.getNode(), "Invalid operand of type " + t);
+      error(context, "Invalid operand of type " + t);
     }
     return StaticType.ERROR_TYPE;
+  }
 
+  private StaticType boxedType(BaseNode context, StaticType t) {
+    if (StaticType.ERROR_TYPE.equals(t)) {
+      return t;
+    }
+    if (StaticType.T_VOID.equals(t)) {
+      error(context, "void where reference type expected");
+      return StaticType.ERROR_TYPE;
+    }
+    if (t instanceof PrimitiveType) {
+      return typePool.type(
+          new TypeSpecification(
+              Preconditions.checkNotNull(((PrimitiveType) t).wrapperType)),
+          context.getSourcePosition(), logger);
+    }
+    return t;
+  }
+
+  private boolean convertibleToNumeric(StaticType t) {
+    if (t instanceof NumericType) {
+      return true;
+    }
+    if (typePool.T_NULL.equals(t)) {
+      return true;  // statically, though fails at runtime.
+    }
+    if (t instanceof TypePool.ClassOrInterfaceType) {
+      TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) t;
+      PrimitiveType pt = TO_WRAPPED.get(ct.info.canonName);
+      return pt instanceof NumericType;
+    }
+    return false;
+  }
+
+  private @Nullable StaticType getPolyExprTypeFromContext(
+      SList<Parent> pathFromRoot) {
+    SList<Parent> anc;
+    for (anc = pathFromRoot; anc != null; anc = anc.prev) {
+      NodeVariant v = anc.x.parent.getVariant();
+      if (v.getDelegate() != null) {
+        continue;
+      }
+      switch (v.getNodeType()) {
+        case VariableDeclarator:
+        case VariableDeclaratorList:
+        case VariableInitializerList:
+          continue;
+        default:
+          break;
+      }
+      break;
+    }
+
+    if (anc == null) {
+      return null;
+    }
+
+    BaseNode node = anc.x.parent;
+    if (node instanceof LocalDeclaration) {
+      WholeType typeNode = (WholeType)
+          ((LocalDeclaration) node).getDeclaredTypeNode();
+      StaticType declaredType = typeNode != null
+          ? typeNode.getStaticType() : null;
+      if (declaredType == null) {
+        error(node, "Missing type info for declaration");
+        return StaticType.ERROR_TYPE;
+      }
+      return declaredType;
+    } else if (node instanceof ArrayCreationExpressionNode) {
+      ArrayCreationExpressionNode newArr = (ArrayCreationExpressionNode) node;
+      ArrayElementTypeNode elementTypeNode =
+          newArr.firstChildWithType(ArrayElementTypeNode.class);
+      WholeType elementTypeNodeWholeType = elementTypeNode != null
+          ? elementTypeNode.firstChildWithType(WholeType.class)
+          : null;
+      StaticType elementType = elementTypeNodeWholeType != null
+          ? elementTypeNodeWholeType.getStaticType()
+          : null;
+      DimsNode dimsNode = newArr.firstChildWithType(DimsNode.class);
+      if (elementType == null) {
+        error(newArr, "Missing element type for new array");
+        return StaticType.ERROR_TYPE;
+      }
+      if (dimsNode == null) {
+        error(newArr, "Missing dimension count for new array");
+        return StaticType.ERROR_TYPE;
+      }
+      int nDims = dimsNode
+          .finder(DimNode.class)
+          .exclude(NodeType.Annotation)
+          .find().size();
+      return typePool.type(
+          elementType.typeSpecification.withNDims(
+              elementType.typeSpecification.nDims + nDims),
+          null,
+          null);
+    } else if (node instanceof ArgumentListNode) {
+      // Look at applicable callees and infer from argument type.
+      // TODO
+      return null;
+    } else if (node instanceof ArrayInitializerNode) {
+      StaticType arrayType = getPolyExprTypeFromContext(anc.prev);
+      if (arrayType == null) {
+        error(node, "Missing type for array initializer");
+        return StaticType.ERROR_TYPE;
+      } else if (StaticType.ERROR_TYPE.equals(arrayType)) {
+        return StaticType.ERROR_TYPE;
+      } else if (arrayType instanceof ArrayType) {
+        return ((ArrayType) arrayType).elementType;
+      } else {
+        error(
+            node,
+            "Cannot initialize declaration with type " + arrayType
+            + " with array");
+        return StaticType.ERROR_TYPE;
+      }
+    }
+    return null;  // Don't know.
   }
 
   private static final ImmutableMap<NumericType, NodeVariant>
@@ -1708,6 +1965,12 @@ final class TypingPass extends AbstractRewritingPass {
 
   private StaticType promoteNumericBinary(
       Operand left, StaticType leftType, Operand right, StaticType rightType) {
+    return promoteNumericBinary(left, leftType, right, rightType, true);
+  }
+
+  private StaticType promoteNumericBinary(
+      Operand left, StaticType leftType, Operand right, StaticType rightType,
+      boolean promoteToInt) {
     StaticType lt = unboxNumericAsNecessary(left, leftType);
     if (StaticType.ERROR_TYPE.equals(lt)) {
       return StaticType.ERROR_TYPE;
@@ -1726,7 +1989,7 @@ final class TypingPass extends AbstractRewritingPass {
         throw new AssertionError("Should already be unboxed");
       case CONVERTING_LOSSLESS:
         // left is wider.
-        if (PROMOTE_TO_INT.contains(lt)) {
+        if (promoteToInt && PROMOTE_TO_INT.contains(lt)) {
           left.cast(lt, StaticType.T_INT);
           lt = StaticType.T_INT;
         }
@@ -1734,7 +1997,7 @@ final class TypingPass extends AbstractRewritingPass {
         return requireNumeric(left, lt);
       case CONVERTING_LOSSY:
         // right is wider
-        if (PROMOTE_TO_INT.contains(rt)) {
+        if (promoteToInt && PROMOTE_TO_INT.contains(rt)) {
           right.cast(rt, StaticType.T_INT);
           rt = StaticType.T_INT;
         }
@@ -1746,7 +2009,7 @@ final class TypingPass extends AbstractRewritingPass {
             "Cannot reconcile operand types " + left + " and " + right);
         return StaticType.ERROR_TYPE;
       case SAME:
-        if (PROMOTE_TO_INT.contains(lt)) {
+        if (promoteToInt && PROMOTE_TO_INT.contains(lt)) {
           left.cast(lt, StaticType.T_INT);
           right.cast(rt, StaticType.T_INT);
           return StaticType.T_INT;
@@ -1863,14 +2126,6 @@ final class TypingPass extends AbstractRewritingPass {
     return staticallyImported.build();
   }
 
-  /**
-   * @param sourceNode
-   * @param calleeType
-   * @param typeArguments
-   * @param methodName
-   * @param actualTypes
-   * @return
-   */
   private Optional<MethodSearchResult> pickMethodOverload(
       BaseNode sourceNode,
       @Nullable StaticType calleeType,
@@ -2070,7 +2325,8 @@ final class TypingPass extends AbstractRewritingPass {
                 + ", formalTypesInContext=" + formalTypesInContext
                 + ", casts=" + casts
                 + ", requiresVariadicArrayConstruction="
-                + requiresVariadicArrayConstruction);
+                + requiresVariadicArrayConstruction
+                + ", returnTypeInContext=" + returnTypeInContext);
           }
           results.add(new MethodSearchResult(
               m, formalTypesInContext, returnTypeInContext,

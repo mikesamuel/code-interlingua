@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -10,10 +11,14 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
 import com.mikesamuel.cil.ast.FloatingPointTypeNode;
@@ -51,10 +56,15 @@ public abstract class StaticType {
   public abstract StaticType toErasedType();
 
   @Override
-  public abstract boolean equals(Object o);
+  public final boolean equals(Object o) {
+    return o instanceof StaticType
+        && this.typeSpecification.equals(((StaticType) o).typeSpecification);
+  }
 
   @Override
-  public abstract int hashCode();
+  public final int hashCode() {
+    return typeSpecification.hashCode();
+  }
 
   /**
    * The operation needed to convert from an output of type t to an input of
@@ -226,16 +236,6 @@ public abstract class StaticType {
     }
 
     @Override
-    public boolean equals(Object o) {
-      return o instanceof NumericType && name.equals(((NumericType) o).name);
-    }
-
-    @Override
-    public int hashCode() {
-      return name.hashCode();
-    }
-
-    @Override
     public Cast assignableFrom(StaticType t) {
       if (t == ERROR_TYPE) {
         return Cast.UNBOX;
@@ -292,16 +292,6 @@ public abstract class StaticType {
     }
 
     @Override
-    public boolean equals(Object o) {
-      return o == this;
-    }
-
-    @Override
-    public int hashCode() {
-      return System.identityHashCode(this);
-    }
-
-    @Override
     public Cast assignableFrom(StaticType t) {
       if (t == this) { return Cast.SAME; }
       if (t == T_VOID) { return Cast.DISJOINT; }
@@ -336,16 +326,6 @@ public abstract class StaticType {
     @Override
     public String toString() {
       return name;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      return o instanceof OneOffType && name.equals(((OneOffType) o).name);
-    }
-
-    @Override
-    public int hashCode() {
-      return name.hashCode();
     }
 
     @Override
@@ -484,9 +464,14 @@ public abstract class StaticType {
             @Override
             public StaticType apply(TypeSpecification ts) {
               if (ts.nDims > 0) {
-                TypeSpecification elementSpec = new TypeSpecification(
-                    ts.typeName, ts.bindings, ts.nDims - 1);
-                return new ArrayType(ts, type(elementSpec, pos, logger));
+                TypeSpecification elementSpec = ts.withNDims(ts.nDims - 1);
+                StaticType elType = type(elementSpec, pos, logger);
+                if (ERROR_TYPE.equals(elType)) {
+                  return ERROR_TYPE;
+                }
+                // We canonicalized the type specification above so we need
+                // not do it here.
+                return new ArrayType(ts, elType);
               }
 
               // Check that the type exists.
@@ -548,6 +533,402 @@ public abstract class StaticType {
           });
     }
 
+    private static final boolean DEBUG_LUB = false;
+
+    /** https://docs.oracle.com/javase/specs/jls/se8/html/jls-4.html#jls-4.10.4 */
+    public ReferenceType leastUpperBound(
+        Iterable<? extends ReferenceType> typesIterable) {
+      return leastUpperBound(typesIterable, Sets.newLinkedHashSet());
+    }
+
+    private ReferenceType leastUpperBound(
+          Iterable<? extends ReferenceType> typesIterable,
+          Set<ImmutableList<TypeSpecification>> infTypeDetect) {
+
+      // Triple-slash comments below are direct quotes from
+      // https://docs.oracle.com/javase/specs/jls/se8/html/jls-4.html#jls-4.10.4
+      // "Least upper bound"
+
+      /// lub(U1, ..., Uk), is determined as follows.
+      ImmutableList<ReferenceType> u = ImmutableList.copyOf(
+          Iterables.filter(typesIterable, new Predicate<ReferenceType>() {
+
+            @Override
+            public boolean apply(ReferenceType t) {
+              if (T_NULL.equals(t)) { return false; }  // Null is the lub of ()
+              Preconditions.checkState(t.getPool() == TypePool.this);
+              return true;
+            }
+          }));
+
+      int nTypes = u.size();
+      if (nTypes == 0) {
+        // The <null> type is a bottom reference type.
+        return T_NULL;
+      }
+      if (nTypes == 1) {
+        /// If k = 1, then the lub is the type itself: lub(U) = U.
+        return u.get(0);
+      }
+      if (DEBUG_LUB) {
+        System.err.println("u=" + u);
+      }
+
+      /// For each Ui (1 ≤ i ≤ k):
+      ///   Let ST(Ui) be the set of supertypes of Ui.
+      ///   Let EST(Ui), the set of erased supertypes of Ui, be:
+      ///   EST(Ui) = { |W| | W in ST(Ui) } where |W| is the erasure of W.
+      ImmutableList<ImmutableSet<ReferenceType>> st;
+      ImmutableList<ImmutableSet<ReferenceType>> est;
+      {
+        ImmutableList.Builder<ImmutableSet<ReferenceType>> stb =
+            ImmutableList.builder();
+        ImmutableList.Builder<ImmutableSet<ReferenceType>> estb =
+            ImmutableList.builder();
+        for (ReferenceType ui : u) {
+          ImmutableSet<ReferenceType> sti = ui.getSuperTypes();
+          stb.add(sti);
+
+          ImmutableSet.Builder<ReferenceType> estib = ImmutableSet.builder();
+          for (ReferenceType w : sti) {
+            // The null type is not a super-type of any type.
+            Preconditions.checkState(
+                !(w instanceof NullType)
+                && w.getPool() == TypePool.this);
+            estib.add(w.toErasedType());
+          }
+          estb.add(estib.build());
+        }
+        st = stb.build();
+        est = estb.build();
+      }
+      if (DEBUG_LUB) {
+        System.err.println("st=" + st + "\nest=" + est);
+      }
+
+      /// Let EC, the erased candidate set for U1 ... Uk, be the intersection of
+      /// all the sets EST(Ui) (1 ≤ i ≤ k).
+      ImmutableList<ReferenceType> ec;
+      {
+        Set<ReferenceType> inter = Sets.newLinkedHashSet(est.get(0));
+        for (int i = 1; i < nTypes; ++i) {
+          inter.retainAll(est.get(i));
+        }
+        ec = ImmutableList.copyOf(inter);
+      }
+      if (DEBUG_LUB) {
+        System.err.println("ec=" + ec);
+      }
+
+      // Let MEC, the minimal erased candidate set for U1 ... Uk, be:
+      //   MEC = { V | V in EC, and for all W ≠ V in EC, it is not the case that
+      //           W <: V }
+      ImmutableList<ReferenceType> mec;
+      {
+        int nec = ec.size();
+        BitSet minimal = new BitSet();
+        minimal.set(0, nec);  // until proven otherwise
+        i_loop:
+        for (int i = 0; i < nec; ++i) {
+          ReferenceType eci = ec.get(i);
+          for (int j = 0; j < nec; ++j) {
+            if (i == j || !minimal.get(j)) { continue; }
+            ReferenceType ecj = ec.get(j);
+            Cast c = eci.assignableFrom(ecj);
+            switch (c) {
+              case BOX:
+              case UNBOX:
+              case CONVERTING_LOSSLESS:
+              case CONVERTING_LOSSY:
+              case SAME:
+                throw new AssertionError(eci);
+              case DISJOINT:
+              case CONFIRM_CHECKED:
+                break;
+              case CONFIRM_UNCHECKED:
+              case CONFIRM_SAFE:
+                minimal.clear(i);
+                if (DEBUG_LUB) {
+                  System.err.println(ecj + " excludes " + eci + " by " + c);
+                }
+                continue i_loop;
+            }
+          }
+        }
+        ImmutableList.Builder<ReferenceType> b = ImmutableList.builder();
+        for (int i = minimal.nextSetBit(0);
+             i >= 0;
+             i = minimal.nextSetBit(i + 1)) {
+          b.add(ec.get(i));
+        }
+        mec = b.build();
+      }
+      if (DEBUG_LUB) {
+        System.err.println("mec=" + mec);
+      }
+
+      /// For any element G of MEC that is a generic type:
+      ///  Let the "relevant" parameterizations of G, Relevant(G), be:
+      ///  Relevant(G) = { V | 1 ≤ i ≤ k: V in ST(Ui) and V = G<...> }
+      ImmutableMultimap<ClassOrInterfaceType, ClassOrInterfaceType> relevant;
+      {
+        ImmutableMultimap.Builder<ClassOrInterfaceType, ClassOrInterfaceType> b
+            = ImmutableMultimap.builder();
+        for (ReferenceType meci : mec) {
+          // AFAICT, array types are not "generic."
+          if (!(meci instanceof ClassOrInterfaceType)) {
+            continue;
+          }
+          ClassOrInterfaceType g = (ClassOrInterfaceType) meci;
+          // TODO: Does "is generic" here, and in the definition of Best below
+          // apply to raw types?
+          if (g.info.parameters.isEmpty()) {
+            continue;
+          }
+          for (int i = 0; i < nTypes; ++i) {
+            for (ReferenceType v : st.get(i)) {
+              if (v instanceof ClassOrInterfaceType
+                  && g.typeSpecification.typeName.equals(
+                      v.typeSpecification.typeName)) {
+                b.put(g, (ClassOrInterfaceType) v);
+              }
+            }
+          }
+        }
+        relevant = b.build();
+      }
+      if (DEBUG_LUB) {
+        System.err.println("relevant=" + relevant);
+      }
+
+      /// Let the "candidate" parameterization of G, Candidate(G), be the most
+      /// specific parameterization of the generic type G that contains all the
+      /// relevant parameterizations of G:
+      ///    Candidate(G) = lcp(Relevant(G))
+      ImmutableMap<ClassOrInterfaceType, ClassOrInterfaceType> candidate;
+      {
+        ImmutableMap.Builder<ClassOrInterfaceType, ClassOrInterfaceType> b =
+            ImmutableMap.builder();
+        for (ClassOrInterfaceType g : relevant.keySet()) {
+          b.put(g, leastContainingInvocation(relevant.get(g), infTypeDetect));
+        }
+        candidate = b.build();
+      }
+      if (DEBUG_LUB) {
+        System.err.println("candidate=" + candidate);
+      }
+
+      /// Let lub(U1 ... Uk) be:
+      ///  Best(W1) & ... & Best(Wr)
+      ///  where Wi (1 ≤ i ≤ r) are the elements of MEC, the minimal erased
+      ///  candidate set of U1 ... Uk;
+      ///  and where, if any of these elements are generic, we use the candidate
+      ///  parameterization (so as to recover type arguments):
+      ///  Best(X) = Candidate(X) if X is generic; X otherwise.
+      ImmutableList.Builder<ReferenceType> bestIntersectionElements =
+          ImmutableList.builder();
+      for (ReferenceType meci : mec) {
+        ReferenceType best = meci;
+        if (meci instanceof ClassOrInterfaceType) {
+          ClassOrInterfaceType ci = (ClassOrInterfaceType) meci;
+          if (!ci.info.parameters.isEmpty()) {
+            best = candidate.get(ci);
+          }
+        }
+        bestIntersectionElements.add(best);
+      }
+      // TODO: implement intersection types
+      ImmutableList<ReferenceType> best = bestIntersectionElements.build();
+      if (DEBUG_LUB) {
+        System.err.println("best=" + best);
+      }
+      return best.get(0);
+    }
+
+    ClassOrInterfaceType leastContainingInvocation(
+        Iterable<? extends ClassOrInterfaceType> types,
+        Set<ImmutableList<TypeSpecification>> infTypeDetect) {
+      /// lcp(), the least containing invocation, is:
+      ///   lcp(S) = lcp(e1, ..., en) where ei (1 ≤ i ≤ n) in S
+      ///   lcp(e1, ..., en) = lcp(lcp(e1, e2), e3, ..., en)
+      ///   lcp(G<X1, ..., Xn>, G<Y1, ..., Yn>) =
+      ///       G<lcta(X1, Y1), ..., lcta(Xn, Yn)>
+      ///   lcp(G<X1, ..., Xn>) = G<lcta(X1), ..., lcta(Xn)>
+      ImmutableList<ClassOrInterfaceType> g = ImmutableList.copyOf(
+          ImmutableSet.copyOf(types));
+
+      // This is always called with a set of types with the same erasure, so
+      // there is only one G for a given call.
+      Preconditions.checkArgument(!g.isEmpty());
+
+      // The above does a pairwise reduction from the left.
+      ClassOrInterfaceType t = g.get(0);
+      int arity = t.typeParameterBindings.size();
+      for (int i = 1, n = g.size(); i < n; ++i) {
+        ClassOrInterfaceType e1 = t;
+        ClassOrInterfaceType e2 = g.get(i);
+
+        Preconditions.checkArgument(
+            e1.info.canonName.equals(e2.info.canonName));
+        Preconditions.checkArgument(e1.typeParameterBindings.size() == arity);
+        Preconditions.checkArgument(e2.typeParameterBindings.size() == arity);
+        ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
+            ImmutableList.builder();
+        for (int j = 0; j < arity; ++j) {
+          bindings.add(lcta(
+              e1.typeParameterBindings.get(j),
+              e2.typeParameterBindings.get(j),
+              infTypeDetect));
+        }
+        t = (ClassOrInterfaceType) type(
+            new TypeSpecification(e1.info.canonName, bindings.build()),
+            null, null);
+      }
+
+      // Last case.
+      ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
+          ImmutableList.builder();
+      for (int j = 0; j < arity; ++j) {
+        bindings.add(lcta(t.typeParameterBindings.get(j)));
+      }
+      return (ClassOrInterfaceType) type(
+          new TypeSpecification(t.info.canonName, bindings.build()),
+          null, null);
+    }
+
+    private TypeBinding lcta(TypeBinding typeBinding) {
+      /// lcta(U) = ? if U's upper bound is Object,
+      TypeSpecification upperBound = upperBound(typeBinding);
+      if (upperBound == null
+          || JAVA_LANG_OBJECT.equals(upperBound.typeName)) {
+        return TypeBinding.EXTENDS_OBJECT;
+      }
+      /// otherwise ? extends lub(U,Object)
+      // AFAICT, when U is an interface type this gives you Object & U
+      // and when U is a class type it gives you U.
+      return typeBinding;
+    }
+
+    private TypeBinding lcta(
+        TypeBinding u, TypeBinding v,
+        /// It is possible that the lub() function yields an infinite type. This
+        /// is permissible, and a compiler for the Java programming language
+        /// must recognize such situations and represent them appropriately
+        /// using cyclic data structures.
+
+        // We could introduce a nameless type to represent a back-cycle which
+        // would allow us to treat the lub(Boolean, Number) as
+        //     Serializable & #1:Comparable<? extends #1>.
+        // HACK: We treat it as (Serializable & Comparable<?>)
+        Set<ImmutableList<TypeSpecification>> infTypeDetect) {
+      switch (u.variance) {
+        case INVARIANT:
+          switch (v.variance) {
+            case INVARIANT:
+              /// lcta(U, V) = U if U = V, otherwise ? extends lub(U, V)
+              if (v.variance == Variance.INVARIANT && u.equals(v)) { return u; }
+              //$FALL-THROUGH$
+            case EXTENDS:
+              /// lcta(U, ? extends V) = ? extends lub(U, V)
+              return new TypeBinding(
+                  Variance.EXTENDS,
+                  lub(u.typeSpec, v.typeSpec, infTypeDetect));
+            case SUPER:
+              /// lcta(U, ? super V) = ? super glb(U, V)
+              return new TypeBinding(
+                  Variance.SUPER,
+                  glb(u.typeSpec, v.typeSpec));
+          }
+          throw new AssertionError(v);
+        case EXTENDS:
+          switch (v.variance) {
+            case INVARIANT:
+              return lcta(v, u, infTypeDetect);
+            case EXTENDS:
+              /// lcta(? extends U, ? extends V) = ? extends lub(U, V)
+              return new TypeBinding(
+                  Variance.EXTENDS,
+                  lub(u.typeSpec, v.typeSpec, infTypeDetect));
+            case SUPER:
+              /// lcta(? extends U, ? super V) = U if U = V, otherwise ?
+              if (u.typeSpec.equals(v.typeSpec)) {
+                return u;
+              }
+              return TypeBinding.WILDCARD;
+          }
+          throw new AssertionError(v);
+        case SUPER:
+          switch (v.variance) {
+            case INVARIANT:
+            case EXTENDS:
+              return lcta(v, u, infTypeDetect);
+            case SUPER:
+              /// lcta(? super U, ? super V) = ? super glb(U, V)
+              return new TypeBinding(
+                  Variance.SUPER,
+                  glb(u.typeSpec, v.typeSpec));
+          }
+          throw new AssertionError(v);
+      }
+      throw new AssertionError(u);
+    }
+
+    private TypeSpecification lub(
+        TypeSpecification u, TypeSpecification v,
+        Set<ImmutableList<TypeSpecification>> infTypeDetect) {
+      StaticType ut = type(u, null, null);
+      StaticType vt = type(v, null, null);
+      if (ut instanceof ReferenceType && vt instanceof ReferenceType) {
+        ImmutableList<TypeSpecification> both = ImmutableList.of(u, v);
+        if (infTypeDetect.add(both)) {
+          TypeSpecification lub = leastUpperBound(
+              ImmutableSet.of(
+                  (ReferenceType) ut, (ReferenceType) vt), infTypeDetect)
+              .typeSpecification;
+          infTypeDetect.remove(both);
+          return lub;
+        } else {
+          // HACK: This is not correct since we want to avoid the complexity of
+          // infinite types.  See note on infTypeDetect above.
+          return TypeSpecification.JAVA_LANG_OBJECT;
+        }
+      }
+      return ERROR_TYPE.typeSpecification;
+    }
+
+    private TypeSpecification glb(
+        TypeSpecification u, TypeSpecification v) {
+      /// glb(V1,...,Vm) is defined as V1 & ... & Vm.
+      // TODO: We need to be able to represent type intersections.
+      if (u.equals(v)) { return u; }
+      if (u.typeName.equals(v.typeName)) {
+        return u.withBindings(ImmutableList.of());
+      }
+      return T_NULL.typeSpecification;
+    }
+
+    private TypeSpecification upperBound(TypeBinding b) {
+      if (b.variance == Variance.SUPER) {
+        return TypeSpecification.JAVA_LANG_OBJECT;
+      }
+      TypeSpecification upperBound = b.typeSpec;
+      while (upperBound != null
+             && upperBound.typeName.type == Name.Type.TYPE_PARAMETER) {
+        StaticType t = type(upperBound, null, null);
+        if (!(t instanceof ClassOrInterfaceType)) {
+          // type bounds can't extend array types or <null>
+          // due to a TypeInfoResolver that lacks a mapping for a name.
+          Preconditions.checkState(ERROR_TYPE.equals(t));
+          return TypeSpecification.JAVA_LANG_OBJECT;
+        }
+        ClassOrInterfaceType rt = (ClassOrInterfaceType) t;
+        upperBound = rt.typeSpecification;
+      }
+      return upperBound != null
+          ? upperBound : TypeSpecification.JAVA_LANG_OBJECT;
+    }
+
+
     /** Base type for primitive types. */
     public abstract class ReferenceType extends StaticType {
       private ReferenceType(TypeSpecification spec) {
@@ -560,7 +941,22 @@ public abstract class StaticType {
       public TypePool getPool() {
         return TypePool.this;
       }
+
+      @Override
+      public abstract ReferenceType toErasedType();
+
+      private ImmutableSet<ReferenceType> superTypes;
+
+      final ImmutableSet<ReferenceType> getSuperTypes() {
+        if (superTypes == null) {
+          superTypes = Preconditions.checkNotNull(buildSuperTypeSet());
+        }
+        return superTypes;
+      }
+
+      abstract ImmutableSet<ReferenceType> buildSuperTypeSet();
     }
+
 
     private final class NullType extends ReferenceType {
 
@@ -581,16 +977,6 @@ public abstract class StaticType {
       }
 
       @Override
-      public boolean equals(Object o) {
-        return o == this;
-      }
-
-      @Override
-      public int hashCode() {
-        return System.identityHashCode(this);
-      }
-
-      @Override
       public Cast assignableFrom(StaticType t) {
         if (t == this) {
           return Cast.SAME;
@@ -607,8 +993,13 @@ public abstract class StaticType {
       }
 
       @Override
-      public StaticType toErasedType() {
+      public ReferenceType toErasedType() {
         return this;
+      }
+
+      @Override
+      ImmutableSet<ReferenceType> buildSuperTypeSet() {
+        throw new AssertionError("Cannot enumerate super-types of <null>");
       }
     }
 
@@ -642,7 +1033,7 @@ public abstract class StaticType {
       }
 
       @Override
-      public StaticType toErasedType() {
+      public ReferenceType toErasedType() {
         TypeSpecification erasedSpec;
         if (info.canonName.type == Name.Type.CLASS) {
           if (this.typeParameterBindings.isEmpty()) {
@@ -653,10 +1044,12 @@ public abstract class StaticType {
         } else {
           Preconditions.checkState(
               Name.Type.TYPE_PARAMETER == info.canonName.type);
-        erasedSpec = info.superType.or(TypeSpecification.JAVA_LANG_OBJECT)
-            .withBindings(ImmutableList.of());
+          erasedSpec = info.superType.or(TypeSpecification.JAVA_LANG_OBJECT)
+              .withBindings(ImmutableList.of());
         }
-        return type(erasedSpec, null, null).toErasedType();
+        // If the type info resolver found the type info for this, then it
+        // should be able to find the type info for the erased type.
+        return (ReferenceType) type(erasedSpec, null, null).toErasedType();
       }
 
       @Override
@@ -821,10 +1214,10 @@ public abstract class StaticType {
             Cast castToCommonSuper = commonSuperType.assignableFrom(ct);
             switch (castToCommonSuper) {
               case SAME:
+              case CONFIRM_UNCHECKED:
                 return Cast.CONFIRM_CHECKED;
               case CONFIRM_SAFE:
               case CONFIRM_CHECKED:  // Is this right?
-              case CONFIRM_UNCHECKED:
                 return castToCommonSuper;
               case CONVERTING_LOSSLESS:
               case CONVERTING_LOSSY:
@@ -879,49 +1272,6 @@ public abstract class StaticType {
     }
 
     @Override
-    public int hashCode() {
-      final int prime = 31;
-      int result = 1;
-      result = prime * result + info.canonName.hashCode();
-      result = prime * result + r.hashCode();
-      result = prime * result + typeParameterBindings.hashCode();
-      return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (obj == null) {
-        return false;
-      }
-      if (getClass() != obj.getClass()) {
-        return false;
-      }
-      ClassOrInterfaceType other = (ClassOrInterfaceType) obj;
-      if (info == null) {
-        if (other.info != null) {
-          return false;
-        }
-      } else if (!info.canonName.equals(other.info.canonName)) {
-        return false;
-      }
-      if (getPool() != other.getPool()) {
-        return false;
-      }
-
-      if (typeParameterBindings == null) {
-        if (other.typeParameterBindings != null) {
-          return false;
-        }
-      } else if (!typeParameterBindings.equals(other.typeParameterBindings)) {
-        return false;
-      }
-      return true;
-    }
-
-    @Override
     public String toDescriptor() {
       if (info.canonName.type == Name.Type.TYPE_PARAMETER) {
         Preconditions.checkState(info.superType.isPresent());
@@ -958,6 +1308,11 @@ public abstract class StaticType {
           return parentType;
       }
     }
+
+    @Override
+    ImmutableSet<ReferenceType> buildSuperTypeSet() {
+      return ImmutableSet.copyOf(getSuperTypesTransitive().values());
+    }
   }
 
     /**
@@ -991,12 +1346,15 @@ public abstract class StaticType {
       }
 
       @Override
-      public StaticType toErasedType() {
+      public ReferenceType toErasedType() {
         StaticType erasedBaseType = baseElementType.toErasedType();
         int nDims = this.typeSpecification.nDims
             - baseElementType.typeSpecification.nDims
             + erasedBaseType.typeSpecification.nDims;
-        return type(new TypeSpecification(
+        // All Array types are reference types, and the type info resolver has
+        // already resolved the base type's type name to a type other than
+        // error type.
+        return (ReferenceType) type(new TypeSpecification(
             erasedBaseType.typeSpecification.typeName, nDims), null, null);
       }
 
@@ -1008,17 +1366,6 @@ public abstract class StaticType {
       @Override
       public String toString() {
         return elementType + "[]";
-      }
-
-      @Override
-      public boolean equals(Object o) {
-        return (o instanceof ArrayType)
-            && elementType.equals(((ArrayType) o).elementType);
-      }
-
-      @Override
-      public int hashCode() {
-        return elementType.hashCode() ^ 0xe20d66a3;
       }
 
       @Override
@@ -1067,6 +1414,30 @@ public abstract class StaticType {
           }
           return a.assignableFrom(b);
         }
+      }
+
+      @Override
+      ImmutableSet<ReferenceType> buildSuperTypeSet() {
+        ImmutableSet.Builder<ReferenceType> supertypes = ImmutableSet.builder();
+        for (Name superTypeName : ARRAY_SUPER_TYPES) {
+          supertypes.add(
+              (ReferenceType) type(
+                  new TypeSpecification(superTypeName),
+                  null, null));
+        }
+        if (elementType instanceof ReferenceType) {
+          for (ReferenceType elementSuperType : getSuperTypes()) {
+            if (elementType.equals(elementSuperType)) {
+              continue;
+            }
+            supertypes.add(
+                (ReferenceType) type(
+                    elementSuperType.typeSpecification.arrayOf(),
+                    null, null));
+          }
+        }
+        supertypes.add(this);
+        return supertypes.build();
       }
     }
   }

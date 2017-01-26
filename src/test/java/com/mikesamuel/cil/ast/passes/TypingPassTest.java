@@ -15,6 +15,7 @@ import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
 import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.NodeI;
@@ -367,6 +368,48 @@ public final class TypingPassTest extends TestCase {
         DECORATE_METHOD_NAMES
         );
 
+  }
+
+  @Test
+  public static final void testParameterizedMethodCalls()
+  throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "import java.util.Collections;",
+            "class C {",
+            "  {",
+            "    Collections./*()Ljava/util/List;*/emptyList();",
+            "    Collections.<String> /*()Ljava/util/Set;*/emptySet();",
+            "    Collections.<? extends Long> /*()Ljava/util/Set;*/emptySet();",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "import java.util.Collections;",
+            "class C {",
+            "  {",
+            "    Collections.emptyList();",
+            "    Collections.<String>emptySet();",
+            "    Collections.<? extends Long>emptySet();",
+            "  }",
+            "}",
+          },
+        },
+        StatementExpressionNode.class,
+        new String[] {
+            "Collections.emptyList()"
+            + " : /java/util/List<? extends /java/lang/Object>",
+            "Collections.<String> emptySet()"
+            + " : /java/util/Set<? extends /java/lang/String>",
+            "Collections.<? extends Long> emptySet()"
+            + " : /java/util/Set<? extends /java/lang/Long>",
+        },
+        DECORATE_METHOD_NAMES
+        );
   }
 
   @Test
@@ -1623,6 +1666,150 @@ public final class TypingPassTest extends TestCase {
         "//C:40+5-6: Cast needed before assigning /java/lang/Long * byte -> long -> /java/lang/Long",
         "//C:41+");
   }
+
+  @Test
+  public static void testConditionalExpression() throws Exception {
+    assertTyped(
+        null,
+        new String[][] {
+          {
+            "//C",
+            "import java.util.*;",
+            "",
+            "public class C {",
+            "  static void f(boolean b) {",
+            "    System.err.println(\"boolean\");",
+            "  }",
+            "",
+            "  static void f(int i) {",
+            "    System.err.println(\"int\");",
+            "  }",
+            "",
+            "  static void f(long j) {",
+            "    System.err.println(\"long\");",
+            "  }",
+            "",
+            "  static void f(Object o) {",
+            "    System.err.println(\"Object\");",
+            "  }",
+            "",
+            "  static void f(Collection c) {",
+            "    System.err.println(\"Collection\");",
+            "  }",
+            "",
+            "  public static void main(String[] argv) {",
+            "    boolean b = false;",
+            "    Boolean B = Boolean.TRUE;",
+            "    int i = 0;",
+            "    Integer I = Integer.valueOf(1);",
+            "    long j = 0;",
+            "",
+            "    f(b ? b : b);",
+            "    f(b ? b : B);",
+            "    f(B ? B : b);",
+            "    f(B ? B : B);",
+            "    f(b ? b : null);",  // f(Object)
+            "    f(b ? null : b);",  // f(Object)
+            "    f(b ? null : null);",  // f(Collection)
+            "",
+            "    f(B ? i : I);",
+            "    f(b ? I : i);",
+            "    f(b ? j : i);",
+            "    f(I ? i : i);",  // L43 - ERROR
+            "",
+            "    List<?> list = Collections.emptyList();",
+            "    Set<?> set = Collections.emptySet();",
+            "    f(b ? list : set);",
+            "    f(b ? Collections.<? extends String>emptyList()",
+            "        : Collections.<? extends CharSequence>emptySet());",
+            "    f(b ? list : null);",
+            "    f(b ? null : list);",
+            "",
+            "    f(b ? b : i);",  // Reference branch boxes.
+            "  }",
+            "}",
+          },
+        },
+        ConditionalExpressionNode.class,
+        new String[] {
+            "b ? b : b : boolean",
+            "b ? b : (boolean) B : boolean",
+            "(boolean) B ? (boolean) (B) : b : boolean",
+            "(boolean) B ? (boolean) (B) : (boolean) B : boolean",
+            "b ? b : null : boolean",
+            "b ? null : b : boolean",
+            "b ? null : null : <null>",
+            "(boolean) B ? i : (int) I : int",
+            "b ? (int) (I) : i : int",
+            "b ? j : (long) i : long",
+            "I ? i : i : int",
+            "b ? list : set"
+            + " : /java/util/Collection<? extends /java/lang/Object>",
+            "b ? Collections.<? extends String> emptyList()"
+            + " : Collections.<?\nextends CharSequence> emptySet()"
+            + " : /java/util/Collection<? extends /java/lang/CharSequence>",
+            "b ? list : null : /java/util/List<? extends /java/lang/Object>",
+            "b ? null : list : /java/util/List<? extends /java/lang/Object>",
+            "b ? b : i : /java/io/Serializable",
+        },
+        DECORATE_METHOD_NAMES,
+        "//C:43+");
+
+  }
+
+  @Test
+  public static void testConditionalConstantPromotion() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "public class C {",
+            "  static void f(Object o) {",
+            "    System.err./*(Ljava/lang/String;)V*/println(\"O\");",
+            "  }",
+            "  static void f(byte b) {"
+            +  " System.err./*(Ljava/lang/String;)V*/println(\"b\");"
+            + " }",
+            "  public static void main(String... argv) {",
+            "    byte b = true ? (byte) (0) : (byte) 0;",
+            "    byte[] bs = { true ? (byte) (1) : (byte) -1, };",
+            "    byte[][] bbs = { { true ? (byte) (1) : (byte) -1, }, };",
+            "    short s = (true ? (short) (-1) : (short) b);",
+            "    /*(z)V*/f(true ? (byte) (0) : b);",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "",
+            "public class C {",
+            "",
+            "  static void f(Object o) {",
+            "    System.err.println(\"O\");",
+            "  }",
+            "",
+            "  static void f(byte b) {",
+            "    System.err.println(\"b\");",  // L10
+            "  }",
+            "",
+            "  public static void main(String... argv) {",
+            "    byte b = true ? 0 : 0;",  // L14
+            "    byte[] bs = { true ? 1 : -1 };", // L15
+            "    byte[][] bbs = { { true ? 1 : -1 } };", // L16
+            "    short s = (true ? -1 : b);",  // L17
+            "    f(true ? 0 : b);  // f(byte)",
+            "  }",
+            "}",
+          },
+        },
+        CastExpressionNode.class,
+        new String[] {
+          "TODO",
+        },
+        DECORATE_METHOD_NAMES);
+  }
+
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 

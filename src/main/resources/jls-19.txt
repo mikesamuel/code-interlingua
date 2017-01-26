@@ -664,7 +664,7 @@ SingleElementAnnotation:
 
 // Arrays
 (chapter=Array)
-ArrayInitializer:
+ArrayInitializer: (@trait=Typed)
      "{" [VariableInitializerList] [","] "}"
 VariableInitializerList:
      VariableInitializer {"," VariableInitializer}

@@ -35,7 +35,6 @@ public final class StaticTypeTest extends TestCase {
   }
 
 
-
   @Test
   public static void testPrimitiveCasts() {
     ImmutableList<StaticType> specs = ImmutableList.of(
@@ -138,7 +137,6 @@ public final class StaticTypeTest extends TestCase {
 
   @Test
   public void testCharSequenceArrays() {
-
     StaticType object = type("java.lang.Object");
     StaticType objectArray = type("java.lang.Object", 1);
     StaticType objectArrayArray = type("java.lang.Object", 2);
@@ -503,6 +501,16 @@ public final class StaticTypeTest extends TestCase {
         arrayOfRawLists,
         Cast.CONFIRM_UNCHECKED);
   }
+
+  @Test
+  public void testTwoRaw() {
+    assertCasts(
+        Cast.CONFIRM_CHECKED,
+        type("java.lang.Iterable"),
+        type("java.util.Collection"),
+        Cast.CONFIRM_SAFE);
+  }
+
 
   @Test
   public void testNullType() {

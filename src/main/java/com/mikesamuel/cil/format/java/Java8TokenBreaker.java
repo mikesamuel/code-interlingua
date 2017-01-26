@@ -105,11 +105,16 @@ implements TokenBreaker<SList<NodeVariant>> {
           }
           break;
         case "}":
-          if (")".equals(right) || ";".equals(right)) {
+          if (")".equals(right) || ";".equals(right) || ",".equals(right)) {
             return TokenBreak.SHOULD_NOT;
           }
           return TokenBreak.SHOULD;
-        case ":": case "?":
+        case "?":
+          if (">".equals(right)) {
+            return TokenBreak.SHOULD_NOT;
+          }
+          //$FALL-THROUGH$
+        case ":":
         case "...":
           return TokenBreak.SHOULD;
         case "*":

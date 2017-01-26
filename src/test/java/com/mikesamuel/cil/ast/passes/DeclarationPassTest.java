@@ -351,7 +351,7 @@ public class DeclarationPassTest extends TestCase {
             "  /* /foo/C.foo(1).<T> extends /java/lang/Object */",
             "  T> Supplier<T> foo(T x) {",
             "    return",
-            "    /* anonymous /foo/C.foo(1)$1"
+            "    /* anonymous final /foo/C.foo(1)$1"
             +     " extends /com/google/common/base/Supplier</foo/C.foo(1).<T>> in /foo/C */",
             "    new Supplier<T> () { @Override public T get() { return x; } };",
             "  }",
