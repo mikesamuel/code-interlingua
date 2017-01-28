@@ -52,17 +52,59 @@ public interface TypeInfoResolver {
     public static TypeInfoResolver forClassLoader(final ClassLoader cl) {
       return new TypeInfoResolver() {
 
-        private final LoadingCache<String, Optional<TypeInfo>> cache =
+        private final LoadingCache<Name, Optional<TypeInfo>> cache =
             CacheBuilder.newBuilder()
             .build(
-                new CacheLoader<String, Optional<TypeInfo>>() {
+                new CacheLoader<Name, Optional<TypeInfo>>() {
 
                   @SuppressWarnings("synthetic-access")
                   @Override
-                  public Optional<TypeInfo> load(String name) {
+                  public Optional<TypeInfo> load(Name name) {
+                    if (name.type == Name.Type.CLASS) {
+                      return loadClass(toBinaryName(name));
+                    }
+
+                    // If name is a type parameter name, then lookup its
+                    // containing class, method, or constructor to get its
+                    // bounds.
+                    if (name.type == Name.Type.TYPE_PARAMETER) {
+                      Optional<GenericDeclaration> containerOpt =
+                          lookupGenericDeclaration(name.parent, cl);
+                      if (!containerOpt.isPresent()) {
+                        return Optional.absent();
+                      }
+                      GenericDeclaration container = containerOpt.get();
+                      for (TypeVariable<?> v : container.getTypeParameters()) {
+                        if (name.identifier.equals(v.getName())) {
+                          Type[] bounds = v.getBounds();
+                          Optional<TypeSpecification> sup =
+                              bounds.length != 0
+                              ? Optional.of(specForType(bounds[0]))
+                              : Optional.absent();
+                          ImmutableList.Builder<TypeSpecification>
+                              additionalBounds = ImmutableList.builder();
+                          for (int i = 1, n = bounds.length; i < n; ++i) {
+                            additionalBounds.add(specForType(bounds[i]));
+                          }
+                          return Optional.of(TypeInfo.builder(name)
+                              .superType(sup)
+                              .interfaces(additionalBounds.build())
+                              .build());
+                        }
+                      }
+                    }
+
+                    // It's possible for StaticType.ERROR_TYPE
+                    // .typeSpecification.typeName
+                    // to reach here which has name type FIELD.
+                    return Optional.absent();
+                  }
+
+                  @SuppressWarnings("synthetic-access")
+                  private Optional<TypeInfo> loadClass(String binaryName) {
                     Class<?> clazz;
                     try {
-                      clazz = cl.loadClass(name);
+                      clazz = cl.loadClass(binaryName);
                     } catch (@SuppressWarnings("unused")
                              ClassNotFoundException ex) {
                       return Optional.absent();
@@ -90,72 +132,72 @@ public interface TypeInfoResolver {
                       if (!Modifier.isPrivate(mods)) {
                         FieldInfo fi = new FieldInfo(
                             mods,
-                            className.child(f.getName(), Name.Type.FIELD));
-                        fi.setValueType(specForType(f.getGenericType()));
-                        members.add(fi);
-                      }
+                          className.child(f.getName(), Name.Type.FIELD));
+                      fi.setValueType(specForType(f.getGenericType()));
+                      members.add(fi);
                     }
-                    Method[] methods = clazz.getDeclaredMethods();
-                    for (Method m : methods) {
-                      String mname = m.getName();
-                      int mods = m.getModifiers();
-                      if (!Modifier.isPrivate(mods)) {
-                        int index = 1;
-                        for (Method om : methods) {
-                          if (m == om) { break; }
-                          if (mname.equals(om.getName())) {
-                            ++index;
-                          }
+                  }
+                  Method[] methods = clazz.getDeclaredMethods();
+                  for (Method m : methods) {
+                    String mname = m.getName();
+                    int mods = m.getModifiers();
+                    if (!Modifier.isPrivate(mods)) {
+                      int index = 1;
+                      for (Method om : methods) {
+                        if (m.equals(om)) { break; }
+                        if (mname.equals(om.getName())) {
+                          ++index;
                         }
-                        Name canonName = className.method(mname, index);
-                        CallableInfo ci = new CallableInfo(
-                            mods, canonName,
-                            typeVars(canonName, m.getTypeParameters()));
-                        ImmutableList.Builder<TypeSpecification> formalTypes =
-                            ImmutableList.builder();
-                        for (Type t : m.getGenericParameterTypes()) {
-                          formalTypes.add(specForType(t));
-                        }
-                        ci.setReturnType(specForType(m.getGenericReturnType()));
-                        ci.setVariadic(m.isVarArgs());
-                        ci.setFormalTypes(formalTypes.build());
-                        ci.setDescriptor(
-                            methodDescriptorFor(
-                                m.getParameterTypes(), m.getReturnType()));
-                        members.add(ci);
                       }
-                    }
-                    Constructor<?>[] ctors = clazz.getDeclaredConstructors();
-                    for (Constructor<?> c : ctors) {
-                      int mods = c.getModifiers();
-                      if (!Modifier.isPrivate(mods)) {
-                        int index = Arrays.asList(ctors).indexOf(c) + 1;
-                        Name canonName = className.method("<init>", index);
-                        CallableInfo ci = new CallableInfo(
-                            mods, canonName,
-                            typeVars(canonName, c.getTypeParameters()));
-                        ImmutableList.Builder<TypeSpecification> formalTypes =
-                            ImmutableList.builder();
-                        for (Type t : c.getGenericParameterTypes()) {
-                          formalTypes.add(specForType(t));
-                        }
-                        ci.setReturnType(StaticType.T_VOID.typeSpecification);
-                        ci.setVariadic(c.isVarArgs());
-                        ci.setFormalTypes(formalTypes.build());
-                        ci.setDescriptor(methodDescriptorFor(
-                            c.getParameterTypes(), Void.TYPE));
-                        members.add(ci);
+                      Name canonName = className.method(mname, index);
+                      CallableInfo ci = new CallableInfo(
+                          mods, canonName,
+                          typeVars(canonName, m.getTypeParameters()));
+                      ImmutableList.Builder<TypeSpecification> formalTypes =
+                          ImmutableList.builder();
+                      for (Type t : m.getGenericParameterTypes()) {
+                        formalTypes.add(specForType(t));
                       }
+                      ci.setReturnType(specForType(m.getGenericReturnType()));
+                      ci.setVariadic(m.isVarArgs());
+                      ci.setFormalTypes(formalTypes.build());
+                      ci.setDescriptor(
+                          methodDescriptorFor(
+                              m.getParameterTypes(), m.getReturnType()));
+                      members.add(ci);
                     }
-                    ImmutableList<Name> parameters = typeVars(
-                        className, clazz.getTypeParameters());
+                  }
+                  Constructor<?>[] ctors = clazz.getDeclaredConstructors();
+                  for (Constructor<?> c : ctors) {
+                    int mods = c.getModifiers();
+                    if (!Modifier.isPrivate(mods)) {
+                      int index = Arrays.asList(ctors).indexOf(c) + 1;
+                      Name canonName = className.method("<init>", index);
+                      CallableInfo ci = new CallableInfo(
+                          mods, canonName,
+                          typeVars(canonName, c.getTypeParameters()));
+                      ImmutableList.Builder<TypeSpecification> formalTypes =
+                          ImmutableList.builder();
+                      for (Type t : c.getGenericParameterTypes()) {
+                        formalTypes.add(specForType(t));
+                      }
+                      ci.setReturnType(StaticType.T_VOID.typeSpecification);
+                      ci.setVariadic(c.isVarArgs());
+                      ci.setFormalTypes(formalTypes.build());
+                      ci.setDescriptor(methodDescriptorFor(
+                          c.getParameterTypes(), Void.TYPE));
+                      members.add(ci);
+                    }
+                  }
+                  ImmutableList<Name> parameters = typeVars(
+                      className, clazz.getTypeParameters());
 
-                    TypeInfo.Builder b = TypeInfo.builder(className)
-                        .modifiers(clazz.getModifiers())
-                        .isAnonymous(clazz.isAnonymousClass())
-                        .superType(superType != null
-                            ? Optional.of(specForType(superType))
-                            : Optional.<TypeSpecification>absent())
+                  TypeInfo.Builder b = TypeInfo.builder(className)
+                      .modifiers(clazz.getModifiers())
+                      .isAnonymous(clazz.isAnonymousClass())
+                      .superType(superType != null
+                          ? Optional.of(specForType(superType))
+                          : Optional.<TypeSpecification>absent())
                         .interfaces(interfaceSpecs.build())
                         .parameters(parameters)
                         .outerClass(outerClass != null
@@ -170,21 +212,11 @@ public interface TypeInfoResolver {
 
         @Override
         public Optional<TypeInfo> resolve(Name name) {
-          if (name.type == Name.Type.CLASS) {
-            @SuppressWarnings("synthetic-access")
-            String binaryName = toBinaryName(name);
-            try {
-              return cache.get(binaryName);
-            } catch (ExecutionException e) {
-              throw new AssertionError(e);
-            }
+          try {
+            return cache.get(name);
+          } catch (ExecutionException e) {
+            throw new AssertionError(e);
           }
-          // TODO if name is a template parameter name, then lookup its
-          // containing class, method, or constructor to get its bounds.
-
-          // It's possible for StaticType.ERROR_TYPE.typeSpecification.typeName
-          // to reach here which has name type FIELD.
-          return Optional.absent();
         }
       };
     }
@@ -210,6 +242,7 @@ public interface TypeInfoResolver {
           separator = '$';
           break;
         default:
+          // TODO: skip over METHOD?
           throw new AssertionError(name.parent.type);
       }
       if (separator != 0) {
@@ -308,7 +341,7 @@ public interface TypeInfoResolver {
           Class<?> dc = m.getDeclaringClass();
           int index = 1;
           for (Method om : dc.getDeclaredMethods()) {
-            if (m == om) { break; }
+            if (m.equals(om)) { break; }
             if (mname.equals(om.getName())) {
               ++index;
             }
@@ -353,6 +386,37 @@ public interface TypeInfoResolver {
         return new TypeSpecification.TypeBinding(
             TypeSpecification.Variance.INVARIANT,
             specForType(t));
+      }
+    }
+
+    private static Optional<GenericDeclaration> lookupGenericDeclaration(
+        Name nm, ClassLoader cl) {
+      switch (nm.type) {
+        case CLASS:
+          try {
+            return Optional.of(cl.loadClass(toBinaryName(nm)));
+          } catch (@SuppressWarnings("unused") ClassNotFoundException ex) {
+            return Optional.absent();
+          }
+        case METHOD:
+          Class<?> containingClass;
+          try {
+            containingClass = cl.loadClass(toBinaryName(nm.parent));
+          } catch (@SuppressWarnings("unused") ClassNotFoundException ex) {
+            return Optional.absent();
+          }
+          int ordinal = nm.variant;
+          for (Method m : containingClass.getDeclaredMethods()) {
+            if (nm.identifier.equals(m.getName())) {
+              --ordinal;
+              if (ordinal == 0) {
+                return Optional.of(m);
+              }
+            }
+          }
+          return Optional.absent();
+        default:
+          throw new AssertionError(nm);
       }
     }
 
