@@ -85,7 +85,7 @@ final class AmbiguousNames {
       case Wildcard:
         WildcardNode wc = arg.firstChildWithType(WildcardNode.class);
         if (wc != null) {
-          WildcardBoundsNode wcb = arg.firstChildWithType(
+          WildcardBoundsNode wcb = wc.firstChildWithType(
               WildcardBoundsNode.class);
           if (wcb != null) {
             switch (wcb.getVariant()) {
