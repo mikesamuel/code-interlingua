@@ -1,10 +1,11 @@
 package com.mikesamuel.cil.ast.meta;
 
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -190,11 +191,11 @@ public final class TypeSpecification {
       this(Variance.INVARIANT, new TypeSpecification(typeName));
     }
 
-    TypeBinding subst(Map<? super Name, ? extends TypeBinding> bindingMap) {
+    TypeBinding subst(Function<? super Name, ? extends TypeBinding> bindings) {
       Variance v = this.variance;
       TypeSpecification ts = this.typeSpec;
-      if (typeSpec.bindings.isEmpty()) {
-        TypeBinding b = bindingMap.get(ts.typeName);
+      if (typeSpec != null && typeSpec.bindings.isEmpty()) {
+        TypeBinding b = bindings.apply(ts.typeName);
         if (b != null) {
           if (ts.nDims != 0) {
             ts = b.typeSpec.withNDims(b.typeSpec.nDims + ts.nDims);
@@ -215,10 +216,13 @@ public final class TypeSpecification {
         }
       }
 
-      ts = ts.subst(bindingMap);
+      ts = ts != null ? ts.subst(bindings) : null;
 
-      if (ts.equals(this.typeSpec) && v == this.variance) {
+      if ((ts == null ? typeSpec == null : ts.equals(typeSpec))
+          && v == this.variance) {
         return this;
+      } else if (ts == null) {
+        return WILDCARD;
       } else {
         return new TypeBinding(v, ts);
       }
@@ -313,14 +317,13 @@ public final class TypeSpecification {
     for (int i = 0, n = parameters.size(); i < n; ++i) {
       substitutions.put(parameters.get(i), typeParameterBindings.get(i));
     }
-    return subst(substitutions.build());
+    return subst(Functions.forMap(substitutions.build(), null));
   }
 
   /** Substitute for type parameters. */
   public TypeSpecification subst(
-      Map<? super Name, ? extends TypeBinding> bindingMap) {
-    if (bindingMap.isEmpty()) { return this; }
-    TypeBinding b = bindingMap.get(typeName);
+      Function<? super Name, ? extends TypeBinding> bindingFn) {
+    TypeBinding b = bindingFn.apply(typeName);
     if (b != null) {
       switch (b.variance) {
         case EXTENDS:
@@ -333,7 +336,7 @@ public final class TypeSpecification {
     ImmutableList.Builder<TypeBinding> substs = null;
     for (int i = 0, n = bindings.size(); i < n; ++i) {
       TypeBinding binding = bindings.get(i);
-      TypeBinding substBinding = binding.subst(bindingMap);
+      TypeBinding substBinding = binding.subst(bindingFn);
       if (substs == null && !binding.equals(substBinding)) {
         substs = ImmutableList.builder();
         substs.addAll(bindings.subList(0, i));

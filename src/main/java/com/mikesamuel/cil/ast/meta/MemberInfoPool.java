@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
@@ -153,7 +154,7 @@ public final class MemberInfoPool {
 
     ImmutableList<TypeSpecification> formalTypes = ci.getFormalTypes();
     for (TypeSpecification ft : formalTypes) {
-      TypeSpecification ts = ft.subst(substMap);
+      TypeSpecification ts = ft.subst(Functions.forMap(substMap, null));
       StaticType sft = typePool.type(ts, null, null);
       erasedTypes.add(sft.toErasedType().typeSpecification);
     }

@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
@@ -88,7 +89,6 @@ import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
 import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.WildcardNode;
@@ -112,6 +112,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.ast.traits.BinaryOp;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
@@ -1340,7 +1341,8 @@ final class TypingPass extends AbstractRewritingPass {
       } else {
         error(e, "Missing info for declaring type " + f.declaringType);
       }
-      valueTypeInContext = typeInDeclaringClass.subst(substMap);
+      valueTypeInContext = typeInDeclaringClass.subst(
+          Functions.forMap(substMap, null));
     }
 
     return typePool.type(valueTypeInContext, e.getSourcePosition(), logger);
@@ -2057,9 +2059,6 @@ final class TypingPass extends AbstractRewritingPass {
           JAVA_LANG.child("Class", Name.Type.CLASS),
           ImmutableList.of(TypeBinding.WILDCARD));
 
-  private static final TypeSpecification JAVA_LANG_THROWABLE =
-      new TypeSpecification(JAVA_LANG.child("Throwable", Name.Type.CLASS));
-
   private static final TypeSpecification JAVA_LANG_VOID =
       new TypeSpecification(JAVA.child("Void", Name.Type.CLASS));
 
@@ -2233,16 +2232,52 @@ final class TypingPass extends AbstractRewritingPass {
             }
           } else {
             error(
-                sourceNode, "Missing info for declaring type " + m.declaringType);
+                sourceNode,
+                "Missing info for declaring type " + m.declaringType);
           }
         }
         if (!typeArguments.isEmpty()) {
           for (int i = 0, n = typeArguments.size(); i < n; ++i) {
-            substMap.put(
-                m.member.typeParameters.get(i),
-                typeArguments.get(i));
+            TypeBinding typeArgument = typeArguments.get(i);
+            Name typeParameter = m.member.typeParameters.get(i);
+            if (TypeBinding.WILDCARD.equals(typeArgument)) {
+              StaticType lowerBound = typePool.type(
+                  new TypeSpecification(typeParameter),
+                  null,
+                  logger);
+              if (lowerBound instanceof ReferenceType) {
+                lowerBound = ((ReferenceType) lowerBound).lowerBound();
+              }
+              typeArgument = new TypeBinding(
+                  Variance.EXTENDS, lowerBound.typeSpecification);
+            }
+            substMap.put(typeParameter, typeArgument);
           }
         }
+
+        Function<Name, TypeBinding> contextualize =
+            new Function<Name, TypeBinding>() {
+              @Override
+              public TypeBinding apply(Name nm) {
+                TypeBinding b;
+                if (nm.type == Name.Type.TYPE_PARAMETER) {
+                  b = substMap.get(nm);
+                  if (b == null) {
+                    StaticType t = typePool.type(
+                        new TypeSpecification(nm),
+                        sourceNode.getSourcePosition(), logger);
+                    if (t instanceof ReferenceType) {
+                      StaticType lowerBound = ((ReferenceType) t).lowerBound();
+                      b = new TypeBinding(
+                          Variance.EXTENDS, lowerBound.typeSpecification);
+                    }
+                  }
+                } else {
+                  b = null;
+                }
+                return b;
+              }
+            };
 
         ImmutableList<TypeSpecification> formalTypes =
             m.member.getFormalTypes();
@@ -2252,7 +2287,7 @@ final class TypingPass extends AbstractRewritingPass {
           ImmutableList.Builder<StaticType> b = ImmutableList.builder();
           for (int i = 0; i < arity; ++i) {
             b.add(typePool.type(
-                formalTypes.get(i).subst(substMap),
+                formalTypes.get(i).subst(contextualize),
                 sourceNode.getSourcePosition(), logger));
           }
           formalTypesInContext = b.build();
@@ -2317,7 +2352,7 @@ final class TypingPass extends AbstractRewritingPass {
         }
         if (compatible) {
           StaticType returnTypeInContext = typePool.type(
-                m.member.getReturnType().subst(substMap),
+                m.member.getReturnType().subst(contextualize),
                 sourceNode.getSourcePosition(), logger);
           ImmutableList<Cast> casts = actualToFormalCasts.build();
           if (DEBUG) {

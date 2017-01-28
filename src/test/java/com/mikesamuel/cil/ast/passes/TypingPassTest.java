@@ -382,6 +382,7 @@ public final class TypingPassTest extends TestCase {
             "    Collections./*()Ljava/util/List;*/emptyList();",
             "    Collections.<String> /*()Ljava/util/Set;*/emptySet();",
             "    Collections.<? extends Long> /*()Ljava/util/Set;*/emptySet();",
+            "    Collections.<?> /*()Ljava/util/Set;*/emptySet();",
             "  }",
             "}",
           },
@@ -395,6 +396,7 @@ public final class TypingPassTest extends TestCase {
             "    Collections.emptyList();",
             "    Collections.<String>emptySet();",
             "    Collections.<? extends Long>emptySet();",
+            "    Collections.<?>emptySet();",
             "  }",
             "}",
           },
@@ -404,9 +406,11 @@ public final class TypingPassTest extends TestCase {
             "Collections.emptyList()"
             + " : /java/util/List<? extends /java/lang/Object>",
             "Collections.<String> emptySet()"
-            + " : /java/util/Set<? extends /java/lang/String>",
+            + " : /java/util/Set</java/lang/String>",
             "Collections.<? extends Long> emptySet()"
             + " : /java/util/Set<? extends /java/lang/Long>",
+            "Collections.<?> emptySet()"
+            + " : /java/util/Set<? extends /java/lang/Object>",
         },
         DECORATE_METHOD_NAMES
         );
@@ -839,7 +843,7 @@ public final class TypingPassTest extends TestCase {
         StatementExpressionNode.class,
         new String[] {
             // TODO: infer type for <T> and use that.
-            "new Foo().f((java.lang.CharSequence) (\"\")) : /Bar.f(2).<T>",
+            "new Foo().f((java.lang.CharSequence) (\"\")) : /java/lang/Object",
             "System.err.println(\"Bar.f(T)\") : void",
             "System.err.println(\"Bar.f(CharSequence)\") : void",
         },
