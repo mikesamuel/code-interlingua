@@ -955,6 +955,9 @@ public abstract class StaticType {
       }
 
       abstract ImmutableSet<ReferenceType> buildSuperTypeSet();
+
+      /** The lower bound of the type */
+      public abstract StaticType lowerBound();
     }
 
 
@@ -1000,6 +1003,11 @@ public abstract class StaticType {
       @Override
       ImmutableSet<ReferenceType> buildSuperTypeSet() {
         throw new AssertionError("Cannot enumerate super-types of <null>");
+      }
+
+      @Override
+      public StaticType lowerBound() {
+        return StaticType.ERROR_TYPE;
       }
     }
 
@@ -1313,6 +1321,23 @@ public abstract class StaticType {
     ImmutableSet<ReferenceType> buildSuperTypeSet() {
       return ImmutableSet.copyOf(getSuperTypesTransitive().values());
     }
+
+    @Override
+    public StaticType lowerBound() {
+      switch (this.info.canonName.type) {
+        case CLASS:
+          return this;
+        case TYPE_PARAMETER:
+          return type(info.superType.get(), null, null);
+        case AMBIGUOUS:
+        case FIELD:
+        case LOCAL:
+        case METHOD:
+        case PACKAGE:
+          break;
+      }
+      throw new AssertionError(this.info.canonName);
+    }
   }
 
     /**
@@ -1438,6 +1463,21 @@ public abstract class StaticType {
         }
         supertypes.add(this);
         return supertypes.build();
+      }
+
+      @Override
+      public StaticType lowerBound() {
+        if (baseElementType instanceof ReferenceType) {
+          StaticType baseElementTypeLowerBound =
+              ((ReferenceType) baseElementType).lowerBound();
+          if (baseElementTypeLowerBound != baseElementType) {
+            return type(
+                baseElementTypeLowerBound.typeSpecification
+                .withNDims(this.dimensionality),
+                null, null);
+          }
+        }
+        return this;
       }
     }
   }
