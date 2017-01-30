@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -391,6 +392,10 @@ final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           break;
         default:
           throw new AssertionError(node.getNodeType());
+      }
+
+      if (isAnonymous) {
+        modifiers |= Modifier.FINAL;
       }
 
       TypeInfo partialTypeInfo = typeInfoResolver.resolve(typeName).get();
