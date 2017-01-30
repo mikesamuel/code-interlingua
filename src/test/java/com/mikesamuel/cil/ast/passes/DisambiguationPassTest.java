@@ -15,6 +15,8 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.ContextFreeNamesNode;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
@@ -26,6 +28,7 @@ import com.mikesamuel.cil.ast.traits.ExpressionNameReference;
 import com.mikesamuel.cil.ast.traits.NamePart;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeReference;
+import com.mikesamuel.cil.parser.SList;
 
 import junit.framework.TestCase;
 
@@ -487,6 +490,183 @@ public final class DisambiguationPassTest extends TestCase {
     }
   }
 
+  @Test
+  public static void testQualifiedNewWithDiamond() {
+    for (boolean longNames : new boolean[] { false, true }) {
+      assertDisambiguated(
+          new String[][] {
+            {
+              "ArgumentList.ExpressionComExpression",
+              "  Expression.ConditionalExpression",
+              "    Primary.InnerClassCreation",
+              "      ExpressionAtom.FreeField",
+              "        FieldName.Identifier : /C.d",
+              "          Identifier.Builtin d",
+              "      UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
+              "        ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
+              "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+              "            Identifier.Builtin E : CLASS",
+              "          Diamond.LtGt",
+            },
+          },
+          new String[][] {
+            {
+              "//C",
+              "class C {",
+              "  D d = new D();",
+              "  {",
+              "    System.err.println(d.new E<>());",
+              "  }",
+              "}"
+            },
+            {
+              "//D",
+              "class D {",
+              "  class E<T> {",
+              "  }",
+              "}",
+            },
+          },
+          nth(0, with(NodeType.ArgumentList)),
+          longNames,
+          TYPE_AND_NAME_DECORATOR);
+    }
+  }
+
+  @Test
+  public static void testQualifiedNewWithTypeParameters() {
+    assertDisambiguated(
+        new String[][] {
+          {
+            "ArgumentList.ExpressionComExpression",
+            "  Expression.ConditionalExpression",
+            "    Primary.InnerClassCreation",
+            "      ExpressionAtom.FreeField",
+            "        FieldName.Identifier : /C.d",
+            "          Identifier.Builtin d",
+            "      UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
+            "        ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
+            "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "            Identifier.Builtin E : CLASS",
+            "            TypeArguments.LtTypeArgumentListGt",
+            "              TypeArgumentList.TypeArgumentComTypeArgument",
+            "                TypeArgument.ReferenceType",
+            "                  ReferenceType.ClassOrInterfaceType",
+            "                    ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /java/lang/Void",
+            "                      ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "                        ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "                          Identifier.Builtin java : PACKAGE",
+            "                        Identifier.Builtin lang : PACKAGE",
+            "                      Identifier.Builtin Void : CLASS",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  D d = new D();",
+            "  {",
+            "    System.err.println(d.new E<Void>());",
+            "  }",
+            "}"
+          },
+          {
+            "//D",
+            "class D {",
+            "  class E<T> {",
+            "  }",
+            "}",
+          },
+        },
+        nth(0, with(NodeType.ArgumentList)),
+        true,
+        TYPE_AND_NAME_DECORATOR);
+  }
+
+  @Test
+  public static void testParameterizedSubtype() {
+    assertDisambiguated(
+        new String[][] {
+          {
+            "ClassDeclaration.NormalClassDeclaration",
+            "  NormalClassDeclaration.Declaration : /Foo",
+            "    SimpleTypeName.Identifier",
+            "      Identifier.Builtin Foo",
+            "    Superclass.ExtendsClassType",
+            "      ClassType.ClassOrInterfaceType",
+            "        ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /java/lang/Iterable",
+            "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "            ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "              Identifier.Builtin java : PACKAGE",
+            "            Identifier.Builtin lang : PACKAGE",
+            "          Identifier.Builtin Iterable : CLASS",
+            "          TypeArguments.LtTypeArgumentListGt",
+            "            TypeArgumentList.TypeArgumentComTypeArgument",
+            "              TypeArgument.ReferenceType",
+            "                ReferenceType.ClassOrInterfaceType",
+            "                  ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /Foo",
+            "                    Identifier.Builtin Foo : CLASS",
+            "    Superinterfaces.ImplementsInterfaceTypeList",
+            "      InterfaceTypeList.InterfaceTypeComInterfaceType",
+            "        InterfaceType.ClassOrInterfaceType",
+            "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /java/lang/Comparable",
+            "            ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "              ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "                Identifier.Builtin java : PACKAGE",
+            "              Identifier.Builtin lang : PACKAGE",
+            "            Identifier.Builtin Comparable : CLASS",
+            "            TypeArguments.LtTypeArgumentListGt",
+            "              TypeArgumentList.TypeArgumentComTypeArgument",
+            "                TypeArgument.ReferenceType",
+            "                  ReferenceType.ClassOrInterfaceType",
+            "                    ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /Foo",
+            "                      Identifier.Builtin Foo : CLASS",
+            "    ClassBody.LcClassBodyDeclarationRc",
+          },
+        },
+        new String[][] {
+          {
+            "//Foo",
+            "class Foo extends Iterable<Foo> implements Comparable<Foo> {",
+            "}"
+          },
+        },
+        nth(0, with(NodeType.ClassDeclaration)),
+        true,
+        TYPE_AND_NAME_DECORATOR);
+  }
+
+  @Test
+  public static void testTypeDiamondInConstructor() {
+    assertDisambiguated(
+        new String[] {
+            "UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
+            "  ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
+            "    ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /java/util/ArrayList",
+            "      ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "        ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "          Identifier.Builtin java : PACKAGE",
+            "        Identifier.Builtin util : PACKAGE",
+            "      Identifier.Builtin ArrayList : CLASS",
+            // Hoisted into ClassOrInterfaceTypeToInstantiate
+            "    Diamond.LtGt",
+        },
+        new String[] {
+          "//C",
+          "import java.util.ArrayList;",
+          "import java.util.List;",
+          "class C {",
+          "  List<String> ls;",
+          "  {",
+          "    ls = new ArrayList<>();",
+          "  }",
+          "}",
+        },
+        nth(0, with(NodeType.UnqualifiedClassInstanceCreationExpression)),
+        true,
+        TYPE_AND_NAME_DECORATOR);
+  }
+
   static void assertDisambiguated(
       String[] want,
       String[] input,
@@ -557,6 +737,29 @@ public final class DisambiguationPassTest extends TestCase {
     assertEquals(
         wantJoined.toString(),
         got.toString());
+
+    for (CompilationUnitNode cu : disambiguated) {
+      checkNoContextFreeNames(cu.getChildren(), SList.append(null, cu));
+    }
+  }
+
+
+  private static void checkNoContextFreeNames(
+      Iterable<? extends BaseNode> nodes, SList<BaseNode> path) {
+    for (BaseNode node : nodes) {
+      SList<BaseNode> pathWithNode = SList.append(path, node);
+      if (node instanceof ContextFreeNamesNode
+          || node instanceof ContextFreeNameNode) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(node.getSourcePosition())
+            .append(" : Not disambiguated");
+        for (BaseNode pathElement : SList.reverseIterable(pathWithNode)) {
+          sb.append(" : ").append(pathElement.getVariant());
+        }
+        fail(sb.toString());
+      }
+      checkNoContextFreeNames(node.getChildren(), pathWithNode);
+    }
   }
 
 

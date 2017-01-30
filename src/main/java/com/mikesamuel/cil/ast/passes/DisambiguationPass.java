@@ -12,8 +12,10 @@ import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.AnnotationNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.ContextFreeNamesNode;
+import com.mikesamuel.cil.ast.DiamondNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
@@ -22,9 +24,11 @@ import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
+import com.mikesamuel.cil.ast.TypeArgumentsOrDiamondNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
-import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
+import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
+       .DeclarationPositionMarker;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -77,34 +81,42 @@ final class DisambiguationPass extends AbstractRewritingPass {
       typeScopes.add((TypeScope) node);
     }
     if (node instanceof ExpressionNameScope) {
-      ExpressionNameScope nameScope = (ExpressionNameScope) node;
-
-//    ExpressionNameResolver r = nameScope.getExpressionNameResolver();
-//    if (r == null && !nameScopes.isEmpty()) {
-//      nameScope.setExpressionNameResolver(
-//          nameScopes.get(nameScopes.size() - 1).getExpressionNameResolver());
-//    }
-      nameScopes.add(nameScope);
+      nameScopes.add((ExpressionNameScope) node);
     }
+    return ProcessingStatus.CONTINUE;
+  }
 
-    List<BaseNode> children = node.getChildren();
-    if (children.size() == 1) {
-      BaseNode child = children.get(0);
+  @Override
+  protected ProcessingStatus postvisit(
+      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+    ProcessingStatus result = ProcessingStatus.CONTINUE;
+
+    if (node.getNChildren() == 1) {
+      BaseNode child = node.getChild(0);
       if (child instanceof ContextFreeNamesNode) {
-        return rewriteContextFreeNames(
+        result = rewriteContextFreeNames(
             pathFromRoot, node, (ContextFreeNamesNode) child);
       }
     }
     // By inspection of the grammar, context free names
     // never have non-template siblings.
-    Preconditions.checkState(!(node instanceof ContextFreeNamesNode));
-    return ProcessingStatus.CONTINUE;
+
+    if (node instanceof TypeScope) {
+      TypeScope popped = typeScopes.remove(typeScopes.size() - 1);
+      Preconditions.checkState(popped == node);
+    }
+    if (node instanceof ExpressionNameScope) {
+      ExpressionNameScope popped = nameScopes.remove(nameScopes.size() - 1);
+      Preconditions.checkState(popped == node);
+    }
+
+    return result;
   }
 
   private ProcessingStatus rewriteContextFreeNames(
       @Nullable SList<Parent> pathFromRoot,
       BaseNode parent, ContextFreeNamesNode names) {
-    Decomposed decomposed = Decomposed.of(names);
+    Decomposed decomposed = decompose(names);
     if (decomposed == null) {
       return ProcessingStatus.BREAK;  // Logged within.
     }
@@ -125,6 +137,30 @@ final class DisambiguationPass extends AbstractRewritingPass {
         Preconditions.checkState(
             parent.getVariant() ==
             ClassOrInterfaceTypeNode.Variant.ContextFreeNames);
+
+        if (pathFromRoot != null && pathFromRoot.x.parent
+            instanceof ClassOrInterfaceTypeToInstantiateNode) {
+          // Hoist any diamond out into the type to instantiate, since
+          // vanilla ClassOrInterfaceTypes cannot have diamonds.
+          ClassOrInterfaceTypeToInstantiateNode newTypeNode =
+              (ClassOrInterfaceTypeToInstantiateNode) pathFromRoot.x.parent;
+          int nIdents = decomposed.idents.size();
+          IdentifierEtc lastIdent = decomposed.idents.get(nIdents - 1);
+          BaseNode lastIdentArguments = lastIdent.getArguments();
+          if (lastIdentArguments != null
+              && lastIdentArguments.getVariant()
+              == TypeArgumentsOrDiamondNode.Variant.Diamond) {
+            if (newTypeNode.getChild(newTypeNode.getNChildren() - 1)
+                .getNodeType() != NodeType.Diamond) {
+              // No existing diamond.
+              DiamondNode diamond = lastIdentArguments.firstChildWithType(
+                  DiamondNode.class);
+              newTypeNode.add(diamond);
+              lastIdent.consumeArguments();
+            }
+          }
+        }
+
         ClassOrInterfaceTypeNode b = (ClassOrInterfaceTypeNode) parent;
         if (pathFromRoot != null
             && pathFromRoot.prev != null
@@ -245,7 +281,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         return ProcessingStatus.replace(expr);
       }
       case TypeName: {
-        Decomposed d = Decomposed.of(names);
+        Decomposed d = decompose(names);
         if (d != null) {
           TypeNameNode typeName = buildTypeNameNode(d, parent, resolver);
           return ProcessingStatus.replace(typeName);
@@ -253,7 +289,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         break;
       }
       case PackageOrTypeName: {
-        Decomposed d = Decomposed.of(names);
+        Decomposed d = decompose(names);
         if (d != null) {
           return ProcessingStatus.replace(buildPackageOrTypeNameNode(d));
         }
@@ -266,27 +302,11 @@ final class DisambiguationPass extends AbstractRewritingPass {
     return ProcessingStatus.BREAK;
   }
 
-  @Override
-  protected ProcessingStatus postvisit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-    if (node instanceof TypeScope) {
-      TypeScope popped = typeScopes.remove(typeScopes.size() - 1);
-      Preconditions.checkState(popped == node);
-    }
-    if (node instanceof ExpressionNameScope) {
-      ExpressionNameScope popped = nameScopes.remove(nameScopes.size() - 1);
-      Preconditions.checkState(popped == node);
-    }
-
-    // TODO: adjust variant if a child was a context free names node
-    return ProcessingStatus.CONTINUE;
-  }
-
   @SuppressWarnings("synthetic-access")
   private Optional<ImmutableList<Decomposed>> expressionNameOf(
       @Nullable SList<Parent> pathFromRoot,
       ContextFreeNamesNode names) {
-    Decomposed d = Decomposed.of(names);
+    Decomposed d = decompose(names);
     String ident0 = d.idents.get(0).identifier.getValue();
 
     // If the zero-th element matches in an expression name resolver, then
@@ -371,6 +391,44 @@ final class DisambiguationPass extends AbstractRewritingPass {
     return Optional.absent();
   }
 
+  private @Nullable Decomposed decompose(ContextFreeNamesNode node) {
+    ImmutableList.Builder<IdentifierEtc> parts = ImmutableList.builder();
+
+    Name name = null;
+    for (BaseNode child : node.getChildren()) {
+      if (!(child instanceof ContextFreeNameNode)) {
+        // Fail gracefully on an unevaluated template.
+        error(child, "Cannot disambiguate " + child);
+        return null;
+      }
+      IdentifierEtc ietc = identifierEtc((ContextFreeNameNode) child);
+      if (ietc == null) {
+        error(child, "Cannot find identifier");
+        return null;
+      }
+      parts.add(ietc);
+      String ident = ietc.identifier.getValue();
+      Name.Type type = ietc.identifier.getNamePartType();
+      if (type == null) {
+        type = Name.Type.AMBIGUOUS;
+      }
+      if (name == null) {
+        if (type == Name.Type.PACKAGE) {
+          name = Name.DEFAULT_PACKAGE.child(ident, type);
+        } else {
+          name = Name.root(ident, type);
+        }
+      } else {
+        name = name.child(ident, type);
+      }
+    }
+
+    @SuppressWarnings("synthetic-access")
+    Decomposed d = new Decomposed(node, parts.build(), name);
+    return d;
+  }
+
+
   private static final class Decomposed {
     final ContextFreeNamesNode sourceNode;
     final ImmutableList<IdentifierEtc> idents;
@@ -383,39 +441,6 @@ final class DisambiguationPass extends AbstractRewritingPass {
       this.sourceNode = sourceNode;
       this.idents = idents;
       this.name = name;
-    }
-
-    static @Nullable Decomposed of(ContextFreeNamesNode node) {
-      ImmutableList.Builder<IdentifierEtc> parts = ImmutableList.builder();
-
-      Name name = null;
-      for (BaseNode child : node.getChildren()) {
-        if (!(child instanceof ContextFreeNameNode)) {
-          // Fail gracefully on an unevaluated template.
-          return null;
-        }
-        IdentifierEtc ietc = IdentifierEtc.of((ContextFreeNameNode) child);
-        if (ietc == null) {
-          return null;
-        }
-        parts.add(ietc);
-        String ident = ietc.identifier.getValue();
-        Name.Type type = ietc.identifier.getNamePartType();
-        if (type == null) {
-          type = Name.Type.AMBIGUOUS;
-        }
-        if (name == null) {
-          if (type == Name.Type.PACKAGE) {
-            name = Name.DEFAULT_PACKAGE.child(ident, type);
-          } else {
-            name = Name.root(ident, type);
-          }
-        } else {
-          name = name.child(ident, type);
-        }
-      }
-
-      return new Decomposed(node, parts.build(), name);
     }
 
     @Override
@@ -431,6 +456,53 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
   }
 
+
+  private static @Nullable
+  IdentifierEtc identifierEtc(ContextFreeNameNode node) {
+    ImmutableList.Builder<AnnotationNode> annotations =
+        ImmutableList.builder();
+    IdentifierNode identifier;
+    BaseNode arguments;
+
+    List<BaseNode> children = node.getChildren();
+    int nChildren = children.size();
+    if (nChildren == 0) {
+      return null;
+    }
+    int index = nChildren - 1;
+    BaseNode child = children.get(index);
+    if (child instanceof TypeArgumentsNode
+        || child instanceof TypeArgumentsOrDiamondNode) {
+      arguments = child;
+      --index;
+    } else {
+      arguments = null;
+    }
+    if (index < 0) {
+      return null;
+    }
+    child = children.get(index);
+    if (!(child instanceof IdentifierNode)) {
+      return null;
+    }
+    identifier = (IdentifierNode) child;
+
+    for (int i = 0; i < index; ++i) {
+      child = children.get(i);
+      if (child instanceof AnnotationNode) {
+        annotations.add((AnnotationNode) child);
+      } else {
+        return null;
+      }
+    }
+
+    @SuppressWarnings("synthetic-access")
+    IdentifierEtc ietc = new IdentifierEtc(
+        node, annotations.build(), identifier, arguments);
+    return ietc;
+  }
+
+
   private static final class IdentifierEtc {
     final ContextFreeNameNode node;
 
@@ -438,55 +510,28 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
     final IdentifierNode identifier;
 
-    final @Nullable TypeArgumentsNode arguments;
+    /** TypeArguments or TypeArgumentsOrDiamond */
+    private @Nullable BaseNode arguments;
 
     private IdentifierEtc(
         ContextFreeNameNode node,
         ImmutableList<AnnotationNode> annotations,
         IdentifierNode identifier,
-        @Nullable TypeArgumentsNode arguments) {
+        @Nullable BaseNode arguments) {
       this.node = node;
       this.annotations = annotations;
       this.identifier = identifier;
       this.arguments = arguments;
     }
 
-    static @Nullable IdentifierEtc of(ContextFreeNameNode node) {
-      ImmutableList.Builder<AnnotationNode> annotations =
-          ImmutableList.builder();
-      IdentifierNode identifier;
-      TypeArgumentsNode arguments;
-
-      List<BaseNode> children = node.getChildren();
-      int nChildren = children.size();
-      if (nChildren == 0) { return null; }
-      int index = nChildren - 1;
-      BaseNode child = children.get(index);
-      if (child instanceof TypeArgumentsNode) {
-        arguments = (TypeArgumentsNode) child;
-        --index;
-      } else {
-        arguments = null;
-      }
-      if (index < 0) { return null; }
-      child = children.get(index);
-      if (!(child instanceof IdentifierNode)) {
-        return null;
-      }
-      identifier = (IdentifierNode) child;
-
-      for (int i = 0; i < index; ++i) {
-        child = children.get(i);
-        if (child instanceof AnnotationNode) {
-          annotations.add((AnnotationNode) child);
-        } else {
-          return null;
-        }
-      }
-
-      return new IdentifierEtc(
-          node, annotations.build(), identifier, arguments);
+    void consumeArguments() {
+      this.arguments = null;
     }
+
+    BaseNode getArguments() {
+      return arguments;
+    }
+
   }
 
   private void buildClassOrInterfaceType(
@@ -539,8 +584,26 @@ final class DisambiguationPass extends AbstractRewritingPass {
     ctype.add(newIdent);
 
     if (ietc != null) {
-      if (ietc.arguments != null) {
-        ctype.add(ietc.arguments);
+      BaseNode arguments = ietc.getArguments();
+      if (arguments != null) {
+        if (arguments instanceof TypeArgumentsNode) {
+          ctype.add(arguments);
+        } else {
+          Preconditions.checkState(
+              arguments instanceof TypeArgumentsOrDiamondNode);
+          TypeArgumentsOrDiamondNode argsOrDiamond =
+              (TypeArgumentsOrDiamondNode) arguments;
+          switch (argsOrDiamond.getVariant()) {
+            case Diamond:
+              error(arguments, "Misplaced type arguments diamond (<>)");
+              break;
+            case TypeArguments:
+              TypeArgumentsNode nestedArguments =
+                  argsOrDiamond.firstChildWithType(TypeArgumentsNode.class);
+              ctype.add(nestedArguments);
+              break;
+          }
+        }
       }
     }
   }
