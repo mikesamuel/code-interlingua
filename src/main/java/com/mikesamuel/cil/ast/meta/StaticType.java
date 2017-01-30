@@ -550,16 +550,20 @@ public abstract class StaticType {
       // "Least upper bound"
 
       /// lub(U1, ..., Uk), is determined as follows.
-      ImmutableList<ReferenceType> u = ImmutableList.copyOf(
-          Iterables.filter(typesIterable, new Predicate<ReferenceType>() {
+      ImmutableList<ReferenceType> u = ImmutableList.<ReferenceType>copyOf(
+          Iterables.filter(
+              typesIterable,
+              new Predicate<ReferenceType>() {
 
-            @Override
-            public boolean apply(ReferenceType t) {
-              if (T_NULL.equals(t)) { return false; }  // Null is the lub of ()
-              Preconditions.checkState(t.getPool() == TypePool.this);
-              return true;
-            }
-          }));
+                @Override
+                public boolean apply(ReferenceType t) {
+                  if (T_NULL.equals(t)) {  // Null is the lub of ()
+                    return false;
+                  }
+                  Preconditions.checkState(t.getPool() == TypePool.this);
+                  return true;
+                }
+              }));
 
       int nTypes = u.size();
       if (nTypes == 0) {
