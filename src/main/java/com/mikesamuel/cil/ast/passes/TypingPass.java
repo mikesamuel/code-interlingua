@@ -230,6 +230,7 @@ final class TypingPass extends AbstractRewritingPass {
       containingTypes.add(typeInfo);
     }
 
+    // Collect local declarations
     if (node instanceof VariableDeclaratorIdNode) {
       VariableDeclaratorIdNode id = (VariableDeclaratorIdNode) node;
       Name name = id.getDeclaredExpressionName();
@@ -284,8 +285,6 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
 
-    // TODO: propagate expected type information based on initializers and
-    // calls to handle poly expressions.
     return ProcessingStatus.CONTINUE;
   }
 
@@ -616,7 +615,7 @@ final class TypingPass extends AbstractRewritingPass {
               ? elementTypeNode.firstChildWithType(WholeType.class) : null;
           StaticType elementType = wholeElementType != null
               ? wholeElementType.getStaticType()
-                  : null;
+              : null;
           if (elementType == null) { elementType = StaticType.ERROR_TYPE; }
           int nExtraDims = 0;
           for (@SuppressWarnings("unused") DimNode dimNode
@@ -1898,6 +1897,7 @@ final class TypingPass extends AbstractRewritingPass {
               return null;
             }
           });
+      castExpr.setStaticType(targetType);
 
       if (wrappedCast.isPresent()) {
         parent.replace(indexInParent, wrappedCast.get());
