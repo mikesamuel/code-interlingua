@@ -29,6 +29,7 @@ import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.ResultNode;
+import com.mikesamuel.cil.ast.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.TypeNode;
 import com.mikesamuel.cil.ast.TypeVariableNode;
 import com.mikesamuel.cil.ast.UnannTypeNode;
@@ -88,7 +89,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
              //     not delegate and rely on the StaticType of the whole
              //     creation expression to specify the type created.
              PrimaryNode.Variant.InnerClassCreation)) {
-      ((WholeType) node).setStaticType(toStaticType(node, nr));
+      processStaticType(node, nr);
       return;
     }
     if (node instanceof TypeDeclaration) {
@@ -264,14 +265,16 @@ final class ClassMemberPass extends AbstractPass<Void> {
     return null;
   }
 
-  StaticType toStaticType(BaseNode node, TypeNameResolver r) {
+  StaticType processStaticType(BaseNode node, TypeNameResolver r) {
     Class<? extends BaseNode> delegateType = null;
+    StaticType t = null;
     switch (node.getNodeType()) {
       case Result: {
         ResultNode.Variant v = ((ResultNode) node).getVariant();
         switch (v) {
           case Void:
-            return StaticType.T_VOID;
+            t = StaticType.T_VOID;
+            break;
           case UnannType:
             delegateType = UnannTypeNode.class;
             break;
@@ -282,7 +285,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
         PrimitiveTypeNode.Variant v = ((PrimitiveTypeNode) node).getVariant();
         switch (v) {
           case AnnotationBoolean:
-            return StaticType.T_BOOLEAN;
+            t = StaticType.T_BOOLEAN;
+            break;
           case AnnotationNumericType:
             delegateType = NumericTypeNode.class;
             break;
@@ -304,11 +308,11 @@ final class ClassMemberPass extends AbstractPass<Void> {
       case IntegralType: {
         IntegralTypeNode.Variant v = ((IntegralTypeNode) node).getVariant();
         switch (v) {
-          case Byte:  return StaticType.T_BYTE;
-          case Char:  return StaticType.T_CHAR;
-          case Int:   return StaticType.T_INT;
-          case Long:  return StaticType.T_LONG;
-          case Short: return StaticType.T_SHORT;
+          case Byte:  t = StaticType.T_BYTE; break;
+          case Char:  t = StaticType.T_CHAR; break;
+          case Int:   t = StaticType.T_INT; break;
+          case Long:  t = StaticType.T_LONG; break;
+          case Short: t = StaticType.T_SHORT; break;
         }
         break;
       }
@@ -316,8 +320,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
         FloatingPointTypeNode.Variant v =
             ((FloatingPointTypeNode) node).getVariant();
         switch (v) {
-          case Double: return StaticType.T_DOUBLE;
-          case Float:  return StaticType.T_FLOAT;
+          case Double: t = StaticType.T_DOUBLE; break;
+          case Float:  t = StaticType.T_FLOAT; break;
         }
         break;
       }
@@ -339,7 +343,19 @@ final class ClassMemberPass extends AbstractPass<Void> {
       case ClassOrInterfaceType: {
         TypeSpecification spec = AmbiguousNames.typeSpecificationOf(
             node, r, logger);
-        return typePool.type(spec, node.getSourcePosition(), logger);
+        t = typePool.type(spec, node.getSourcePosition(), logger);
+        // step into type arguments to attach metadata
+        // TODO: do we need to step into annotations?
+        TypeArgumentsNode args = node.firstChildWithType(
+            TypeArgumentsNode.class);
+        if (args != null) {
+          for (WholeType argType : args.finder(WholeType.class)
+              .exclude(WholeType.class)
+              .find()) {
+            processStaticType((BaseNode) argType, r);
+          }
+        }
+        break;
       }
       case ClassType: {
         ClassTypeNode.Variant v = ((ClassTypeNode) node).getVariant();
@@ -370,7 +386,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
             switch (canonNames.size()) {
               case 0:
                 error(ident, "Undefined type variable name " + name);
-                return StaticType.ERROR_TYPE;
+                t = StaticType.ERROR_TYPE;
+                break;
               default:
                 error(ident, "Ambiguous type name: " + canonNames);
                 //$FALL-THROUGH$
@@ -381,27 +398,33 @@ final class ClassMemberPass extends AbstractPass<Void> {
                       ident,
                       "Type variable name does not resolve to a type parameter "
                       + canonName);
-                  return StaticType.ERROR_TYPE;
+                  t = StaticType.ERROR_TYPE;
+                } else {
+                  t = typePool.type(
+                      new TypeSpecification(canonName),
+                      ident.getSourcePosition(),
+                      logger);
                 }
-                return typePool.type(
-                    new TypeSpecification(canonName), ident.getSourcePosition(),
-                    logger);
+                break;
             }
         }
         throw new AssertionError(v);
       }
       case ArrayType: {
-        TypeNode elementType = node.firstChildWithType(TypeNode.class);
-        if (elementType == null) {
+        TypeNode elementTypeNode = node.firstChildWithType(TypeNode.class);
+        if (elementTypeNode == null) {
           error(node, "Cannot find element type");
-          return StaticType.ERROR_TYPE;
+          t = StaticType.ERROR_TYPE;
+        } else {
+          StaticType elementType = processStaticType(elementTypeNode, r);
+          if (StaticType.ERROR_TYPE.equals(elementType)) {
+            t = StaticType.ERROR_TYPE;
+          } else {
+            TypeSpecification spec = elementType.typeSpecification.arrayOf();
+            t = typePool.type(spec, node.getSourcePosition(), logger);
+          }
         }
-        StaticType t = toStaticType(elementType, r);
-        TypeSpecification spec = new TypeSpecification(
-            t.typeSpecification.typeName,
-            t.typeSpecification.bindings,
-            t.typeSpecification.nDims + 1);
-        return typePool.type(spec, node.getSourcePosition(), logger);
+        break;
       }
       case UnannType: {
         UnannTypeNode.Variant v = ((UnannTypeNode) node).getVariant();
@@ -430,11 +453,20 @@ final class ClassMemberPass extends AbstractPass<Void> {
     if (delegateType != null) {
       BaseNode delegate = node.firstChildWithType(delegateType);
       if (delegate != null) {
-        return toStaticType(delegate, r);
+        t = processStaticType(delegate, r);
+      } else {
+        error(node, "Partial type AST");
+        t = StaticType.ERROR_TYPE;
       }
     }
-    error(node, "Malformed type for node of type " + node.getNodeType());
-    return StaticType.ERROR_TYPE;
+    if (t == null) {
+      error(node, "Malformed type for node of type " + node.getNodeType());
+      t = StaticType.ERROR_TYPE;
+    }
+    if (node instanceof WholeType) {
+      ((WholeType) node).setStaticType(t);
+    }
+    return t;
   }
 
   @Override
