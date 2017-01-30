@@ -246,8 +246,8 @@ final class Reference extends PTParSer {
               } else {
                 throw new IllegalStateException(
                     "Grew backwards " + nodeType + " from "
-                        + grown.input.getSourcePosition(grown.index)
-                        + " to " + next.input.getSourcePosition(next.index));
+                    + grown.input.getSourcePosition(grown.index)
+                    + " to " + next.input.getSourcePosition(next.index));
               }
             }
             grown = next;
@@ -591,104 +591,120 @@ final class Reference extends PTParSer {
      * Scan until we find the push of the seed and distribute pushes and pops
      * from LRSuffix events.
      */
-    private SList<Event> pushback(SList<Event> out) {
+    private SList<Event> pushback(SList<Event> outWithLR) {
       if (DEBUG_LR) {
         String indent = indent();
         System.err.println(
-            indent + "pushback(" + (out != null ? "...," + out.x : "<null>")
+            indent + "pushback("
+            + (outWithLR != null ? "...," + outWithLR.x : "<null>")
             + ", popDepth=" + popDepth + ", pushback=" + pushback + ")");
       }
-      Preconditions.checkNotNull(out);
 
-      Event e = out.x;
+      // Accumulates, in reverse, events that do not need to be pushed back.
+      SList<Event> pbReverse = null;
 
-      SList<Event> pushedBack = null;
-      switch (e.getKind()) {
-        case POP:
-          ++popDepth;
-          // TODO: make this non-recursive so the max length of the file we
-          // can parse is not linear with the stack size.
-          pushedBack = SList.append(pushback(out.prev), e);
-          break;
-        case PUSH:
-          Preconditions.checkState(popDepth != 0);  // pop required above.
-          --popDepth;
-          if (popDepth == 0) {
-            Preconditions.checkState(
-                nodeTypeToPushback == e.getNodeType());
-            pushedBack = out.prev;
-            if (DEBUG_LR) {
-              System.err.println(indent() + "Pushback = " + pushback);
+      outer_loop:
+      for (SList<Event> out = outWithLR; true;
+           // No increment.
+           // All continues are explicit because of the throw below the switch.
+           //
+           // The flow control here is odd, but it is simpler to think of this
+           // as a recursive algorithm but where recursive calls have been
+           // replaced with
+           //     { out = recursiveOut; continue outer_loop; }
+           // so instead of
+           //     return SList.append(pushback(out.prev), e);
+           // the non-recursive
+           //     pbReverse = SList.append(pbReverse, e);
+           //     out = out.prev;
+           //     continue outer_loop;
+           // with a revAppend on the final return.
+           //
+           // The original recursive algo was abandoned because it made the
+           // max parsable input size dependent on the VM's max stack size.
+          ) {
+        Preconditions.checkNotNull(out);
+
+        Event e = out.x;
+
+        switch (e.getKind()) {
+          case POP:
+            ++popDepth;
+            pbReverse = SList.append(pbReverse, e);
+            out = out.prev;
+            continue outer_loop;
+          case PUSH:
+            Preconditions.checkState(popDepth != 0);  // pop required above.
+            --popDepth;
+            if (popDepth == 0) {
+              Preconditions.checkState(
+                  nodeTypeToPushback == e.getNodeType());
+              SList<Event> pushedBack = out.prev;
+              if (DEBUG_LR) {
+                System.err.println(indent() + "Pushback = " + pushback);
+              }
+              for (List<Event> onePb : pushback) {
+                for (Event pb : Lists.reverse(onePb)) {
+                  pushedBack = SList.append(pushedBack, pb);
+                }
+              }
+              pushback.clear();
+              pushedBack = SList.append(pushedBack, e);
+              return SList.revAppendAll(pushedBack, pbReverse);
+            } else {
+              out = out.prev;
+              pbReverse = SList.append(pbReverse, e);
+              continue outer_loop;
             }
-            for (List<Event> onePb : pushback) {
-              for (Event pb : Lists.reverse(onePb)) {
-                pushedBack = SList.append(pushedBack, pb);
+          case LR_END:
+            if (e.getNodeType() == nodeTypeToPushback) {
+              int pushCount = 0;
+              int popCount = 0;
+
+              List<Event> onePb = Lists.newArrayList();
+              pushback.add(onePb);
+              for (SList<Event> c = out.prev; c != null; c = c.prev) {
+                Event ce = c.x;
+                switch (ce.getKind()) {
+                  case LR_START:
+                    Preconditions.checkState(pushCount >= popCount);
+                    popDepth += popCount - pushCount;
+                    Preconditions.checkState(popDepth >= 0);
+                    out = c.prev;
+                    continue outer_loop;
+                  case POP:
+                    onePb.add(ce);
+                    ++popCount;
+                    continue;
+                  case PUSH:
+                    onePb.add(ce);
+                    ++pushCount;
+                    continue;
+                  case CONTENT:
+                  case DELAYED_CHECK:
+                  case IGNORABLE:
+                  case LR_END:
+                  case POSITION_MARK:
+                  case TOKEN:
+                    break;
+                }
+                throw new AssertionError(
+                    "Non push/pop on path to LR invocation " + ce);
               }
             }
-            pushback.clear();
-            pushedBack = SList.append(pushedBack, e);
-          } else {
-            // TODO: make this non-recursive so the max length of the file we
-            // can parse is not linear with the stack size.
-            pushedBack = SList.append(pushback(out.prev), e);
-          }
-          break;
-        case LR_END:
-          if (e.getNodeType() == nodeTypeToPushback) {
-            int pushCount = 0;
-            int popCount = 0;
-
-            List<Event> onePb = Lists.newArrayList();
-            pushback.add(onePb);
-            boolean foundStart = false;
-            pb_loop:
-            for (SList<Event> c = out.prev; c != null; c = c.prev) {
-              Event ce = c.x;
-              switch (ce.getKind()) {
-                case LR_START:
-                  Preconditions.checkState(pushCount >= popCount);
-                  popDepth += popCount - pushCount;
-                  Preconditions.checkState(popDepth >= 0);
-                  // TODO: make this non-recursive so the max length of the file we
-                  // can parse is not linear with the stack size.
-                  pushedBack = pushback(c.prev);
-                  foundStart = true;
-                  break pb_loop;
-                case POP:
-                  onePb.add(ce);
-                  ++popCount;
-                  continue;
-                case PUSH:
-                  onePb.add(ce);
-                  ++pushCount;
-                  continue;
-                case CONTENT:
-                case DELAYED_CHECK:
-                case IGNORABLE:
-                case LR_END:
-                case POSITION_MARK:
-                case TOKEN:
-                  break;
-              }
-              throw new AssertionError(
-                  "Non push/pop on path to LR invocation " + ce);
-            }
-            Preconditions.checkState(foundStart);
-            break;
-          }
-          //$FALL-THROUGH$
-        case CONTENT:
-        case DELAYED_CHECK:
-        case IGNORABLE:
-        case LR_START:
-        case POSITION_MARK:
-        case TOKEN:
-          // TODO: make this non-recursive so the max length of the file we
-          // can parse is not linear with the stack size.
-          pushedBack = SList.append(pushback(out.prev), e);
-          break;
+            //$FALL-THROUGH$
+          case CONTENT:
+          case DELAYED_CHECK:
+          case IGNORABLE:
+          case LR_START:
+          case POSITION_MARK:
+          case TOKEN:
+            pbReverse = SList.append(pbReverse, e);
+            out = out.prev;
+            continue outer_loop;
+        }
+        throw new AssertionError(e);
       }
-      return pushedBack;
     }
   }
 }
