@@ -802,15 +802,14 @@ final class TypingPass extends AbstractRewritingPass {
                   && convertibleToNumeric(thenType)
                   && convertibleToNumeric(elseType)) {
                 if (contextTypeHint != null) {
-                  if (!convertibleToNumeric(contextTypeHint)) {
-                    warn(e, "(?:) has numeric operands " + thenType + " * "
-                        + elseType + " but used in a non-numeric context: "
-                        + contextTypeHint);
-                    contextTypeHint = null;
-                  } else {
+                  if (convertibleToNumeric(contextTypeHint)) {
                     contextTypeHint = unboxedType(
                         e, contextTypeHint,
                         Predicates.instanceOf(NumericType.class));
+                  } else {
+                    // Possibly a widening conversion like Object or Number,
+                    // but there's no info to be had.
+                    contextTypeHint = null;
                   }
                 }
                 thenType = unboxNumericAsNecessary(thenClause, thenType);
@@ -1158,7 +1157,7 @@ final class TypingPass extends AbstractRewritingPass {
                   case Bng:
                     exprType = StaticType.T_BOOLEAN;
                     StaticType operandType = unboxAsNecessary(
-                        operand, passThru(operand));
+                        operand, maybePassThru(operand));
                     if (!StaticType.T_BOOLEAN.equals(operandType)
                         && !StaticType.ERROR_TYPE.equals(operandType)) {
                       error(operand.getNode(),
