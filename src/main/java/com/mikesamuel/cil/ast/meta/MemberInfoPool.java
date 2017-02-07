@@ -2,14 +2,22 @@ package com.mikesamuel.cil.ast.meta;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Optional;
+import com.google.common.base.Throwables;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
@@ -39,78 +47,131 @@ public final class MemberInfoPool {
     // This assumes there is one MemberInfo per canonName which should be
     // true for a proper canonResolver.
     if (!cancels.containsKey(mi.canonName)) {
-      Collection<Name> cancelled;
       if (mi instanceof CallableInfo) {
-        cancelled = overriddenBy((CallableInfo) mi);
+        CallableInfo ci = (CallableInfo) mi;
+        if (!CallableInfo.isSpecialMethodName(ci.canonName.identifier)) {
+          // constructors are not inherited.
+          Set<Name> ob = overriddenBy(ci);
+          cancels.putAll(ci.canonName, ob);
+          Set<Name> bd = bridgesTo(ci);
+          cancels.putAll(ci.canonName, bd);
+        }
       } else {
-        cancelled = maskedBy((FieldInfo) mi);
+        cancels.putAll(mi.canonName, maskedBy((FieldInfo) mi));
       }
-      cancels.putAll(mi.canonName, cancelled);
     }
     return Collections.unmodifiableCollection(cancels.get(mi.canonName));
   }
+
+  private ImmutableSet<Name> overriddenBy(CallableInfo ci) {
+    try {
+      return overriddenBy.get(ci);
+    } catch (ExecutionException ex) {
+      Throwables.propagate(ex);
+      return null;
+    }
+  }
+
+  private ImmutableSet<Name> bridgesTo(CallableInfo dest) {
+    // org.springframework.core.BridgeMethodResolver is instructive here.
+    Optional<TypeInfo> declaringTypeInfoOpt = typePool.r.resolve(
+        dest.canonName.getContainingClass());
+    if (!declaringTypeInfoOpt.isPresent()) {
+      return ImmutableSet.of();
+    }
+    TypeInfo dti = declaringTypeInfoOpt.get();
+
+    // If they override any of the same methods, then they are bridge methods.
+    ImmutableSet<Name> overriddenByDest = overriddenBy(dest);
+
+    ImmutableSet.Builder<Name> b = ImmutableSet.builder();
+    for (MemberInfo mi : dti.declaredMembers) {
+      if (!(mi instanceof CallableInfo)) {
+        continue;
+      }
+      CallableInfo ci = (CallableInfo) mi;
+      if (!ci.isBridge()) {
+        continue;
+      }
+      if (!ci.canonName.identifier.equals(dest.canonName.identifier)) {
+        continue;
+      }
+      if (ci.canonName.equals(dest.canonName)) {
+        continue;
+      }
+      ImmutableSet<Name> overriddenByCi = overriddenBy(ci);
+      if (!Collections.disjoint(overriddenByDest, overriddenByCi)) {
+        b.add(ci.canonName);
+      }
+    }
+    return b.build();
+  }
+
 
   private Collection<Name> maskedBy(FieldInfo fi) {
     Optional<TypeInfo> declaringTypeInfoOpt = typePool.r.resolve(
         fi.canonName.getContainingClass());
     if (declaringTypeInfoOpt.isPresent()) {
       TypeInfo dti = declaringTypeInfoOpt.get();
-      class ScanParents {
-        Set<Name> cancelled = Sets.newLinkedHashSet();
-        Set<Name> typesVisited = Sets.newHashSet();
-        void scan(TypeSpecification ts) {
-          if (!typesVisited.add(ts.typeName)) {
-            // It's illegal to implement an interface with two different
-            // parameterizations (TODO: at least I think it is).
-            return;
-          }
-          for (TypeSpecification superType
-              // Even if the start type is a concrete type we still need to walk
-              // interfaces to get default methods and static methods.
-              : typePool.r.superTypesOf(ts)) {
+      TypeSpecification typeSpec = TypeSpecification.autoScoped(dti);
 
-            Optional<TypeInfo> tio = typePool.r.resolve(superType.typeName);
-            if (!tio.isPresent()) { return; }
-            TypeInfo ti = tio.get();
-            for (MemberInfo mi : ti.declaredMembers) {
-              if (mi instanceof FieldInfo
-                  && mi.canonName.identifier.equals(fi.canonName.identifier)) {
-                cancelled.add(mi.canonName);
-              }
-            }
+      ImmutableSet.Builder<Name> b = ImmutableSet.builder();
+      for (TypeSpecification superType
+          // Even if the start type is a concrete type we still need to walk
+          // interfaces to get default methods and static methods.
+          : typePool.r.superTypesTransitiveOf(typeSpec)) {
+        if (typeSpec.typeName.equals(superType.typeName)) {
+          continue;
+        }
+
+        Optional<TypeInfo> tio = typePool.r.resolve(superType.typeName);
+        if (!tio.isPresent()) { continue; }
+        TypeInfo ti = tio.get();
+        for (MemberInfo mi : ti.declaredMembers) {
+          if (mi instanceof FieldInfo
+              && mi.canonName.identifier.equals(fi.canonName.identifier)) {
+            b.add(mi.canonName);
           }
         }
       }
-      ScanParents scanner = new ScanParents();
-      scanner.scan(TypeSpecification.autoScoped(dti));
-      return scanner.cancelled;
+      return b.build();
     }
     return ImmutableList.of();
   }
 
-  private Collection<Name> overriddenBy(CallableInfo ci) {
-    ImmutableList<TypeSpecification> erasedSig = erasedSignatureOf(
-        ci, ImmutableMap.of());
-    Optional<TypeInfo> declaringTypeInfoOpt = typePool.r.resolve(
-        ci.canonName.getContainingClass());
-    if (declaringTypeInfoOpt.isPresent()) {
-      TypeInfo dti = declaringTypeInfoOpt.get();
-      class ScanParents {
-        Set<Name> cancelled = Sets.newLinkedHashSet();
-        Set<Name> typesVisited = Sets.newHashSet();
-        void scan(TypeSpecification ts) {
-          if (!typesVisited.add(ts.typeName)) {
-            // It's illegal to implement an interface with two different
-            // parameterizations (TODO: at least I think it is).
-            return;
+  private final LoadingCache<CallableInfo, ImmutableSet<Name>> overriddenBy =
+      CacheBuilder.newBuilder()
+      .build(new CacheLoader<CallableInfo, ImmutableSet<Name>>() {
+
+        @Override
+        public ImmutableSet<Name> load(CallableInfo ci) throws Exception {
+          // TODO: Take a close look at
+          // //docs.oracle.com/javase/specs/jls/se8/html/jls-8.html#jls-8.4.2
+          // and see if this properly matches the definition of subsignature.
+          // I don't think it deals with overrides when there are raw parameter
+          // types.
+          Optional<TypeInfo> declaringTypeInfoOpt = typePool.r.resolve(
+              ci.canonName.getContainingClass());
+          if (!declaringTypeInfoOpt.isPresent()) {
+            return ImmutableSet.of();
           }
+          @SuppressWarnings("synthetic-access")
+          ImmutableList<TypeSpecification> erasedSig = erasedSignatureOf(
+              ci, ImmutableMap.of());
+          TypeInfo dti = declaringTypeInfoOpt.get();
+          TypeSpecification typeSpec = TypeSpecification.autoScoped(dti);
+
+          ImmutableSet.Builder<Name> b = ImmutableSet.builder();
           for (TypeSpecification superType
-              // Even if the start type is a concrete type we still need to walk
-              // interfaces to get default methods and static methods.
-              : typePool.r.superTypesOf(ts)) {
+              // Even if the start type is a concrete type we still need to
+              // walk interfaces to get default methods and static methods.
+              : typePool.r.superTypesTransitiveOf(typeSpec)) {
+            if (superType.typeName.equals(typeSpec.typeName)) {
+              continue;
+            }
 
             Optional<TypeInfo> tio = typePool.r.resolve(superType.typeName);
-            if (!tio.isPresent()) { return; }
+            if (!tio.isPresent()) { continue; }
             TypeInfo ti = tio.get();
             Map<Name, TypeBinding> typeParamMap = null;
             for (MemberInfo mi : ti.declaredMembers) {
@@ -130,22 +191,18 @@ public final class MemberInfoPool {
 
                 @SuppressWarnings("synthetic-access")
                 ImmutableList<TypeSpecification> superTypeErasedSig =
-                    erasedSignatureOf((CallableInfo) mi, typeParamMap);
+                erasedSignatureOf((CallableInfo) mi, typeParamMap);
 
                 if (erasedSig.equals(superTypeErasedSig)) {
-                  cancelled.add(mi.canonName);
+                  b.add(mi.canonName);
                 }
               }
             }
           }
+          return b.build();
         }
-      }
-      ScanParents scanner = new ScanParents();
-      scanner.scan(TypeSpecification.autoScoped(dti));
-      return scanner.cancelled;
-    }
-    return ImmutableList.of();
-  }
+
+      });
 
   private ImmutableList<TypeSpecification> erasedSignatureOf(
       CallableInfo ci, Map<Name, TypeBinding> substMap) {
@@ -173,8 +230,7 @@ public final class MemberInfoPool {
     final class Search {
       Set<Name> typesSeen = Sets.newHashSet();
       Set<Name> cancelled = Sets.newHashSet();
-      ImmutableList.Builder<ParameterizedMember<MI>> out =
-          ImmutableList.builder();
+      List<ParameterizedMember<MI>> out = Lists.newArrayList();
 
       void search(TypeSpecification declaringType) {
         if (!typesSeen.add(declaringType.typeName)) {
@@ -196,10 +252,15 @@ public final class MemberInfoPool {
             cancelled.addAll(cancelledBy(mi));
           }
         }
+        if (memberType == CallableInfo.class
+            && CallableInfo.isSpecialMethodName(memberName)) {
+          // Special methods are not inherited from super-types.
+          return;
+        }
         for (TypeSpecification superType
             // Even if the start type is a concrete type we still need to walk
             // interfaces to get default methods and static methods.
-            : typePool.r.superTypesOf(declaringType)) {
+            : typePool.r.superTypesTransitiveOf(declaringType)) {
           search(superType);
         }
       }
@@ -208,7 +269,15 @@ public final class MemberInfoPool {
     Search search = new Search();
     search.search(containingType);
 
-    return search.out.build();
+    ImmutableList.Builder<ParameterizedMember<MI>> b = ImmutableList.builder();
+    // We're not guaranteed to visit non-bridge methods before their bridge
+    // methods, so re-filter here.
+    for (ParameterizedMember<MI> m : search.out) {
+      if (!search.cancelled.contains(m.member.canonName)) {
+        b.add(m);
+      }
+    }
+    return b.build();
   }
 
   /**

@@ -165,6 +165,8 @@ public final class ExpressionScopePassTest extends TestCase {
             "    /* EARLIEST */",
             "    println(i);",  // this.i
             "  }",
+            "  /* (Block) */",
+            "  public C() {}",
             "}",
           },
         },
@@ -220,6 +222,8 @@ public final class ExpressionScopePassTest extends TestCase {
             +       ") */",
             "    { int i; };",
             "  }",
+            "  /* (Block) */",
+            "  public C() {}",
             "}",
           },
         },

@@ -221,6 +221,7 @@ public final class TypingPassTest extends TestCase {
           {
             "class C {",
             "  long i = (long) (+(int) Integer.valueOf(\"4\"));",
+            "  public C() {}",
             "}",
           },
         },
@@ -256,6 +257,7 @@ public final class TypingPassTest extends TestCase {
             "    String s = this./*(Ljava/lang/Integer;)Ljava/lang/String;*/f(Integer",
             "        ./*(I)Ljava/lang/Integer;*/valueOf(42));",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -299,6 +301,7 @@ public final class TypingPassTest extends TestCase {
             "    String s = /*(Ljava/lang/Integer;)Ljava/lang/String;*/f(Integer",
             "        ./*(I)Ljava/lang/Integer;*/valueOf(42));",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -332,8 +335,7 @@ public final class TypingPassTest extends TestCase {
   }
 
   @Test
-  public static final void testMethodDispatchWithBoxyCasts()
-  throws Exception {
+  public static final void testMethodDispatchWithBoxyCasts() throws Exception {
     assertTyped(
         new String[][] {
           {
@@ -348,6 +350,7 @@ public final class TypingPassTest extends TestCase {
             "    /*(I)V*/g((int) ("
             +          "Integer./*(I)Ljava/lang/Integer;*/valueOf(0)));",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -386,7 +389,9 @@ public final class TypingPassTest extends TestCase {
             "  class I {",
             "    int f(Object o) { return 1; }",
             "    int i = /*(Ljava/lang/Object;)I*/f((java.lang.Object) (0));",
+            "    public I() {}",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -426,6 +431,7 @@ public final class TypingPassTest extends TestCase {
             "    Collections.<? extends Long> /*()Ljava/util/Set;*/emptySet();",
             "    Collections.<?> /*()Ljava/util/Set;*/emptySet();",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -489,6 +495,7 @@ public final class TypingPassTest extends TestCase {
             // not
             "    Foo.<String> /*(Ljava/lang/Object;)Ljava/lang/Object;*/f(s);",
             "  }",
+            "  public Foo() {}",
             "}",
           },
         },
@@ -569,6 +576,7 @@ public final class TypingPassTest extends TestCase {
             "    /*(D)V*/f(d - d);",
             "    /*(D)V*/f((double) i - d);",
             "  }",
+            "  public Foo() {}",
             "}",
           },
         },
@@ -633,6 +641,7 @@ public final class TypingPassTest extends TestCase {
             "    /* /bar/Bar(I)I*/",
             "    f((int) ((short) 0));",
             "  }",
+            "  public Foo() {}",
             "}",
           },
           {
@@ -644,6 +653,7 @@ public final class TypingPassTest extends TestCase {
             "    println(\"Bar.f\");",
             "    return 0;",
             "  }",
+            "  public Bar() {}",
             "}",
           },
           {
@@ -655,6 +665,7 @@ public final class TypingPassTest extends TestCase {
             "    println(\"Baz.f\");",
             "    return 0;",
             "  }",
+            "  public Baz() {}",
             "}",
           },
           {
@@ -666,6 +677,7 @@ public final class TypingPassTest extends TestCase {
             "    println(\"Boo.f\");",
             "    return 0;",
             "  }",
+            "  public Boo() {}",
             "}",
           },
         },
@@ -736,6 +748,7 @@ public final class TypingPassTest extends TestCase {
             "    /* /foo/Boo(Ljava/lang/Object;)V*/",
             "    f((java.lang.Object) (x));",
             "  }",
+            "  public Foo() {}",
             "}",
           },
           {
@@ -753,6 +766,7 @@ public final class TypingPassTest extends TestCase {
             "    /* /java/io/PrintStream(Ljava/lang/Object;)V*/",
             "    println(o);",
             "  }",
+            "  public Boo() {}",
             "}",
           },
         },
@@ -799,10 +813,16 @@ public final class TypingPassTest extends TestCase {
             "  { System.err.println((java.lang.Object) (d.new E()));",
             "  }",
             "  static D d = new D();",
+            "  public C() {}",
             "}"
           },
           {
-            "class D { class E {} }",
+            "class D {",
+            "  class E {",
+            "    public E() {}",
+            "  }",
+            "  public D() {}",
+            "}",
           },
         },
         new String[][] {
@@ -813,13 +833,16 @@ public final class TypingPassTest extends TestCase {
             "    System.err.println(d.new E());",
             "  }",
             "  static D d = new D();",
+            "  public C() {}",
             "}"
           },
           {
             "//D",
             "class D {",
             "  class E {",
+            "    public E() {}",
             "  }",
+            "  public D() {}",
             "}",
           },
         },
@@ -842,10 +865,11 @@ public final class TypingPassTest extends TestCase {
             // Even though the signature, post template variable substitution,
             // of the first f is f(String) which is more specific than
             // f(CharSequence), java still chooses the latter.
-            "    new Foo()./*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f("
-            +           "(java.lang",
-            "            .CharSequence) (\"\"));",
+            "    /*()V*/new Foo()./*(Ljava/lang/CharSequence;)"
+            +        "Ljava/lang/Object;*/f((java",
+            "            .lang.CharSequence) (\"\"));",
             "  }",
+            "  public Foo() {}",
             "}",
           },
           {
@@ -860,6 +884,7 @@ public final class TypingPassTest extends TestCase {
             +   "/*(Ljava/lang/String;)V*/println(\"Bar.f(CharSequence)\");",
             "    return null;",
             "  }",
+            "  public Bar() {}",
             "}",
           },
         },
@@ -907,7 +932,9 @@ public final class TypingPassTest extends TestCase {
             "  static void f(short s) {",
             "    System.err./*(Ljava/lang/String;)V*/println(\"short\");",
             "  }",
-            "  static void f(long l) { System.err./*(Ljava/lang/String;)V*/println(\"long\"); }",
+            "  static void f(long l) { "
+            +   "System.err./*(Ljava/lang/String;)V*/println(\"long\"); "
+            + "}",
             "  static void f(double d) {",
             "    System.err./*(Ljava/lang/String;)V*/println(\"double\");",
             "  }",
@@ -923,6 +950,7 @@ public final class TypingPassTest extends TestCase {
             "    /*(D)V*/f((double) ((float) 0));",
             "    /*(D)V*/f((double) 0);",
             "  }",
+            "  public Foo() {}",
             "}",
           },
         },
@@ -988,6 +1016,7 @@ public final class TypingPassTest extends TestCase {
             "    /*([I)V*/f(null);",
             "    /*([I)V*/f(new int[] { 1, 2, 3, });",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -1033,6 +1062,7 @@ public final class TypingPassTest extends TestCase {
             "    /*([I)V*/f(null);",
             "    /*([I)V*/f(new int[] { 1, 2, 3, });",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -1173,6 +1203,7 @@ public final class TypingPassTest extends TestCase {
         new String[][] {
           {
             "class C {",
+            "  C() {}",
             "  void f(byte b)   { System.err.println('b'); }",
             "  void f(char c)   { System.err.println('c'); }",
             "  void f(short s)  { System.err.println('s'); }",
@@ -1215,6 +1246,7 @@ public final class TypingPassTest extends TestCase {
           {
             "//C",
             "class C {",
+            "  C() {}",
             "  void f(byte b)   { System.err.println('b'); }",
             "  void f(char c)   { System.err.println('c'); }",
             "  void f(short s)  { System.err.println('s'); }",
@@ -1279,12 +1311,12 @@ public final class TypingPassTest extends TestCase {
           "d >>> i : /error/ErrorType.TYPE",
         },
         null,
-        "//C:24+7-13: Expected integral shift operands not float * float",
-        "//C:25+7-13: Expected integral shift operands not double * double",
-        "//C:31+7-14: Expected integral shift operands not int * float",
-        "//C:32+7-13: Expected integral shift operands not int * double",
-        "//C:38+7-13: Expected integral shift operands not float * int",
-        "//C:39+7-14: Expected integral shift operands not double * int");
+        "//C:25+7-13: Expected integral shift operands not float * float",
+        "//C:26+7-13: Expected integral shift operands not double * double",
+        "//C:32+7-14: Expected integral shift operands not int * float",
+        "//C:33+7-13: Expected integral shift operands not int * double",
+        "//C:39+7-13: Expected integral shift operands not float * int",
+        "//C:40+7-14: Expected integral shift operands not double * int");
   }
 
   @Test
@@ -1357,6 +1389,7 @@ public final class TypingPassTest extends TestCase {
             "    f(I == Z);",
             "    f((boolean) Z == i);",  // Don't care whether Z unboxed
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -1467,7 +1500,7 @@ public final class TypingPassTest extends TestCase {
             "    long j = (long) (0);",
             "    float f = (float) (0);",
             "    double d = (double) (0);",
-            "    Long J = new Long(1);",
+            "    Long J = new Long((long) (1));",
             "    Integer I = new Integer(0);",
             "    Boolean Z = new Boolean(true);",
             "",  // L20
@@ -1516,6 +1549,7 @@ public final class TypingPassTest extends TestCase {
             "    f(Z instanceof Serializable);",
             "    f(I instanceof String);",  // L64 not assignable
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -1626,7 +1660,7 @@ public final class TypingPassTest extends TestCase {
             "    float f = (float) (0);",
             "    double d = (double) (0);",
             "",
-            "    Long J = new Long(1);",
+            "    Long J = new Long((long) (1));",
             "    Integer I = new Integer(0);",
             "    Boolean Z = new Boolean(true);",
             "    String T = \"T\";",
@@ -1654,6 +1688,7 @@ public final class TypingPassTest extends TestCase {
             "    f |= c;",  // L41 bad operand types
             "    j ^= j;",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -1831,6 +1866,7 @@ public final class TypingPassTest extends TestCase {
             "    /*(Ljava/lang/Object;)V*/f("
             +       "(java.lang.Object) (true ? 0 : (int) b));",
             "  }",
+            "  public C() {}",
             "}",
           },
         },
@@ -1876,6 +1912,125 @@ public final class TypingPassTest extends TestCase {
         DECORATE_METHOD_NAMES);
   }
 
+  @Test
+  public static final void testConstructor() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class C extends B {",
+            "  C(CharSequence cs) {",
+            "    super (String.",
+            "        /* /java/lang/String(Ljava/lang/Object;)Ljava/lang/String;*/",
+            "        valueOf((java.lang.Object) (cs)));",
+            "  }",
+            "  C(Object o) { super (\"Object \" + o); }",
+            "  public static C make(String s) {",
+            "    return",
+            "    /* /C(Ljava/lang/CharSequence;)V*/",
+            "    new C((java.lang.CharSequence) (s));",
+            "  }",
+            "  public static C make(Object o) "
+            + "{ return/* /C(Ljava/lang/Object;)V*/new C(o); }",
+            "  public static C make() "
+            + "{ return/* /C(Ljava/lang/CharSequence;)V*/new C(null); }",
+            "}",
+          },
+          {
+            "class B { B(String s) { ; } }",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C extends B {",
+            "",
+            "  C(CharSequence cs) {",
+            "    super(String.valueOf(cs));",
+            "  }",
+            "",
+            "  C(Object o) {",
+            "    super(\"Object \" + o);",
+            "  }",
+            "",
+            "  public static C make(String s) {",
+            "    return new C(s);",
+            "  }",
+            "",
+            "  public static C make(Object o) {",
+            "    return new C(o);",
+            "  }",
+            "",
+            "  public static C make() {",
+            "    return new C(null);",
+            "  }",
+            "",
+            "}",
+          },
+          {
+            "//B",
+            "class B {",
+            "  B(String s) {",
+            "    ;",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        DECORATE_METHOD_NAMES_INCL_CONTAINER
+        );
+  }
+
+  @Test
+  public static final void testStringBuilderMethodResolution()
+  throws Exception {
+    // Test that bridge methods work properly.
+
+    // StringBuilder.append(char) precludes several methods
+    // (1) Appendable            Appendable.append(char)
+    // (2) AbstractStringBuilder AbstractStringBuilder.append(char)
+    // (3) Appendable            AbstractStringBuilder.append(char)  (bridge)
+    // (4) AbstractStringBuilder StringBuilder.append(char)          (bridge)
+    // (5) Appendable            StringBuilder.append(char)          (bridge)
+    assertTyped(
+        new String[][] {
+          {
+            "class C {",
+            "  static final String S =",
+            "  /* /java/lang/StringBuilder()V*/",
+            "  new StringBuilder().",
+            "  /* /java/lang/StringBuilder(C)Ljava/lang/StringBuilder;*/",
+            "  append('a').",
+            "  /* /java/lang/StringBuilder(C)Ljava/lang/StringBuilder;*/",
+            "  append('b').",
+            "  /* /java/lang/StringBuilder()Ljava/lang/String;*/",
+            "  toString();",
+            "  public C() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//C",
+            "class C {",
+            "  static final String S =",
+            "      new StringBuilder().append('a').append('b').toString();",
+            "}",
+          },
+        },
+        PrimaryNode.class,
+        new String[] {
+            "new StringBuilder().append('a').append('b').toString()"
+            + " : /java/lang/String",
+
+            "new StringBuilder().append('a').append('b')"
+            + " : /java/lang/StringBuilder",
+
+            "new StringBuilder().append('a') : /java/lang/StringBuilder",
+        },
+        DECORATE_METHOD_NAMES_INCL_CONTAINER
+        );
+  }
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 

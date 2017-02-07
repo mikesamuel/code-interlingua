@@ -11,6 +11,7 @@ import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -23,6 +24,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 /**
@@ -61,7 +63,7 @@ public interface TypeInfoResolver {
                   @Override
                   public Optional<TypeInfo> load(Name name) {
                     if (name.type == Name.Type.CLASS) {
-                      return loadClass(toBinaryName(name));
+                      return loadClass(name.toBinaryName());
                     }
 
                     // If name is a type parameter name, then lookup its
@@ -160,10 +162,10 @@ public interface TypeInfoResolver {
                       }
                       ci.setReturnType(specForType(m.getGenericReturnType()));
                       ci.setVariadic(m.isVarArgs());
+                      ci.setSynthetic(m.isSynthetic());
+                      ci.setIsBridge(m.isBridge());
                       ci.setFormalTypes(formalTypes.build());
-                      ci.setDescriptor(
-                          methodDescriptorFor(
-                              m.getParameterTypes(), m.getReturnType()));
+                      ci.setDescriptor(ReflectionUtils.descriptorFor(m));
                       members.add(ci);
                     }
                   }
@@ -183,9 +185,9 @@ public interface TypeInfoResolver {
                       }
                       ci.setReturnType(StaticType.T_VOID.typeSpecification);
                       ci.setVariadic(c.isVarArgs());
+                      ci.setSynthetic(c.isSynthetic());
                       ci.setFormalTypes(formalTypes.build());
-                      ci.setDescriptor(methodDescriptorFor(
-                          c.getParameterTypes(), Void.TYPE));
+                      ci.setDescriptor(ReflectionUtils.descriptorFor(c));
                       members.add(ci);
                     }
                   }
@@ -219,38 +221,6 @@ public interface TypeInfoResolver {
           }
         }
       };
-    }
-
-    private static String toBinaryName(Name name) {
-      Preconditions.checkArgument(name.type == Name.Type.CLASS, name);
-      StringBuilder sb = new StringBuilder();
-      appendBinaryName(name, sb);
-      return sb.toString();
-    }
-
-    private static void appendBinaryName(Name name, StringBuilder sb) {
-      char separator;
-      switch (name.parent.type) {
-        case PACKAGE:
-          if (name.parent.equals(Name.DEFAULT_PACKAGE)) {
-            separator = 0;
-          } else {
-            separator = '.';
-          }
-          break;
-        case CLASS:
-          separator = '$';
-          break;
-        default:
-          // TODO: skip over METHOD?
-          throw new AssertionError(name.parent.type);
-      }
-      if (separator != 0) {
-        appendBinaryName(name.parent, sb);
-        sb.append(separator);
-      }
-      Preconditions.checkNotNull(name.identifier);
-      sb.append(name.identifier);
     }
 
     private static ImmutableList<Name> typeVars(
@@ -394,14 +364,14 @@ public interface TypeInfoResolver {
       switch (nm.type) {
         case CLASS:
           try {
-            return Optional.of(cl.loadClass(toBinaryName(nm)));
+            return Optional.of(cl.loadClass(nm.toBinaryName()));
           } catch (@SuppressWarnings("unused") ClassNotFoundException ex) {
             return Optional.absent();
           }
         case METHOD:
           Class<?> containingClass;
           try {
-            containingClass = cl.loadClass(toBinaryName(nm.parent));
+            containingClass = cl.loadClass(nm.parent.toBinaryName());
           } catch (@SuppressWarnings("unused") ClassNotFoundException ex) {
             return Optional.absent();
           }
@@ -417,47 +387,6 @@ public interface TypeInfoResolver {
           return Optional.absent();
         default:
           throw new AssertionError(nm);
-      }
-    }
-
-    private static String methodDescriptorFor(
-        Class<?>[] parameterTypes, Class<?> returnType) {
-      StringBuilder sb = new StringBuilder();
-      sb.append('(');
-      for (Class<?> parameterType : parameterTypes) {
-        appendTypeDescriptor(sb, parameterType);
-      }
-      sb.append(')');
-      appendTypeDescriptor(sb, returnType);
-      return sb.toString();
-    }
-
-    private static final ImmutableMap<Class<?>, Character> PRIMITIVE_FIELD_TYPES
-        = ImmutableMap.<Class<?>, Character>builder()
-        .put(Void.TYPE, 'V')
-        .put(Boolean.TYPE, 'Z')
-        .put(Byte.TYPE, 'B')
-        .put(Character.TYPE, 'C')
-        .put(Double.TYPE, 'D')
-        .put(Float.TYPE, 'F')
-        .put(Integer.TYPE, 'I')
-        .put(Long.TYPE, 'J')
-        .put(Short.TYPE, 'S')
-        .build();
-
-    private static void appendTypeDescriptor(StringBuilder sb, Class<?> t) {
-      Preconditions.checkArgument(!t.isAnnotation());
-      if (t.isPrimitive()) {
-        sb.append(PRIMITIVE_FIELD_TYPES.get(t).charValue());
-      } else {
-        Class<?> bareType = t;
-        while (bareType.isArray()) {
-          sb.append('[');
-          bareType = bareType.getComponentType();
-        }
-        sb.append('L');
-        sb.append(t.getName().replace('.', '/'));
-        sb.append(';');
       }
     }
 
@@ -509,7 +438,7 @@ public interface TypeInfoResolver {
     if (!superTypeOpt.isPresent()
         && Modifier.isInterface(info.modifiers)) {
       // Interfaces implicitly have Object as the super type.
-      superTypeOpt = Optional.of(TypeSpecification.JAVA_LANG_OBJECT);
+      superTypeOpt = Optional.of(JavaLang.JAVA_LANG_OBJECT);
     }
     return Iterables.transform(
         Iterables.concat(superTypeOpt.asSet(), info.interfaces),
@@ -522,5 +451,30 @@ public interface TypeInfoResolver {
             return sub.subst(info.parameters, ts.bindings);
           }
         });
+  }
+
+  /**
+   * The super-types (transitive) of the given type.
+   * <p>
+   * For example, the super-type of {@code List<String>} includes
+   * {@code Collection<String>} because {@code List<T> extends Collection<T>}.
+   */
+  public default Iterable<TypeSpecification> superTypesTransitiveOf(
+      TypeSpecification ts) {
+    Set<Name> seen = Sets.newHashSet();
+    Deque<TypeSpecification> unprocessed = Lists.newLinkedList();
+    unprocessed.add(ts);
+    seen.add(ts.typeName);
+
+    ImmutableList.Builder<TypeSpecification> b = ImmutableList.builder();
+    for (TypeSpecification st; (st = unprocessed.poll()) != null;) {
+      b.add(st);
+      for (TypeSpecification sst : superTypesOf(st)) {
+        if (seen.add(sst.typeName)) {
+          unprocessed.add(sst);
+        }
+      }
+    }
+    return b.build();
   }
 }

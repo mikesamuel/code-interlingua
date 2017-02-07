@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -21,16 +22,16 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
+import com.mikesamuel.cil.util.LogUtils;
 
 final class AmbiguousNames {
   private AmbiguousNames() {
     // Static API
   }
 
-  private static void error(
+  static void error(
       Logger logger, @Nullable SourcePosition pos, String msg) {
-    String fullMessage = pos != null ? pos + ": " + msg : msg;
-    logger.severe(fullMessage);
+    LogUtils.log(logger, Level.SEVERE, pos, msg, null);
   }
 
   static TypeSpecification typeSpecificationOf(
@@ -157,13 +158,10 @@ final class AmbiguousNames {
           default:
             if (logger != null) {
               StringBuilder msg = new StringBuilder();
-              if (pos != null) {
-                msg.append(pos).append(": ");
-              }
               msg.append("Ambiguous type name ");
               nm.appendDottedString(msg);
               msg.append(": ").append(qualNames);
-              logger.severe(msg.toString());
+              error(logger, pos, msg.toString());
             }
             //$FALL-THROUGH$
           case 1:

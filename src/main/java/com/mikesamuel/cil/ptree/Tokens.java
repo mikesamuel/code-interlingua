@@ -34,12 +34,57 @@ import com.mikesamuel.cil.parser.SerialState;
 public final class Tokens {
 
   private static final String ESCAPE_SEQUENCE =
-      "\\\\(?:[ntnfr\"'\\\\]|[0-3][0-7]{0,2}|[4-7][0-7]?)";
+      "\\\\(?:[ntbfr\"'\\\\]|[0-3][0-7]{0,2}|[4-7][0-7]?)";
 
   private static final String INPUT_CHARACTER_NO_QUOTES = "[^\r\n\"\'\\\\]";
 
   private static final String CHAR_NO_QUOTES =
       "(?:" + INPUT_CHARACTER_NO_QUOTES + "|" + ESCAPE_SEQUENCE + ")";
+
+
+  /**
+   * Decodes a single codepoint in a quoted string or character literal.
+   *
+   * @return (indexAfterDecoded << 32) | decodedCodeUnit or -1 to indicate
+   *     invalid char.
+   */
+  public static final long decodeChar(CharSequence cs, int pos) {
+    char c = cs.charAt(pos);
+    if (c != '\\') { return (((long) pos + 1) << 32) | c; }
+    int length = cs.length();
+    if (pos + 1 == length) {
+      return -1;
+    }
+    c = cs.charAt(pos + 1);
+    int end = pos + 2;
+    switch (c) {
+      case '\\': case '"': case '\'':
+        break;
+      case 'n': c = '\n'; break;
+      case 't': c = '\t'; break;
+      case 'b': c = '\b'; break;
+      case 'f': c = '\f'; break;
+      case 'r': c = '\r'; break;
+      case '0': case '1': case '2':
+      case '3': case '4': case '5': case '6': case '7':
+        c -= '0';
+        int endLimit = Math.min(end + (c < 4 ? 2 : 1), length);
+        while (end < endLimit) {
+          char d = cs.charAt(end);
+          if ('0' <= d && d <= '7') {
+            c = (char) ((c << 3) | (d - '0'));
+            ++end;
+          } else {
+            break;
+          }
+        }
+        break;
+      default:
+        // u escapes handled by pre-lexer decoding pass.
+        return -1;
+    }
+    return (((long) end) << 32) | c;
+  }
 
 
   /** Matches a {@code '.'} style character literal. Section 3.10.4. */
@@ -519,5 +564,48 @@ public final class Tokens {
           : Preconditions.checkNotNull(sb).append(
               multilineToken, pos, n).toString();
     }
+  }
+
+  /**
+   * Parses a double literal.
+   */
+  public static double decodeDouble(String literal)
+  throws NumberFormatException {
+    return Double.valueOf(fixupNumericLiteral(literal));
+  }
+
+  /**
+   * Parses a float literal.
+   */
+  public static float decodeFloat(String literal) throws NumberFormatException {
+    return Float.valueOf(fixupNumericLiteral(literal));
+  }
+
+  /**
+   * Parses an int literal.
+   */
+  public static int decodeInt(String literal) throws NumberFormatException {
+    long l = decodeLong(fixupNumericLiteral(literal));
+    long shifted = l >> 32;
+    if (shifted == 0 || shifted == -1) {
+      return (int) l;
+    }
+    throw new NumberFormatException(literal);  // over or under flow.
+  }
+
+  /**
+   * Parses a long literal.
+   */
+  public static long decodeLong(String literal) throws NumberFormatException {
+    String lit = fixupNumericLiteral(literal);
+    return Long.decode(lit);
+    // TODO: Long.decode expects a signed input.
+    // The JLS allows 16 digit hex inputs that have the first digit in
+    // [8-F].
+  }
+
+  private static String fixupNumericLiteral(String literal) {
+    // Strip out myriad separators because 1_000_000 == 1e6
+    return literal.replace("_", "");
   }
 }

@@ -42,7 +42,13 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 
-final class DeclarationPass extends AbstractPass<TypeInfoResolver> {
+/**
+ * Looks at all type declarations disambiguates names in {@code extends} and
+ * {@code implements} clauses so that we can know, within a given class
+ * body, which field, method, and type parameter names are available, and
+ * in which class they are declared.
+ */
+class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
   static final boolean DEBUG = false;
 

@@ -182,7 +182,9 @@ public final class ClassNamingPassTest extends TestCase {
     {
       ImmutableList<String> want = ImmutableList.of(
           "private static final /foo/bar/C.x",
+          "public /foo/bar/C.<init>(1)",
           "/foo/bar/C$1.y",
+          "public /foo/bar/D.<init>(1)",
           "public static final /Foo$A.B",
           "public static final /Foo$A.C",
           "public static final /com/example/X.A",
@@ -191,7 +193,8 @@ public final class ClassNamingPassTest extends TestCase {
           "private /com/example/X.<init>(1)",
           "private static /com/example/X.<clinit>(1)",
           "/com/example/parameterized/P.foo(1)",
-          "/com/example/parameterized/P.bar(1)"
+          "/com/example/parameterized/P.bar(1)",
+          "public /com/example/parameterized/P.<init>(1)"
           );
 
       ImmutableList.Builder<String> b = ImmutableList.builder();

@@ -84,4 +84,32 @@ public final class TokensTest extends TestCase {
     }
   }
 
+  @Test
+  public static void testDecodeChar() {
+    String encoded = "foo\\b\\n\\f\\r\\t\\0\\012\\470\\\\\"\\'";
+    String decoded = "foo\b\n\f\r\t\0\012\470\\\"\'";
+
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0, n = encoded.length(); i < n;) {
+      long j = Tokens.decodeChar(encoded, i);
+      if (j == -1L) {
+        fail("Cannot decode char at " + i);
+      }
+      i = (int) (j >>> 32);
+      sb.append((char) j);
+    }
+
+    assertEquals(decoded, sb.toString());
+
+    assertEquals(-1, Tokens.decodeChar("\\", 0));
+    assertEquals(2L << 32, Tokens.decodeChar("\\0", 0));
+
+    for (int i = 0; i <= 0377; ++i) {
+      String octal = "\\" + Integer.toOctalString(i);
+      long j = Tokens.decodeChar(octal, 0);
+      assertEquals(octal.length(), j >>> 32);
+      assertEquals(i, (int) j);
+    }
+  }
+
 }

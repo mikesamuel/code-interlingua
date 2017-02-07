@@ -1,12 +1,13 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.NodeI;
-import com.mikesamuel.cil.parser.SourcePosition;
+import com.mikesamuel.cil.util.LogUtils;
 
 /** A compiler pass. */
 abstract class AbstractPass<T> {
@@ -17,17 +18,12 @@ abstract class AbstractPass<T> {
     this.logger = logger;
   }
 
-  private static String fullMessage(@Nullable NodeI node, String message) {
-    SourcePosition pos = node != null ? node.getSourcePosition() : null;
-    return pos != null ? pos + ": " + message : message;
-  }
-
   protected void error(@Nullable NodeI node, String message) {
-    logger.severe(fullMessage(node, message));
+    LogUtils.log(logger, Level.SEVERE, node, message, null);
   }
 
   protected void warn(@Nullable NodeI node, String message) {
-    logger.warning(fullMessage(node, message));
+    LogUtils.log(logger, Level.WARNING, node, message, null);
   }
 
   /** Applies the pass to the given compilation units. */

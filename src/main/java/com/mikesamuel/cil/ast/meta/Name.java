@@ -377,4 +377,34 @@ public final class Name {
     }
     return nm;
   }
+
+  /**
+   * A Java binary name.
+   */
+  public String toBinaryName() {
+    Preconditions.checkState(type == Name.Type.CLASS, this);
+    StringBuilder sb = new StringBuilder();
+    appendBinaryName(this, sb);
+    return sb.toString();
+  }
+
+  private static void appendBinaryName(Name name, StringBuilder sb) {
+    if (!Name.DEFAULT_PACKAGE.equals(name.parent)) {
+      appendBinaryName(name.parent, sb);
+      switch (name.parent.type) {
+        case PACKAGE:
+          sb.append('.');
+          break;
+        case CLASS:
+          sb.append('$');
+          break;
+        case METHOD:
+          return;
+        default:
+          throw new AssertionError(name.parent.type);
+      }
+    }
+    Preconditions.checkNotNull(name.identifier);
+    sb.append(name.identifier);
+  }
 }

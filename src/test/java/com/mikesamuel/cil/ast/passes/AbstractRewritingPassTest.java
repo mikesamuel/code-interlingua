@@ -123,8 +123,8 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         new AbstractRewritingPass(logger) {
           @Override
-          protected ProcessingStatus
- previsit(         BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+          protected ProcessingStatus previsit(
+              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceType:
                 if ("C".equals(node.getTextContent("^"))) {

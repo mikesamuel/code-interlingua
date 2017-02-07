@@ -622,6 +622,13 @@ public final class DisambiguationPassTest extends TestCase {
             "                    ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /Foo",
             "                      Identifier.Builtin Foo : CLASS",
             "    ClassBody.LcClassBodyDeclarationRc",
+            "      ClassBodyDeclaration.ConstructorDeclaration",
+            "        ConstructorDeclaration.Declaration",
+            "          Modifier.Public",
+            "          ConstructorDeclarator.TypeParametersSimpleTypeNameLpFormalParameterListRp",
+            "            SimpleTypeName.Identifier",
+            "              Identifier.Builtin Foo",
+            "          ConstructorBody.LcExplicitConstructorInvocationBlockStatementsRc",
           },
         },
         new String[][] {

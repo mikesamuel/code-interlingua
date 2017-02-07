@@ -12,6 +12,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.ClassBodyDeclarationNode;
+import com.mikesamuel.cil.ast.ClassBodyNode;
+import com.mikesamuel.cil.ast.ConstructorBodyNode;
+import com.mikesamuel.cil.ast.ConstructorDeclarationNode;
+import com.mikesamuel.cil.ast.ConstructorDeclaratorNode;
 import com.mikesamuel.cil.ast.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.EnumConstantNode;
 import com.mikesamuel.cil.ast.EnumDeclarationNode;
@@ -19,6 +24,8 @@ import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.MethodHeaderNode;
 import com.mikesamuel.cil.ast.ModifierNode;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.NormalClassDeclarationNode;
+import com.mikesamuel.cil.ast.SimpleTypeNameNode;
 import com.mikesamuel.cil.ast.TypeParameterNode;
 import com.mikesamuel.cil.ast.TypeParametersNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
@@ -63,6 +70,45 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         .outerClass(Optional.fromNullable(name.getOuterType()))
         .build();
     d.setDeclaredTypeInfo(partialTypeInfo);
+    if (d instanceof NormalClassDeclarationNode) {
+      ClassBodyNode body = d.firstChildWithType(ClassBodyNode.class);
+      boolean hasConstructor = false;
+      for (BaseNode child : body.getChildren()) {
+        if (child instanceof ClassBodyDeclarationNode
+            && child.firstChildWithType(ConstructorDeclarationNode.class)
+               != null) {
+          hasConstructor = true;
+          break;
+        }
+      }
+      // Insert a zero argument public constructor for any class that lacks one.
+      if (!hasConstructor) {
+        // TODO: Move this into a separate pass that runs just before the
+        // typing pass to introduce all synthetics including:
+        //   1. implied constructors in normal classes and enum classes
+        //   2. bridge methods for generic overrides a la example 15.12.4.5-1
+        //   docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.12.4.5
+        //   3. static accessors for private access between inner and outer
+        //   classes.
+        // This will require moving the code that allocates method variants to
+        // a common type that persists across multiple passes.
+        ConstructorDeclarationNode noopPublicCtor =
+            ConstructorDeclarationNode.Variant.Declaration.buildNode(
+                ModifierNode.Variant.Public.buildNode(),
+                ConstructorDeclaratorNode.Variant
+                .TypeParametersSimpleTypeNameLpFormalParameterListRp
+                    .buildNode(
+                        SimpleTypeNameNode.Variant.Identifier.buildNode(
+                            IdentifierNode.Variant.Builtin.buildNode(
+                                name.identifier))),
+                ConstructorBodyNode.Variant
+                .LcExplicitConstructorInvocationBlockStatementsRc.buildNode());
+
+        body.add(
+            ClassBodyDeclarationNode.Variant.ConstructorDeclaration.buildNode(
+                noopPublicCtor));
+      }
+    }
   }
 
 
@@ -75,6 +121,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
     for (BaseNode bodyElement : body.getChildren()) {
       processMembers(declaringClass, declaration, bodyElement, b);
     }
+
     return b.build();
   }
 

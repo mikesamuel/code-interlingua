@@ -70,8 +70,7 @@ import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.NumericTypeNode;
-import com.mikesamuel.cil.ast.PostExpressionNode;
-import com.mikesamuel.cil.ast.PreExpressionNode;
+import com.mikesamuel.cil.ast.PrefixOperatorNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.ReferenceTypeNode;
@@ -97,6 +96,7 @@ import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
+import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool.ParameterizedMember;
@@ -117,6 +117,8 @@ import com.mikesamuel.cil.ast.traits.BinaryOp;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.traits.LocalDeclaration;
+import com.mikesamuel.cil.ast.traits.MemberDeclaration;
+import com.mikesamuel.cil.ast.traits.MethodDescriptorReference;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.ast.traits.Typed;
@@ -153,6 +155,7 @@ final class TypingPass extends AbstractRewritingPass {
   private final Map<Name, StaticType> locals = Maps.newLinkedHashMap();
 
   static final boolean DEBUG = false;
+
   private static final Predicate<PrimitiveType> IS_INTEGRAL_NUMERIC =
       new Predicate<PrimitiveType>() {
         @Override
@@ -353,7 +356,7 @@ final class TypingPass extends AbstractRewritingPass {
           break type_switch;
         case StringLiteral:
           exprType = typePool.type(
-              JAVA_LANG_STRING, node.getSourcePosition(), logger);
+              JavaLang.JAVA_LANG_STRING, node.getSourcePosition(), logger);
           break type_switch;
         case ExpressionAtom: {
           ExpressionAtomNode e = (ExpressionAtomNode) node;
@@ -429,7 +432,10 @@ final class TypingPass extends AbstractRewritingPass {
                   TypeSpecification.autoScoped(containingTypes.peekLast()),
                   e.getSourcePosition(), logger);
               break type_switch;
-            case UnqualifiedClassInstanceCreationExpression:
+            case UnqualifiedClassInstanceCreationExpression: {
+              UnqualifiedClassInstanceCreationExpressionNode ctorCall =
+                  e.firstChildWithType(
+                      UnqualifiedClassInstanceCreationExpressionNode.class);
               Optional<ClassOrInterfaceTypeNode> type = node.finder(
                   ClassOrInterfaceTypeNode.class)
                   .exclude(NodeType.TypeArguments)
@@ -438,11 +444,14 @@ final class TypingPass extends AbstractRewritingPass {
                   .findOne();
               if (type.isPresent()) {
                 exprType = type.get().getStaticType();
+                processCallableInvocation(
+                    ctorCall, exprType, "<init>", ctorCall);
               } else {
                 error(node, "Class to instantiate unspecified");
                 exprType = StaticType.ERROR_TYPE;
               }
               break type_switch;
+            }
           }
           throw new AssertionError(e);
         }
@@ -531,6 +540,8 @@ final class TypingPass extends AbstractRewritingPass {
                   exprType = typePool.type(
                       innerTypeSpec, e.getSourcePosition(), logger);
                   Preconditions.checkNotNull(type).setStaticType(exprType);
+                  processCallableInvocation(
+                      instantiation, exprType, "<init>", instantiation);
                   break type_switch;
                 }
               }
@@ -590,12 +601,12 @@ final class TypingPass extends AbstractRewritingPass {
               break;
             case VoidDotClass:
               Preconditions.checkState(dimensionality == 0);
-              spec = JAVA_LANG_VOID;
+              spec = JavaLang.JAVA_LANG_VOID;
               break;
           }
           if (spec != null) {
             TypeSpecification classSpec = new TypeSpecification(
-                JAVA_LANG_CLASS.typeName,
+                JavaLang.JAVA_LANG_CLASS.typeName,
                 ImmutableList.of(new TypeBinding(spec)));
             exprType = typePool.type(
                 classSpec, e.getSourcePosition(), logger);
@@ -1098,7 +1109,8 @@ final class TypingPass extends AbstractRewritingPass {
           // type, or a compile-time error occurs.
           StaticType leftType = maybePassThru(left);
           StaticType rightType = maybePassThru(right);
-          StaticType stringType = typePool.type(JAVA_LANG_STRING, null, logger);
+          StaticType stringType = typePool.type(
+              JavaLang.JAVA_LANG_STRING, null, logger);
           boolean isStringConcat = operator != null
               && operator.getVariant() == AdditiveOperatorNode.Variant.Pls
               && (
@@ -1131,29 +1143,54 @@ final class TypingPass extends AbstractRewritingPass {
               exprType = passThru(e);
               break type_switch;
             case PrefixOperatorUnaryExpression:
+              PrefixOperatorNode operator = e.firstChildWithType(
+                  PrefixOperatorNode.class);
               Operand operand = nthOperandOf(
                   0, e, NodeType.UnaryExpression);
-              if (operand != null) {
-                exprType = unboxNumericAsNecessary(operand, passThru(operand));
-              } else {
+              if (operand == null || operator == null) {
                 exprType = StaticType.ERROR_TYPE;
-                error(e, "Missing operand");
+                error(e,
+                      operand == null
+                      ? "Missing operand" : "Missing operator");
+                break type_switch;
+              } else {
+                switch (operator.getVariant()) {
+                  case Bng:
+                    exprType = StaticType.T_BOOLEAN;
+                    StaticType operandType = unboxAsNecessary(
+                        operand, passThru(operand));
+                    if (!StaticType.T_BOOLEAN.equals(operandType)
+                        && !StaticType.ERROR_TYPE.equals(operandType)) {
+                      error(operand.getNode(),
+                            "Expected boolean not " + operandType);
+                    }
+                    break type_switch;
+                  case Dsh:
+                  case Pls:
+                  case Tld:  // TODO: check integral, and promote to int.
+                    exprType = promoteNumericUnary(
+                        operand, passThru(operand));
+                    break type_switch;
+                }
               }
-              break type_switch;
+              break;
           }
           throw new AssertionError(e);
         }
 
-        case PreExpression: {
-          PreExpressionNode e = (PreExpressionNode) node;
-          // TODO
-          throw new AssertionError(e);
-        }
-
+        case PreExpression:
         case PostExpression: {
-          PostExpressionNode e = (PostExpressionNode) node;
-          // TODO
-          throw new AssertionError(e);
+          Operand op = nthOperandOf(0, node, NodeType.LeftHandSideExpression);
+          if (op == null) {
+            error(node, "Missing operand");
+            exprType = StaticType.ERROR_TYPE;
+            break type_switch;
+          }
+          StaticType opType = maybePassThru(op);
+          opType = maybeUnbox(
+              op, opType, Predicates.instanceOf(NumericType.class));
+          exprType = opType;
+          break type_switch;
         }
 
         case CastExpression: {
@@ -1303,8 +1340,8 @@ final class TypingPass extends AbstractRewritingPass {
                     sourceType,
                     oneContainer);
             if (!fieldsFound.isEmpty()) {
-              // Implement name shadowing by taking the first that has any accessible
-              // with the right name.
+              // Implement name shadowing by taking the first that has any
+              // accessible with the right name.
               return Optional.of(fieldsFound);
             }
             return Optional.absent();
@@ -1313,12 +1350,18 @@ final class TypingPass extends AbstractRewritingPass {
         ImmutableList.of();
 
     if (fields.isEmpty()) {
+      if (containerType instanceof ArrayType && "length".equals(fieldName)) {
+        return StaticType.T_INT;
+      }
       error(
           e, "Reference to undefined or inaccessible field named " + fieldName);
+      return StaticType.ERROR_TYPE;
     }
 
     ParameterizedMember<FieldInfo> f = fields.get(0);
     TypeSpecification typeInDeclaringClass = f.member.getValueType();
+    Preconditions.checkNotNull(nameNode)
+        .setReferencedExpressionName(f.member.canonName);
 
     TypeSpecification valueTypeInContext;
 
@@ -1350,24 +1393,15 @@ final class TypingPass extends AbstractRewritingPass {
   private StaticType processMethodInvocation(BaseNode e) {
     Typed callee = e.firstChildWithType(Typed.class);
 
-    @Nullable TypeArgumentsNode args = e.firstChildWithType(
-        TypeArgumentsNode.class);
-
-    @Nullable Operand actualsOp = firstWithType(e, NodeType.ArgumentList);
-    @Nullable ArgumentListNode actuals = actualsOp != null
-        ? (ArgumentListNode) actualsOp.getNode() : null;
-
     MethodNameNode nameNode = e.firstChildWithType(
         MethodNameNode.class);
     IdentifierNode nameIdent = nameNode != null
         ? nameNode.firstChildWithType(IdentifierNode.class) : null;
     String name = nameIdent != null ? nameIdent.getValue() : null;
-
     if (name == null) {
       error(e, "Cannot determine name of method invoked");
       return StaticType.ERROR_TYPE;
     }
-    Preconditions.checkNotNull(nameNode);
 
     StaticType calleeType;
     if (callee == null) {
@@ -1406,6 +1440,19 @@ final class TypingPass extends AbstractRewritingPass {
         return StaticType.ERROR_TYPE;
       }
     }
+
+    return processCallableInvocation(e, calleeType, name, nameNode);
+  }
+
+  private StaticType processCallableInvocation(
+      BaseNode e, StaticType calleeType, String name,
+      MethodDescriptorReference descriptorRef) {
+    @Nullable TypeArgumentsNode args = e.firstChildWithType(
+        TypeArgumentsNode.class);
+
+    @Nullable Operand actualsOp = firstWithType(e, NodeType.ArgumentList);
+    @Nullable ArgumentListNode actuals = actualsOp != null
+        ? (ArgumentListNode) actualsOp.getNode() : null;
 
     ImmutableList.Builder<StaticType> actualTypes =
         ImmutableList.builder();
@@ -1450,8 +1497,8 @@ final class TypingPass extends AbstractRewritingPass {
     MethodSearchResult invokedMethod = invokedMethodOpt.get();
 
     // Associate method descriptor with invokedMethod.
-    nameNode.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
-    nameNode.setMethodDeclaringType(invokedMethod.m.declaringType);
+    descriptorRef.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
+    descriptorRef.setMethodDeclaringType(invokedMethod.m.declaringType);
 
     // Inject casts for actual parameters.
     if (this.injectCasts && actuals != null) {
@@ -1507,7 +1554,7 @@ final class TypingPass extends AbstractRewritingPass {
     if (node instanceof Typed) {
       StaticType t = ((Typed) node).getStaticType();
       if (t == null) {
-        error(node, "Untyped");
+        error(node, "Untyped " + node.getVariant());
         return StaticType.ERROR_TYPE;
       }
       return t;
@@ -1527,14 +1574,14 @@ final class TypingPass extends AbstractRewritingPass {
       if (child instanceof Typed) {
         StaticType t = ((Typed) child).getStaticType();
         if (t == null) {
-          error(child, "Untyped");
+          error(child, "Untyped " + child.getVariant());
           return StaticType.ERROR_TYPE;
         }
         return t;
       }
       return passThru(child);
     }
-    error(node, "Untyped");
+    error(node, "Untyped " + node.getVariant());
     return StaticType.ERROR_TYPE;
   }
 
@@ -1647,6 +1694,14 @@ final class TypingPass extends AbstractRewritingPass {
         return StaticType.ERROR_TYPE;
       }
       return declaredType;
+    } else if (node instanceof MemberDeclaration) {
+      MemberDeclaration decl = (MemberDeclaration) node;
+      MemberInfo info = decl.getMemberInfo();
+      if (info instanceof FieldInfo) {
+        return typePool.type(
+            ((FieldInfo) info).getValueType(),
+            decl.getSourcePosition(), logger);
+      }
     } else if (node instanceof ArrayCreationExpressionNode) {
       ArrayCreationExpressionNode newArr = (ArrayCreationExpressionNode) node;
       ArrayElementTypeNode elementTypeNode =
@@ -2044,23 +2099,6 @@ final class TypingPass extends AbstractRewritingPass {
       return StaticType.ERROR_TYPE;
     }
   }
-
-  private static final Name JAVA =
-      Name.DEFAULT_PACKAGE.child("java", Name.Type.PACKAGE);
-
-  private static final Name JAVA_LANG =
-      JAVA.child("lang", Name.Type.PACKAGE);
-
-  private static final TypeSpecification JAVA_LANG_STRING =
-      new TypeSpecification(JAVA_LANG.child("String", Name.Type.CLASS));
-
-  private static final TypeSpecification JAVA_LANG_CLASS =
-      new TypeSpecification(
-          JAVA_LANG.child("Class", Name.Type.CLASS),
-          ImmutableList.of(TypeBinding.WILDCARD));
-
-  private static final TypeSpecification JAVA_LANG_VOID =
-      new TypeSpecification(JAVA.child("Void", Name.Type.CLASS));
 
   /**
    * The containers to try in order when looking up a member.

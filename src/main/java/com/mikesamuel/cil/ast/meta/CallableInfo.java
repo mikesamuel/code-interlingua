@@ -11,6 +11,8 @@ public final class CallableInfo extends MemberInfo {
   private TypeSpecification returnType;
   private ImmutableList<TypeSpecification> formalTypes;
   private boolean isVariadic;
+  private boolean isSynthetic;
+  private boolean isBridge;
 
   /** */
   public CallableInfo(
@@ -77,6 +79,36 @@ public final class CallableInfo extends MemberInfo {
     this.isVariadic = isVariadic;
   }
 
+  /**
+   * True iff the method was synthesized to close the gap between the Java
+   * language view of method and member accessibility and the JVM view of the
+   * same.
+   */
+  public boolean isSynthetic() {
+    return isSynthetic;
+  }
+
+  /** @see #isSynthetic() */
+  public void setSynthetic(boolean isSynthetic) {
+    this.isSynthetic = isSynthetic;
+  }
+
+  /**
+   * True iff the method was synthesized to override a generic method from
+   * a super-type so that calls to the virtual super-type method will reach
+   * a method declared in the sub-type that semantically overrides but has a
+   * different descriptor because it uses the post-substitution type of a
+   * type parameter.
+   */
+  public boolean isBridge() {
+    return isBridge;
+  }
+
+  /** @see #isSynthetic() */
+  public void setIsBridge(boolean isBridge) {
+    this.isBridge = isBridge;
+  }
+
   @Override
   protected void appendExtraToString(StringBuilder sb) {
     if (!typeParameters.isEmpty()) {
@@ -96,6 +128,14 @@ public final class CallableInfo extends MemberInfo {
     if (returnType != null) {
       sb.append(" : ").append(returnType);
     }
+  }
+
+  /**
+   * True if the name is one of the names invoked via the invokespecial
+   * bytecode.
+   */
+  public static boolean isSpecialMethodName(String memberName) {
+    return "<init>".equals(memberName) || "<clinit>".equals(memberName);
   }
 
 }

@@ -471,6 +471,10 @@ ClassMemberDeclaration:
      ClassDeclaration
      InterfaceDeclaration
      ";"
+// TODO: Is this really a member declaration?  If there are multiple variable
+// declarators then there are multiple declarations here.
+// We could solve this by iterating out field declarations to have one
+// variable declarator per declaration.
 FieldDeclaration: (@trait=MemberDeclaration)
      [JavaDocComment] {!!FieldModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
@@ -549,6 +553,8 @@ ConstructorDeclarator:
      [TypeParameters] SimpleTypeName "(" [FormalParameterList] ")"
 ConstructorBody:
      "{" [ExplicitConstructorInvocation] [BlockStatements] "}"
+// TODO: Resolve constructor descriptor reference for explicit constructor
+// invocations.
 ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
@@ -854,7 +860,7 @@ ClassLiteral: (@trait=Typed)
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration)
+UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration,MethodDescriptorReference)
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
      // Lookahead avoids type arguments then diamond as in (new foo.Bar<T><>())
@@ -932,6 +938,8 @@ AndExpression: (@trait=Typed,BinaryOp)
 EqualityExpression: (@trait=Typed,BinaryOp)
      EqualityExpression EqualityOperator RelationalExpression
      RelationalExpression @anon
+// TODO: Attach metadata about whether primitive or reference comparison
+// is done.
 EqualityOperator: @operator
      "=="
      "!="
@@ -954,6 +962,8 @@ ShiftOperator: @operator
 AdditiveExpression: (@trait=Typed,BinaryOp)
      AdditiveExpression AdditiveOperator MultiplicativeExpression
      MultiplicativeExpression @anon
+// TODO: Attach metadata about whether numeric addition or
+// string concatenation is done.
 AdditiveOperator: @operator
      "+"
      "-"

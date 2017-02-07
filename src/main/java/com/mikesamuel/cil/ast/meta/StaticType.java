@@ -29,6 +29,8 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.parser.SourcePosition;
 
+import static com.mikesamuel.cil.ast.meta.JavaLang.JAVA_LANG;
+
 /**
  * Represents a Java type.
  */
@@ -184,10 +186,13 @@ public abstract class StaticType {
     public final String name;
     /** The wrapper class. */
     public final @Nullable Name wrapperType;
+    /** The primitive class, e.g. {@code boolean.class}. */
+    public final Class<?> primitiveClass;
     final String descriptorFragment;
 
     private PrimitiveType(
         String name, @Nullable Name wrapperType, @Nullable Name specType,
+        Class<?> primitiveClass,
         String descriptorFragment) {
       super(new TypeSpecification(
           specType != null
@@ -196,6 +201,8 @@ public abstract class StaticType {
       this.name = name;
       this.wrapperType = wrapperType;
       this.descriptorFragment = descriptorFragment;
+      Preconditions.checkArgument(primitiveClass.isPrimitive());
+      this.primitiveClass = primitiveClass;
     }
 
     @Override
@@ -223,8 +230,8 @@ public abstract class StaticType {
     private NumericType(
         String name, boolean isFloaty, int byteWidth,
         boolean isSigned, Name wrapperType,
-        String descriptorFragment) {
-      super(name, wrapperType, null, descriptorFragment);
+        Class<?> primitiveClass, String descriptorFragment) {
+      super(name, wrapperType, null, primitiveClass, descriptorFragment);
       this.isFloaty = isFloaty;
       this.byteWidth = byteWidth;
       this.isSigned = isSigned;
@@ -265,18 +272,6 @@ public abstract class StaticType {
       return Cast.DISJOINT;
     }
   }
-
-  private static final Name JAVA =
-      Name.DEFAULT_PACKAGE.child("java", Name.Type.PACKAGE);
-
-  private static final Name JAVA_LANG =
-      JAVA.child("lang", Name.Type.PACKAGE);
-
-  static final Name JAVA_LANG_OBJECT =
-      JAVA_LANG.child("Object", Name.Type.CLASS);
-
-  private static final Name JAVA_LANG_CLONEABLE =
-      JAVA_LANG.child("Cloneable", Name.Type.CLASS);
 
   /** A type returned when a type is malformed. */
   public static StaticType ERROR_TYPE = new StaticType(
@@ -319,8 +314,9 @@ public abstract class StaticType {
 
     private OneOffType(
         String name, @Nullable Name wrapperType, @Nullable Name specTypeName,
-        String descriptorFragment) {
-      super(name, wrapperType, specTypeName, descriptorFragment);
+        Class<?> primitiveClass, String descriptorFragment) {
+      super(
+          name, wrapperType, specTypeName, primitiveClass, descriptorFragment);
     }
 
     @Override
@@ -349,52 +345,53 @@ public abstract class StaticType {
   public static final PrimitiveType T_VOID = new OneOffType(
       "void", null,
       JAVA_LANG.child("Void", Name.Type.CLASS).child("TYPE", Name.Type.FIELD),
-      "V");
+      void.class, "V");
 
   /** Type {@code byte} */
   public static final PrimitiveType T_BOOLEAN = new OneOffType(
       "boolean", JAVA_LANG.child("Boolean", Name.Type.CLASS), null,
-      "Z");
+      boolean.class, "Z");
 
   /** Type {@code byte} */
   public static final NumericType T_BYTE = new NumericType(
       "byte", false, 1, true,
-      JAVA_LANG.child("Byte", Name.Type.CLASS), "B");
+      JAVA_LANG.child("Byte", Name.Type.CLASS), byte.class, "B");
 
   /** Type {@code short} */
   public static final NumericType T_SHORT = new NumericType(
       "short", false, 2, true,
-      JAVA_LANG.child("Short", Name.Type.CLASS), "S");
+      JAVA_LANG.child("Short", Name.Type.CLASS), short.class, "S");
 
   /** Type {@code char} */
   public static final NumericType T_CHAR = new NumericType(
       "char", false, 2, false,
-      JAVA_LANG.child("Character", Name.Type.CLASS), "C");
+      JAVA_LANG.child("Character", Name.Type.CLASS), char.class, "C");
 
   /** Type {@code int} */
   public static final NumericType T_INT = new NumericType(
       "int", false, 4, true,
-      JAVA_LANG.child("Integer", Name.Type.CLASS), "I");
+      JAVA_LANG.child("Integer", Name.Type.CLASS), int.class, "I");
 
   /** Type {@code long} */
   public static final NumericType T_LONG = new NumericType(
       "long", false, 8, true,
-      JAVA_LANG.child("Long", Name.Type.CLASS), "J");
+      JAVA_LANG.child("Long", Name.Type.CLASS), long.class, "J");
 
   /** Type {@code float} */
   public static final NumericType T_FLOAT = new NumericType(
       "float", true, 4, true,
-      JAVA_LANG.child("Float", Name.Type.CLASS), "F");
+      JAVA_LANG.child("Float", Name.Type.CLASS), float.class, "F");
 
   /** Type {@code double} */
   public static final NumericType T_DOUBLE = new NumericType(
       "double", true, 8, true,
-      JAVA_LANG.child("Double", Name.Type.CLASS), "D");
+      JAVA_LANG.child("Double", Name.Type.CLASS), double.class, "D");
 
   private static final Set<Name> ARRAY_SUPER_TYPES = ImmutableSet.of(
-      JAVA_LANG_OBJECT,
-      JAVA_LANG_CLONEABLE,
-      JAVA.child("io", Name.Type.PACKAGE).child("Serializable", Name.Type.CLASS)
+      JavaLang.JAVA_LANG_OBJECT.typeName,
+      JavaLang.JAVA_LANG_CLONEABLE.typeName,
+      JavaLang.JAVA.child("io", Name.Type.PACKAGE)
+          .child("Serializable", Name.Type.CLASS)
       );
 
   /**
@@ -804,7 +801,7 @@ public abstract class StaticType {
       /// lcta(U) = ? if U's upper bound is Object,
       TypeSpecification upperBound = upperBound(typeBinding);
       if (upperBound == null
-          || JAVA_LANG_OBJECT.equals(upperBound.typeName)) {
+          || JavaLang.JAVA_LANG_OBJECT.typeName.equals(upperBound.typeName)) {
         return TypeBinding.EXTENDS_OBJECT;
       }
       /// otherwise ? extends lub(U,Object)
@@ -894,7 +891,7 @@ public abstract class StaticType {
         } else {
           // HACK: This is not correct since we want to avoid the complexity of
           // infinite types.  See note on infTypeDetect above.
-          return TypeSpecification.JAVA_LANG_OBJECT;
+          return JavaLang.JAVA_LANG_OBJECT;
         }
       }
       return ERROR_TYPE.typeSpecification;
@@ -913,7 +910,7 @@ public abstract class StaticType {
 
     private TypeSpecification upperBound(TypeBinding b) {
       if (b.variance == Variance.SUPER) {
-        return TypeSpecification.JAVA_LANG_OBJECT;
+        return JavaLang.JAVA_LANG_OBJECT;
       }
       TypeSpecification upperBound = b.typeSpec;
       while (upperBound != null
@@ -923,13 +920,13 @@ public abstract class StaticType {
           // type bounds can't extend array types or <null>
           // due to a TypeInfoResolver that lacks a mapping for a name.
           Preconditions.checkState(ERROR_TYPE.equals(t));
-          return TypeSpecification.JAVA_LANG_OBJECT;
+          return JavaLang.JAVA_LANG_OBJECT;
         }
         ClassOrInterfaceType rt = (ClassOrInterfaceType) t;
         upperBound = rt.typeSpecification;
       }
       return upperBound != null
-          ? upperBound : TypeSpecification.JAVA_LANG_OBJECT;
+          ? upperBound : JavaLang.JAVA_LANG_OBJECT;
     }
 
 
@@ -1056,7 +1053,7 @@ public abstract class StaticType {
         } else {
           Preconditions.checkState(
               Name.Type.TYPE_PARAMETER == info.canonName.type);
-          erasedSpec = info.superType.or(TypeSpecification.JAVA_LANG_OBJECT)
+          erasedSpec = info.superType.or(JavaLang.JAVA_LANG_OBJECT)
               .withBindings(ImmutableList.of());
         }
         // If the type info resolver found the type info for this, then it
@@ -1168,7 +1165,7 @@ public abstract class StaticType {
                         // reference types and Object is a top for reference
                         // types.
                         && (left.variance != Variance.EXTENDS
-                            || !JAVA_LANG_OBJECT.equals(
+                            || !JavaLang.JAVA_LANG_OBJECT.typeName.equals(
                                 left.typeSpec.typeName))) {
                       result = Cast.CONFIRM_UNCHECKED;
                     } else if (left.variance != Variance.EXTENDS) {

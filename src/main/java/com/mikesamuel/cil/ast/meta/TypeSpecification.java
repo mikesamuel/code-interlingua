@@ -17,9 +17,6 @@ import com.google.common.collect.Sets;
  * consistency with {@link TypeInfo}.
  */
 public final class TypeSpecification {
-  /** The type specification for {@code Object}. */
-  public static final TypeSpecification JAVA_LANG_OBJECT =
-      new TypeSpecification(StaticType.JAVA_LANG_OBJECT);
 
   /**
    * The name of the raw element type.  If this specifies an
@@ -170,7 +167,7 @@ public final class TypeSpecification {
      * The canonical {@code ? extends Object} binding.
      */
     public static final TypeBinding EXTENDS_OBJECT = new TypeBinding(
-        Variance.EXTENDS, JAVA_LANG_OBJECT);
+        Variance.EXTENDS, JavaLang.JAVA_LANG_OBJECT);
 
     /** */
     public TypeBinding(
@@ -330,7 +327,7 @@ public final class TypeSpecification {
         case INVARIANT:
           return b.typeSpec;
         case SUPER:
-          return JAVA_LANG_OBJECT;
+          return JavaLang.JAVA_LANG_OBJECT;
       }
     }
     ImmutableList.Builder<TypeBinding> substs = null;
@@ -372,7 +369,7 @@ public final class TypeSpecification {
         if (infoOpt == null) {
           infoOpt = r.resolve(typeName);
         }
-        TypeSpecification paramBaseType = JAVA_LANG_OBJECT;
+        TypeSpecification paramBaseType = JavaLang.JAVA_LANG_OBJECT;
 
         find_type_parameter_bound:
         if (infoOpt.isPresent()) {
