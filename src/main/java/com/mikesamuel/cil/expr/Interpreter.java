@@ -7,6 +7,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -19,11 +20,14 @@ import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.BooleanLiteralNode;
+import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimExprsNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.EqualityOperatorNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
+import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.IncrDecrOperatorNode;
@@ -188,9 +192,31 @@ public final class Interpreter<VALUE> {
               ArrayType arrType = (ArrayType) resultType;
               DimExprsNode dimExprsNode = e.firstChildWithType(
                   DimExprsNode.class);
-              System.err.println("arrType=" + arrType + ", dimExprsNode=" + dimExprsNode);
-              // TODO
-              return errorCompletion;
+              ImmutableList<DimExprNode> dimExprs = dimExprsNode
+                  .finder(DimExprNode.class)
+                  .exclude(NodeType.Annotation, NodeType.Expression)
+                  .find();
+              int n = dimExprs.size();
+              int[] dims = new int[n];
+              for (int i = 0; i < n; ++i) {
+                Completion<VALUE> dimResult = interpret(
+                    dimExprs.get(i), locals, null);
+                if (!completedNormallyWithoutError(dimResult)) {
+                  return dimResult;
+                }
+                Optional<Integer> length = context.toInt(dimResult.value);
+                if (length.isPresent()) {
+                  dims[i] = length.get();
+                  if (dims[i] < 0) {
+                    error(dimExprs.get(i), "Negative array length: " + dims[i]);
+                    return errorCompletion;
+                  }
+                } else {
+                  error(dimExprs.get(i), "Invalid array length: " + dimResult);
+                  return errorCompletion;
+                }
+              }
+              return normal(buildMultiDimArray(dims, 0, arrType));
             } else {
               error(e, "Missing type info");
               return errorCompletion;
@@ -385,8 +411,27 @@ public final class Interpreter<VALUE> {
         }
         throw new AssertionError(rightResult);
       }
-      case ConditionalExpression:
-        break;
+      case ConditionalExpression: {
+        ConditionalExpressionNode e = (ConditionalExpressionNode) node;
+        if (e.getNChildren() != 3) { return errorCompletion; }
+        BaseNode cond = e.getChild(0);
+        Completion<VALUE> condResult = interpret(cond, locals, null);
+        if (!completedNormallyWithoutError(condResult)) {
+          error(cond, "Bad condition result " + condResult.value);
+          return condResult;
+        }
+        TriState b = context.toBoolean(condResult.value);
+        switch (b) {
+          case FALSE:
+            return interpret(e.getChild(2), locals, null);
+          case OTHER:
+            error(cond, "Bad condition result " + condResult.value);
+            return errorCompletion;
+          case TRUE:
+            return interpret(e.getChild(1), locals, null);
+        }
+        throw new AssertionError(condResult.value);
+      }
       case ConfirmCast:
         break;
       case ConstantDeclaration:
@@ -463,8 +508,10 @@ public final class Interpreter<VALUE> {
         break;
       case Dim:
         break;
-      case DimExpr:
-        break;
+      case DimExpr: {
+        ExpressionNode e = node.firstChildWithType(ExpressionNode.class);
+        return interpret(e, locals, null);
+      }
       case DimExprs:
         break;
       case Dims:
@@ -1112,6 +1159,22 @@ public final class Interpreter<VALUE> {
         break;
     }
     throw new AssertionError(node.getVariant());
+  }
+
+  private VALUE buildMultiDimArray(int[] dims, int d, ArrayType arrType) {
+    int len = dims[d];
+    VALUE arr = context.newArray(arrType.elementType, len);
+    if (d + 1 < dims.length) {
+      if (arrType.elementType instanceof ArrayType) {
+        ArrayType subArrType = (ArrayType) arrType.elementType;
+        for (int i = 0; i < len; ++i) {
+          context.arraySet(arr, i, buildMultiDimArray(dims, d + 1, subArrType));
+        }
+      } else {
+        return context.errorValue();
+      }
+    }
+    return arr;
   }
 
   private static BaseNode leftOperand(BaseNode node) {

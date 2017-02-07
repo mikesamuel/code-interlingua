@@ -112,9 +112,17 @@ public final class TestExpressions {
       Boolean.TRUE && B1,
       !Boolean.valueOf("false"),
   };
-  // TODO ?:
 
-  public static final boolean dereference(Object x) {
+  public static final String[][][] MULTI_DIM_ARRAY = new String[3][2][];
+
+  public static final Object[] HOOK_RESULTS = {
+      B0 ? true : TestExpressions.dereference((Boolean) null),
+      B1 ? TestExpressions.dereference((Boolean) null) : false,
+      Boolean.TRUE ? 0 : 1,
+      !B0 ? "foo" : "bar",
+  };
+
+  public static final <T> boolean dereference(T x) {
     return x.equals(Boolean.TRUE);
   }
 
