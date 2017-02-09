@@ -32,8 +32,8 @@ import com.mikesamuel.cil.ast.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.ModifierNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeVariableNode;
+import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.Name;
-import com.mikesamuel.cil.ast.meta.Name.Type;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
@@ -296,7 +296,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
               // java.lang.* is implicitly visible.
               TypeNameResolver.Resolvers.wildcardLookup(
-                  ImmutableList.of(JAVA_LANG), canonicalizer),
+                  ImmutableList.of(JavaLang.JAVA_LANG), canonicalizer),
 
               // Fully qualified names should resolve to themselves.
               canonicalizer);
@@ -317,7 +317,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       // Collect the declared type after resolving its super-types.
       Name typeName = decl.getDeclaredTypeInfo().canonName;
 
-      TypeSpecification superTypeSpec = new TypeSpecification(JAVA_LANG_OBJECT);
+      TypeSpecification superTypeSpec = JavaLang.JAVA_LANG_OBJECT;
 
       ImmutableList.Builder<TypeSpecification> interfaceNames =
           ImmutableList.builder();
@@ -384,13 +384,12 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
         case TypeParameter:
           break;
         case AnnotationTypeDeclaration:
-          interfaceNames.add(new TypeSpecification(
-              JAVA_LANG_ANNOTATION_ANNOTATION));
+          interfaceNames.add(JavaLang.JAVA_LANG_ANNOTATION_ANNOTATION);
           break;
         case EnumDeclaration:
           // Would be Enum<typeName> if Name captured generic parameters.
-          superTypeSpec = new TypeSpecification(
-              JAVA_LANG_ENUM, ImmutableList.of(new TypeBinding(typeName)));
+          superTypeSpec = JavaLang.JAVA_LANG_ENUM.withBindings(
+              ImmutableList.of(new TypeBinding(typeName)));
           break;
         case UnqualifiedClassInstanceCreationExpression:
         case EnumConstant:
@@ -448,7 +447,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     void collectImports(BaseNode node) {
       switch (node.getVariant().getNodeType()) {
         case PackageDeclaration:
-          this.currentPackage = toName(node, Type.PACKAGE);
+          this.currentPackage = toName(node, Name.Type.PACKAGE);
           break;
         case SingleTypeImportDeclaration:
           Name ambigName = AmbiguousNames.ambiguousNameOf(node);
@@ -478,7 +477,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           switch (outerTypes.size()) {
             case 0:
               // Assume anything not a type is a package.
-              this.wildcardImports.add(toName(node, Type.PACKAGE));
+              this.wildcardImports.add(toName(node, Name.Type.PACKAGE));
               break;
             case 1:
               this.wildcardImports.add(outerTypes.get(0));
@@ -501,11 +500,11 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     }
   }
 
-  static Name toName(BaseNode node, Type type) {
+  static Name toName(BaseNode node, Name.Type type) {
     List<String> identifiers = new ArrayList<>();
     findIdentifiers(node, identifiers);
     Name nm = null;
-    if (type == Type.PACKAGE) {
+    if (type == Name.Type.PACKAGE) {
       nm = Name.DEFAULT_PACKAGE;
     }
     for (String ident : identifiers) {
@@ -530,19 +529,4 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       }
     }
   }
-
-  static final Name JAVA_LANG = Name.DEFAULT_PACKAGE
-      .child("java", Type.PACKAGE)
-      .child("lang", Type.PACKAGE);
-
-  static final Name JAVA_LANG_OBJECT = JAVA_LANG
-      .child("Object", Type.CLASS);
-
-  static final Name JAVA_LANG_ENUM = JAVA_LANG
-      .child("Enum", Type.CLASS);
-
-  static final Name JAVA_LANG_ANNOTATION_ANNOTATION = JAVA_LANG
-      .child("annotation", Type.PACKAGE)
-      .child("Annotation", Type.CLASS);
-
 }
