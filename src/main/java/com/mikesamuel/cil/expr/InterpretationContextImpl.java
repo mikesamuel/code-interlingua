@@ -638,7 +638,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object arraySet(Object arr, int index, Object newElement) {
+  public Object arraySet(Object arr, int index, @Nullable Object newElement) {
     Class<?> arrType = arr.getClass();
     if (arrType.isArray()) {
       Class<?> componentType = arrType.getComponentType();
@@ -648,7 +648,7 @@ if (u == null) { Thread.dumpStack(); }
           Array.set(arr, index, converted);
         }
         return converted;
-      } else if (componentType.isInstance(newElement)) {
+      } else if (newElement == null || componentType.isInstance(newElement)) {
         Array.set(arr, index, isNullValue(newElement) ? null : newElement);
         return newElement;
       }
