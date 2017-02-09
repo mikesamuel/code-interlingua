@@ -399,12 +399,51 @@ public final class Name {
           sb.append('$');
           break;
         case METHOD:
-          return;
+          break;
         default:
           throw new AssertionError(name.parent.type);
       }
     }
-    Preconditions.checkNotNull(name.identifier);
-    sb.append(name.identifier);
+    if (name.type != Name.Type.METHOD) {
+      Preconditions.checkNotNull(name.identifier);
+      sb.append(name.identifier);
+    }
   }
+
+  /**
+   * Converts a class type to a type descriptor form: {@code Lfoo/bar/Name;}.
+   */
+  public String toTypeDescriptor() {
+    Preconditions.checkState(this.type == Name.Type.CLASS);
+    StringBuilder sb = new StringBuilder();
+    sb.append('L');
+    toDescriptor(this, sb);
+    return sb.append(';').toString();
+  }
+
+  private Name.Type toDescriptor(Name nm, StringBuilder sb) {
+    if (nm == Name.DEFAULT_PACKAGE) {
+      return null;
+    }
+    Name.Type parentType = toDescriptor(nm.parent, sb);
+    switch (nm.type) {
+      case CLASS:
+        if (parentType == Name.Type.CLASS) {
+          sb.append('$');
+        } else if (parentType == Name.Type.PACKAGE) {
+          sb.append('/');
+        }
+        sb.append(nm.identifier);
+        return Name.Type.CLASS;
+      case PACKAGE:
+        if (parentType != null) {
+          sb.append('/');
+        }
+        sb.append(nm.identifier);
+        return Name.Type.PACKAGE;
+      default:
+        return parentType;
+    }
+  }
+
 }

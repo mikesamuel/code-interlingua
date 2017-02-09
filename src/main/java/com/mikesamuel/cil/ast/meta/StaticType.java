@@ -1206,9 +1206,10 @@ public abstract class StaticType {
               case CONFIRM_CHECKED:  // Is this right?
               case CONFIRM_UNCHECKED:
                 return castToCtCommonSuper;
+              case DISJOINT:
+                return Cast.DISJOINT;
               case CONVERTING_LOSSLESS:
               case CONVERTING_LOSSY:
-              case DISJOINT:
               case BOX:
               case UNBOX:
                 throw new AssertionError(castToCtCommonSuper);
@@ -1287,35 +1288,7 @@ public abstract class StaticType {
         // Mimic type-erasure by using the upper-type bound.
         return type(info.superType.get(), null, null).toDescriptor();
       }
-      StringBuilder sb = new StringBuilder();
-      sb.append('L');
-      toDescriptor(this.info.canonName, sb);
-      return sb.append(';').toString();
-    }
-
-    private Name.Type toDescriptor(Name nm, StringBuilder sb) {
-      if (nm == Name.DEFAULT_PACKAGE) {
-        return null;
-      }
-      Name.Type parentType = toDescriptor(nm.parent, sb);
-      switch (nm.type) {
-        case CLASS:
-          if (parentType == Name.Type.CLASS) {
-            sb.append('$');
-          } else if (parentType == Name.Type.PACKAGE) {
-            sb.append('/');
-          }
-          sb.append(nm.identifier);
-          return Name.Type.CLASS;
-        case PACKAGE:
-          if (parentType != null) {
-            sb.append('/');
-          }
-          sb.append(nm.identifier);
-          return Name.Type.PACKAGE;
-        default:
-          return parentType;
-      }
+      return this.info.canonName.toTypeDescriptor();
     }
 
     @Override
