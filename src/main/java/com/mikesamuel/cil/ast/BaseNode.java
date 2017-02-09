@@ -151,6 +151,7 @@ public abstract class BaseNode implements NodeI {
    * A finder rooted at this that returns results of the given node type or
    * trait.
    */
+  @SuppressWarnings("synthetic-access")
   public <T> Finder<T> finder(Class<T> resultType) {
     return new Finder<>(this, resultType);
   }
@@ -164,7 +165,7 @@ public abstract class BaseNode implements NodeI {
     private Predicate<? super BaseNode> doNotEnter;
     private boolean allowNonStandard = false;
 
-    Finder(BaseNode root, Class<? extends T> matchType) {
+    private Finder(BaseNode root, Class<? extends T> matchType) {
       this.root = root;
       this.matchType = matchType;
       match = Predicates.instanceOf(matchType);

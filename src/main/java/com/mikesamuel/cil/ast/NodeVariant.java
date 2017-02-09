@@ -6,7 +6,6 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
-import com.mikesamuel.cil.parser.Lookahead1;
 import com.mikesamuel.cil.parser.ParSerable;
 
 /**
@@ -24,22 +23,8 @@ public interface NodeVariant extends ParSerable {
    */
   NodeType getNodeType();
 
-  /**
-   * True if the variant might be left-recursive.
-   */
-  boolean isLeftRecursive();
-
   /** @see {Enum#name()}. */
   String name();
-
-  /**
-   * The characters that might appear immediately after the input cursor
-   * when this variant matches a prefix of the input.
-   *
-   * @return null if this variant might match the empty string, so no
-   *     character is required at the input cursor for this variant to match.
-   */
-  Lookahead1 getLookahead1();
 
   /**
    * Produces a new node with this variant.
