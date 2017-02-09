@@ -1,9 +1,11 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.AdditiveOperatorNode;
 import com.mikesamuel.cil.ast.AndExpressionNode;
@@ -38,6 +41,7 @@ import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
 import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.CaseValueNode;
 import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
 import com.mikesamuel.cil.ast.CatchTypeNode;
@@ -51,6 +55,7 @@ import com.mikesamuel.cil.ast.ConvertCastNode;
 import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimNode;
 import com.mikesamuel.cil.ast.DimsNode;
+import com.mikesamuel.cil.ast.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
@@ -79,6 +84,7 @@ import com.mikesamuel.cil.ast.ShiftExpressionNode;
 import com.mikesamuel.cil.ast.ShiftOperatorNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
+import com.mikesamuel.cil.ast.SwitchStatementNode;
 import com.mikesamuel.cil.ast.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeArgumentsNode;
@@ -124,6 +130,7 @@ import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.SList;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * Attaches types to {@link Typed} expressions.
@@ -242,19 +249,9 @@ final class TypingPass extends AbstractRewritingPass {
           BaseNode anc = p.x.parent;
           if (anc instanceof LocalDeclaration) {
             LocalDeclaration localDecl = (LocalDeclaration) anc;
-            BaseNode typ = localDecl.getDeclaredTypeNode();
-            if (typ instanceof UnannTypeNode) {
-              UnannTypeNode typeNode = (UnannTypeNode) typ;
-              StaticType styp = typeNode.getStaticType();
-              if (anc.getVariant()
-                  == LastFormalParameterNode.Variant.Variadic) {
-                styp = typePool.type(
-                    styp.typeSpecification.arrayOf(), typ.getSourcePosition(),
-                    logger);
-              }
-              this.locals.put(name, styp);
-            } else if (typ != null) {
-              CatchTypeNode ctyp = (CatchTypeNode) typ;
+            BaseNode typeNode = localDecl.getDeclaredTypeNode();
+            if (typeNode instanceof CatchTypeNode) {
+              CatchTypeNode ctyp = (CatchTypeNode) typeNode;
               ImmutableList.Builder<ReferenceType> excTypes =
                   ImmutableList.builder();
               boolean isError = false;
@@ -281,6 +278,16 @@ final class TypingPass extends AbstractRewritingPass {
                   isError
                   ? StaticType.ERROR_TYPE
                   : typePool.leastUpperBound(excTypes.build()));
+            } else if (typeNode instanceof WholeType) {
+              StaticType styp = ((WholeType) typeNode).getStaticType();
+              if (anc.getVariant()
+                  == LastFormalParameterNode.Variant.Variadic) {
+                styp = typePool.type(
+                    styp.typeSpecification.arrayOf(),
+                    typeNode.getSourcePosition(),
+                    logger);
+              }
+              this.locals.put(name, styp);
             }
             break;
           }
@@ -1217,6 +1224,49 @@ final class TypingPass extends AbstractRewritingPass {
           break type_switch;
         }
 
+        case CaseValue: {
+          CaseValueNode e = (CaseValueNode) node;
+          SList<Parent> pathToSwitchStmt = pathFromRoot;
+          while (pathToSwitchStmt != null &&
+                 BETWEEN_SWITCH_AND_CASE.contains(
+                     pathToSwitchStmt.x.parent.getNodeType())) {
+            pathToSwitchStmt = pathToSwitchStmt.prev;
+          }
+          if (pathToSwitchStmt != null && pathToSwitchStmt.x.parent.getNodeType()
+              == NodeType.SwitchStatement) {
+            SwitchStatementNode switchStmt =
+                (SwitchStatementNode) pathToSwitchStmt.x.parent;
+            Operand expr = firstWithType(switchStmt, NodeType.Expression);
+            // We assume here that the switch expression is processed before
+            // the cases which works because the switch expression appears
+            // lexically before the cases.
+            exprType = ((ExpressionNode) expr.getNode()).getStaticType();
+            if (exprType instanceof ClassOrInterfaceType
+                && TO_WRAPPED.containsKey(
+                    ((ClassOrInterfaceType) exprType).info.canonName)) {
+              exprType = unboxAsNecessary(expr, exprType);
+            }
+            if (exprType != null) {
+              if (e.getVariant() == CaseValueNode.Variant.Ambiguous) {
+                // TODO: Do all the other case values have to be ambiguous
+                // for any to be interpreted as enum case values?
+                if (rewriteAmbiguousCaseValue(exprType, e)) {
+                  // Type the replacement expression.
+                  for (int i = 0, n = e.getNChildren(); i < n; ++i) {
+                    process(
+                        e.getChild(i),
+                        SList.append(pathFromRoot, new Parent(i, e)));
+                  }
+                }
+              }
+              break type_switch;
+            }
+          }
+          exprType = StaticType.ERROR_TYPE;
+          error(e, "Failed to find expression type for case statement");
+          break type_switch;
+        }
+
         default:
           throw new AssertionError(t);
       }
@@ -1295,6 +1345,122 @@ final class TypingPass extends AbstractRewritingPass {
         break;
       }
     }
+  }
+
+
+  private boolean rewriteAmbiguousCaseValue(
+      StaticType exprType, CaseValueNode e) {
+    Operand caseIdentOp = firstWithType(e, NodeType.Identifier);
+    if (caseIdentOp == null) {
+      error(e, "Missing identifier");
+      return false;
+    }
+    IdentifierNode caseIdentNode = (IdentifierNode) caseIdentOp.getNode();
+    String caseIdent = caseIdentNode.getValue();
+    if (caseIdent != null) {
+      // Rewrite as free field or as enum constant
+      StaticType enumType = typePool.type(
+          JavaLang.JAVA_LANG_ENUM, null, logger);
+      if (enumType instanceof ClassOrInterfaceType) {
+        // TODO: Should we check an isEnum bit instead to distinguish
+        // btw `enum E { ... }` and `class E extends Enum<E>`
+        Name enumFieldName = null;
+        switch (Compatibility.of(enumType.assignableFrom(exprType))) {
+          case IMPLICIT_CAST:
+            ClassOrInterfaceType cit = (ClassOrInterfaceType) exprType;
+            for (MemberInfo mi : cit.info.declaredMembers) {
+              if (mi instanceof FieldInfo
+                  // TODO: check a bit to differentiate enum
+                  // declarations from other fields of the enum
+                  && Modifier.isStatic(mi.modifiers)
+                  && mi.canonName.identifier.matches(caseIdent)) {
+                enumFieldName = mi.canonName;
+                break;
+              }
+            }
+            break;
+          case COMPATIBLE_AS_IS:  // The type Enum has no enum members.
+          case INCOMPATIBLE:
+            break;
+        }
+
+        SourcePosition pos = caseIdentNode.getSourcePosition();
+        if (enumFieldName != null) {
+          e.setVariant(CaseValueNode.Variant.EnumConstantNameExpCln);
+          FieldNameNode fieldName = FieldNameNode.Variant.Identifier
+              .buildNode(caseIdentNode)
+              .setReferencedExpressionName(enumFieldName);
+          fieldName.setSourcePosition(pos);
+          EnumConstantNameNode constantName =
+              EnumConstantNameNode.Variant.FieldName
+              .buildNode(fieldName);
+          constantName.setSourcePosition(pos);
+          e.replace(caseIdentOp.indexInParent, constantName);
+          return true;
+        } else {
+          Iterator<ExpressionNameResolver> enrIt =
+              expressionNameResolvers.iterator();
+          Iterator<DeclarationPositionMarker> dpmIt =
+              declarationPositionMarkers.iterator();
+          while (enrIt.hasNext()) {
+            Preconditions.checkState(dpmIt.hasNext());
+            ExpressionNameResolver enr = enrIt.next();
+            DeclarationPositionMarker dpm = dpmIt.next();
+            Optional<Name> nameOpt = enr.resolveReference(caseIdent, dpm);
+            if (nameOpt.isPresent()) {
+              Name name = nameOpt.get();
+              ExpressionAtomNode constantExpr = null;
+              switch (name.type) {
+                case LOCAL:
+                  LocalNameNode local = LocalNameNode.Variant.Identifier
+                      .buildNode(caseIdentNode);
+                  local.setReferencedExpressionName(name);
+                  local.setSourcePosition(pos);
+
+                  constantExpr = ExpressionAtomNode.Variant.Local
+                      .buildNode(local);
+                  break;
+                case FIELD:
+                  FieldNameNode fieldName = FieldNameNode.Variant.Identifier
+                      .buildNode(caseIdentNode)
+                      .setReferencedExpressionName(enumFieldName);
+                  fieldName.setSourcePosition(pos);
+                  constantExpr = ExpressionAtomNode.Variant.FreeField
+                      .buildNode(fieldName);
+                  break;
+                case AMBIGUOUS:
+                case CLASS:
+                case METHOD:
+                case PACKAGE:
+                case TYPE_PARAMETER:
+                  throw new AssertionError(name);
+              }
+              Preconditions.checkNotNull(constantExpr);
+              PrimaryNode primary = PrimaryNode.Variant.ExpressionAtom
+                  .buildNode(constantExpr);
+              primary.setSourcePosition(pos);
+
+              Optional<BaseNode> constExpr = Intermediates.wrap(
+                  primary, NodeType.ConstantExpression,
+                  new Function<BaseNode, Void>() {
+                    @Override
+                    public Void apply(BaseNode node) {
+                      node.setSourcePosition(pos);
+                      return null;
+                    }
+                  });
+              Preconditions.checkState(constExpr.isPresent());
+
+              e.setVariant(CaseValueNode.Variant.ConstantExpression);
+              e.replace(caseIdentOp.indexInParent, constExpr.get());
+              return true;
+            }
+          }
+          error(e, "Failed to disambiguate case " + caseIdent);
+        }
+      }
+    }
+    return false;
   }
 
   private StaticType processFieldAccess(BaseNode e) {
@@ -1988,18 +2154,25 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
   private Operand firstWithType(BaseNode node, NodeType t) {
-      if (!(node instanceof BaseInnerNode)) {
-        return null;
-      }
-      BaseInnerNode inode = (BaseInnerNode) node;
-      for (int i = 0, n = inode.getNChildren(); i < n; ++i) {
-        BaseNode child = inode.getChild(i);
-        if (child.getNodeType() == t) {
-          return new Operand(inode, i, t);
-        }
-      }
+    if (!(node instanceof BaseInnerNode)) {
       return null;
     }
+    BaseInnerNode inode = (BaseInnerNode) node;
+    for (int i = 0, n = inode.getNChildren(); i < n; ++i) {
+      BaseNode child = inode.getChild(i);
+      if (child.getNodeType() == t) {
+        return new Operand(inode, i, t);
+      }
+    }
+    return null;
+  }
+
+  private static final ImmutableSet<NodeType> BETWEEN_SWITCH_AND_CASE =
+      Sets.immutableEnumSet(
+          NodeType.SwitchLabel, NodeType.SwitchLabels,
+          NodeType.SwitchBlockStatementGroup,
+          NodeType.SwitchBlock);
+
 
   private static final ImmutableSet<StaticType> PROMOTE_TO_INT =
       ImmutableSet.of(

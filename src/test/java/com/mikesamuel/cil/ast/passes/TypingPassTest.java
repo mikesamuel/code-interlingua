@@ -24,12 +24,14 @@ import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.StatementExpressionNode;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
+import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
 import com.mikesamuel.cil.ast.traits.BinaryOp;
+import com.mikesamuel.cil.ast.traits.ExpressionNameReference;
 import com.mikesamuel.cil.ast.traits.MethodDescriptorReference;
 import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
@@ -1118,7 +1120,7 @@ public final class TypingPassTest extends TestCase {
             "double[][].class : /java/lang/Class</java/lang/Double.TYPE[][]>",
             "boolean.class : /java/lang/Class</java/lang/Boolean>",
             "boolean[].class : /java/lang/Class</java/lang/Boolean.TYPE[]>",
-            "void.class : /java/lang/Class</java/Void>",
+            "void.class : /java/lang/Class</java/lang/Void>",
         },
         null);
   }
@@ -2032,6 +2034,121 @@ public final class TypingPassTest extends TestCase {
         );
   }
 
+  @Test
+  public static void testEnumCaseConstants() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class Foo {",
+            "  enum E { A() , B() , C() , }",
+            "  static final E A = E.",
+            "  /* /Foo$E.B*/",
+            "  B;",
+            "  public static void main(String[] args) {",
+            "    E C = E.",
+            "    /* /Foo$E.B*/",
+            "    B;",
+            "    for (String arg :",
+            "        /* /Foo.main(1):args*/",
+            "        args) {",
+            "      E e = E.valueOf(/* /Foo.main(1):arg*/arg);",
+            "      switch (",
+            "          /* /Foo.main(1):e*/",
+            "          e) {",
+            "        case",
+            "        /* /Foo$E.A*/",  // Not /Foo.A
+            "        A : System.",
+            "        /* /java/lang/System.out*/",
+            "        out.println(\"A\");",
+            "        break;",
+            "        case",
+            "        /* /Foo$E.B*/",
+            "        B : System.",
+            "        /* /java/lang/System.out*/",
+            "        out.println(\"B\");",
+            "        break;",
+            "        case",
+            "        /* /Foo$E.C*/",  // Not /Foo.main(1):C
+            "        C : System.",
+            "        /* /java/lang/System.out*/",
+            "        out.println(\"C\");",
+            "        break;",
+            "        default : System.",
+            "        /* /java/lang/System.out*/",
+            "        out.println(\"D\");",
+            "        break;",
+            "      }",
+            "    }",
+            "  }",
+            "  public Foo() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//Foo",
+            "class Foo {",
+            "  enum E {",
+            "    A, B, C,",
+            "  }",
+            "",
+            "  static final E A = E.B;",
+            "",
+            "  public static void main(String[] args) {",
+            "    E C = E.B;",
+            "",
+            "    for (String arg : args) {",
+            "      E e = E.valueOf(arg);",
+            "      switch (e) {",
+            "      case A: System.out.println(\"A\"); break;",
+            "      case B: System.out.println(\"B\"); break;",
+            "      case C: System.out.println(\"C\"); break;",
+            "      default: System.out.println(\"D\"); break;",
+            "      }",
+            "    }",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        DECORATE_EXPR_NAMES);
+  }
+
+  @Test
+  public static void testSwitchValueUnboxing() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "class Foo {",
+            "  {",
+            "    switch ((int) (Integer.valueOf(1))) { case 1 : break; }",
+            "    switch (Integer.toString(1)) { case \"1\" : break; }",
+            "  }",
+            "  public Foo() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//Foo",
+            "class Foo {",
+            "  {",
+            "    switch (Integer.valueOf(1)) {",
+            "      case 1: break;",
+            "    }",
+            "    switch (Integer.toString(1)) {",
+            "      case \"1\": break;",
+            "    }",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        null,
+        null);
+  }
+
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 
     @Override
@@ -2075,4 +2192,20 @@ public final class TypingPassTest extends TestCase {
         }
 
       };
+
+  private static final Decorator DECORATE_EXPR_NAMES = new Decorator() {
+
+    @Override
+    public String decorate(BaseNode node) {
+      if (node instanceof ExpressionNameReference) {
+        Name referent = ((ExpressionNameReference) node)
+            .getReferencedExpressionName();
+        if (referent != null) {
+          return Java8Comments.blockCommentMinimalSpace(referent.toString());
+        }
+      }
+      return null;
+    }
+
+  };
 }

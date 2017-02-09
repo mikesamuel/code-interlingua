@@ -751,7 +751,7 @@ SwitchLabels:
 SwitchLabel:
      "case" CaseValue ":"
      "default" ":"
-CaseValue:
+CaseValue: (@trait=Typed)
      Identifier !!":" (@name=Ambiguous)  // Foo could be a constant reference or an enum name
      EnumConstantName !!":"
      ConstantExpression
