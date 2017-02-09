@@ -41,7 +41,20 @@ public final class JavaLang {
 
   /** */
   public static final TypeSpecification JAVA_LANG_VOID =
-      new TypeSpecification(JAVA.child("Void", Name.Type.CLASS));
+      new TypeSpecification(JAVA_LANG.child("Void", Name.Type.CLASS));
 
+  /** */
+  public static final TypeSpecification JAVA_LANG_ENUM = new TypeSpecification(
+          JAVA_LANG.child("Enum", Name.Type.CLASS));
 
+  /** */
+  public static final TypeSpecification JAVA_LANG_ANNOTATION_ANNOTATION =
+      new TypeSpecification(
+          JAVA_LANG
+          .child("annotation", Name.Type.PACKAGE)
+          .child("Annotation", Name.Type.CLASS));
+
+  /** */
+  public static final TypeSpecification JAVA_LANG_AUTOCLOSEABLE =
+      new TypeSpecification(JAVA_LANG.child("AutoCloseable", Name.Type.CLASS));
 }
