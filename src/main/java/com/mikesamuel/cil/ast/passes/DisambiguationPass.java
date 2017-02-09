@@ -222,7 +222,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         Preconditions.checkArgument(
             parent.getVariant() == PrimaryNode.Variant.Ambiguous);
         Optional<ImmutableList<Decomposed>> dsOpt = expressionNameOf(
-            pathFromRoot, names);
+            pathFromRoot, decomposed, names);
         if (!dsOpt.isPresent()) { break; }
         ImmutableList<Decomposed> ds = dsOpt.get();
         // The left hand side is the LR seed and the rest are fields.
@@ -274,7 +274,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
           expr = PrimaryNode.Variant.FieldAccess.buildNode(
               expr,
               FieldNameNode.Variant.Identifier.buildNode(
-                  d.idents.get(0).identifier));
+                  d.idents.get(0).identifier
+                  .setNamePartType(Name.Type.FIELD)));
         }
 
         expr.setSourcePosition(parent.getSourcePosition());
@@ -304,9 +305,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   @SuppressWarnings("synthetic-access")
   private Optional<ImmutableList<Decomposed>> expressionNameOf(
-      @Nullable SList<Parent> pathFromRoot,
+      @Nullable SList<Parent> pathFromRoot, Decomposed d,
       ContextFreeNamesNode names) {
-    Decomposed d = decompose(names);
     String ident0 = d.idents.get(0).identifier.getValue();
 
     // If the zero-th element matches in an expression name resolver, then
@@ -361,6 +361,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
     for (Name nm = d.name; nm != null && nm.type != Name.Type.PACKAGE;
         stripped = SList.append(stripped, nm), nm = nm.parent, ++nStripped) {
       ImmutableList<Name> canonNames = canonResolver.lookupTypeName(nm);
+      canonNames = filterOutAnonymousNames(canonNames);
       if (!canonNames.isEmpty()) {
         if (canonNames.size() > 1) {
           error(
@@ -389,6 +390,22 @@ final class DisambiguationPass extends AbstractRewritingPass {
     // Else warn.
     error(names, "Cannot resolve ambiguous name " + d.name);
     return Optional.absent();
+  }
+
+  private ImmutableList<Name> filterOutAnonymousNames(
+      ImmutableList<Name> canonNames) {
+    ImmutableList.Builder<Name> b = ImmutableList.builder();
+    for (Name canonName : canonNames) {
+      Optional<TypeInfo> typeInfoOpt = this.typeInfoResolver.resolve(canonName);
+      if (typeInfoOpt.isPresent()) {
+        TypeInfo typeInfo = typeInfoOpt.get();
+        if (!typeInfo.isAnonymous) {
+          b.add(canonName);
+          // TODO: do we need to check that outer types are not anonymous.
+        }
+      }
+    }
+    return b.build();
   }
 
   private @Nullable Decomposed decompose(ContextFreeNamesNode node) {
@@ -647,7 +664,9 @@ final class DisambiguationPass extends AbstractRewritingPass {
       PackageOrTypeNameNode child = buildPackageOrTypeNameNode(
           idents, 0, nIdents - 1);
       newTypeNameNode = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .buildNode(child, idents.get(nIdents - 1).identifier);
+          .buildNode(
+              child,
+              idents.get(nIdents - 1).identifier);
     }
     newTypeNameNode.copyMetadataFrom(orig);
     ImmutableList<Name> canonNames = resolver.lookupTypeName(d.name);
