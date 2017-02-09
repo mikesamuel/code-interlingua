@@ -4,6 +4,7 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -14,6 +15,8 @@ import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.ClassTypeNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ConstantDeclarationNode;
+import com.mikesamuel.cil.ast.EnumConstantNameNode;
+import com.mikesamuel.cil.ast.EnumConstantNode;
 import com.mikesamuel.cil.ast.FieldDeclarationNode;
 import com.mikesamuel.cil.ast.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.FormalParameterListNode;
@@ -226,6 +229,21 @@ final class ClassMemberPass extends AbstractPass<Void> {
           } else {
             error(node, "Missing member info for " + fieldName);
           }
+        }
+      }
+    } else if (node instanceof EnumConstantNode) {
+      EnumConstantNode constant = (EnumConstantNode) node;
+      EnumConstantNameNode nameNode =
+          constant.firstChildWithType(EnumConstantNameNode.class);
+      if (nameNode != null) {
+        Optional<IdentifierNode> identNode =
+            nameNode.finder(IdentifierNode.class).findOne();
+        if (identNode.isPresent()) {
+          FieldInfo info = (FieldInfo) memberWithName(
+              typeInfo,
+              typeInfo.canonName.child(
+                  identNode.get().getValue(), Name.Type.FIELD));
+          info.setValueType(new TypeSpecification(typeInfo.canonName));
         }
       }
     }
