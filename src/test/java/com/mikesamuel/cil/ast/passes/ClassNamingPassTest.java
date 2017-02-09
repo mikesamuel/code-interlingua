@@ -54,6 +54,8 @@ public final class ClassNamingPassTest extends TestCase {
             "  ;",
             "  X(int i) { }",
             "  static { }",
+            // declared valueOf should not collide with implied valueOf(String)
+            "  public static final A valueOf(int i) { return null; }",
             "}",
           },
           {
@@ -187,11 +189,16 @@ public final class ClassNamingPassTest extends TestCase {
           "public /foo/bar/D.<init>(1)",
           "public static final /Foo$A.B",
           "public static final /Foo$A.C",
+          "public static /Foo$A.values(1)",
+          "public static /Foo$A.valueOf(1)",
           "public static final /com/example/X.A",
           "public static final /com/example/X.B",
           "public static final /com/example/X.C",
           "private /com/example/X.<init>(1)",
           "private static /com/example/X.<clinit>(1)",
+          "public static final /com/example/X.valueOf(1)",  // Declared
+          "public static /com/example/X.values(1)",
+          "public static /com/example/X.valueOf(2)",  // Implicit
           "/com/example/parameterized/P.foo(1)",
           "/com/example/parameterized/P.bar(1)",
           "public /com/example/parameterized/P.<init>(1)"

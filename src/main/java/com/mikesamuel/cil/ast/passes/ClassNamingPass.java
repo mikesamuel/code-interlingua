@@ -31,9 +31,11 @@ import com.mikesamuel.cil.ast.TypeParametersNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
+import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
+import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.traits.CallableDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
@@ -112,7 +114,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
   }
 
 
-  private static ImmutableList<MemberInfo> findMembers(
+  private ImmutableList<MemberInfo> findMembers(
       Name declaringClass, TypeDeclaration declaration) {
     BaseNode body = declaration.getChild(declaration.getNChildren() - 1);
 
@@ -120,6 +122,36 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
     for (BaseNode bodyElement : body.getChildren()) {
       processMembers(declaringClass, declaration, bodyElement, b);
+    }
+
+    if (declaration instanceof EnumDeclarationNode) {
+      // Add methods specified in
+      // https://docs.oracle.com/javase/specs/jls/se8/html/jls-8.html#jls-8.9.3
+      MethodVariantPool methodVariantPool = this.getMethodVariantPool();
+
+      // public static E[] values();
+      CallableInfo values = new CallableInfo(
+          Modifier.PUBLIC | Modifier.STATIC,
+          methodVariantPool.allocateVariant(declaringClass, "values"),
+          ImmutableList.of());
+      values.setDescriptor("()[" + declaringClass.toTypeDescriptor());
+      values.setFormalTypes(ImmutableList.of());
+      values.setReturnType(new TypeSpecification(declaringClass, 1));
+
+      // public static E valueOf(String name);
+      Name valueOfName = methodVariantPool.allocateVariant(
+          declaringClass, "valueOf");
+      CallableInfo valueOf = new CallableInfo(
+          Modifier.PUBLIC | Modifier.STATIC,
+          valueOfName,
+          ImmutableList.of(valueOfName.child("name", Name.Type.LOCAL)));
+      valueOf.setDescriptor(
+          "(Ljava/lang/String;)" + declaringClass.toTypeDescriptor());
+      valueOf.setFormalTypes(ImmutableList.of(JavaLang.JAVA_LANG_STRING));
+      valueOf.setReturnType(new TypeSpecification(declaringClass));
+
+      b.add(values);
+      b.add(valueOf);
     }
 
     return b.build();

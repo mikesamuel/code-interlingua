@@ -25,7 +25,7 @@ import com.mikesamuel.cil.ast.traits.TypeScope;
  */
 abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
   private final Map<Name, Integer> anonClassCounters = new HashMap<>();
-  private final Map<Name, Integer> methodCounters = new HashMap<>();
+  private final MethodVariantPool methodVariantPool = new MethodVariantPool();
   private final Map<TypeScope, TypeScope> scopeToParentScope =
       new IdentityHashMap<>();
   private Name pkg = Name.DEFAULT_PACKAGE;
@@ -60,15 +60,12 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       String methodName = cd.getMethodName();
       int methodVariant = cd.getMethodVariant();
       if (methodVariant == 0) {
-        Name nameWithoutVariant = childOuter.method(methodName, 1);
-        Integer ordinal = methodCounters.get(nameWithoutVariant);
-        if (ordinal == null) { ordinal = 0; }
-        ordinal += 1;
-        methodCounters.put(nameWithoutVariant, ordinal);
-        methodVariant = ordinal;
-        cd.setMethodVariant(methodVariant);
+        childOuter = methodVariantPool.allocateVariant(
+            childOuter, methodName);
+        cd.setMethodVariant(childOuter.variant);
+      } else {
+        childOuter = childOuter.method(methodName, methodVariant);
       }
-      childOuter = childOuter.method(methodName, methodVariant);
     }
 
     switch (nt) {
@@ -148,6 +145,10 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
   protected final Map<TypeScope, TypeScope> getScopeToParentMap() {
     return Collections.unmodifiableMap(
         new IdentityHashMap<>(scopeToParentScope));
+  }
+
+  protected final MethodVariantPool getMethodVariantPool() {
+    return this.methodVariantPool;
   }
 
   @Override
