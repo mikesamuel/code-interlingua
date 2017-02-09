@@ -123,7 +123,7 @@ public final class DisambiguationPassTest extends TestCase {
             "        TypeName.Identifier : /java/lang/Math",
             "          Identifier.Builtin Math",
             "      FieldName.Identifier",
-            "        Identifier.Builtin PI",
+            "        Identifier.Builtin PI : FIELD",
             "    MethodName.Identifier",
             "      Identifier.Builtin hashCode",
         },
@@ -153,7 +153,7 @@ public final class DisambiguationPassTest extends TestCase {
             "            Identifier.Builtin lang : PACKAGE",
             "          Identifier.Builtin Math",
             "      FieldName.Identifier",
-            "        Identifier.Builtin PI",
+            "        Identifier.Builtin PI : FIELD",
             "    MethodName.Identifier",
             "      Identifier.Builtin hashCode",
         },
@@ -334,7 +334,7 @@ public final class DisambiguationPassTest extends TestCase {
             "          Identifier.Builtin lang : PACKAGE",
             "        Identifier.Builtin System",
             "    FieldName.Identifier",
-            "      Identifier.Builtin err",
+            "      Identifier.Builtin err : FIELD",
             "  MethodName.Identifier",
             "    Identifier.Builtin println",
             "  ArgumentList.ExpressionComExpression",
@@ -395,7 +395,7 @@ public final class DisambiguationPassTest extends TestCase {
             "      FieldName.Identifier : /foo/Foo.x",
             "        Identifier.Builtin x",
             "    FieldName.Identifier",
-            "      Identifier.Builtin y",
+            "      Identifier.Builtin y : FIELD",
           },
           {
             "AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
@@ -409,7 +409,7 @@ public final class DisambiguationPassTest extends TestCase {
             "      FieldName.Identifier : /foo/Foo.x",
             "        Identifier.Builtin x",
             "    FieldName.Identifier",
-            "      Identifier.Builtin y",
+            "      Identifier.Builtin y : FIELD",
           }
         },
         new String[][] {
@@ -670,6 +670,34 @@ public final class DisambiguationPassTest extends TestCase {
           "}",
         },
         nth(0, with(NodeType.UnqualifiedClassInstanceCreationExpression)),
+        true,
+        TYPE_AND_NAME_DECORATOR);
+  }
+
+  @Test
+  public static void testEnumConstants() {
+    assertDisambiguated(
+        new String[] {
+            "Primary.FieldAccess",
+            "  ExpressionAtom.StaticMember",
+            "    TypeName.PackageOrTypeNameDotIdentifier : /C$E",
+            "      PackageOrTypeName.Identifier",
+            "        Identifier.Builtin C : CLASS",
+            "      Identifier.Builtin E",
+            "  FieldName.Identifier",
+            "    Identifier.Builtin B : FIELD",
+        },
+        new String[] {
+          "//C",
+          "import static java.lang.System.out;",
+          "class C {",
+          "  enum E { A, B,; }",
+          "  static {",
+          "    E x = E.B;",
+          "  }",
+          "}",
+        },
+        nth(0, with(NodeType.Primary)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
