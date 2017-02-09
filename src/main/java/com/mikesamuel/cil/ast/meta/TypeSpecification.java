@@ -163,12 +163,6 @@ public final class TypeSpecification {
     public static final TypeBinding WILDCARD = new TypeBinding(
         Variance.EXTENDS, null);
 
-    /**
-     * The canonical {@code ? extends Object} binding.
-     */
-    public static final TypeBinding EXTENDS_OBJECT = new TypeBinding(
-        Variance.EXTENDS, JavaLang.JAVA_LANG_OBJECT);
-
     /** */
     public TypeBinding(
         Variance variance, @Nullable TypeSpecification typeSpec) {

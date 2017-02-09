@@ -7,6 +7,8 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import org.junit.Assert;
 
 import com.google.common.base.Function;
@@ -174,7 +176,7 @@ class PassTestHelpers {
   }
 
   static String serializeNodes(
-      Iterable<? extends BaseNode> nodes, Decorator decorator)
+      Iterable<? extends BaseNode> nodes, @Nullable Decorator decorator)
   throws UnparseVerificationException {
     StringBuilder sb = new StringBuilder();
     for (BaseNode node : nodes) {

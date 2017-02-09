@@ -10,6 +10,7 @@ import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
+import com.mikesamuel.cil.util.TriState;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 
 /**

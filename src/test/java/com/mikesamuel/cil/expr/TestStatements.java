@@ -6,11 +6,14 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * This class is compiled when tests are compiled, but the source is also
  * available as a resource, so the interpreted sequence of events can be
  * compared to that produced by the javac-compiled version.
  */
+@SuppressFBWarnings
 public class TestStatements {
   /** Appends a bunch of stuff that exercises statement execution. */
   public static List<String> f(String s) {
@@ -35,6 +38,7 @@ public class TestStatements {
         ls.add("if(t)if(f)else");
     // class declarations interrupt blocks in the AST.  Test that execution
     // resumes on the other side.
+    @SuppressWarnings("unused")
     class C {
       public String get() { return "C.get"; }
     }

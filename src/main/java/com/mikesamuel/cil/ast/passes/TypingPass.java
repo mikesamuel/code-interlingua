@@ -131,6 +131,7 @@ import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
+import com.mikesamuel.cil.util.TriState;
 
 /**
  * Attaches types to {@link Typed} expressions.
@@ -522,7 +523,9 @@ final class TypingPass extends AbstractRewritingPass {
                   ? typeToInstantiate.firstChildWithType(
                       ClassOrInterfaceTypeNode.class)
                   : null;
-              Name innerName = AmbiguousNames.ambiguousNameOf(type);
+              Name innerName = type != null
+                  ? AmbiguousNames.ambiguousNameOf(type)
+                  : null;
               if (outerType != null && innerName != null) {
                 TypeSpecification outerSpec = outerType.typeSpecification;
                 if (outerSpec.nDims == 0
@@ -1070,9 +1073,7 @@ final class TypingPass extends AbstractRewritingPass {
               rightType = promoteNumericUnary(right, rightType);
               if (leftType instanceof NumericType
                   && rightType instanceof NumericType) {
-                if (leftType instanceof NumericType
-                    && !((NumericType) leftType).isFloaty
-                    && rightType instanceof NumericType
+                if (!((NumericType) leftType).isFloaty
                     && !((NumericType) rightType).isFloaty) {
                   exprType = leftType;
                 } else {
@@ -1423,7 +1424,7 @@ final class TypingPass extends AbstractRewritingPass {
                 case FIELD:
                   FieldNameNode fieldName = FieldNameNode.Variant.Identifier
                       .buildNode(caseIdentNode)
-                      .setReferencedExpressionName(enumFieldName);
+                      .setReferencedExpressionName(name);
                   fieldName.setSourcePosition(pos);
                   constantExpr = ExpressionAtomNode.Variant.FreeField
                       .buildNode(fieldName);
@@ -1593,7 +1594,6 @@ final class TypingPass extends AbstractRewritingPass {
       // be used as left hand sides.
       calleeType = callee.getStaticType();
       if (calleeType == null) {
-        calleeType = StaticType.ERROR_TYPE;
         error(callee, "Cannot determine type for method target");
         return StaticType.ERROR_TYPE;
       } else if (calleeType instanceof PrimitiveType
@@ -2769,16 +2769,18 @@ final class TypingPass extends AbstractRewritingPass {
 
       boolean oneMoreSpecificThan = false;
       for (int i = 0; i < nonVarArgsArity; ++i) {
-        Boolean b = parameterSpecificity(aTypes.get(i), bTypes.get(i));
-        if (b == null) {
-          continue;
-        } else if (b) {
-          oneMoreSpecificThan = true;
-        } else {
-          if (DEBUG) {
-            System.err.println("\tparameterSpecificity " + i + " = false");
-          }
-          return false;
+        TriState s = parameterSpecificity(aTypes.get(i), bTypes.get(i));
+        switch (s) {
+          case OTHER:
+            continue;
+          case TRUE:
+            oneMoreSpecificThan = true;
+            break;
+          case FALSE:
+            if (DEBUG) {
+              System.err.println("\tparameterSpecificity " + i + " = false");
+            }
+            return false;
         }
       }
 
@@ -2811,19 +2813,20 @@ final class TypingPass extends AbstractRewritingPass {
       int bIndex = nonVarArgsArity;
       for (int aNonVariadicLimit = aArity - (aIsVariadic ? 1 : 0);
            aIndex < aNonVariadicLimit; ++aIndex) {
-        Boolean b = parameterSpecificity(
+        TriState s = parameterSpecificity(
             aTypes.get(aIndex), bMarginalFormalType);
-        if (b == null) {
-          // This is the case because the required min arity is now more
-          // specific.
-          oneMoreSpecificThan = true;
-        } else if (b) {
-          oneMoreSpecificThan = true;
-        } else {
-          if (DEBUG) {
-            System.err.println("\tExtra arg not more specific " + aIndex);
-          }
-          return false;
+        switch (s) {
+          case OTHER:
+          case TRUE:
+            // This is the case because the required min arity is now more
+            // specific.
+            oneMoreSpecificThan = true;
+            break;
+          case FALSE:
+            if (DEBUG) {
+              System.err.println("\tExtra arg not more specific " + aIndex);
+            }
+            return false;
         }
       }
       oneMoreSpecificThan = true;
@@ -2844,7 +2847,7 @@ final class TypingPass extends AbstractRewritingPass {
         //   (A...)
         //   (B...)
         // -> A is more specific than B
-        Boolean specificity;
+        TriState specificity;
         if (aIsVariadic) {
           specificity = parameterSpecificity(
               aMarginalFormalType, bMarginalFormalType);
@@ -2861,7 +2864,11 @@ final class TypingPass extends AbstractRewritingPass {
               "\tBoth variadic specificity=" + specificity
               + ", oneMoreSpecificThan=" + oneMoreSpecificThan);
         }
-        return specificity != null ? specificity : oneMoreSpecificThan;
+        switch (specificity) {
+          case TRUE:  return true;
+          case FALSE: return false;
+          case OTHER: return oneMoreSpecificThan;
+        }
       }
 
       // We can safely return false here because the cases below do not
@@ -2881,22 +2888,27 @@ final class TypingPass extends AbstractRewritingPass {
       return false;
     }
 
-    private static Boolean parameterSpecificity(
+    /**
+     * True -> a is more specific than b;
+     * Other -> a is the same as b.
+     * False -> a is not more specific than b.
+     */
+    private static TriState parameterSpecificity(
         StaticType aType, StaticType bType) {
       Cast c = bType.assignableFrom(aType);
       switch (c) {
         case CONFIRM_SAFE:
         case CONFIRM_UNCHECKED:
         case CONVERTING_LOSSLESS:
-          return true;
+          return TriState.TRUE;
         case CONVERTING_LOSSY:
         case BOX:
         case UNBOX:
         case DISJOINT:
         case CONFIRM_CHECKED:
-          return false;
+          return TriState.FALSE;
         case SAME:
-          return null;
+          return TriState.OTHER;
       }
       throw new AssertionError(c);
     }

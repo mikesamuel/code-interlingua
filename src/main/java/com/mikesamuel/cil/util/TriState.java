@@ -1,4 +1,4 @@
-package com.mikesamuel.cil.expr;
+package com.mikesamuel.cil.util;
 
 /** Boolean or a context dependent other. */
 public enum TriState {

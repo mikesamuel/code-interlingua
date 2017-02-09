@@ -35,6 +35,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.util.LogUtils;
+import com.mikesamuel.cil.util.TriState;
 
 /**
  * An interpolation context that uses
@@ -75,17 +76,17 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public boolean isErrorValue(Object v) {
+  public boolean isErrorValue(@Nullable Object v) {
     return v instanceof ErrorValue;
   }
 
   @Override
-  public Object nullValue() {
+  public @Nullable Object nullValue() {
     return null;
   }
 
   @Override
-  public boolean isNullValue(Object v) {
+  public boolean isNullValue(@Nullable Object v) {
     return v == null;
   }
 
@@ -95,7 +96,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public Object getThisValue(Name className) {
+  public @Nullable Object getThisValue(Name className) {
     return this.thisValues.get(className);
   }
 
@@ -110,7 +111,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public TriState toBoolean(Object v) {
+  public TriState toBoolean(@Nullable Object v) {
     if (v instanceof Boolean) {
       return ((Boolean) v).booleanValue() ? TriState.TRUE : TriState.FALSE;
     }
@@ -118,7 +119,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public Optional<Integer> toInt(Object v) {
+  public Optional<Integer> toInt(@Nullable Object v) {
     if (v instanceof Integer) {
       return Optional.of((Integer) v);
     }
@@ -171,7 +172,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public Object sameReference(Object u, Object v) {
+  public Object sameReference(@Nullable Object u, @Nullable Object v) {
     if (isErrorValue(u) || isErrorValue(v)) { return ErrorValue.INSTANCE; }
     return u == v;
   }
@@ -206,7 +207,7 @@ implements InterpretationContext<Object> {
     DOUBLE,
   }
 
-  private static @Nullable Number asNumber(Object v) {
+  private static @Nullable Number asNumber(@Nullable Object v) {
     if (v instanceof Number) { return (Number) v; }
     if (v instanceof Character) {
       return Short.valueOf((short) ((Character) v).charValue());
@@ -248,7 +249,7 @@ implements InterpretationContext<Object> {
     return delta < 0 ? nt : mt;
   }
 
-  private Object convertForAssignment(Object v, Class<?> primType) {
+  private Object convertForAssignment(@Nullable Object v, Class<?> primType) {
     PrimitiveType pt = Preconditions.checkNotNull(CL_TO_PRIM.get(primType));
     Number n;
     switch (pt) {
@@ -308,7 +309,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public Object primitiveLessThan(Object u, Object v) {
+  public Object primitiveLessThan(@Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -326,7 +327,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public Object primitiveAddition(Object u, Object v) {
+  public Object primitiveAddition(@Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -337,7 +338,6 @@ implements InterpretationContext<Object> {
         case FLOAT:  return m.floatValue()  + n.floatValue();
       }
     }
-if (u == null) { Thread.dumpStack(); }
     if (!(isErrorValue(u) || isErrorValue(v))) {
       logger.severe("Failed to compute " + u + " + " + v);
     }
@@ -345,7 +345,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveSubtraction(Object u, Object v) {
+  public Object primitiveSubtraction(@Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -363,7 +363,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object stringConcatenation(Object u, Object v) {
+  public Object stringConcatenation(@Nullable Object u, @Nullable Object v) {
     if (isErrorValue(u) || isErrorValue(v)) {
       return ErrorValue.INSTANCE;
     }
@@ -371,7 +371,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveModulus(Object u, Object v) {
+  public Object primitiveModulus(@Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -401,7 +401,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveDivision(Object u, Object v) {
+  public Object primitiveDivision(@Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -431,7 +431,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveOr(Object u, Object v) {
+  public Object primitiveOr(@Nullable Object u, @Nullable Object v) {
     if (u instanceof Boolean && v instanceof Boolean) {
       return ((Boolean) u) | ((Boolean) v);
     }
@@ -453,7 +453,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveAnd(Object u, Object v) {
+  public Object primitiveAnd(@Nullable Object u, @Nullable Object v) {
     if (u instanceof Boolean && v instanceof Boolean) {
       return ((Boolean) u) & ((Boolean) v);
     }
@@ -475,7 +475,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveXor(Object u, Object v) {
+  public Object primitiveXor(@Nullable Object u, @Nullable Object v) {
     if (u instanceof Boolean && v instanceof Boolean) {
       return ((Boolean) u) ^ ((Boolean) v);
     }
@@ -516,7 +516,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveRshift(Object u, Object v) {
+  public Object primitiveRshift(@Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -554,7 +554,8 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveMultiplication(Object u, Object v) {
+  public Object primitiveMultiplication(
+      @Nullable Object u, @Nullable Object v) {
     Number m = asNumber(u);
     Number n = asNumber(v);
     if (m != null && n != null) {
@@ -572,7 +573,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveNegation(Object u) {
+  public Object primitiveNegation(@Nullable Object u) {
     Number n = asNumber(u);
     if (u != null) {
       switch (NumericOperandType.of(n)) {
@@ -589,7 +590,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveLogicalNot(Object u) {
+  public Object primitiveLogicalNot(@Nullable Object u) {
     if (u instanceof Boolean) {
       return !((Boolean) u);
     }
@@ -600,7 +601,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object primitiveBitwiseInvert(Object u) {
+  public Object primitiveBitwiseInvert(@Nullable Object u) {
     Number n = asNumber(u);
     if (u != null) {
       switch (NumericOperandType.of(n)) {
@@ -619,16 +620,16 @@ if (u == null) { Thread.dumpStack(); }
 
   @Override
   public int arrayLength(Object v) {
-    if (v.getClass().isArray()) {
+    if (v != null && v.getClass().isArray()) {
       return Array.getLength(v);
     }
     return 0;
   }
 
   @Override
-  public Object arrayGet(Object arr, int index) {
+  public Object arrayGet(@Nullable Object arr, int index) {
     // Interpreter is responsible for checking bounds.
-    if (arr.getClass().isArray()) {
+    if (arr != null && arr.getClass().isArray()) {
       return Array.get(arr, index);
     }
     if (!isErrorValue(arr)) {
@@ -638,19 +639,22 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object arraySet(Object arr, int index, @Nullable Object newElement) {
-    Class<?> arrType = arr.getClass();
-    if (arrType.isArray()) {
-      Class<?> componentType = arrType.getComponentType();
-      if (componentType.isPrimitive()) {
-        Object converted = convertForAssignment(newElement, componentType);
-        if (!isErrorValue(converted)) {
-          Array.set(arr, index, converted);
+  public Object arraySet(
+      @Nullable Object arr, int index, @Nullable Object newElement) {
+    if (arr != null) {
+      Class<?> arrType = arr.getClass();
+      if (arrType.isArray()) {
+        Class<?> componentType = arrType.getComponentType();
+        if (componentType.isPrimitive()) {
+          Object converted = convertForAssignment(newElement, componentType);
+          if (!isErrorValue(converted)) {
+            Array.set(arr, index, converted);
+          }
+          return converted;
+        } else if (newElement == null || componentType.isInstance(newElement)) {
+          Array.set(arr, index, isNullValue(newElement) ? null : newElement);
+          return newElement;
         }
-        return converted;
-      } else if (newElement == null || componentType.isInstance(newElement)) {
-        Array.set(arr, index, isNullValue(newElement) ? null : newElement);
-        return newElement;
       }
     }
     if (!isErrorValue(arr)) {
@@ -670,7 +674,8 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object setField(FieldInfo field, Object container, Object newValue) {
+  public Object setField(
+      FieldInfo field, @Nullable Object container, @Nullable Object newValue) {
     Optional<Field> fOpt = fieldFor(field);
     Throwable th = null;
     if (fOpt.isPresent()) {
@@ -689,7 +694,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object setStaticField(FieldInfo field, Object newValue) {
+  public Object setStaticField(FieldInfo field, @Nullable Object newValue) {
     Optional<Field> fOpt = fieldFor(field);
     Throwable th = null;
     if (fOpt.isPresent()) {
@@ -707,7 +712,7 @@ if (u == null) { Thread.dumpStack(); }
   }
 
   @Override
-  public Object getField(FieldInfo field, Object container) {
+  public Object getField(FieldInfo field, @Nullable Object container) {
     Optional<Field> fOpt = fieldFor(field);
     Throwable th = null;
     if (fOpt.isPresent()) {
@@ -766,7 +771,8 @@ if (u == null) { Thread.dumpStack(); }
 
   @Override
   public Object invokeVirtual(
-      CallableInfo method, Object receiver, List<? extends Object> actuals) {
+      CallableInfo method,
+      @Nullable Object receiver, List<? extends Object> actuals) {
     Optional<Executable> execOpt = executableFor(method);
     if (execOpt.isPresent()) {
       Executable exec = execOpt.get();
@@ -1042,11 +1048,14 @@ if (u == null) { Thread.dumpStack(); }
   @Override
   public Function<Object, Object> coercion(StaticType targetType) {
     Function<Object, Object> coercion = COERCIONS.get(targetType);
+    if (typePool.T_NULL.equals(targetType)) {
+      return Functions.constant(null);
+    }
     return coercion != null ? coercion : Functions.identity();
   }
 
   @Override
-  public StaticType runtimeType(Object v) {
+  public StaticType runtimeType(@Nullable Object v) {
     if (isNullValue(v)) {
       return typePool.T_NULL;
     }

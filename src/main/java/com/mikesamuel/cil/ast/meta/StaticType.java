@@ -274,7 +274,7 @@ public abstract class StaticType {
   }
 
   /** A type returned when a type is malformed. */
-  public static StaticType ERROR_TYPE = new StaticType(
+  public static final StaticType ERROR_TYPE = new StaticType(
       new TypeSpecification(
           Name.DEFAULT_PACKAGE
           .child("error", Name.Type.PACKAGE)
@@ -797,12 +797,15 @@ public abstract class StaticType {
           null, null);
     }
 
+    private static final TypeBinding EXTENDS_OBJECT = new TypeBinding(
+        Variance.EXTENDS, JavaLang.JAVA_LANG_OBJECT);
+
     private TypeBinding lcta(TypeBinding typeBinding) {
       /// lcta(U) = ? if U's upper bound is Object,
       TypeSpecification upperBound = upperBound(typeBinding);
       if (upperBound == null
           || JavaLang.JAVA_LANG_OBJECT.typeName.equals(upperBound.typeName)) {
-        return TypeBinding.EXTENDS_OBJECT;
+        return EXTENDS_OBJECT;
       }
       /// otherwise ? extends lub(U,Object)
       // AFAICT, when U is an interface type this gives you Object & U

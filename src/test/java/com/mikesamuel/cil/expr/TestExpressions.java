@@ -4,6 +4,8 @@ import java.util.List;
 
 import com.google.common.collect.ImmutableList;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * This class is compiled when tests are compiled, but the source is also
  * available as a resource, so the field initializer expressions can be
@@ -11,6 +13,7 @@ import com.google.common.collect.ImmutableList;
  * version.
  */
 @SuppressWarnings("javadoc")
+@SuppressFBWarnings
 public final class TestExpressions {
   public static final int SUM = 2 + 3;
   public static final int SUB = 1 - 1 - 1;  // Obliquely test associativity.

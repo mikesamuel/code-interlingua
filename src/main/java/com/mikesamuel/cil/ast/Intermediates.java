@@ -110,7 +110,7 @@ public final class Intermediates {
           NodeType from = pts.from;
           NodeType to = pts.to;
           if (from == to) {
-            return null;  // This null means empty path.
+            return Optional.absent();  // This absent means empty path.
           }
 
           @SuppressWarnings("synthetic-access")
@@ -132,7 +132,7 @@ public final class Intermediates {
               dq.add(SList.append(path, g));
             }
           }
-          return Optional.absent();  // This null means no path.
+          return Optional.absent();  // This absent means no path.
         }
 
       });

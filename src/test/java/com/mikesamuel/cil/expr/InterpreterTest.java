@@ -9,6 +9,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
@@ -50,6 +52,7 @@ import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.ptree.PTree;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import junit.framework.TestCase;
 
 @SuppressWarnings("javadoc")
@@ -339,6 +342,9 @@ public final class InterpreterTest extends TestCase {
           valueTests.add(new Runnable() {
 
               @Override
+              // fail calls trigger inside test runner since value tests are
+              // run synchronously below.
+              @SuppressFBWarnings("IJU_ASSERT_METHOD_INVOKED_FROM_RUN_METHOD")
               public void run() {
                 Field f;
                 try {
@@ -379,8 +385,9 @@ public final class InterpreterTest extends TestCase {
   }
 
   static void requireDeepEquals(
-      String message, SourcePosition sourcePosition, SList<Integer> path,
-      Object expected, Object value) {
+      String message, SourcePosition sourcePosition,
+      @Nullable SList<Integer> path,
+      @Nullable Object expected, @Nullable Object value) {
     boolean same;
     if (expected == value) {
       same = true;

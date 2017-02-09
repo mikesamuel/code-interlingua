@@ -78,6 +78,7 @@ import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.ptree.Tokens;
 import com.mikesamuel.cil.util.LogUtils;
+import com.mikesamuel.cil.util.TriState;
 
 import static com.mikesamuel.cil.expr.Completion.normal;
 
@@ -101,7 +102,7 @@ public final class Interpreter<VALUE> {
     errorCompletion = Completion.normal(context.errorValue());
   }
 
-  void error(BaseNode node, String message) {
+  void error(@Nullable BaseNode node, String message) {
     LogUtils.log(context.getLogger(), Level.SEVERE, node, message, null);
   }
 
