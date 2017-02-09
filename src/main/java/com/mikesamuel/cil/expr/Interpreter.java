@@ -2,6 +2,7 @@ package com.mikesamuel.cil.expr;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -19,19 +20,25 @@ import com.mikesamuel.cil.ast.ArrayInitializerNode;
 import com.mikesamuel.cil.ast.AssignmentNode;
 import com.mikesamuel.cil.ast.AssignmentOperatorNode;
 import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.BlockNode;
+import com.mikesamuel.cil.ast.BlockStatementsNode;
 import com.mikesamuel.cil.ast.BooleanLiteralNode;
-import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.DimExprNode;
 import com.mikesamuel.cil.ast.DimExprsNode;
+import com.mikesamuel.cil.ast.EnhancedForStatementNode;
 import com.mikesamuel.cil.ast.EqualityExpressionNode;
 import com.mikesamuel.cil.ast.EqualityOperatorNode;
 import com.mikesamuel.cil.ast.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FieldNameNode;
+import com.mikesamuel.cil.ast.FinallyNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.IncrDecrOperatorNode;
+import com.mikesamuel.cil.ast.LabelNode;
 import com.mikesamuel.cil.ast.LeftHandSideNode;
+import com.mikesamuel.cil.ast.LocalNameNode;
+import com.mikesamuel.cil.ast.LocalVariableDeclarationNode;
 import com.mikesamuel.cil.ast.MethodNameNode;
 import com.mikesamuel.cil.ast.MultiplicativeExpressionNode;
 import com.mikesamuel.cil.ast.MultiplicativeOperatorNode;
@@ -40,9 +47,20 @@ import com.mikesamuel.cil.ast.PrefixOperatorNode;
 import com.mikesamuel.cil.ast.PrimaryNode;
 import com.mikesamuel.cil.ast.RelationalExpressionNode;
 import com.mikesamuel.cil.ast.RelationalOperatorNode;
+import com.mikesamuel.cil.ast.ResourceNode;
+import com.mikesamuel.cil.ast.ResourceSpecificationNode;
+import com.mikesamuel.cil.ast.StatementNode;
+import com.mikesamuel.cil.ast.SwitchBlockNode;
+import com.mikesamuel.cil.ast.SwitchBlockStatementGroupNode;
+import com.mikesamuel.cil.ast.SwitchLabelNode;
+import com.mikesamuel.cil.ast.SwitchLabelsNode;
+import com.mikesamuel.cil.ast.UnannTypeNode;
 import com.mikesamuel.cil.ast.UnaryExpressionNode;
 import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
+import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.ast.VariableInitializerListNode;
+import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -54,15 +72,17 @@ import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ClassOrInterfaceType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
+import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
-import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.ptree.Tokens;
+import com.mikesamuel.cil.util.LogUtils;
 
 import static com.mikesamuel.cil.expr.Completion.normal;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -82,9 +102,7 @@ public final class Interpreter<VALUE> {
   }
 
   void error(BaseNode node, String message) {
-    SourcePosition pos = node != null ? node.getSourcePosition() : null;
-    String fullMessage = pos != null ? pos + ": " + message : message;
-    context.getLogger().log(Level.SEVERE, fullMessage);
+    LogUtils.log(context.getLogger(), Level.SEVERE, node, message, null);
   }
 
   /** Interprets the given AST fragment. */
@@ -102,13 +120,14 @@ public final class Interpreter<VALUE> {
   }
 
   private static final ImmutableSet<NodeType> NONSPECIFIC_DELEGATES =
-      Sets.immutableEnumSet(NodeType.FieldName, NodeType.TypeName);
+      Sets.immutableEnumSet(
+          NodeType.FieldName, NodeType.TypeName, NodeType.LocalName);
 
   /**
    * @param parentLabel the label of the containing block so that interpretation
    *     can properly handle continues.
    */
-  @SuppressWarnings("synthetic-access")
+  @SuppressWarnings({ "synthetic-access" })
   private Completion<VALUE> interpret(
       BaseNode nodei, Locals<VALUE> locals,
       @Nullable String parentLabel) {
@@ -132,6 +151,8 @@ public final class Interpreter<VALUE> {
       case AdditiveOperator:
       case AmbiguousBinaryUnaryOperator:
       case AssignmentOperator:
+      case ClassDeclaration:
+      case EmptyStatement:
       case EqualityOperator:
       case IncrDecrOperator:
       case MultiplicativeOperator:
@@ -295,16 +316,56 @@ public final class Interpreter<VALUE> {
             new AssignLeftHandSideHandler(computeNewValue, rhsSupplier));
 
       }
-      case BasicForStatement:
-        break;
+      case BasicForStatement: {
+        BaseNode forInit = null;
+        BaseNode expression = null;
+        BaseNode forUpdate = null;
+        BaseNode statement = null;
+        for (int i = 0, n = node.getNChildren(); i < n; ++i) {
+          BaseNode child = node.getChild(i);
+          switch (child.getNodeType()) {
+            case ForInit: forInit = child; break;
+            case Expression: expression = child; break;
+            case ForUpdate: forUpdate = child; break;
+            case Statement: statement = child; break;
+            default:
+              throw new AssertionError(child);
+          }
+        }
+        Locals<VALUE> forLocals = new Locals<>(locals);
+        return interpretLoop(
+            forInit, expression, forUpdate, statement,
+            forLocals, parentLabel);
+      }
       case Block:
-        break;
+        Locals<VALUE> blockLocals = new Locals<>(locals);
+        return interpret(
+            node.firstChildWithType(BlockStatementsNode.class),
+            blockLocals, null);
       case BlockStatement:
         break;
-      case BlockStatements:
-        break;
-      case BlockTypeScope:
-        break;
+      case BlockStatements: {
+        int n = node.getNChildren();
+        for (int i = 0; i < n; ++i) {
+          Completion<VALUE> result = interpret(
+              node.getChild(i), locals, parentLabel);
+          if (result.kind == Completion.Kind.NORMAL
+              && !context.isErrorValue(result.value)) {
+            continue;
+          }
+          if (result.kind == Completion.Kind.BREAK
+              && result.label != null && result.label.equals(parentLabel)) {
+            break;
+          }
+          return result;
+        }
+        return nullCompletion;
+      }
+      case BlockTypeScope: {
+        BaseNode stmts = node.firstChildWithType(BlockStatementsNode.class);
+        if (stmts == null) { return nullCompletion; }
+        return interpret(stmts, locals, parentLabel);
+      }
       case BooleanLiteral:
         switch (((BooleanLiteralNode) node).getVariant()) {
           case False: return normal(context.from(false));
@@ -312,7 +373,22 @@ public final class Interpreter<VALUE> {
         }
         break;
       case BreakStatement:
-        break;
+      case ContinueStatement: {
+        String label = null;
+        LabelNode labelNode = node.firstChildWithType(LabelNode.class);
+        if (labelNode != null) {
+          IdentifierNode ident = labelNode.firstChildWithType(
+              IdentifierNode.class);
+          if (ident == null) {
+            error(labelNode, "Missing label");
+            return errorCompletion;
+          }
+          label = ident.getValue();
+        }
+        return NodeType.BreakStatement == node.getNodeType()
+            ? Completion.breakTo(label)
+            : Completion.continueTo(label);
+      }
       case CaseValue:
         break;
       case Cast:
@@ -357,8 +433,6 @@ public final class Interpreter<VALUE> {
       case ClassBody:
         break;
       case ClassBodyDeclaration:
-        break;
-      case ClassDeclaration:
         break;
       case ClassInstanceCreationExpression:
         break;
@@ -411,10 +485,11 @@ public final class Interpreter<VALUE> {
         }
         throw new AssertionError(rightResult);
       }
-      case ConditionalExpression: {
-        ConditionalExpressionNode e = (ConditionalExpressionNode) node;
-        if (e.getNChildren() != 3) { return errorCompletion; }
-        BaseNode cond = e.getChild(0);
+      case ConditionalExpression:
+      case IfStatement: {
+        int nChildren = node.getNChildren();
+        if (nChildren != 2 && nChildren != 3) { return errorCompletion; }
+        BaseNode cond = node.getChild(0);
         Completion<VALUE> condResult = interpret(cond, locals, null);
         if (!completedNormallyWithoutError(condResult)) {
           error(cond, "Bad condition result " + condResult.value);
@@ -423,12 +498,13 @@ public final class Interpreter<VALUE> {
         TriState b = context.toBoolean(condResult.value);
         switch (b) {
           case FALSE:
-            return interpret(e.getChild(2), locals, null);
+            if (nChildren == 2) { return nullCompletion; }  // if w/o else
+            return interpret(node.getChild(2), locals, null);
           case OTHER:
             error(cond, "Bad condition result " + condResult.value);
             return errorCompletion;
           case TRUE:
-            return interpret(e.getChild(1), locals, null);
+            return interpret(node.getChild(1), locals, null);
         }
         throw new AssertionError(condResult.value);
       }
@@ -498,8 +574,6 @@ public final class Interpreter<VALUE> {
         }
         return result;
       }
-      case ContinueStatement:
-        break;
       case ConvertCast:
         break;
       case DefaultValue:
@@ -516,8 +590,36 @@ public final class Interpreter<VALUE> {
         break;
       case Dims:
         break;
-      case DoStatement:
-        break;
+      case DoStatement: {
+        if (node.getNChildren() != 2) {
+          error(node, "Malformed do loop " + node);
+          return errorCompletion;
+        }
+        BaseNode body = node.getChild(0);
+        BaseNode expression = node.getChild(1);
+        Completion<VALUE> firstTimeThroughBody = interpret(body, locals, null);
+        switch (firstTimeThroughBody.kind) {
+          case BREAK:
+            if (firstTimeThroughBody.label == null
+                || firstTimeThroughBody.label.equals(parentLabel)) {
+              return nullCompletion;
+            }
+            return firstTimeThroughBody;
+          case CONTINUE:
+            if (firstTimeThroughBody.label == null
+                || firstTimeThroughBody.label.equals(parentLabel)) {
+              break;
+            }
+            return firstTimeThroughBody;
+          case NORMAL:
+            break;
+          case RETURN:
+          case THROW:
+            return firstTimeThroughBody;
+        }
+        return interpretLoop(
+            null, expression, null, body, locals, parentLabel);
+      }
       case DotKeywordDimsOrCtorRef:
         break;
       case ElementValue:
@@ -530,10 +632,149 @@ public final class Interpreter<VALUE> {
         break;
       case ElementValuePairList:
         break;
-      case EmptyStatement:
-        break;
-      case EnhancedForStatement:
-        break;
+      case EnhancedForStatement: {
+        EnhancedForStatementNode s = (EnhancedForStatementNode) node;
+        WholeType elementTypeNode = s.firstChildWithType(WholeType.class);
+        VariableDeclaratorIdNode decl = s.firstChildWithType(
+            VariableDeclaratorIdNode.class);
+        ExpressionNode sequenceNode = s.firstChildWithType(ExpressionNode.class);
+        StatementNode body = s.firstChildWithType(StatementNode.class);
+        if (elementTypeNode == null || decl == null || sequenceNode == null
+            || body == null) {
+          error(s, "Malformed loop");
+          return errorCompletion;
+        }
+
+        StaticType elementType = elementTypeNode.getStaticType();
+        if (elementType == null) {
+          elementType = context.getTypePool().type(
+              JavaLang.JAVA_LANG_OBJECT, null, context.getLogger());
+        }
+
+        Name elementName = decl.getDeclaredExpressionName();
+        if (elementName == null) {
+          elementName = Name.root(
+              decl.getDeclaredExpressionIdentifier(), Name.Type.AMBIGUOUS);
+        }
+
+        Locals<VALUE> loopLocals = new Locals<>(locals);
+        loopLocals.declare(elementName, context.coercion(elementType));
+
+        Completion<VALUE> sequence = interpret(sequenceNode, loopLocals, null);
+        if (!completedNormallyWithoutError(sequence)) {
+          return sequence;
+        }
+
+        StaticType sequenceType = sequenceNode.getStaticType();
+        if (sequenceType == null) {
+          sequenceType = context.runtimeType(sequence.value);
+        }
+
+        if (sequenceType instanceof ClassOrInterfaceType) {
+          TypeInfo sti = ((ClassOrInterfaceType) sequenceType).info;
+          Optional<CallableInfo> iteratorMethod = findMethod(
+              sti, "iterator", "()Ljava/util/Iterator;");
+          if (!iteratorMethod.isPresent()) {
+            error(sequenceNode, "Not iterable");
+            return errorCompletion;
+          }
+          VALUE iterator = context.invokeVirtual(
+              iteratorMethod.get(), sequence.value, ImmutableList.of());
+
+          StaticType iteratorType = context.runtimeType(iterator);
+          if (!(iteratorType instanceof ClassOrInterfaceType)) {
+            error(sequenceNode,
+                ".iterator() returned value of type " + iteratorType);
+            return errorCompletion;
+          }
+          TypeInfo iti = ((ClassOrInterfaceType) iteratorType).info;
+          Optional<CallableInfo> hasNext = findMethod(
+              iti, "hasNext", "()Z");
+          Optional<CallableInfo> next = findMethod(
+              iti, "next", "()Ljava/lang/Object;");
+          if (hasNext.isPresent() && next.isPresent()) {
+            while (true) {
+              VALUE hasNextValue = context.invokeVirtual(
+                  hasNext.get(), iterator, ImmutableList.of());
+              switch (context.toBoolean(hasNextValue)) {
+                case TRUE:
+                  break;
+                case FALSE:
+                  return nullCompletion;
+                case OTHER:
+                  error(sequenceNode, "Expected boolean from hasNext(), not "
+                        + hasNextValue);
+                  return errorCompletion;
+              }
+              VALUE element = context.invokeVirtual(
+                  next.get(), iterator, ImmutableList.of());
+              if (context.isErrorValue(element)) { return normal(element); }
+              loopLocals.set(elementName, element);
+
+              Completion<VALUE> result = interpret(
+                  body, loopLocals, parentLabel);
+              switch (result.kind) {
+                case BREAK:
+                  if (result.label == null
+                      || result.label.equals(parentLabel)) {
+                    return nullCompletion;
+                  }
+                  return result;
+                case CONTINUE:
+                  if (result.label == null
+                      || result.label.equals(parentLabel)) {
+                    break;
+                  }
+                  return result;
+                case NORMAL:
+                  if (context.isErrorValue(result.value)) {
+                    return result;
+                  }
+                  break;
+                case RETURN:
+                case THROW:
+                  return result;
+              }
+            }
+          }
+        } else if (sequenceType instanceof ArrayType) {
+          VALUE arr = sequence.value;
+          int len = context.arrayLength(arr);
+          for (int i = 0; i < len; ++i) {
+            VALUE element = context.arrayGet(arr, i);
+            if (context.isErrorValue(element)) { return normal(element); }
+            loopLocals.set(elementName, element);
+
+            Completion<VALUE> result = interpret(
+                body, loopLocals, parentLabel);
+            switch (result.kind) {
+              case BREAK:
+                if (result.label == null
+                    || result.label.equals(parentLabel)) {
+                  return nullCompletion;
+                }
+                return result;
+              case CONTINUE:
+                if (result.label == null
+                    || result.label.equals(parentLabel)) {
+                  continue;
+                }
+                return result;
+              case NORMAL:
+                if (context.isErrorValue(result.value)) {
+                  return result;
+                }
+                continue;
+              case RETURN:
+              case THROW:
+                return result;
+            }
+          }
+          return nullCompletion;
+        }
+        error(sequenceNode, "Don't know how to iterate over " + sequenceType);
+        return errorCompletion;
+      }
       case EnumBody:
         break;
       case EnumBodyDeclarations:
@@ -644,7 +885,8 @@ public final class Interpreter<VALUE> {
       case FieldName:
         break;
       case Finally:
-        break;
+        return interpret(
+            node.firstChildWithType(BlockNode.class), locals, null);
       case FloatingPointLiteral:
       case IntegerLiteral: {
         String text = node.getValue();
@@ -691,8 +933,6 @@ public final class Interpreter<VALUE> {
         break;
       case Identifier:
         break;
-      case IfStatement:
-        break;
       case ImportDeclaration:
         break;
       case InclusiveOrExpression:
@@ -728,8 +968,33 @@ public final class Interpreter<VALUE> {
         break;
       case Label:
         break;
-      case LabeledStatement:
-        break;
+      case LabeledStatement: {
+        LabelNode labelNode = node.firstChildWithType(LabelNode.class);
+        BaseNode stmt = node.firstChildWithType(StatementNode.class);
+        if (stmt != null
+            && ((StatementNode) stmt).getVariant()
+                == StatementNode.Variant.Block) {
+          // A block is a barrier for parentLabel, so feed this through
+          // explicitly.
+          stmt = stmt.firstChildWithType(BlockNode.class);
+          if (stmt != null) {
+            stmt = stmt.firstChildWithType(BlockStatementsNode.class);
+          }
+        }
+        IdentifierNode identNode = labelNode != null
+            ? labelNode.firstChildWithType(IdentifierNode.class)
+            : null;
+        if (identNode == null || stmt == null) {
+          error(node, "Malformed labeled statement");
+          return errorCompletion;
+        }
+        String label = identNode.getValue();
+        Completion<VALUE> result = interpret(stmt, locals, label);
+        if (label.equals(result.label)) {
+          return nullCompletion;
+        }
+        return result;
+      }
       case LambdaBody:
         break;
       case LambdaExpression:
@@ -746,10 +1011,39 @@ public final class Interpreter<VALUE> {
         break;
       case LocalName:
         break;
-      case LocalVariableDeclaration:
-        break;
+      case LocalVariableDeclaration: {
+        UnannTypeNode typeNode = node.firstChildWithType(UnannTypeNode.class);
+        if (typeNode == null) { return errorCompletion; }
+        StaticType type = typeNode.getStaticType();
+        Function<VALUE, VALUE> coercion = context.coercion(type);
+        for (VariableDeclaratorNode decl
+            : node.finder(VariableDeclaratorNode.class)
+                  .exclude(NodeType.VariableInitializer)
+                  .find()) {
+          VariableDeclaratorIdNode varid = decl.firstChildWithType(
+              VariableDeclaratorIdNode.class);
+          Name localName = varid.getDeclaredExpressionName();
+          if (localName == null) {
+            IdentifierNode id = varid.firstChildWithType(IdentifierNode.class);
+            localName = Name.root(id.getValue(), Name.Type.LOCAL);
+          }
+          locals.declare(localName, coercion);
+          VariableInitializerNode varinit =
+              decl.firstChildWithType(VariableInitializerNode.class);
+          if (varinit != null) {
+            Completion<VALUE> initResult = interpret(varinit, locals, null);
+            if (!completedNormallyWithoutError(initResult)) {
+              return initResult;
+            }
+            locals.set(localName, initResult.value);
+          }
+        }
+        return nullCompletion;
+      }
       case LocalVariableDeclarationStatement:
-        break;
+        return interpret(
+            node.firstChildWithType(LocalVariableDeclarationNode.class),
+            locals, null);
       case MarkerAnnotation:
         break;
       case MethodBody:
@@ -956,8 +1250,28 @@ public final class Interpreter<VALUE> {
         break;
       case Result:
         break;
-      case ReturnStatement:
-        break;
+      case ReturnStatement: {
+        ExpressionNode expr = node.firstChildWithType(ExpressionNode.class);
+        if (expr == null) {
+          return Completion.returnValue(null);
+        } else {
+          Completion<VALUE> result = interpret(expr, locals, null);
+          switch (result.kind) {
+            case BREAK:
+            case CONTINUE:
+              return result;
+            case NORMAL:
+              if (context.isErrorValue(result.value)) {
+                return result;
+              }
+              return Completion.returnValue(result.value);
+            case RETURN:
+            case THROW:
+              return result;
+          }
+          throw new AssertionError(result);
+        }
+      }
       case ShiftExpression:
         break;
       case SimpleCallPrefix:
@@ -974,8 +1288,17 @@ public final class Interpreter<VALUE> {
         break;
       case StatementExpression:
         break;
-      case StatementExpressionList:
-        break;
+      case StatementExpressionList: {
+        int n = node.getNChildren();
+        for (int i = 0; i < n; ++i) {
+          BaseNode stmt = node.getChild(i);
+          Completion<VALUE> result = interpret(stmt, locals, null);
+          if (!completedNormallyWithoutError(result)) {
+            return result;
+          }
+        }
+        return nullCompletion;
+      }
       case StaticImportOnDemandDeclaration:
         break;
       case StaticInitializer:
@@ -1004,11 +1327,148 @@ public final class Interpreter<VALUE> {
       case SwitchBlockStatementGroup:
         break;
       case SwitchLabel:
-        break;
+        return interpret(
+            node.firstChildWithType(NodeType.CaseValue), locals, null);
       case SwitchLabels:
         break;
-      case SwitchStatement:
-        break;
+      case SwitchStatement: {
+        ExpressionNode expr = node.firstChildWithType(ExpressionNode.class);
+        SwitchBlockNode body = node.firstChildWithType(SwitchBlockNode.class);
+
+        if (expr == null || body == null) {
+          error(node, "Malformed switch");
+          return errorCompletion;
+        }
+
+        VALUE exprValue;
+        {
+          Completion<VALUE> exprResult = interpret(expr, locals, null);
+          if (!completedNormallyWithoutError(exprResult)) {
+            return exprResult;
+          }
+          exprValue = exprResult.value;
+        }
+        if (context.isNullValue(exprValue)) {
+          error(expr, "Cannot switch on null");
+          return errorCompletion;
+        }
+
+        // If the value is primitive we will compare as per the primitive
+        // variant of (==), otherwise we will compare as by Object.equals.
+        CallableInfo equalsInfo = null;
+        {
+          StaticType exprType = expr.getStaticType();
+          if (exprType == null) {
+            exprType = context.runtimeType(exprValue);
+          }
+          if (exprType instanceof ClassOrInterfaceType) {
+            TypeInfo ti = ((ClassOrInterfaceType) exprType).info;
+            Optional<CallableInfo> mi = findMethod(
+                ti, "equals", "(Ljava/lang/Object;)Z");
+            if (mi.isPresent()) {
+              equalsInfo = mi.get();
+            }
+          }
+        }
+
+        int matchIndex = -1;
+        search:
+        for (int i = 0, n = body.getNChildren(); i < n; ++i) {
+          BaseNode child = body.getChild(i);
+          if (child instanceof SwitchBlockStatementGroupNode) {
+            SwitchBlockStatementGroupNode group =
+                (SwitchBlockStatementGroupNode) child;
+            SwitchLabelsNode labels = group.firstChildWithType(
+                SwitchLabelsNode.class);
+            if (labels == null) {
+              error(node, "Malformed case group");
+              return errorCompletion;
+            }
+            for (BaseNode labelsChild : labels.getChildren()) {
+              boolean matchFound = false, matchMore = true;
+              if (labelsChild instanceof SwitchLabelNode) {
+                SwitchLabelNode label = (SwitchLabelNode) labelsChild;
+                switch (label.getVariant()) {
+                  case CaseCaseValueCln:
+                    Completion<VALUE> caseResult = interpret(
+                        label, locals, null);
+                    if (!completedNormallyWithoutError(caseResult)) {
+                      return caseResult;
+                    }
+                    VALUE eq = equalsInfo == null
+                        ? context.primitiveEquals(
+                            exprValue, caseResult.value)
+                        : context.invokeVirtual(
+                            equalsInfo,
+                            exprValue,
+                            ImmutableList.of(caseResult.value));
+                    switch (context.toBoolean(eq)) {
+                      case TRUE:
+                        matchFound = true;
+                        matchMore = false;
+                        break;
+                      case OTHER:
+                        return errorCompletion;
+                      case FALSE:
+                        break;
+                    }
+                    break;
+                  case DefaultCln:
+                    matchFound = true;
+                    matchMore = true;
+                }
+                if (matchFound) {
+                  matchIndex = i;
+                  if (!matchMore) {
+                    break search;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (matchIndex >= 0) {
+          block_execution_loop:
+          for (int i = matchIndex, n = body.getNChildren(); i < n; ++i) {
+            BaseNode child = body.getChild(i);
+            if (child instanceof SwitchBlockStatementGroupNode) {
+              BlockStatementsNode stmts = child.firstChildWithType(
+                  BlockStatementsNode.class);
+              if (stmts == null) { continue; }
+              Locals<VALUE> caseLocals = new Locals<>(locals);
+              Completion<VALUE> blockResult = interpret(
+                  stmts, caseLocals, null);
+              switch (blockResult.kind) {
+                case BREAK:
+                  if (blockResult.label == null
+                      || blockResult.label.equals(parentLabel)) {
+                    return nullCompletion;
+                  }
+                  return blockResult;
+                case CONTINUE:
+                  if (blockResult.label != null
+                      && blockResult.label.equals(parentLabel)) {
+                    error(stmts, "continue from labeled switch");
+                    return errorCompletion;
+                  }
+                  return blockResult;
+                case NORMAL:
+                  if (context.isErrorValue(blockResult.value)) {
+                    return blockResult;
+                  }
+                  // Fall through to next case.
+                  continue block_execution_loop;
+                case RETURN:
+                case THROW:
+                  return blockResult;
+              }
+              throw new AssertionError(blockResult);
+            }
+          }
+        }
+        return nullCompletion;
+      }
       case SynchronizedStatement:
         break;
       case TemplateComprehension:
@@ -1028,9 +1488,93 @@ public final class Interpreter<VALUE> {
       case Throws:
         break;
       case TryStatement:
-        break;
-      case TryWithResourcesStatement:
-        break;
+      case TryWithResourcesStatement: {
+        ResourceSpecificationNode resources = node.firstChildWithType(
+            ResourceSpecificationNode.class);
+        BlockNode body = node.firstChildWithType(BlockNode.class);
+        FinallyNode finalStmt = node.firstChildWithType(FinallyNode.class);
+
+        Completion<VALUE> result = nullCompletion;
+
+        List<Object> toClose = null;
+        Locals<VALUE> tryLocals = locals;
+        if (resources != null) {
+          toClose = new ArrayList<>();
+          tryLocals = new Locals<>(locals);
+
+          ImmutableList<ResourceNode> rs = resources.finder(ResourceNode.class)
+              .exclude(ResourceNode.class)
+              .find();
+          for (ResourceNode r : rs) {
+            WholeType type = (WholeType) r.getDeclaredTypeNode();
+            VariableDeclaratorIdNode decl = r.firstChildWithType(
+                VariableDeclaratorIdNode.class);
+            ExpressionNode expr = r.firstChildWithType(ExpressionNode.class);
+            if (type == null || decl == null || expr == null) {
+              error(r, "Malformed resource specification");
+              return errorCompletion;
+            }
+            Name declName = decl.getDeclaredExpressionName();
+            if (declName == null) {
+              declName = Name.root(
+                  decl.getDeclaredExpressionIdentifier(), Name.Type.AMBIGUOUS);
+            }
+            StaticType staticType = type.getStaticType();
+            if (staticType == null) {
+              staticType = context.getTypePool().type(
+                  JavaLang.JAVA_LANG_AUTOCLOSEABLE, null, context.getLogger());
+            }
+            tryLocals.declare(declName, context.coercion(staticType));
+
+            // Continue initializing resources until one fails.
+            // If one does fail we still need to close the ones that succeeded
+            // and run any finally block.
+            if (completedNormallyWithoutError(result)) {
+              result = interpret(expr, tryLocals, null);
+              if (completedNormallyWithoutError(result)) {
+                VALUE resourceValue = tryLocals.set(declName, result.value);
+                if (!context.isNullValue(resourceValue)) {
+                  toClose.add(staticType);
+                  toClose.add(declName);
+                  toClose.add(resourceValue);
+                }
+              }
+            }
+          }
+        }
+
+        if (body != null && completedNormallyWithoutError(result)) {
+          result = interpret(body, tryLocals, null);
+        }
+        if (toClose != null) {
+          for (int i = toClose.size() - 3; i >= 0; i -= 3) {
+            StaticType resourceType = (StaticType) toClose.get(i);
+            Name declName = (Name) toClose.get(i + 1);
+            @SuppressWarnings("unchecked")
+            VALUE resource = (VALUE) toClose.get(i + 2);
+
+            if (resourceType instanceof ClassOrInterfaceType) {
+              TypeInfo ti = ((ClassOrInterfaceType) resourceType).info;
+              Optional<CallableInfo> close = findMethod(ti, "close", "()V");
+              if (close.isPresent()) {
+                VALUE v = context.invokeVirtual(
+                    close.get(), resource, ImmutableList.of());
+                if (!context.isErrorValue(v)) {
+                  continue;
+                }
+              }
+            }
+            error(resources, "Failed to close " + declName);
+          }
+        }
+        if (finalStmt != null) {
+          Completion<VALUE> finallyResult = interpret(finalStmt, locals, null);
+          if (!completedNormallyWithoutError(finallyResult)) {
+            result = finallyResult;
+          }
+        }
+        return completedNormallyWithoutError(result) ? nullCompletion : result;
+      }
       case Type:
         break;
       case TypeArgument:
@@ -1151,14 +1695,107 @@ public final class Interpreter<VALUE> {
         break;
       case VariableModifier:
         break;
-      case WhileStatement:
-        break;
+      case WhileStatement: {
+        if (node.getNChildren() != 2) {
+          error(node, "Malformed do loop " + node);
+          return errorCompletion;
+        }
+        BaseNode expression = node.getChild(0);
+        BaseNode body = node.getChild(1);
+        return interpretLoop(
+            null, expression, null, body, locals, parentLabel);
+      }
       case Wildcard:
         break;
       case WildcardBounds:
         break;
     }
     throw new AssertionError(node.getVariant());
+  }
+
+private Optional<CallableInfo> findMethod(TypeInfo ti, String name, String desc) {
+  TypeInfoResolver r = context.getTypePool().r;
+  Optional<MemberInfo> mi = ti.memberMatching(
+      r,
+      new Predicate<MemberInfo>() {
+        @Override
+        public boolean apply(MemberInfo m) {
+          if (m instanceof CallableInfo
+              && Modifier.isPublic(m.modifiers)
+              && name.equals(m.canonName.identifier)
+              && desc.equals(((CallableInfo) m).getDescriptor())) {
+            Optional<TypeInfo> declaringClass = r.resolve(
+                m.canonName.getContainingClass());
+            if (declaringClass.isPresent()
+                && !Modifier.isPublic(declaringClass.get().modifiers)) {
+              return false;
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+  return mi.isPresent()
+      ? Optional.of((CallableInfo) mi.get())
+      : Optional.absent();
+}
+
+private int debugSteps = 1000;
+
+  private Completion<VALUE> interpretLoop(
+      BaseNode forInit, BaseNode expression, BaseNode forUpdate,
+      BaseNode statement,
+      Locals<VALUE> locals, String parentLabel) {
+    if (forInit != null) {
+      Completion<VALUE> result = interpret(forInit, locals, null);
+      if (!completedNormallyWithoutError(result)) { return result; }
+    }
+    while (true) {
+      if (debugSteps <= 0) { throw new Error(); }
+      --debugSteps;
+      if (expression != null) {
+        Completion<VALUE> result = interpret(expression, locals, null);
+        if (!completedNormallyWithoutError(result)) { return result; }
+        switch (context.toBoolean(result.value)) {
+          case FALSE:
+            return nullCompletion;
+          case OTHER:
+            error(expression, "Invalid condition result: " + result.value);
+            return errorCompletion;
+          case TRUE:
+            break;
+        }
+      }
+      if (statement != null) {
+        Completion<VALUE> result = interpret(statement, locals, null);
+        switch (result.kind) {
+          case BREAK:
+            if (result.label == null || result.label.equals(parentLabel)) {
+              return nullCompletion;
+            } else {
+              return result;
+            }
+          case CONTINUE:
+            if (result.label == null || result.label.equals(parentLabel)) {
+              break;  // proceed to increment
+            } else {
+              return result;
+            }
+          case NORMAL:
+            if (context.isErrorValue(result.value)) {
+              return result;
+            }
+            break;
+          case RETURN:
+          case THROW:
+            return result;
+        }
+      }
+      if (forUpdate != null) {
+        Completion<VALUE> result = interpret(forUpdate, locals, null);
+        if (!completedNormallyWithoutError(result)) { return result; }
+      }
+    }
   }
 
   private VALUE buildMultiDimArray(int[] dims, int d, ArrayType arrType) {
@@ -1255,7 +1892,7 @@ public final class Interpreter<VALUE> {
     T arrayAccess(VALUE arr, int index);
     T arrayLength(VALUE arr);
     T fieldAccess(FieldInfo fieldInfo, VALUE container);
-    T local(Name localName);
+    T local(Name localName, Locals<VALUE> locals);
 
     T error(BaseNode node);
     T error(Completion<VALUE> c);
@@ -1329,8 +1966,20 @@ public final class Interpreter<VALUE> {
     }
 
     @Override
-    public Completion<VALUE> local(Name localName) {
-      throw new UnsupportedOperationException("TODO");  // TODO
+    public Completion<VALUE> local(Name localName, Locals<VALUE> locals) {
+      Supplier<Completion<VALUE>> oldValueSupplier =
+          new Supplier<Completion<VALUE>>() {
+            @Override
+            public Completion<VALUE> get() {
+              return normal(locals.get(localName, context.errorValue()));
+            }
+          };
+      Completion<VALUE> newValue = computeNewValue.perform(
+          oldValueSupplier, rhsSupplier);
+      if (!completedNormallyWithoutError(newValue)) {
+        return newValue;
+      }
+      return normal(locals.set(localName, newValue.value));
     }
 
     @Override
@@ -1373,8 +2022,8 @@ public final class Interpreter<VALUE> {
     }
 
     @Override
-    public Completion<VALUE> local(Name localName) {
-      throw new UnsupportedOperationException("TODO");  // TODO
+    public Completion<VALUE> local(Name localName, Locals<VALUE> locals) {
+      return normal(locals.get(localName, context.errorValue()));
     }
 
     @Override
@@ -1500,8 +2149,23 @@ public final class Interpreter<VALUE> {
 
         return handler.fieldAccess(fieldInfoOpt.get(), thisValue);
       }
-      case Local:
-        throw new UnsupportedOperationException("TODO");
+      case Local: {
+        LocalNameNode nameNode = e.firstChildWithType(LocalNameNode.class);
+        Name name = null;
+        if (nameNode != null) {
+          name = nameNode.getReferencedExpressionName();
+          if (name == null) {
+            IdentifierNode identNode =
+                nameNode.firstChildWithType(IdentifierNode.class);
+            name = Name.root(identNode.getValue(), Name.Type.AMBIGUOUS);
+          }
+        }
+        if (name == null) {
+          error(e, "Malformed local variable use");
+          return handler.error(e);
+        }
+        return handler.local(name, locals);
+      }
       default:
         break;
     }

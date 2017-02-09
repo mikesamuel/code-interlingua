@@ -2,6 +2,7 @@ package com.mikesamuel.cil.expr;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.Iterator;
@@ -11,7 +12,9 @@ import java.util.logging.Logger;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
@@ -20,6 +23,8 @@ import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.FieldDeclarationNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
+import com.mikesamuel.cil.ast.MethodBodyNode;
+import com.mikesamuel.cil.ast.MethodDeclarationNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.StatementNode;
 import com.mikesamuel.cil.ast.Trees;
@@ -28,6 +33,7 @@ import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
+import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -205,20 +211,24 @@ public final class InterpreterTest extends TestCase {
         StaticType.T_DOUBLE.typeSpecification.arrayOf(), "arr", new double[3]);
   }
 
-  @Test
-  public void testTestExpressions() throws Exception {
-    String path = null;
+  private String pathTo(String pathSuffix) throws IOException {
     try (BufferedReader r = Resources.asCharSource(
         getClass().getResource("/all-sources.txt"),
         Charsets.UTF_8).openBufferedStream()) {
       for (String line; (line = r.readLine()) != null;) {
-        if (line.endsWith("/expr/TestExpressions.java")) {
-          path = line;
+        if (line.endsWith(pathSuffix)) {
+          return line;
         }
       }
     }
+    fail("No source available for ..." + pathSuffix);
+    return null;
+  }
 
-    assertNotNull(path);
+  @Test
+  public void testTestExpressions() throws Exception {
+    String path = pathTo("/expr/TestExpressions.java");
+
     InterpreterTestContext tc = contextFor(
         NodeType.CompilationUnit,
         Files.toString(new File(path), Charsets.UTF_8),
@@ -421,4 +431,66 @@ public final class InterpreterTest extends TestCase {
           + ") but got (" + value + ") at " + SList.forwardIterable(path));
     }
   }
+
+  public void testTestStatements() throws Exception {
+    String path = pathTo("/expr/TestStatements.java");
+
+    InterpreterTestContext tc = contextFor(
+        NodeType.CompilationUnit,
+        Files.toString(new File(path), Charsets.UTF_8),
+        TestStatements.class.getSimpleName() + ".java");
+    Locals<Object> locals = new Locals<>();
+
+    Name thisTypeName;
+    {
+      String[] nameParts = TestStatements.class.getName().split("[.]");
+      Name nm = Name.DEFAULT_PACKAGE;
+      for (int i = 0, n = nameParts.length; i < n; ++i) {
+        nm = nm.child(
+            nameParts[i], i + 1 == n ? Name.Type.CLASS : Name.Type.PACKAGE);
+      }
+      thisTypeName = nm;
+    }
+
+    ClassOrInterfaceType thisType = (ClassOrInterfaceType) tc.typePool.type(
+        new TypeSpecification(thisTypeName), null, tc.logger);
+
+    InterpretationContext<Object> ctx = new InterpretationContextImpl(
+        tc.logger, tc.loader, tc.typePool);
+    ctx.setThisType(thisType.info);
+
+    Interpreter<Object> interpreter = new Interpreter<>(ctx);
+
+    // Find the f(String) method.
+    MethodDeclarationNode decl = tc.root
+        .finder(MethodDeclarationNode.class)
+        .exclude(NodeType.MethodBody)
+        .find()
+        .get(0);
+    MethodBodyNode body = decl.firstChildWithType(MethodBodyNode.class);
+    Preconditions.checkNotNull(body);
+
+    Name methodName = decl.getMemberInfo().canonName;
+    assertEquals("f", methodName.identifier);
+    Name paramName = methodName.child("s", Name.Type.LOCAL);
+
+    // Set up parameters
+    String testInputString = "inputToF";
+    locals.declare(paramName, ctx.coercion(ctx.getTypePool().type(
+        JavaLang.JAVA_LANG_STRING, null, ctx.getLogger())));
+    locals.set(paramName, ctx.from(testInputString));
+
+    // Interpret the body.
+    Completion<Object> result = interpreter.interpret(body, locals);
+
+    // Returns are translated to normal results when traversing the method body.
+    assertEquals(Completion.Kind.RETURN, result.kind);
+
+    List<String> want = TestStatements.f(testInputString);
+    assertEquals(want.getClass(), result.value.getClass());
+    Iterable<?> got = (Iterable<?>) result.value;
+
+    assertEquals(Joiner.on('\n').join(want), Joiner.on('\n').join(got));
+  }
+
 }
