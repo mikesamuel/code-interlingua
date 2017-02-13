@@ -92,6 +92,7 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
       return new BlockGrossStructure(0, children.build());
     }
 
+    @SuppressWarnings("synthetic-access")
     private static int nest(
         List<AbstractGrossStructure> gs, int left, int right,
         ImmutableList.Builder<AbstractGrossStructure> children) {
@@ -99,25 +100,35 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
         AbstractGrossStructure g = gs.get(i);
         if (g instanceof OneToken) {
           OneToken t = (OneToken) g;
-          if (t.content.length() == 1) {
-            char ch0 = t.content.charAt(0);
-            switch (ch0) {
-              case '(': case '[': case '{':
-                int indent = ch0 == '(' ? 4 : 2;
-                ImmutableList.Builder<AbstractGrossStructure> nested =
-                    ImmutableList.builder();
-                int end = nest(gs, i + 1, right, nested);
-                children.add(t);  // Open bracket.
-                children.add(new BlockGrossStructure(indent, nested.build()));
-                if (end < right) {
-                  children.add(gs.get(end));  // Close bracket.
-                }
-                i = end;
-                continue;
-              case '}': case ']': case ')':
+          // Try to find a bracket as the first character which works for all
+          // standard brackets, and some nonstandard tokens: "(%", "{%"
+          char ch = t.content.charAt(0);
+          if (ch >= BRACKET_CHARS.length || !BRACKET_CHARS[ch]) {
+            // Failover in the case of nonstandard tokens that include
+            // "%%{", "%%}".
+            int n =  t.content.length();
+            ch = t.content.charAt(n - 1);
+          }
+          switch (ch) {
+            case '(': case '[': case '{':
+              int indent = ch == '(' ? 4 : 2;
+              ImmutableList.Builder<AbstractGrossStructure> nested =
+                  ImmutableList.builder();
+              int end = nest(gs, i + 1, right, nested);
+              children.add(t);  // Open bracket.
+              children.add(new BlockGrossStructure(indent, nested.build()));
+              if (end < right) {
+                children.add(gs.get(end));  // Close bracket.
+              }
+              i = end;
+              continue;
+            case '}': case ']': case ')':
+              if (i != left) {
                 // Return control to parent to handle siblings.
                 return i;
-            }
+              }
+              // Avoid inf. recursion by just ignoring the bracket.
+              break;
           }
         }
         children.add(g);
@@ -453,5 +464,12 @@ public class CStyleGrossStructurer<C> implements Layout<C> {
       // Only used for transfer of control.
       this.setStackTrace(new StackTraceElement[0]);
     }
+  }
+
+  private static boolean[] BRACKET_CHARS = new boolean[128];
+  static {
+    BRACKET_CHARS['('] = BRACKET_CHARS['['] = BRACKET_CHARS['{']
+        = BRACKET_CHARS['}'] = BRACKET_CHARS[']'] = BRACKET_CHARS[')']
+        = true;
   }
 }

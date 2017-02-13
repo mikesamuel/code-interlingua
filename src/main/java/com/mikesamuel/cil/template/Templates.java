@@ -42,8 +42,8 @@ public final class Templates {
     // We have three goals here.
     // 1. Make sure that interpolations are in as general a position as
     //    possible.
-    // 2. Make sure that start directives like <%template...{%> are at the same
-    //    depth as end directives <%}%> and that in-between is a forest
+    // 2. Make sure that start directives like (%%template...{) are at the same
+    //    depth as end directives (%}) and that in-between is a forest
     //    (no node at a lower-depth between them and only properly nested
     //    start/end directives between.
     // 3. Make sure that start/end directive pairs are in as general a position
@@ -231,7 +231,7 @@ public final class Templates {
   }
 
   static final Event PUSH_TEMPLATE_DIRECTIVES = Event.push(
-      TemplateDirectivesNode.Variant.TemplateDirectives);
+      TemplateDirectivesNode.Variant.TemplateDirectiveTemplateDirective);
 
   static final Event POP = Event.pop();
 
@@ -241,76 +241,62 @@ public final class Templates {
 
     ImmutableList<Event> filter(Iterable<? extends Event> events) {
       // Our TemplateDirectives look like
-      //     TemplateDirectives
-      //       "<%"
-      //       TemplateDirective
-      //       "%>"
+      //     push TemplateDirectives
+      //       push TemplateDirective
+      //         "%%"
+      //         ...
+      //       pop
+      //     pop
       // Later in the generalize process, we move the directives around, and we
-      // avoid moving past a token as this respects the user's intent as to where
-      // they place the directive.
+      // avoid moving past a token as this respects the user's intent as to
+      // where they place the directive.
       //
-      // The tokens "<%" and "%>" get in the way of this, and having the
-      // TemplateDirectives push/pop in the stream makes gains us nothing.
+      // The push and pop of TemplateDirectives get in the way of this because
+      // we might want to push different directives in different directions.
       //
-      // Here we remove the token pairs
-      //    (push TemplateDirectives),`<%`
-      // and
-      //    `%>`, (pop)
-      // when not paired with TemplateInterpolation.
-      // Later in the process we rewrap TemplateDirective nodes in
+      // Here we remove each
+      //    (push TemplateDirectives)
+      // and its corresponding
+      //    (pop)
+      //
+      // Later in the process we rewrap runs of TemplateDirective nodes in
       // TemplateDirectives.
       ImmutableList.Builder<Event> b = ImmutableList.builder();
-      Event last = null;
       int depth = 0;
       BitSet pushRemoved = new BitSet();
       for (Event e : events) {
         switch (e.getKind()) {
-          case TOKEN:
-            if ("<%".equals(e.getContent()) && last != null) {
-                if (last.getKind() == Event.Kind.PUSH
-                    && last.getNodeType() == NodeType.TemplateDirectives) {
-                  last = null;
-                  Preconditions.checkState(depth != 0);
-                  pushRemoved.set(depth - 1);
-                  continue;
-                } else if (last.getKind() == Event.Kind.TOKEN
-                           && "%>".equals(last.getContent())
-                           && depth != 0 && pushRemoved.get(depth - 1)) {
-                  last = null;
-                  continue;
-                }
-            }
-            break;
           case POP:
             Preconditions.checkState(depth != 0);
             --depth;
-            if (last != null && last.getKind() == Event.Kind.TOKEN
-                && "%>".equals(last.getContent())
-                && pushRemoved.get(depth)) {
-              last = null;
+            if (pushRemoved.get(depth)) {
               continue;
             }
             break;
           case PUSH:
-            if (NodeTypeTables.NONSTANDARD.contains(e.getNodeType())) {
+            NodeType nt = e.getNodeType();
+            if (NodeTypeTables.NONSTANDARD.contains(nt)) {
               this.hasNonStandard = true;
             }
-            pushRemoved.clear(depth);
+            boolean removed = nt == NodeType.TemplateDirectives;
+            pushRemoved.set(depth, removed);
             ++depth;
+            if (removed) {
+              continue;
+            }
             break;
+          case TOKEN:
           case CONTENT:
           case IGNORABLE:
-            break;
           case DELAYED_CHECK:
+          case POSITION_MARK:
+            break;
           case LR_END:
           case LR_START:
-          case POSITION_MARK:
             throw new IllegalArgumentException(e.toString());
         }
-        if (last != null) { b.add(last); }
-        last = e;
+        b.add(e);
       }
-      if (last != null) { b.add(last); }
       return b.build();
     }
   }
@@ -397,7 +383,6 @@ public final class Templates {
               dk = DirectiveKind.START;
               break;
             case Else:
-            case Vars:
               dk = DirectiveKind.INFIX;
               break;
             case End:

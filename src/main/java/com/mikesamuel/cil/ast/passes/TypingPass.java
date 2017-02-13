@@ -408,6 +408,10 @@ final class TypingPass extends AbstractRewritingPass {
             case Parenthesized:
               exprType = passThru(e);
               break type_switch;
+            case QuotedName:
+              exprType = typePool.type(  // TODO
+                  JavaLang.JAVA_LANG_OBJECT, e.getSourcePosition(), logger);
+              break type_switch;
             case StaticMember: {
               TypeNameNode tn = e.firstChildWithType(TypeNameNode.class);
               TypeInfo ti = tn != null ? tn.getReferencedTypeInfo() : null;

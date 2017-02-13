@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
+import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -105,11 +106,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
           @Override
           public boolean apply(ParseState afterParse) {
-            BaseNode root = Trees.of(
+            ImmutableList<Event> generalized = Templates.generalize(
                 afterParse.input,
-                Templates.generalize(
-                    afterParse.input,
-                    SList.forwardIterable(afterParse.output)));
+                SList.forwardIterable(afterParse.output));
+            BaseNode root = Trees.of(afterParse.input, generalized);
             String want = Joiner.on('\n').join(expectedTreeAscii);
             String got = root.toAsciiArt("", Functions.constant(null));
             assertEquals(want, got);
@@ -347,7 +347,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
       Debug.dumpEvents(verified.events);
     }
 
-    Input input = input(Unparse.format(verified).code);
+    FormattedSource formattedSource = Unparse.format(verified);
+    Input input = input(formattedSource.code);
     LatestParseErrorReceiver reparseErr = new LatestParseErrorReceiver();
     ParseResult reparse = parSer.parse(
         new ParseState(input), new LeftRecursion(), reparseErr);

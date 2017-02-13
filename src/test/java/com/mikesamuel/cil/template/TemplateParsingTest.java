@@ -23,7 +23,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   public final void testInterpolationInExpressionContext() {
     assertParseTree(
         PTree.complete(NodeType.Expression),
-        "1 + <% x %> + 3",
+        "1 + (%x) + 3",
         "Expression.ConditionalExpression",
         "  AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
         "    AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
@@ -31,7 +31,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "        Literal.IntegerLiteral",
         "          IntegerLiteral.Builtin 1",
         "      AdditiveOperator.Pls",
-        "      TemplateInterpolation.Interpolation",
+        "      TemplateInterpolation.LpPctTemplateComprehensionRp",
         "        TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
         "          Expression.ConditionalExpression",
         "            Primary.Ambiguous",
@@ -48,16 +48,16 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   public final void testDirectiveBlock() {
     assertParseTree(
         PTree.complete(NodeType.Block),
-        "{ <% { %> ; <% } %> }",
+        "{ %%{ ; %%} }",
 
         "Block.LcBlockStatementsRc",
-        "  TemplateDirectives.TemplateDirectives",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
         "    TemplateDirective.BlockStart",
         "  BlockStatements.BlockStatementBlockStatementBlockTypeScope",
         "    BlockStatement.Statement",
         "      Statement.EmptyStatement",
         "        EmptyStatement.Sem",
-        "  TemplateDirectives.TemplateDirectives",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
         "    TemplateDirective.End");
   }
 
@@ -65,7 +65,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   public final void testInterpolationInExpressionStatement() {
     assertParseTree(
         PTree.complete(NodeType.BlockStatements),
-        "int x; <% { %><% let s = \"foo\"; %> int <% s %>; <% } %> continue;",
+        "int x; %%{ let s = \"foo\"; int (%s); %%} continue;",
 
         "BlockStatements.BlockStatementBlockStatementBlockTypeScope",
         "  BlockStatement.LocalVariableDeclarationStatement",
@@ -80,14 +80,16 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "          VariableDeclarator.VariableDeclaratorIdEqVariableInitializer",
         "            VariableDeclaratorId.IdentifierDims",
         "              Identifier.Builtin x",
-        "  TemplateDirectives.TemplateDirectives",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
         "    TemplateDirective.BlockStart",
-        "    TemplateDirective.Vars",
-        "      Identifier.Builtin s",
-        "      Expression.ConditionalExpression",
-        "        ExpressionAtom.Literal",
-        "          Literal.StringLiteral",
-        "            StringLiteral.Builtin \"foo\"",
+        "      VariableDeclarator.VariableDeclaratorIdEqVariableInitializer",
+        "        VariableDeclaratorId.IdentifierDims",
+        "          Identifier.Builtin s",
+        "        VariableInitializer.Expression",
+        "          Expression.ConditionalExpression",
+        "            ExpressionAtom.Literal",
+        "              Literal.StringLiteral",
+        "                StringLiteral.Builtin \"foo\"",
         "  BlockStatement.LocalVariableDeclarationStatement",
         "    LocalVariableDeclarationStatement.LocalVariableDeclarationSem",
         "      LocalVariableDeclaration.Declaration",
@@ -96,14 +98,14 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "            PrimitiveType.AnnotationNumericType",
         "              NumericType.IntegralType",
         "                IntegralType.Int",
-        "        TemplateInterpolation.Interpolation",
+        "        TemplateInterpolation.LpPctTemplateComprehensionRp",
         "          TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
         "            Expression.ConditionalExpression",
         "              Primary.Ambiguous",
         "                ContextFreeNames.ContextFreeNameDotContextFreeName",
         "                  ContextFreeName.Name",
         "                    Identifier.Builtin s",
-        "  TemplateDirectives.TemplateDirectives",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
         "    TemplateDirective.End",
         "  BlockStatement.Statement",
         "    Statement.ContinueStatement",

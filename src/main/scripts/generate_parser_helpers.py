@@ -145,6 +145,7 @@ _TOK_OTHER = 6
 
 _PTREE_NAME_TO_KIND = {
     None: 'PTree.Kind.SEQUENCE',
+    '()': 'PTree.Kind.SEQUENCE',
     '{}': 'PTree.Kind.REPEATED',
     '[]': 'PTree.Kind.OPTIONAL',
     'lit': 'PTree.Kind.LITERAL',

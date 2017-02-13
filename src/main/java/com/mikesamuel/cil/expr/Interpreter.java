@@ -862,6 +862,8 @@ public final class Interpreter<VALUE> {
             break;
           case Parenthesized:
             break;
+          case QuotedName:
+            break;
           case StaticMember:
             return nullCompletion;
           case StaticReference:
@@ -1216,6 +1218,8 @@ public final class Interpreter<VALUE> {
       }
       case PrimitiveType:
         break;
+      case QuotedName:
+        break;
       case ReceiverParameter:
         break;
       case ReferenceType:
@@ -1481,6 +1485,8 @@ public final class Interpreter<VALUE> {
       case TemplateDirectives:
         break;
       case TemplateInterpolation:
+        break;
+      case TemplateLocal:
         break;
       case TemplateLoop:
         break;

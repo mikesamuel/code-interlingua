@@ -823,6 +823,7 @@ ExpressionAtom: (@trait=Typed)
      TypeName !!"."  (@name=StaticMember)
      ReferenceType !!"::"  (@name=StaticReference)
      !CastExpression "(" Expression ")"  (@name=Parenthesized) @intermediate
+     QuotedName
 Primary: (@trait=Typed)
      Primary "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
      Primary "::" [TypeArguments] MethodName  (@name=MethodReference)
@@ -1017,20 +1018,24 @@ ConstantExpression:
 // solely used when parsing AST templates.
 (chapter=Template)
 TemplateDirectives: @nonstandard @toplevel
-    "<%" TemplateDirective "%>" {"<%" TemplateDirective "%>"}                  (@name=TemplateDirectives)
-TemplateInterpolation: @nonstandard @toplevel
-    "<%" !TemplateDirective TemplateComprehension "%>"                         (@name=Interpolation)
+    TemplateDirective {TemplateDirective}
 TemplateDirective: @nonstandard
-    "let" Identifier ["=" Expression] {"," Identifier ["=" Expression]} [";"]  (@name=Vars)
-    "template" Identifier ":" Identifier "{"                                   (@name=TemplateStart)
-    "if" "(" Expression ")" "{"                                                (@name=IfStart)
-    "} else" ["if" "(" Expression ")"] "{"                                     (@name=Else)
-    "for" "(" Identifier ":" Expression ")" "{"                                (@name=LoopStart)
-    "{"                                                                        (@name=BlockStart)
-    "}"                                                                        (@name=End)
+    "%%" "{" ["let" TemplateLocal {"," TemplateLocal} ";"]                          (@name=BlockStart)
+    "%%" "template" Identifier ":" Identifier "{"                                   (@name=TemplateStart)
+    "%%" "if" "(" Expression ")" "{"                                                (@name=IfStart)
+    "%%" "} else" ["if" "(" Expression ")"] "{"                                     (@name=Else)
+    "%%" "for" "(" Identifier ":" Expression ")" "{"                                (@name=LoopStart)
+    "%%" "}"                                                                        (@name=End)
+TemplateInterpolation: @nonstandard @toplevel
+    "(%" TemplateComprehension ")"
+    "{%" TemplateComprehension "}"
 TemplateComprehension: @nonstandard
     Expression {"," Expression} [TemplateLoop] [TemplateCondition]
 TemplateLoop: @nonstandard
-    "for" Identifier "in" TemplateComprehension
+    "for" "(" Identifier ":" TemplateComprehension ")"
 TemplateCondition: @nonstandard
-    "if" Expression
+    "if" "(" Expression ")"
+TemplateLocal: @nonstandard
+    !(Identifier Dims) VariableDeclarator @anon
+QuotedName: @nonstandard
+    "\\" ContextFreeNames

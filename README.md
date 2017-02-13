@@ -103,27 +103,41 @@ This sequence of events is the flattened form of a parse tree:
 ```
 
 The parser can also run with a flag that allows extra nodes to be inserted.
-The following syntax shows Java code interspersed with meta-instructions.
+The following syntax shows Java code interspersed with meta-programming
+instructions.
 
 ```java
-<% template HelloWorld : Statement %>
-<% let id = autoname %>
-for (int <% id %> = 0; i < limit; ++i) {
-  <% action %>(buffer, i);
-}
+%%template HelloWorld(action) {
+  %%{let id = autoname;
+    for (int (% id ) = 0; i < limit; ++i) {
+      (% action )(buffer, i);
+    }
+  %%}
+%%}
 ```
 
 which might parse to a sequence of events like
 
 ```
 (BlockStatements)
-  (meta let id ...)
-  (BasicForStatement)
-    (ForInit)
-      (LocalVariableDeclaration)
-        (PrimitiveType) "int" (pop)
-        (Identifier) (meta ...) (pop)
-        ...
+  (TemplateDirectives)
+    (TemplateDirective.Template)
+      (Identifier) "HelloWorld" (pop)
+      (TemplateFormals)
+        (Identifier) "action" (pop)
+      (pop)
+      (TemplateDirective.BlockStart)
+        "let" (TemplateLocal) "id" ... (pop)
+        (BasicForStatement)
+          (ForInit)
+            (LocalVariableDeclaration)
+              (PrimitiveType) "int" (pop)
+                (Identifier) (TemplateInterpolation ...) (pop)
+                ...
+              (pop)
+            (pop)
+          (pop)
+        (pop)
       (pop)
     (pop)
   (pop)
@@ -131,7 +145,7 @@ which might parse to a sequence of events like
 ```
 
 During tree building, the meta events are interpreted to produce a valid parse
-tree.  Meta-variables like the one in `<% action %>` resolve to parse trees that
+tree.  Meta-variables like the one in `(% action )` resolve to parse trees that
 are inserted into the tree using intermediate-node inference so that broad
 node categories (statements, expressions, labels, and identifiers) can be
 interpolated without worrying about details of the Java grammar.

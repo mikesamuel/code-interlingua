@@ -13,7 +13,6 @@ import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.TemplateInterpolationNode;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
@@ -348,7 +347,7 @@ final class Reference extends PTParSer {
         }
       }
 
-      if (stage != Stage.GROWING && shouldHandleTemplatePart(state)
+      if (stage != Stage.GROWING && shouldHandleTemplateInterpolation(state)
           && !NodeTypeTables.NOINTERP.contains(nodeType)) {
         // Try parsing a template element.
         ParseResult nonStandardResult =
@@ -372,15 +371,44 @@ final class Reference extends PTParSer {
     return ParseResult.failure();
   }
 
-  private boolean shouldHandleTemplatePart(ParseState state) {
-    return state.input.allowNonStandardProductions
-        && state.startsWith("<%", Optional.absent())
-        && !NodeTypeTables.NONSTANDARD.contains(nodeType);
+  private static boolean shouldHandleTemplateInterpolation(ParseState state) {
+    if (state.input.allowNonStandardProductions) {
+      CharSequence content = state.input.content();
+      int index = state.index;
+      // Recognize template part prefixes "(%", "{%"
+      if (index + 1 < content.length()
+          && '%' == content.charAt(index + 1)) {
+        char c0 = content.charAt(index);
+        return c0 == '(' || c0 == '{';
+      }
+    }
+    return false;
+  }
+
+  private boolean shouldHandleTemplateDirective(ParseState state) {
+    if (state.input.allowNonStandardProductions) {
+      switch (nodeType) {
+        case TemplateDirective:
+        case TemplateDirectives:
+          return false;  // Avoid inf. recursion.
+        default:
+          break;
+      }
+      CharSequence content = state.input.content();
+      int index = state.index;
+      // Recognize template part prefix "%%"
+      if (index + 1 < content.length()
+          && '%' == content.charAt(index)
+          && '%' == content.charAt(index + 1)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private ParseState maybeParseTemplateDirectives(
       Stage stage, ParseState state, ParseErrorReceiver err) {
-    if (stage == Stage.NOT_ON_STACK && shouldHandleTemplatePart(state)) {
+    if (stage == Stage.NOT_ON_STACK && shouldHandleTemplateDirective(state)) {
       // Handle directives at the front.
       ParseResult result = NodeType.TemplateDirectives.getParSer()
           .parse(state, new LeftRecursion(), err);
@@ -420,9 +448,10 @@ final class Reference extends PTParSer {
       Event e = state.structure.get(state.index);
       switch (e.getKind()) {
         case PUSH:
-          NodeVariant variant = e.getNodeVariant();
-          if (variant.getNodeType() == nodeType
-              || variant == TemplateInterpolationNode.Variant.Interpolation) {
+          NodeType pushedNodeType = e.getNodeType();
+          if (pushedNodeType == nodeType
+              || pushedNodeType == NodeType.TemplateInterpolation) {
+            NodeVariant variant = e.getNodeVariant();
             if (DEBUG_UP) {
               System.err.println(indent() + ". Found same variant " + variant);
             }
@@ -507,12 +536,10 @@ final class Reference extends PTParSer {
 
   private SerialState unparseTemplateDirectives(
       SerialState start, SerialErrorReceiver err) {
-    if (NodeTypeTables.NONSTANDARD.contains(nodeType)) {
-      return start;
-    }
     if (!start.isEmpty()) {
       Event e = start.structure.get(start.index);
       if (e.getKind() == Event.Kind.PUSH
+          && NodeType.TemplateDirectives != nodeType  // avoid inf. rec
           && e.getNodeType() == NodeType.TemplateDirectives) {
         Optional<SerialState> result = e.getNodeVariant().getParSer().unparse(
             start.advanceWithCopy(), err);
