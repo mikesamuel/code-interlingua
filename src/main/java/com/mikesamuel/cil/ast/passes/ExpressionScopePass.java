@@ -31,6 +31,7 @@ import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.traits.CallableDeclaration;
 import com.mikesamuel.cil.ast.traits.ExpressionNameDeclaration;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 
@@ -107,16 +108,24 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
   }
 
   @Override
-  Void run(Iterable<? extends CompilationUnitNode> compilationUnits) {
-    for (CompilationUnitNode cu : compilationUnits) {
-      ExpressionNameResolver r = resolverFor(cu);
-      cu.setExpressionNameResolver(r);
-      walk(cu, r, DeclarationPositionMarker.LATEST, null);
+  Void run(Iterable<? extends FileNode> fileNodes) {
+    for (FileNode fn : fileNodes) {
+      ExpressionNameResolver r = resolverFor(fn);
+      fn.setExpressionNameResolver(r);
+      walk((BaseNode) fn, r, DeclarationPositionMarker.LATEST, null);
     }
     return null;
   }
 
-  private ExpressionNameResolver resolverFor(CompilationUnitNode cu) {
+  private ExpressionNameResolver resolverFor(FileNode fn) {
+    CompilationUnitNode cu;
+    if (fn instanceof CompilationUnitNode) {
+      cu = (CompilationUnitNode) fn;
+    } else {
+      cu = fn.firstChildWithType(CompilationUnitNode.class);
+    }
+    Preconditions.checkNotNull(cu, fn);
+
     PackageDeclarationNode pkgNode = cu.firstChildWithType(
         PackageDeclarationNode.class);
     Name packageName = Name.DEFAULT_PACKAGE;

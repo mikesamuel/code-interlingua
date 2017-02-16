@@ -11,12 +11,12 @@ import javax.annotation.Nullable;
 
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.ClassBodyNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.PackageDeclarationNode;
 import com.mikesamuel.cil.ast.SimpleTypeNameNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.traits.CallableDeclaration;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 
@@ -43,7 +43,8 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
   protected abstract void handleTypeDeclaration(
       TypeScope s, TypeDeclaration d, Name name, boolean isAnonymous);
 
-  protected void findClasses(@Nullable Name outer, TypeScope s, BaseNode n) {
+  private final void findClasses(
+      @Nullable Name outer, @Nullable TypeScope s, BaseNode n) {
     TypeScope scope;
     if (n instanceof TypeScope) {
       scope = (TypeScope) n;
@@ -152,10 +153,10 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
   }
 
   @Override
-  public T run(Iterable<? extends CompilationUnitNode> compilationUnits) {
-    for (CompilationUnitNode node : compilationUnits) {
+  public T run(Iterable<? extends FileNode> fileNodes) {
+    for (FileNode node : fileNodes) {
       this.pkg = Name.DEFAULT_PACKAGE;
-      findClasses(null, node, node);
+      findClasses(null, null, (BaseNode) node);
     }
     return getResult();
   }

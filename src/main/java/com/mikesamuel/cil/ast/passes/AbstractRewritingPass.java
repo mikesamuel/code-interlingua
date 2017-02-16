@@ -10,6 +10,7 @@ import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.parser.SList;
 
 abstract class AbstractRewritingPass
@@ -163,10 +164,10 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
 
   @Override
   ImmutableList<CompilationUnitNode>
-  run(Iterable<? extends CompilationUnitNode> compilationUnits) {
+  run(Iterable<? extends FileNode> fileNodes) {
     ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
-    for (CompilationUnitNode compilationUnit : compilationUnits) {
-      ProcessingStatus status = visit(compilationUnit, null);
+    for (FileNode fileNode : fileNodes) {
+      ProcessingStatus status = visit((BaseNode) fileNode, null);
       if (status == ProcessingStatus.BREAK
           || status == ProcessingStatus.CONTINUE) {
         throw new AssertionError(status);

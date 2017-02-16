@@ -407,7 +407,7 @@ ContextFreeName:
 
 // Packages
 (chapter=Package)
-CompilationUnit: (@trait=TypeScope) (@trait=ExpressionNameScope) @toplevel
+CompilationUnit: (@trait=FileNode) @toplevel
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
      // TODO: Why is the package name here not left-associative as it is under the names chapter?
@@ -1021,7 +1021,7 @@ TemplateDirectives: @nonstandard @toplevel
     TemplateDirective {TemplateDirective}
 TemplateDirective: @nonstandard
     "%%" "{" ["let" TemplateLocal {"," TemplateLocal} ";"]                          (@name=BlockStart)
-    "%%" "template" Identifier ":" Identifier "{"                                   (@name=TemplateStart)
+    "%%" "template" Identifier "(" [TemplateFormals] ")" "{"                        (@name=TemplateStart)
     "%%" "if" "(" Expression ")" "{"                                                (@name=IfStart)
     "%%" "} else" ["if" "(" Expression ")"] "{"                                     (@name=Else)
     "%%" "for" "(" Identifier ":" Expression ")" "{"                                (@name=LoopStart)
@@ -1037,5 +1037,17 @@ TemplateCondition: @nonstandard
     "if" "(" Expression ")"
 TemplateLocal: @nonstandard
     !(Identifier Dims) VariableDeclarator @anon
+TemplateFormals: @nonstandard
+    LocalName {"," LocalName}
+
+// A parse tree has to have a single root.  When parsing a compilation unit that is
+// within a block template, we start with a compilation unit, and after the
+// generalize operation, end up with one or more block starts, followed by the
+// compilation unit, followed by the same number of block ends.
+//
+// This pseudo-production allows collecting all of those into one pseudo-root.
+TemplatePseudoRoot: @nonstandard @toplevel (@trait=FileNode)
+    CompilationUnit
+
 QuotedName: @nonstandard
     "\\" ContextFreeNames

@@ -693,8 +693,12 @@ public final class Templates {
           before.next = toMove;
           before = toMove;
 
-          toMoveNext.prev = toMovePrev;
-          toMovePrev.next = toMoveNext;
+          if (toMoveNext != null) {
+            toMoveNext.prev = toMovePrev;
+          }
+          if (toMovePrev != null) {
+            toMovePrev.next = toMoveNext;
+          }
           after = toMoveNext;
         }
       }

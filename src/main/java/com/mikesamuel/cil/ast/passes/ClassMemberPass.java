@@ -13,7 +13,6 @@ import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.ClassTypeNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ConstantDeclarationNode;
 import com.mikesamuel.cil.ast.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.EnumConstantNode;
@@ -47,6 +46,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.traits.CallableDeclaration;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.MemberDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
@@ -488,9 +488,9 @@ final class ClassMemberPass extends AbstractPass<Void> {
   }
 
   @Override
-  Void run(Iterable<? extends CompilationUnitNode> compilationUnits) {
-    for (CompilationUnitNode cu : compilationUnits) {
-      run(cu, null, cu.getTypeNameResolver(), null);
+  Void run(Iterable<? extends FileNode> fileNodes) {
+    for (FileNode fileNode : fileNodes) {
+      run((BaseNode) fileNode, null, null, null);
     }
     return null;
   }

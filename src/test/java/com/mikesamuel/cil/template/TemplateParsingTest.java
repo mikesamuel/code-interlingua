@@ -111,4 +111,38 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "    Statement.ContinueStatement",
         "      ContinueStatement.ContinueLabelSem");
   }
+
+  @Test
+  public final void testTopLevelLoop() {
+    assertParseTree(
+        PTree.complete(NodeType.CompilationUnit),
+        "%%for (x : xs) { package foo; class (%x) {} %%}",
+
+        "TemplatePseudoRoot.CompilationUnit",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
+        "    TemplateDirective.LoopStart",
+        "      Identifier.Builtin x",
+        "      Expression.ConditionalExpression",
+        "        Primary.Ambiguous",
+        "          ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "            ContextFreeName.Name",
+        "              Identifier.Builtin xs",
+        "  CompilationUnit.PackageDeclarationImportDeclarationTypeDeclaration",
+        "    PackageDeclaration.Declaration",
+        "      PackageName.IdentifierDotIdentifier",
+        "        Identifier.Builtin foo",
+        "    TypeDeclaration.ClassDeclaration",
+        "      ClassDeclaration.NormalClassDeclaration",
+        "        NormalClassDeclaration.Declaration",
+        "          TemplateInterpolation.LpPctTemplateComprehensionRp",
+        "            TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
+        "              Expression.ConditionalExpression",
+        "                Primary.Ambiguous",
+        "                  ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "                    ContextFreeName.Name",
+        "                      Identifier.Builtin x",
+        "          ClassBody.LcClassBodyDeclarationRc",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
+        "    TemplateDirective.End");
+  }
 }

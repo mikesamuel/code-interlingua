@@ -41,6 +41,15 @@ _TRAITS = {
         (
             'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
         )),
+    'FileNode': (
+        (
+            ('ExpressionNameResolver', 'expressionNameResolver'),
+            ('TypeNameResolver', 'typeNameResolver'),
+        ),
+        (
+            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
+            'com.mikesamuel.cil.ast.meta.TypeNameResolver',
+        )),
     'LimitedScopeElement': (
         (
             ('DeclarationPositionMarker', 'declarationPositionMarker'),

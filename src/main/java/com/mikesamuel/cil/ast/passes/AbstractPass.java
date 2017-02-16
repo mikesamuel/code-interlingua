@@ -5,8 +5,8 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.NodeI;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.util.LogUtils;
 
 /** A compiler pass. */
@@ -27,5 +27,5 @@ abstract class AbstractPass<T> {
   }
 
   /** Applies the pass to the given compilation units. */
-  abstract T run(Iterable<? extends CompilationUnitNode> compilationUnits);
+  abstract T run(Iterable<? extends FileNode> fileNodes);
 }

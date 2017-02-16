@@ -322,8 +322,15 @@ public abstract class AbstractParSerTestCase extends TestCase {
       Debug.dumpEvents(structure);
     }
 
+    ParSer unparser = parSer;
+    if (root.getNodeType() == NodeType.TemplatePseudoRoot) {
+      // Pseudo roots are synthesized by the , so we can't use the
+      unparser = PTree.complete(NodeType.TemplatePseudoRoot).getParSer();
+      // TODO: We should really confirm that parSer is complete(CompilationUnit)
+    }
+
     SerialState beforeRoot = new SerialState(structure);
-    Optional<SerialState> afterRoot = parSer.unparse(beforeRoot, serialErr);
+    Optional<SerialState> afterRoot = unparser.unparse(beforeRoot, serialErr);
     if (!afterRoot.isPresent()) {
       fail(
           "Failed to unparse: " + serialErr.getErrorMessage()

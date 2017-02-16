@@ -39,6 +39,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeScope;
 
@@ -69,8 +70,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
    * @return a TypeInfoResolver that resolves canonical names.
    */
   @Override
-  TypeInfoResolver run(
-      Iterable<? extends CompilationUnitNode> compilationUnits) {
+  TypeInfoResolver run(Iterable<? extends FileNode> fileNodes) {
     // To properly map type names to canonical type names, we need four things:
     // 1. The set of internally defined types.
     // 2. The set of external types.
@@ -80,11 +80,10 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     // (3) requires (1, 2) so before wildcard imports can be resolved.
     // (4) requires (1, 2, 3) so we can resolve super-type relationships.
 
-    ImmutableList<CompilationUnitNode> cus =
-        ImmutableList.copyOf(compilationUnits);
+    ImmutableList<FileNode> files = ImmutableList.copyOf(fileNodes);
     // (1)
     ClassNamingPass.DeclarationsAndScopes declarationsAndScopes =
-        new ClassNamingPass(logger).run(cus);
+        new ClassNamingPass(logger).run(files);
     // (2)
     TypeInfoResolver externalTypeInfoResolver = getFallbackTypeInfoResolver();
 

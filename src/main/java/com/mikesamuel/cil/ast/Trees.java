@@ -58,19 +58,38 @@ public final class Trees {
       throw new IllegalArgumentException(
           "Content outside root: `" + root.content + "`");
     }
-
-    int nRoots = root.nodes.size();
-    if (nRoots != 1) {
-      throw new IllegalArgumentException(
-          "Expected unique root node but found " + nRoots);
-    }
-
+    Preconditions.checkState(!it.hasNext());
     if (root.sawPop) {
       throw new IllegalArgumentException("Saw orphaned pop");
     }
-    Preconditions.checkState(!it.hasNext());
 
-    return root.nodes.get(0);
+    return coalesce(root, input);
+  }
+
+  private static BaseNode coalesce(Tier tier, Input inp) {
+    int nRoots = tier.nodes.size();
+    if (nRoots == 1) {
+      return tier.nodes.get(0);
+    }
+
+    int compilationUnitCount = 0;
+    for (BaseNode node : tier.nodes) {
+      NodeType nt = node.getNodeType();
+      if (nt == NodeType.CompilationUnit) {
+        ++compilationUnitCount;
+      } else if (!NodeTypeTables.NONSTANDARD.contains(nt)) {
+        throw new IllegalArgumentException(
+            "Expected 1 root node.  " + nt
+            + " cannot be coalesced into a template pseudo root");
+      }
+    }
+    Preconditions.checkState(compilationUnitCount <= 1);
+    // TODO: Check balancedness of start and end template instructions.
+
+    TemplatePseudoRootNode root = TemplatePseudoRootNode.Variant.CompilationUnit
+        .buildNode(tier.nodes);
+    root.setSourcePosition(inp.getSourcePosition(0, inp.content().length()));
+    return root;
   }
 
   /** @see #of(Input, SList) */
