@@ -76,6 +76,7 @@ import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
+import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.ptree.Tokens;
 import com.mikesamuel.cil.util.LogUtils;
 import com.mikesamuel.cil.util.TriState;
@@ -95,6 +96,7 @@ public final class Interpreter<VALUE> {
   public final InterpretationContext<VALUE> context;
   private final Completion<VALUE> nullCompletion;
   final Completion<VALUE> errorCompletion;
+  private SourcePosition currentSourcePosition;
 
   Interpreter(InterpretationContext<VALUE> context) {
     this.context = context;
@@ -108,7 +110,7 @@ public final class Interpreter<VALUE> {
 
   /** Interprets the given AST fragment. */
   public Completion<VALUE> interpret(BaseNode node) {
-    return interpret(node, new Locals<>(), null);
+    return interpret(node, new Locals<>());
   }
 
   /**
@@ -117,7 +119,22 @@ public final class Interpreter<VALUE> {
    * @param locals used to resolve free variables.
    */
   public Completion<VALUE> interpret(BaseNode node, Locals<VALUE> locals) {
-    return interpret(node, locals, null);
+    Supplier<SourcePosition> oldSourcePositionSupplier =
+        context.getSourcePositionSupplier();
+
+    context.setSourcePositionSupplier(
+        new Supplier<SourcePosition>() {
+
+          @SuppressWarnings("synthetic-access")
+          @Override
+          public SourcePosition get() {
+            return currentSourcePosition;
+          }
+
+        });
+    Completion<VALUE> result = interpret(node, locals, null);
+    context.setSourcePositionSupplier(oldSourcePositionSupplier);
+    return result;
   }
 
   private static final ImmutableSet<NodeType> NONSPECIFIC_DELEGATES =
@@ -146,6 +163,12 @@ public final class Interpreter<VALUE> {
         break;
       }
     }
+
+    SourcePosition pos = node.getSourcePosition();
+    if (pos != null) {
+      this.currentSourcePosition = pos;
+    }
+
     NodeType nodeType = node.getNodeType();
     switch (nodeType) {
       case AdditionalBound:
@@ -542,26 +565,9 @@ public final class Interpreter<VALUE> {
             if (result == null) {
               Name name = Name.root(ident, Name.Type.AMBIGUOUS);
               v = locals.get(name, context.errorValue());
+              // TODO: or dynamic field on the this value.
             } else {
-              StaticType rt = context.runtimeType(result.value);
-              if (StaticType.ERROR_TYPE.equals(rt)) {
-                return errorCompletion;
-              }
-              if (rt instanceof PrimitiveType) {
-                rt = context.getTypePool().type(
-                    new TypeSpecification(((PrimitiveType) rt).wrapperType),
-                    child.getSourcePosition(), context.getLogger());
-              }
-              Optional<FieldInfo> field = fieldForType(rt, ident, true);
-              if (field.isPresent()) {
-                v = context.getField(field.get(), result.value);
-              } else if ("length".equals(ident) && rt instanceof ArrayType) {
-                // Special case : array.length
-                v = context.from(context.arrayLength(result.value));
-              } else {
-                error(node, "cannot find field " + ident);
-                return errorCompletion;
-              }
+              v = context.getFieldDynamic(ident, result.value);
             }
             if (context.isErrorValue(v)) {
               return errorCompletion;
@@ -1484,11 +1490,15 @@ public final class Interpreter<VALUE> {
         break;
       case TemplateDirectives:
         break;
+      case TemplateFormals:
+        break;
       case TemplateInterpolation:
         break;
       case TemplateLocal:
         break;
       case TemplateLoop:
+        break;
+      case TemplatePseudoRoot:
         break;
       case ThrowStatement:
         break;
@@ -1899,6 +1909,7 @@ private int debugSteps = 1000;
     T arrayAccess(VALUE arr, int index);
     T arrayLength(VALUE arr);
     T fieldAccess(FieldInfo fieldInfo, VALUE container);
+    T fieldAccess(String name, VALUE container);
     T local(Name localName, Locals<VALUE> locals);
 
     T error(BaseNode node);
@@ -1973,6 +1984,13 @@ private int debugSteps = 1000;
     }
 
     @Override
+    public Completion<VALUE> fieldAccess(String fieldName, VALUE container) {
+      Interpreter.this.error(
+          null, "Cannot assign to dynamic field " + fieldName);
+      return errorCompletion;
+    }
+
+    @Override
     public Completion<VALUE> local(Name localName, Locals<VALUE> locals) {
       Supplier<Completion<VALUE>> oldValueSupplier =
           new Supplier<Completion<VALUE>>() {
@@ -1996,7 +2014,8 @@ private int debugSteps = 1000;
 
     @Override
     public Completion<VALUE> error(Completion<VALUE> c) {
-      return c;
+      return completedNormallyWithoutError(c)
+          ? errorCompletion : c;
     }
   }
 
@@ -2029,6 +2048,11 @@ private int debugSteps = 1000;
     }
 
     @Override
+    public Completion<VALUE> fieldAccess(String fieldName, VALUE container) {
+      return normal(context.getFieldDynamic(fieldName, container));
+    }
+
+    @Override
     public Completion<VALUE> local(Name localName, Locals<VALUE> locals) {
       return normal(locals.get(localName, context.errorValue()));
     }
@@ -2040,9 +2064,9 @@ private int debugSteps = 1000;
 
     @Override
     public Completion<VALUE> error(Completion<VALUE> c) {
-      return c;
+      return completedNormallyWithoutError(c)
+          ? errorCompletion : c;
     }
-
   }
 
   private <T> T withLeftHandSide(
@@ -2066,7 +2090,7 @@ private int debugSteps = 1000;
       LeftHandSideHandler<VALUE, T> handler) {
     switch (e.getVariant()) {
       case Ambiguous:
-        throw new UnsupportedOperationException("TODO");
+        throw new UnsupportedOperationException("TODO");  // TODO
 
       case ArrayAccess: {
         if (e.getNChildren() != 2) { break; }
@@ -2117,12 +2141,16 @@ private int debugSteps = 1000;
               return handler.fieldAccess(fi.get(), obj.value);
             }
           }
-        } else if (objType instanceof ArrayType && identNode != null
-                   && "length".equals(identNode.getValue())) {
+        }
+        String ident = identNode != null ? identNode.getValue() : null;
+        if (objType instanceof ArrayType && "length".equals(ident)) {
           return handler.arrayLength(obj.value);
         }
-        error(objNode, "Field access failed");
-        return handler.error(obj);
+        if (ident != null) {
+          return handler.fieldAccess(ident, obj.value);
+        }
+        error(e, "Field access failed");
+        return handler.error(e);
       }
       default:
         break;
@@ -2337,15 +2365,6 @@ private int debugSteps = 1000;
        };
     }
     throw new AssertionError(v);
-  }
-
-  private Optional<FieldInfo> fieldForType(
-      StaticType rt, String ident, boolean publicOnly) {
-    if (rt instanceof ClassOrInterfaceType) {
-      ClassOrInterfaceType cit = (ClassOrInterfaceType) rt;
-      return fieldForType(cit.info, ident, publicOnly);
-    }
-    return Optional.absent();
   }
 
   private Optional<FieldInfo> fieldForType(

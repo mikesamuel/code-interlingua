@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Supplier;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.Name;
@@ -12,6 +13,7 @@ import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.util.TriState;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * @param <VALUE> the type of a value instance.
@@ -26,6 +28,18 @@ public interface InterpretationContext<VALUE> {
    * inputs should report.
    */
   Logger getLogger();
+
+  /**
+   * A position supplier that may be used to associate source positions
+   * with log messages when logging interpretation failures.
+   */
+  Supplier<SourcePosition> getSourcePositionSupplier();
+
+  /**
+   * Sets a position supplier that may be used to associate source positions
+   * with log messages when logging interpretation failures.
+   */
+  void setSourcePositionSupplier(Supplier<SourcePosition> newPositionSupplier);
 
   /** An error value of the given kind. */
   VALUE errorValue();
@@ -201,6 +215,11 @@ public interface InterpretationContext<VALUE> {
    * Gets an instance field.
    */
   VALUE getField(FieldInfo field, VALUE container);
+
+  /**
+   * Gets a field value given the field's name.
+   */
+  VALUE getFieldDynamic(String key, VALUE container);
 
   /**
    * Gets a static field.

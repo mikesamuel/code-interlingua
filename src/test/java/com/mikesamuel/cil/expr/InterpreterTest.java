@@ -14,10 +14,12 @@ import javax.annotation.Nullable;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.io.CharSource;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.mikesamuel.cil.ast.BaseNode;
@@ -57,6 +59,8 @@ import junit.framework.TestCase;
 
 @SuppressWarnings("javadoc")
 public final class InterpreterTest extends TestCase {
+
+  // TODO: Make this run log clean.
 
   static final class InterpreterTestContext {
     final BaseNode root;
@@ -196,6 +200,36 @@ public final class InterpreterTest extends TestCase {
         Completion.normal(3),
         "arr.length",
         StaticType.T_INT.typeSpecification.arrayOf(), "arr", new int[3]);
+  }
+
+  @Test
+  public void testDataBundleIntegration() throws Exception {
+    DataBundle b = DataBundle.fromJsonFile(
+        getName(), CharSource.wrap(
+            "{"
+            + "  \"nm\": {\n"
+            + "    \"nodeType\": \"Expression\",\n"
+            + "    \"code\": \"k.a[0].x\"\n"
+            + "  },\n"
+            + "  \"j\": 42,\n"
+            + "  \"k\": { \"a\": [{ \"x\": \"k.a[0].x\" }] }"
+            + "}"));
+    Locals<Object> locals = new Locals<>();
+    InterpreterTestContext tc = contextFor(
+        NodeType.Expression, "null", getName());
+    InterpretationContext<Object> context = new InterpretationContextImpl(
+        tc.logger, tc.loader, tc.typePool);
+    locals.initializeFrom(b, context, Functions.identity());
+
+    Object nm = locals.get(
+        Name.root("nm", Name.Type.AMBIGUOUS), context.errorValue());
+    assertTrue(nm instanceof BaseNode);
+
+    Interpreter<Object> interpreter = new Interpreter<>(context);
+
+    Completion<Object> got = interpreter.interpret((BaseNode) nm, locals);
+    assertEquals(Completion.Kind.NORMAL, got.kind);
+    assertEquals("k.a[0].x", got.value);
   }
 
   @Test
