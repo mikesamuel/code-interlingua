@@ -36,9 +36,16 @@ import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 import com.mikesamuel.cil.parser.Unparse.Verified;
 import com.mikesamuel.cil.ptree.PTree;
 
-class PassTestHelpers {
+/** Utilities for testing AST processing passes. */
+public final class PassTestHelpers {
 
-  static ImmutableList<CompilationUnitNode> parseCompilationUnits(
+  /**
+   * Parses inputs to compilation units.
+   *
+   * @param linesPerFile {@code linesPerFile[f][i]} is line i (zero-indexed)
+   *   in the f-th file.
+   */
+  public static ImmutableList<CompilationUnitNode> parseCompilationUnits(
       String[]... linesPerFile) {
     ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
     for (String[] lines : linesPerFile) {
@@ -61,7 +68,13 @@ class PassTestHelpers {
     }
     return b.build();
   }
-  static void assertAnnotatedOutput(
+
+  /**
+   * Parses inputs to compilation units, applies the pass runner to those inputs
+   * to process them, requires log messages to match the expected errors,
+   * require the processed and decorated inputs to match the expected outputs.
+   */
+  public static void assertAnnotatedOutput(
       PassRunner passRunner,
       String[][] expectedLines,
       String[][] inputLines,
@@ -97,11 +110,19 @@ class PassTestHelpers {
     return sb.toString();
   }
 
-  interface LoggableOperation<T> {
+  /**
+   * An operation can be performed in the context of a logger.
+   */
+  public interface LoggableOperation<T> {
+    /** Perform the operation logging any messages to the given logger. */
     T run(Logger logger);
   }
 
-  static <T> T expectErrors(
+  /**
+   * Performs an operation in the context of a logger and checks that
+   * all warning and severe entries match the given expected errors.
+   */
+  public static <T> T expectErrors(
       LoggableOperation<T> op, String... expectedErrors) {
 
     Logger logger = Logger.getAnonymousLogger();
@@ -169,13 +190,17 @@ class PassTestHelpers {
       String gotStr = got.isEmpty()
           ? "" : "\n\t" + tj.join(got) + "\n";
       String msg = "Expected errors [" + wantStr + "] got [" + gotStr + "]";
-      Assert.assertEquals(nj.join(allMessages), nj.join(unsatisfied), nj.join(got));
+      Assert.assertEquals(
+          nj.join(allMessages), nj.join(unsatisfied), nj.join(got));
       Assert.fail(msg);
     }
     return result;
   }
 
-  static String serializeNodes(
+  /**
+   * Serialize the given nodes and decorate with the given decorator.
+   */
+  public static String serializeNodes(
       Iterable<? extends BaseNode> nodes, @Nullable Decorator decorator)
   throws UnparseVerificationException {
     StringBuilder sb = new StringBuilder();
@@ -200,12 +225,23 @@ class PassTestHelpers {
     return sb.toString();
   }
 
-  static String normalizeCompilationUnitSource(String[][] linesPerFile)
+  /**
+   * Parses and serializes lines of compilation units to smooth over minor
+   * indentation and formatting issues when comparing expected output to
+   * actual output.
+   */
+  public static String normalizeCompilationUnitSource(String[][] linesPerFile)
   throws UnparseVerificationException {
     return serializeNodes(parseCompilationUnits(linesPerFile), null);
   }
 
-  interface PassRunner {
+  /**
+   * Runs processing passes on a group of compilation units.
+   */
+  public interface PassRunner {
+    /**
+     * @return the processed compilation units.
+     */
     ImmutableList<CompilationUnitNode> runPasses(
         Logger logger, ImmutableList<CompilationUnitNode> cus);
   }

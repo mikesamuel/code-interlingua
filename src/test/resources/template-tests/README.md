@@ -22,6 +22,7 @@ For each input json file, *X*`.json`, *X*`.out` is the result of applying the
 templates to the data in *X*`.json`, rendering the result to Java
 and concatentaing the results together with a delimiter in between.
 
-### `expected.log`
+### `*.log` Expected Log Entries
 
-If present, any expected errors or warnings.
+If present, *X*`.log` contains any errors or warnings expected when applying
+the templates to the data in *X*`.json`.

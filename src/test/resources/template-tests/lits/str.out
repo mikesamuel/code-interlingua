@@ -1,0 +1,7 @@
+package foo.bar;
+
+class C {
+  static final java.lang.String X = "foo\nbar";
+
+  public C() {}
+}

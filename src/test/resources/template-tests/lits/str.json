@@ -1,0 +1,7 @@
+{
+    "type": {
+        "nodeType": "ClassOrInterfaceType",
+        "code": "java.lang.String"
+    },
+    "value": "foo\nbar"
+}
