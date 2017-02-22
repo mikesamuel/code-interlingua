@@ -70,7 +70,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
    * @return a TypeInfoResolver that resolves canonical names.
    */
   @Override
-  TypeInfoResolver run(Iterable<? extends FileNode> fileNodes) {
+  public TypeInfoResolver run(Iterable<? extends FileNode> fileNodes) {
     // To properly map type names to canonical type names, we need four things:
     // 1. The set of internally defined types.
     // 2. The set of external types.

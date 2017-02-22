@@ -10,12 +10,12 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
@@ -66,11 +66,11 @@ public class DeclarationPassTest extends TestCase {
         new PassTestHelpers.PassRunner() {
 
           @Override
-          public ImmutableList<CompilationUnitNode> runPasses(
-              Logger logger, ImmutableList<CompilationUnitNode> cus) {
+          public ImmutableList<FileNode> runPasses(
+              Logger logger, ImmutableList<FileNode> files) {
             DeclarationPass dp = new DeclarationPass(logger);
-            dp.run(cus);
-            return cus;
+            dp.run(files);
+            return files;
           }
         },
         expectedLines,
@@ -672,7 +672,7 @@ public class DeclarationPassTest extends TestCase {
 
   @Test
   public static void testTypeParameters() {
-    List<CompilationUnitNode> cus =
+    List<FileNode> files =
         PassTestHelpers.parseCompilationUnits(
         new String[][] {
           {
@@ -687,7 +687,7 @@ public class DeclarationPassTest extends TestCase {
     Logger logger = Logger.getAnonymousLogger();
     logger.setUseParentHandlers(false);  // Ignore missing ambiguous type "Foo"
     DeclarationPass dp = new DeclarationPass(logger);
-    TypeInfoResolver r = dp.run(cus);
+    TypeInfoResolver r = dp.run(files);
 
     Name bazName = Name.DEFAULT_PACKAGE
         .child("foo", Name.Type.PACKAGE)

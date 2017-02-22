@@ -6,7 +6,6 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
@@ -14,6 +13,7 @@ import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMar
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.PassRunner;
 import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
@@ -326,13 +326,13 @@ public final class ExpressionScopePassTest extends TestCase {
         new PassRunner() {
 
           @Override
-          public ImmutableList<CompilationUnitNode> runPasses(
-              Logger logger, ImmutableList<CompilationUnitNode> cus) {
+          public ImmutableList<FileNode> runPasses(
+              Logger logger, ImmutableList<FileNode> files) {
             DeclarationPass dp = new DeclarationPass(logger);
-            TypeInfoResolver tir = dp.run(cus);
+            TypeInfoResolver tir = dp.run(files);
             ExpressionScopePass esp = new ExpressionScopePass(tir, logger);
-            esp.run(cus);
-            return cus;
+            esp.run(files);
+            return files;
           }
         },
         want,

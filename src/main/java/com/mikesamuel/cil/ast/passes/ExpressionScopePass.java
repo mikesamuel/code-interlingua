@@ -108,7 +108,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
   }
 
   @Override
-  Void run(Iterable<? extends FileNode> fileNodes) {
+  public Void run(Iterable<? extends FileNode> fileNodes) {
     for (FileNode fn : fileNodes) {
       ExpressionNameResolver r = resolverFor(fn);
       fn.setExpressionNameResolver(r);

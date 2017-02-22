@@ -14,7 +14,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.ContextFreeNamesNode;
 import com.mikesamuel.cil.ast.NodeI;
@@ -25,6 +24,7 @@ import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.traits.ExpressionNameReference;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.NamePart;
 import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.traits.TypeReference;
@@ -722,31 +722,29 @@ public final class DisambiguationPassTest extends TestCase {
       boolean useLongNames,
       @Nullable Function<? super NodeI, ? extends String> decorator,
       String... expectedErrors) {
-    ImmutableList<CompilationUnitNode> disambiguated =
-        PassTestHelpers.expectErrors(
-            new PassTestHelpers
-            .LoggableOperation<ImmutableList<CompilationUnitNode>>() {
+    ImmutableList<FileNode> disambiguated = PassTestHelpers.expectErrors(
+        new PassTestHelpers.LoggableOperation<ImmutableList<FileNode>>() {
 
-              @Override
-              public ImmutableList<CompilationUnitNode> run(Logger logger) {
-                ImmutableList<CompilationUnitNode> cuNodes =
-                    PassTestHelpers.parseCompilationUnits(inputs);
+          @Override
+          public ImmutableList<FileNode> run(Logger logger) {
+            ImmutableList<FileNode> fileNodes =
+                PassTestHelpers.parseCompilationUnits(inputs);
 
-                DeclarationPass declarationPass = new DeclarationPass(logger);
-                TypeInfoResolver typeInfoResolver =
-                    declarationPass.run(cuNodes);
+            DeclarationPass declarationPass = new DeclarationPass(logger);
+            TypeInfoResolver typeInfoResolver =
+                declarationPass.run(fileNodes);
 
-                ExpressionScopePass scopePass = new ExpressionScopePass(
-                    typeInfoResolver, logger);
-                scopePass.run(cuNodes);
+            ExpressionScopePass scopePass = new ExpressionScopePass(
+                typeInfoResolver, logger);
+            scopePass.run(fileNodes);
 
-                return new DisambiguationPass(
-                        typeInfoResolver, logger, useLongNames)
-                    .run(cuNodes);
-              }
+            return new DisambiguationPass(
+                typeInfoResolver, logger, useLongNames)
+                .run(fileNodes);
+          }
 
-            },
-            expectedErrors);
+        },
+        expectedErrors);
     ImmutableList.Builder<BaseNode> matches = ImmutableList.builder();
     nodeMatcher.match(disambiguated, matches);
 
@@ -773,8 +771,9 @@ public final class DisambiguationPassTest extends TestCase {
         wantJoined.toString(),
         got.toString());
 
-    for (CompilationUnitNode cu : disambiguated) {
-      checkNoContextFreeNames(cu.getChildren(), SList.append(null, cu));
+    for (FileNode fn : disambiguated) {
+      checkNoContextFreeNames(
+          fn.getChildren(), SList.append(null, (BaseNode) fn));
     }
   }
 
@@ -820,29 +819,29 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static Predicate<BaseNode> with(NodeType nt) {
-    return new Predicate<BaseNode>() {
+  static Predicate<NodeI> with(NodeType nt) {
+    return new Predicate<NodeI>() {
 
       @Override
-      public boolean apply(BaseNode node) {
+      public boolean apply(NodeI node) {
         return node.getNodeType() == nt;
       }
 
     };
   }
 
-  static Predicate<BaseNode> with(NodeVariant nv) {
-    return new Predicate<BaseNode>() {
+  static Predicate<NodeI> with(NodeVariant nv) {
+    return new Predicate<NodeI>() {
 
       @Override
-      public boolean apply(BaseNode node) {
+      public boolean apply(NodeI node) {
         return node.getVariant() == nv;
       }
 
     };
   }
 
-  static NodeMatcher nth(int n, Predicate<? super BaseNode> p) {
+  static NodeMatcher nth(int n, Predicate<? super NodeI> p) {
     Preconditions.checkArgument(n >= 0);
 
     return new NodeMatcher() {
@@ -850,15 +849,15 @@ public final class DisambiguationPassTest extends TestCase {
 
       @Override
       public void match(
-          List<? extends BaseNode> nodes,
+          List<? extends NodeI> nodes,
           ImmutableList.Builder<BaseNode> out) {
 
-        for (BaseNode node : nodes) {
+        for (NodeI node : nodes) {
           if (remaining < 0) { break; }
 
           if (p.apply(node)) {
             if (remaining == 0) {
-              out.add(node);
+              out.add((BaseNode) node);
             }
             --remaining;
           }
@@ -870,16 +869,16 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static NodeMatcher all(Predicate<? super BaseNode> p) {
+  static NodeMatcher all(Predicate<? super NodeI> p) {
     return new NodeMatcher() {
 
       @Override
       public void match(
-          List<? extends BaseNode> nodes,
+          List<? extends NodeI> nodes,
           ImmutableList.Builder<BaseNode> out) {
-        for (BaseNode node : nodes) {
+        for (NodeI node : nodes) {
           if (p.apply(node)) {
-            out.add(node);
+            out.add((BaseNode) node);
           }
           match(node.getChildren(), out);
         }
@@ -922,7 +921,7 @@ public final class DisambiguationPassTest extends TestCase {
 
   interface NodeMatcher {
     void match(
-        List<? extends BaseNode> nodes,
+        List<? extends NodeI> nodes,
         ImmutableList.Builder<BaseNode> out);
   }
 }

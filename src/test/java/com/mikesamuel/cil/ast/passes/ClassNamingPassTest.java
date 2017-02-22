@@ -12,9 +12,9 @@ import org.junit.Test;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.traits.FileNode;
 
 import junit.framework.TestCase;
 
@@ -26,7 +26,7 @@ public final class ClassNamingPassTest extends TestCase {
 
   @Test
   public static void testClassFinder() {
-    List<CompilationUnitNode> compilationUnits =
+    List<FileNode> compilationUnits =
         PassTestHelpers.parseCompilationUnits(
         new String[][] {
           {

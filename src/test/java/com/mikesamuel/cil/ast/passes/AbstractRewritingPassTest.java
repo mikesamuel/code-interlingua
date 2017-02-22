@@ -17,6 +17,7 @@ import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InterfaceTypeListNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -244,10 +245,10 @@ public final class AbstractRewritingPassTest extends TestCase {
     assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);
     CompilationUnitNode cu = (CompilationUnitNode) Trees.of(result.next());
     StringBuilder sb = new StringBuilder();
-    for (CompilationUnitNode out : pass.run(ImmutableList.of(cu))) {
+    for (FileNode out : pass.run(ImmutableList.of(cu))) {
       Optional<SerialState> ser = ps.unparse(
           new SerialState(SList.forwardIterable(
-              Trees.startUnparse(null, out, decorator))),
+              Trees.startUnparse(null, (BaseNode) out, decorator))),
           SerialErrorReceiver.DEV_NULL);
       if (!ser.isPresent()) {
         fail(out.toAsciiArt("", null));

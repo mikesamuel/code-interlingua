@@ -15,7 +15,6 @@ import com.mikesamuel.cil.ast.CastExpressionNode;
 import com.mikesamuel.cil.ast.CastNode;
 import com.mikesamuel.cil.ast.ClassLiteralNode;
 import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.Java8Comments;
@@ -32,6 +31,7 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
 import com.mikesamuel.cil.ast.traits.BinaryOp;
 import com.mikesamuel.cil.ast.traits.ExpressionNameReference;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.MethodDescriptorReference;
 import com.mikesamuel.cil.ast.traits.Typed;
 import com.mikesamuel.cil.ast.traits.WholeType;
@@ -59,32 +59,32 @@ public final class TypingPassTest extends TestCase {
       @Nullable Decorator decorator,
       String... expectedErrors)
   throws UnparseVerificationException {
-    ImmutableList<CompilationUnitNode> processedCus =
+    ImmutableList<FileNode> processedFiles =
         PassTestHelpers.expectErrors(
-            new LoggableOperation<ImmutableList<CompilationUnitNode>>() {
+            new LoggableOperation<ImmutableList<FileNode>>() {
 
               @Override
-              public ImmutableList<CompilationUnitNode> run(Logger logger) {
-                ImmutableList<CompilationUnitNode> cus =
+              public ImmutableList<FileNode> run(Logger logger) {
+                ImmutableList<FileNode> files =
                     PassTestHelpers.parseCompilationUnits(inputs);
                 DeclarationPass dp = new DeclarationPass(logger);
-                TypeInfoResolver typeInfoResolver = dp.run(cus);
+                TypeInfoResolver typeInfoResolver = dp.run(files);
 
                 ExpressionScopePass scopePass = new ExpressionScopePass(
                     typeInfoResolver, logger);
-                scopePass.run(cus);
+                scopePass.run(files);
 
                 DisambiguationPass disambigPass = new DisambiguationPass(
                     typeInfoResolver, logger, false);
-                cus = disambigPass.run(cus);
+                files = disambigPass.run(files);
 
                 TypePool typePool = new TypePool(typeInfoResolver);
                 ClassMemberPass classMemberPass = new ClassMemberPass(
                     logger, typePool);
-                classMemberPass.run(cus);
+                classMemberPass.run(files);
 
                 TypingPass tp = new TypingPass(logger, typePool, true);
-                return tp.run(cus);
+                return tp.run(files);
               }
 
             },
@@ -92,7 +92,7 @@ public final class TypingPassTest extends TestCase {
 
 
     if (expectedWithCasts != null) {
-      String got = PassTestHelpers.serializeNodes(processedCus, decorator);
+      String got = PassTestHelpers.serializeNodes(processedFiles, decorator);
       String want = decorator == null
           ? PassTestHelpers.normalizeCompilationUnitSource(expectedWithCasts)
           : PassTestHelpers.joinExpectedLines(expectedWithCasts);
@@ -101,8 +101,8 @@ public final class TypingPassTest extends TestCase {
 
     if (target != null) {
       List<NodeI> typed = Lists.newArrayList();
-      for (CompilationUnitNode cu : processedCus) {
-        for (NodeI n : cu.finder(target).find()) {
+      for (FileNode fileNode : processedFiles) {
+        for (NodeI n : ((BaseNode) fileNode).finder(target).find()) {
           if (n instanceof Typed) {
             typed.add(n);
           } else if (n instanceof WholeType) {
@@ -147,8 +147,8 @@ public final class TypingPassTest extends TestCase {
     // Sanity check that the processed CUs have associated types, even if only
     // the error type, with every Typed and WholeType.
     List<BaseNode> untyped = Lists.newArrayList();
-    for (CompilationUnitNode cu : processedCus) {
-      sanityCheckUntyped(cu, untyped);
+    for (FileNode fileNode : processedFiles) {
+      sanityCheckUntyped((BaseNode) fileNode, untyped);
     }
     if (!untyped.isEmpty()) {
       StringBuilder msg = new StringBuilder(

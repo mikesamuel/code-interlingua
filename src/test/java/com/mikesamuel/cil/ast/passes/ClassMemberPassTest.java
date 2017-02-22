@@ -6,13 +6,13 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.Trees.Decorator;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.PassRunner;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.ast.traits.MemberDeclaration;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
@@ -30,17 +30,16 @@ public final class ClassMemberPassTest extends TestCase {
         new PassRunner() {
 
           @Override
-          public ImmutableList<CompilationUnitNode> runPasses(
-              Logger logger, ImmutableList<CompilationUnitNode> cus) {
+          public ImmutableList<FileNode> runPasses(
+              Logger logger, ImmutableList<FileNode> files) {
             DeclarationPass declPass = new DeclarationPass(logger);
-            TypeInfoResolver typeInfoResolver = declPass.run(cus);
+            TypeInfoResolver typeInfoResolver = declPass.run(files);
             ExpressionScopePass esp = new ExpressionScopePass(
                 typeInfoResolver, logger);
-            esp.run(cus);
+            esp.run(files);
             DisambiguationPass disambigPass = new DisambiguationPass(
                 typeInfoResolver, logger, false);
-            ImmutableList<CompilationUnitNode> rewritten =
-                disambigPass.run(cus);
+            ImmutableList<FileNode> rewritten = disambigPass.run(files);
             TypePool typePool = new TypePool(typeInfoResolver);
             ClassMemberPass classMemberPass = new ClassMemberPass(
                 logger, typePool);

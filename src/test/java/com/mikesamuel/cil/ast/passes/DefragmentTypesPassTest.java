@@ -6,8 +6,8 @@ import org.junit.Test;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
 import junit.framework.TestCase;
@@ -16,14 +16,14 @@ import junit.framework.TestCase;
 public final class DefragmentTypesPassTest extends TestCase {
 
   private void assertRewritten(String want, String input, String... errors) {
-    ImmutableList<CompilationUnitNode> wantedCus =
+    ImmutableList<FileNode> wantedFiles =
         PassTestHelpers.parseCompilationUnits(new String[] { want });
 
-    ImmutableList<CompilationUnitNode> gotCus = PassTestHelpers.expectErrors(
-        new LoggableOperation<ImmutableList<CompilationUnitNode>>() {
+    ImmutableList<FileNode> gotFiles = PassTestHelpers.expectErrors(
+        new LoggableOperation<ImmutableList<FileNode>>() {
           @Override
-          public ImmutableList<CompilationUnitNode> run(Logger logger) {
-            ImmutableList<CompilationUnitNode> inputCus =
+          public ImmutableList<FileNode> run(Logger logger) {
+            ImmutableList<FileNode> inputCus =
                 PassTestHelpers.parseCompilationUnits(new String[] {
                     "//" + getName(), input });
 
@@ -33,8 +33,8 @@ public final class DefragmentTypesPassTest extends TestCase {
 
     try {
       assertEquals(
-          PassTestHelpers.serializeNodes(wantedCus, null),
-          PassTestHelpers.serializeNodes(gotCus, null));
+          PassTestHelpers.serializeNodes(wantedFiles, null),
+          PassTestHelpers.serializeNodes(gotFiles, null));
     } catch (UnparseVerificationException ex) {
       ex.printStackTrace();
       fail(ex.getMessage());

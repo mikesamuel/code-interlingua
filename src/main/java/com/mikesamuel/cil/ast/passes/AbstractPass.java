@@ -10,11 +10,11 @@ import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.util.LogUtils;
 
 /** A compiler pass. */
-abstract class AbstractPass<T> {
+public abstract class AbstractPass<T> {
 
   protected final Logger logger;
 
-  AbstractPass(Logger logger) {
+  protected AbstractPass(Logger logger) {
     this.logger = logger;
   }
 
@@ -27,5 +27,5 @@ abstract class AbstractPass<T> {
   }
 
   /** Applies the pass to the given compilation units. */
-  abstract T run(Iterable<? extends FileNode> fileNodes);
+  public abstract T run(Iterable<? extends FileNode> fileNodes);
 }

@@ -13,58 +13,86 @@ import com.mikesamuel.cil.ast.CompilationUnitNode;
 import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.parser.SList;
 
-abstract class AbstractRewritingPass
-extends AbstractPass<ImmutableList<CompilationUnitNode>> {
+/**
+ * A pass which makes it simple to process a tree and rewrite in-place.
+ */
+public abstract class AbstractRewritingPass
+extends AbstractPass<ImmutableList<FileNode>> {
 
-  AbstractRewritingPass(Logger logger) {
+  protected AbstractRewritingPass(Logger logger) {
     super(logger);
   }
 
-  static final class ProcessingStatus {
+
+  /**
+   * Specifies replacements for the node being processed, and how/whether to
+   * continue additional processing.
+   */
+  public static final class ProcessingStatus {
     /**
      * Continue processing the subtree rooted at the current node.
      * In the post-processing phase, this is equivalent to break.
      */
-    static ProcessingStatus CONTINUE = new ProcessingStatus("continue");
+    public static ProcessingStatus CONTINUE = new ProcessingStatus(
+        Mutation.CONTINUE);
     /**
      * Cease processing the subtree rooted at the current node.
      * In the post-processing phase, this means use the current state of the
      * node as the replacement.
      */
-    static ProcessingStatus BREAK = new ProcessingStatus("break");
+    public static ProcessingStatus BREAK = new ProcessingStatus(
+        Mutation.BREAK);
     /**
      * Remove the subtree rooted at the current node and cease .
      */
-    static ProcessingStatus REMOVE = new ProcessingStatus("remove");
+    public static ProcessingStatus REMOVE = new ProcessingStatus(
+        Mutation.REPLACE);
 
-    static ProcessingStatus replace(BaseNode node, BaseNode... rest) {
+    /**
+     * A status that specifies that the current node should be replaced with
+     * the given ones in order.
+     */
+    public static ProcessingStatus replace(BaseNode node, BaseNode... rest) {
       return replace(
           ImmutableList.<BaseNode>builder().add(node).add(rest).build());
     }
 
-    static ProcessingStatus replace(Iterable<? extends BaseNode> replacements) {
+    /**
+     * A status that specifies that the current node should be replaced with
+     * the given ones in order.
+     */
+    public static ProcessingStatus replace(
+        Iterable<? extends BaseNode> replacements) {
       return new ProcessingStatus(
-          "replace", ImmutableList.copyOf(replacements));
+          Mutation.REPLACE, ImmutableList.copyOf(replacements));
     }
 
-    private final String text;
+    final Mutation mut;
     final ImmutableList<BaseNode> replacements;
 
-    private ProcessingStatus(String text) {
-      this(text, ImmutableList.of());
+    private ProcessingStatus(Mutation mut) {
+      this(mut, ImmutableList.of());
     }
 
     private ProcessingStatus(
-        String text, ImmutableList<BaseNode> replacements) {
-      this.text = text;
+        Mutation mut, ImmutableList<BaseNode> replacements) {
+      this.mut = mut;
       this.replacements = replacements;
     }
 
     @Override
     public String toString() {
-      return text;
+      return mut.name();
     }
   }
+
+
+  private enum Mutation {
+    BREAK,
+    CONTINUE,
+    REPLACE,
+  }
+
 
   /**
    * Called before processing a node's children.
@@ -122,35 +150,7 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
     ProcessingStatus status = previsit(node, pathFromRoot);
     if (status == ProcessingStatus.CONTINUE) {
       if (node instanceof BaseInnerNode) {
-        BaseInnerNode inode = (BaseInnerNode) node;
-        List<BaseNode> children = ImmutableList.copyOf(inode.getChildren());
-        int j = 0;
-        for (int i = 0, n = children.size(); i < n; ++i, ++j) {
-          BaseNode child = children.get(i);
-          ProcessingStatus childStatus = visit(
-              child, SList.append(pathFromRoot, makeParent(i, inode)));
-          ImmutableList<BaseNode> replacements;
-          if (childStatus == ProcessingStatus.BREAK
-              || childStatus == ProcessingStatus.CONTINUE) {
-            throw new AssertionError(childStatus);
-          } else {
-            replacements = childStatus.replacements;
-          }
-
-          Preconditions.checkState(inode.getChild(j) == child);
-
-          if (replacements.isEmpty()) {
-            inode.remove(j);
-            --j;
-          } else {
-            inode.replace(j, replacements.get(0));
-            for (BaseNode extraReplacement
-                 : replacements.subList(1, replacements.size())) {
-              inode.add(++j, extraReplacement);
-            }
-          }
-        }
-
+        visitChildren((BaseInnerNode) node, pathFromRoot);
       }
       status = postvisit(node, pathFromRoot);
     }
@@ -162,19 +162,41 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
     }
   }
 
+  protected final void visitChildren(
+      BaseInnerNode node, @Nullable SList<Parent> pathFromRoot) {
+    List<BaseNode> children = ImmutableList.copyOf(node.getChildren());
+    int j = 0;
+    for (int i = 0, n = children.size(); i < n; ++i, ++j) {
+      BaseNode child = children.get(i);
+      ProcessingStatus childStatus = visit(
+          child, SList.append(pathFromRoot, makeParent(i, node)));
+
+      Preconditions.checkState(childStatus.mut == Mutation.REPLACE);
+      Preconditions.checkState(node.getChild(j) == child);
+
+      ImmutableList<BaseNode> replacements = childStatus.replacements;
+      if (replacements.isEmpty()) {
+        node.remove(j);
+        --j;
+      } else {
+        node.replace(j, replacements.get(0));
+        for (BaseNode extraReplacement
+             : replacements.subList(1, replacements.size())) {
+          node.add(++j, extraReplacement);
+        }
+      }
+    }
+
+  }
+
   @Override
-  ImmutableList<CompilationUnitNode>
-  run(Iterable<? extends FileNode> fileNodes) {
-    ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
+  public ImmutableList<FileNode> run(Iterable<? extends FileNode> fileNodes) {
+    ImmutableList.Builder<FileNode> b = ImmutableList.builder();
     for (FileNode fileNode : fileNodes) {
       ProcessingStatus status = visit((BaseNode) fileNode, null);
-      if (status == ProcessingStatus.BREAK
-          || status == ProcessingStatus.CONTINUE) {
-        throw new AssertionError(status);
-      } else {
-        for (BaseNode replacement : status.replacements) {
-          b.add((CompilationUnitNode) replacement);
-        }
+      Preconditions.checkState(status.mut == Mutation.REPLACE);
+      for (BaseNode replacement : status.replacements) {
+        b.add((FileNode) replacement);
       }
     }
     return b.build();
@@ -186,10 +208,14 @@ extends AbstractPass<ImmutableList<CompilationUnitNode>> {
   }
 
 
-  static class Parent {
+  /**
+   * The position of a node in its parent.
+   */
+  public static class Parent {
     /** Index in parent's child list of the current node. */
-    final int indexInParent;
-    final BaseInnerNode parent;
+    public final int indexInParent;
+    /** The parent of the current node. */
+    public final BaseInnerNode parent;
 
     Parent(int indexInParent, BaseInnerNode parent) {
       this.indexInParent = indexInParent;

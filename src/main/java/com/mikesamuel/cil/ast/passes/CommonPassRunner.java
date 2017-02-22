@@ -13,6 +13,7 @@ import com.mikesamuel.cil.ast.StatementNode;
 import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
+import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
@@ -40,9 +41,8 @@ public final class CommonPassRunner {
   /**
    * Runs passes on the given compilation units and returns the result.
    */
-  public ImmutableList<CompilationUnitNode> run(
-      Iterable<? extends CompilationUnitNode> unprocessed) {
-    ImmutableList<CompilationUnitNode> cus = ImmutableList.copyOf(unprocessed);
+  public ImmutableList<FileNode> run(Iterable<? extends FileNode> unprocessed) {
+    ImmutableList<FileNode> cus = ImmutableList.copyOf(unprocessed);
     cus = new DefragmentTypesPass(logger).run(cus);
 
     DeclarationPass dp = new DeclarationPass(logger) {
@@ -83,8 +83,8 @@ public final class CommonPassRunner {
    * since that way only one type pool is allocated, and each compilation unit
    * can refer to types declared in the others.
    */
-  public CompilationUnitNode run(CompilationUnitNode cu) {
-    ImmutableList<CompilationUnitNode> after = run(ImmutableList.of(cu));
+  public FileNode run(CompilationUnitNode cu) {
+    ImmutableList<FileNode> after = run(ImmutableList.of(cu));
     Preconditions.checkState(after.size() == 1);
     return after.get(0);
   }
@@ -107,7 +107,7 @@ public final class CommonPassRunner {
     CompilationUnitNode cu = createEnvelope();
     boolean replaced = replaceFirst(cu, n);
     Preconditions.checkState(replaced);
-    CompilationUnitNode after = run(cu);
+    BaseNode after = (BaseNode) run(cu);
     return after.finder(n.getClass()).exclude(n.getClass())
         .findOne().get();
   }

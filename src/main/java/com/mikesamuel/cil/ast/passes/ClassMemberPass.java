@@ -224,7 +224,9 @@ final class ClassMemberPass extends AbstractPass<Void> {
               childTypeInfo, fieldName);
           if (info != null) {
             WholeType valueType = findWholeType(node);
-            info.setValueType(valueType.getStaticType().typeSpecification);
+            if (valueType != null) {
+              info.setValueType(valueType.getStaticType().typeSpecification);
+            }
             ((MemberDeclaration) node).setMemberInfo(info);
           } else {
             error(node, "Missing member info for " + fieldName);
@@ -488,12 +490,11 @@ final class ClassMemberPass extends AbstractPass<Void> {
   }
 
   @Override
-  Void run(Iterable<? extends FileNode> fileNodes) {
+  public Void run(Iterable<? extends FileNode> fileNodes) {
     for (FileNode fileNode : fileNodes) {
       run((BaseNode) fileNode, null, null, null);
     }
     return null;
   }
-
 
 }
