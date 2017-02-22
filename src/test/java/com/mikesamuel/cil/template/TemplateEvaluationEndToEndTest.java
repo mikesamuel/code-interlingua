@@ -73,7 +73,6 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
 
   @Test
   public void testEndToEnd() throws Exception {
-    if (true) { return; }  // TODO: Implement TemplateBundle processing
     for (File testRoot : testRoots) {
       Set<File> javaFiles = Sets.newTreeSet();
       Map<String, File> prefixToInput = Maps.newTreeMap();
@@ -183,14 +182,14 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
 
         File gotFile = writeToTempFile(prefix, got);
 
-        Truth.assertWithMessage(prefix + " logged at " + logOutputFile)
-            .that(canonCompilationUnit(Files.toString(gotFile, UTF_8)))
-            .isEqualTo(canonCompilationUnit(Files.toString(output, UTF_8)));
         if (log != null) {
           Truth.assertWithMessage(prefix + " log")
               .that(Files.toString(logOutputFile, UTF_8))
               .isEqualTo(Files.toString(log, UTF_8));
         }
+        Truth.assertWithMessage(prefix + " logged to " + logOutputFile)
+            .that(canonCompilationUnit(Files.toString(gotFile, UTF_8)))
+            .isEqualTo(canonCompilationUnit(Files.toString(output, UTF_8)));
       }
     }
 

@@ -103,7 +103,8 @@ public final class InterpreterTest extends TestCase {
         root = passes.run((ExpressionNode) root);
         break;
       case CompilationUnit:
-        root = passes.run((CompilationUnitNode) root);
+      case TemplatePseudoRoot:
+        root = (BaseNode) passes.run((CompilationUnitNode) root);
         break;
       case Statement:
         root = passes.run((StatementNode) root);
