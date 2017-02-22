@@ -1,9 +1,12 @@
 package com.mikesamuel.cil.ptree;
 
+import java.util.LinkedHashSet;
+
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -119,6 +122,21 @@ final class Repetition extends PTParSer {
         return Optional.of(state);
       }
     }
+  }
+
+  @Override
+  public ForceFitState forceFit(ForceFitState start) {
+    ForceFitState state = start;
+    LinkedHashSet<ForceFitState.PartialFit> fits =
+        new LinkedHashSet<>(start.fits);
+    while (true) {
+      int nFits = fits.size();
+      ForceFitState after = p.getParSer().forceFit(state);
+      fits.addAll(after.fits);
+      if (fits.size() == nFits) { break; }
+      state = after;
+    }
+    return start.withFits(fits);
   }
 
   @Override

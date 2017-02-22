@@ -1,6 +1,8 @@
 package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -67,6 +69,18 @@ final class Completer extends ParSer {
       r.error(state, "Unmatched input");
     }
     return Optional.absent();
+  }
+
+  @Override
+  public ForceFitState forceFit(ForceFitState state) {
+    ImmutableList.Builder<ForceFitState.PartialFit> b = ImmutableList.builder();
+    ForceFitState after = p.getParSer().forceFit(state);
+    for (ForceFitState.PartialFit f : after.fits) {
+      if (f.index == state.parts.size()) {
+        b.add(f);
+      }
+    }
+    return state.withFits(b.build());
   }
 
   @Override

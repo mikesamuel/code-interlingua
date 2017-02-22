@@ -7,6 +7,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.event.Event;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -106,6 +107,11 @@ final class PatternMatch extends PTParSer {
       err.error(state, "Expected " + diagnostic + " but got " + e);
       return Optional.absent();
     }
+  }
+
+  @Override
+  public ForceFitState forceFit(ForceFitState state) {
+    return state.withFits(ImmutableSet.of());
   }
 
   @Override

@@ -174,4 +174,20 @@ public final class Intermediates {
     return Optional.of(result);
   }
 
+  /**
+   * True iff target is reachable from source only via intermediate variants.
+   */
+  public static boolean reachedFrom(NodeType target, NodeType source) {
+    if (target == source) {
+      return true;
+    }
+    Endpoints pts = new Endpoints(source, target);
+    Optional<SList<IntermediateGraphNode>> pathOpt;
+    try {
+      pathOpt = BETWEEN_CACHE.get(pts);
+    } catch (ExecutionException ex) {
+      throw new AssertionError(null, ex);
+    }
+    return pathOpt.isPresent();
+  }
 }

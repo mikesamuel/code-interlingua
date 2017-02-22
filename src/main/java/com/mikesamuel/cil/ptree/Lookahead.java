@@ -6,6 +6,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.mikesamuel.cil.event.Event;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -112,6 +113,11 @@ final class Lookahead extends PTParSer {
   @Override
   public Optional<MatchState> match(MatchState state, MatchErrorReceiver err) {
     return Optional.of(state);
+  }
+
+  @Override
+  public ForceFitState forceFit(ForceFitState state) {
+    return state;
   }
 
   @Override

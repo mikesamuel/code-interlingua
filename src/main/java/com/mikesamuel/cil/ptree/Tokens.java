@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ptree;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -15,6 +16,7 @@ import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.TokenStrings;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.Ignorables;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
@@ -66,7 +68,7 @@ public final class Tokens {
       case 'f': c = '\f'; break;
       case 'r': c = '\r'; break;
       case '0': case '1': case '2':
-      case '3': case '4': case '5': case '6': case '7':
+      case '3': case '4': case '5': case '6': case '7': {
         c -= '0';
         int endLimit = Math.min(end + (c < 4 ? 2 : 1), length);
         while (end < endLimit) {
@@ -79,11 +81,119 @@ public final class Tokens {
           }
         }
         break;
+      }
+      case 'u': {
+        // u escapes handled by pre-lexer decoding pass, but there's no harm.
+        // in handling things here except that we might spuriously pass invalid
+        // inputs like
+        //   "\u005cu005c"
+        // Since we optimistically assume that all input Java files actually
+        // compile, this is not a problem.
+        end = pos + 6;
+        if (end > length) {
+          return -1;
+        }
+        c = 0;
+        for (int i = pos + 2; i < end; ++i) {
+          char hex = cs.charAt(i);
+          int dec;
+          if (hex <= '9') {
+            if ('0' <= hex) {
+              dec = hex - '0';
+            } else {
+              return -1;
+            }
+          } else {
+            hex |= 32;
+            if ('a' <= hex && hex <= 'f') {
+              dec = hex - ('a' - 10);
+            } else {
+              return -1;
+            }
+          }
+          c = (char) ((c << 4) | dec);
+        }
+        break;
+      }
       default:
-        // u escapes handled by pre-lexer decoding pass.
         return -1;
     }
     return (((long) end) << 32) | c;
+  }
+
+  /**
+   * Given a codepoint, appends codeunits that can be
+   * {@linkplain #decodeChar decoded} to the same codepoint regardless of
+   * whether the decoded output is embedded in a single-quoted or
+   * double-quoted string.
+   * <p>
+   * All non-
+   *
+   * @param codePoint The codepoint to encode.
+   * @param out receives the encoded output.
+   * @throws IOException only if out throws.
+   */
+  public static void encodeCodepointOnto(int codePoint, Appendable out)
+  throws IOException {
+    Preconditions.checkArgument(
+        0 <= codePoint && codePoint <= Character.MAX_CODE_POINT);
+    if (codePoint < 0x100) {
+      char ch = (char) codePoint;
+      switch (ch) {
+        case '\0': out.append("\\u0000"); return;
+        case '\b': out.append("\\b"); return;
+        case '\t': out.append("\\t"); return;
+        case '\n': out.append("\\n"); return;
+        case '\f': out.append("\\f"); return;
+        case '\r': out.append("\\r"); return;
+        case '\\': out.append("\\\\"); return;
+        case '\'': out.append("\\\'"); return;
+        case '\"': out.append("\\\""); return;
+      }
+      out.append(ch);
+    } else if (codePoint < 0x10000) {
+      appendSlashU4Hex((char) codePoint, out);
+    } else {
+      char leading = Character.highSurrogate(codePoint);
+      char trailing = Character.lowSurrogate(codePoint);
+      appendSlashU4Hex(leading, out);
+      appendSlashU4Hex(trailing, out);
+    }
+  }
+
+  private static final char[] HEX_DIGITS = {
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+  };
+
+  private static void appendSlashU4Hex(char codeUnit, Appendable out)
+  throws IOException {
+    out.append('\\');
+    out.append('u');
+    out.append(HEX_DIGITS[(codeUnit >> 12) & 0xF]);
+    out.append(HEX_DIGITS[(codeUnit >>  8) & 0xF]);
+    out.append(HEX_DIGITS[(codeUnit >>  4) & 0xF]);
+    out.append(HEX_DIGITS[(codeUnit      ) & 0xF]);
+  }
+
+  /**
+   * A double quoted Java8 string literal that encodes the given string.
+   */
+  public static final String encodeString(CharSequence s) {
+    int n = s.length();
+    StringBuilder sb = new StringBuilder(n + 18);
+    sb.append('"');
+    for (int i = 0, cc; i < n; i += cc) {
+      int cp = Character.codePointAt(s, i);
+      cc = Character.charCount(cp);
+
+      try {
+        encodeCodepointOnto(cp, sb);
+      } catch (IOException ex) {
+        throw new AssertionError("StringBuilders should not throw", ex);
+      }
+    }
+    return sb.append('"').toString();
   }
 
 
@@ -518,6 +628,11 @@ public final class Tokens {
         }
       }
       return Optional.of(afterComment);
+    }
+
+    @Override
+    public ForceFitState forceFit(ForceFitState state) {
+      return state;
     }
 
     static final class JavaDocCommentRecognizer

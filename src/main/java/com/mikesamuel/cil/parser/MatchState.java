@@ -14,7 +14,8 @@ public final class MatchState {
   /** The cursor of the current event in {@link #events}. */
   public final int index;
 
-  MatchState(ImmutableList<Event> events, int index) {
+  /** */
+  public MatchState(ImmutableList<Event> events, int index) {
     Preconditions.checkArgument(0 <= index && index <= events.size());
     this.events = events;
     this.index = index;

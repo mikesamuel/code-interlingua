@@ -9,6 +9,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.IdentifierWrappers;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -148,6 +149,16 @@ class Concatenation extends PTParSer {
     return Optional.of(state);
   }
 
+  @Override
+  public ForceFitState forceFit(ForceFitState start) {
+    ForceFitState state = start;
+    for (ParSerable p : ps) {
+      if (state.fits.isEmpty()) { break; }
+      ParSer fitter = p.getParSer();
+      state = fitter.forceFit(state);
+    }
+    return state;
+  }
 
   private static boolean isIdentifierWrapper(ParSerable ps) {
     if (ps instanceof NodeType) {

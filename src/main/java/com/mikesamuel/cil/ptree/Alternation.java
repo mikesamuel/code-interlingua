@@ -2,6 +2,8 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -68,6 +70,19 @@ final class Alternation extends PTParSer {
       if (next.isPresent()) { return next; }
     }
     return Optional.absent();
+  }
+
+  @Override
+  public ForceFitState forceFit(ForceFitState state) {
+    if (state.fits.isEmpty()) { return state; }
+    ImmutableSet.Builder<ForceFitState.PartialFit> b =
+        ImmutableSet.builder();
+    for (ParSerable p : ps) {
+      ParSer fitter = p.getParSer();
+      ForceFitState after = fitter.forceFit(state);
+      b.addAll(after.fits);
+    }
+    return state.withFits(b.build());
   }
 
   @Override

@@ -47,12 +47,19 @@ public abstract class ParSer implements ParSerable {
       SerialState serialState, SerialErrorReceiver err);
 
   /**
-   * Given a match state, consumes events to determine whether a flattened can
-   * be parsed/serialized by this ParSer.
+   * Given a match state, consumes events to determine whether a flattened
+   * parse tree can be parsed/serialized by this ParSer.
    *
    * @return absent if the events at the front of state cannot be handled
    *     by this ParSer.
    */
   public abstract Optional<MatchState> match(
       MatchState state, MatchErrorReceiver err);
+
+  /**
+   * Takes a set of ASTs, some of which are complete, and some of which are
+   * partial, and figures out how they could be coerced so that they could
+   * be unparsed to a string that matches the language matched by this ParSer.
+   */
+  public abstract ForceFitState forceFit(ForceFitState state);
 }

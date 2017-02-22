@@ -8,6 +8,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.event.Event;
+import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
@@ -85,13 +86,18 @@ final class Literal extends PTParSer {
   }
 
   @Override
+  public ForceFitState forceFit(ForceFitState state) {
+    return state;
+  }
+
+  @Override
   Kind getKind() {
     return Kind.LIT;
   }
 
   @Override
   public String toString() {
-    return "\"" + this.text + "\"";  // TODO escape
+    return Tokens.encodeString(text);
   }
 
 

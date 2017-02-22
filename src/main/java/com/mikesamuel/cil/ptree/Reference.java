@@ -1,25 +1,45 @@
 package com.mikesamuel.cil.ptree;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
 
+import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.mikesamuel.cil.ast.BaseLeafNode;
+import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.Intermediates;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.StringLiteralNode;
+import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
+import com.mikesamuel.cil.parser.ForceFitState;
+import com.mikesamuel.cil.parser.ForceFitState.FixedNode;
+import com.mikesamuel.cil.parser.ForceFitState.InterpolatedValue;
+import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
+import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
@@ -347,21 +367,25 @@ final class Reference extends PTParSer {
         }
       }
 
-      if (stage != Stage.GROWING && shouldHandleTemplateInterpolation(state)
-          && !NodeTypeTables.NOINTERP.contains(nodeType)) {
-        // Try parsing a template element.
-        ParseResult nonStandardResult =
-            NodeType.TemplateInterpolation.getParSer()
-            .parse(state, new LeftRecursion(), err);
-        switch (nonStandardResult.synopsis) {
-          case FAILURE: break;
-          case SUCCESS:
-            failureExclusionsTriggered.addAll(
-                nonStandardResult.lrExclusionsTriggered);
-            return ParseResult.success(
-                nonStandardResult.next(),
-                nonStandardResult.writeBack,
-                failureExclusionsTriggered);
+      if (stage != Stage.GROWING && shouldHandleTemplateInterpolation(state)) {
+        Optional<NodeType> nodeTypeHint = preparseNodeTypeHint(state, err);
+        if (nodeTypeHint.isPresent()
+            ? nodeTypeHint.get() == nodeType
+            : !NodeTypeTables.NOINTERP.contains(nodeType)) {
+          // Try parsing a template element.
+          ParseResult nonStandardResult =
+              NodeType.TemplateInterpolation.getParSer()
+              .parse(state, new LeftRecursion(), err);
+          switch (nonStandardResult.synopsis) {
+            case FAILURE: break;
+            case SUCCESS:
+              failureExclusionsTriggered.addAll(
+                  nonStandardResult.lrExclusionsTriggered);
+              return ParseResult.success(
+                  nonStandardResult.next(),
+                  nonStandardResult.writeBack,
+                  failureExclusionsTriggered);
+          }
         }
       }
     } finally {
@@ -383,6 +407,28 @@ final class Reference extends PTParSer {
       }
     }
     return false;
+  }
+
+  private static Optional<NodeType> preparseNodeTypeHint(
+      ParseState state,
+      ParseErrorReceiver err) {
+    ParseState afterInterpStart = state.advance(2);
+    Matcher m = afterInterpStart.matcherAtStart(Tokens.IDENTIFIER.p);
+    if (m.find() && m.start() == state.index) {
+      String s = m.group();
+      ParseState afterIdentifier = state.withIndex(m.end());
+      if (afterIdentifier.startsWith(":", Optional.absent())) {
+        NodeType nt;
+        try {
+          nt = NodeType.valueOf(s);
+        } catch (@SuppressWarnings("unused") IllegalArgumentException ex) {
+          err.error(afterInterpStart, "No such node type " + s);
+          return Optional.absent();
+        }
+        return Optional.of(nt);
+      }
+    }
+    return Optional.absent();
   }
 
   private boolean shouldHandleTemplateDirective(ParseState state) {
@@ -563,6 +609,69 @@ final class Reference extends PTParSer {
     return Alternation.of(variants).getParSer().match(state, err);
   }
 
+  @Override
+  public ForceFitState forceFit(ForceFitState state) {
+    // We do not recurse to the variants.  Instead, we coerce try to match a
+    // part against this reference's node type.
+
+    initLazy();
+    if (state.fits.isEmpty()) { return state; }
+    if (NodeTypeTables.NONSTANDARD.contains(nodeType)) {
+      return state.withFits(ImmutableSet.of());
+    }
+
+    int nParts = state.parts.size();
+
+    ImmutableSet.Builder<ForceFitState.PartialFit> b = ImmutableSet.builder();
+    for (ForceFitState.PartialFit f : state.fits) {
+      if (f.index == nParts) { continue; }
+      ForceFitState.FitPart p = state.parts.get(f.index);
+      if (p instanceof ForceFitState.FixedNode) {
+        ForceFitState.FixedNode fn = (FixedNode) p;
+        if (reachableViaAnon(this.nodeType, fn.child.getNodeType())) {
+          b.add(f.advance());
+        }
+      } else if (p instanceof ForceFitState.InterpolatedValue) {
+        ForceFitState.InterpolatedValue iv = (InterpolatedValue) p;
+        Object value = iv.value;
+        if (value instanceof NodeVariant) {
+          value = ((NodeVariant) value).buildNode(ImmutableList.of());
+        }
+        if (value instanceof CharSequence) {
+          String content = new StringBuilder()
+              .append((CharSequence) value)
+              .toString();
+          NodeType srcNt = iv.typeHint.or(nodeType);
+
+          if (Intermediates.reachedFrom(NodeType.StringLiteral, srcNt)) {
+            value = StringLiteralNode.Variant.Builtin.buildNode(
+                Tokens.encodeString(content));
+          } else {
+            Input input = Input.builder().code(content).build();
+            ParseState start = new ParseState(input);
+            ParseResult result = PTree.complete(srcNt).getParSer()
+                .parse(start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
+            if (result.synopsis == ParseResult.Synopsis.SUCCESS) {
+              value = Trees.of(result.next());
+            }
+          }
+        } else if (value instanceof Number) {
+          // TODO
+        } else if (value instanceof Boolean) {
+          // TODO
+        }
+        if (value instanceof BaseNode) {
+          Optional<BaseNode> wrapped = Intermediates.wrap(
+              (BaseNode) value, nodeType, Functions.constant(null));
+          if (wrapped.isPresent()) {
+            b.add(f.advanceAndResolve(wrapped.get()));
+          }
+        }
+      }
+    }
+    return state.withFits(b.build());
+  }
+
   private boolean growReachedLR(int startIndex, ParseState s) {
     int nOtherLREndsSeen = 0;
     for (SList<Event> o = s.output; o != null; o = o.prev) {
@@ -734,4 +843,92 @@ final class Reference extends PTParSer {
       }
     }
   }
+
+  private static final
+  LoadingCache<NodeType, ImmutableSet<NodeType>> REACHABLE_VIA_ANON =
+      CacheBuilder.newBuilder().build(
+          new CacheLoader<NodeType, ImmutableSet<NodeType>>() {
+
+            @Override
+            public ImmutableSet<NodeType> load(NodeType t) throws Exception {
+              Set<NodeType> reachable = new LinkedHashSet<>();
+              Deque<NodeType> unprocessed = new ArrayDeque<>();
+              unprocessed.add(t);
+              while (!unprocessed.isEmpty()) {
+                NodeType nt = unprocessed.poll();
+                if (!reachable.add(nt)) {
+                  continue;
+                }
+                for (Enum<?> nodeVariant
+                     : nt.getVariantType().getEnumConstants()) {
+                  NodeVariant v = (NodeVariant) nodeVariant;
+                  if (v.isAnon()) {
+                    NodeType referent = getReferent((PTParSer) v.getParSer());
+                    unprocessed.add(Preconditions.checkNotNull(referent));
+                  }
+                }
+              }
+              return ImmutableSet.copyOf(reachable);
+            }
+
+            private NodeType getReferent(PTParSer p) {
+              switch (p.getKind()) {
+                case ALT:
+                  return null;
+                case CAT:
+                  for (ParSerable child : ((Concatenation) p).ps) {
+                    NodeType r = getReferent((PTParSer) child.getParSer());
+                    if (r != null) { return r; }
+                  }
+                  return null;
+                case LA:
+                case LIT:
+                case REP:
+                case REX:
+                  return null;
+                case REF:
+                  return ((Reference) p).getNodeType();
+              }
+              throw new AssertionError(p);
+            }
+          });
+
+  /** True if there is path from src to tgt only via {@code @anon} variants. */
+  static boolean reachableViaAnon(NodeType src, NodeType tgt) {
+    if (src == tgt) { return true; }
+    ImmutableSet<NodeType> reachable;
+    try {
+      reachable = REACHABLE_VIA_ANON.get(src);
+    } catch (ExecutionException ex) {
+      throw (AssertionError) new AssertionError(src).initCause(ex);
+    }
+    return reachable.contains(tgt);
+  }
+
+  static Set<NodeType> leafsReachableViaAnon(NodeType src) {
+    if (isLeafNodeType(src)) {
+      return ImmutableSet.of(src);
+    }
+    ImmutableSet<NodeType> reachable;
+    try {
+      reachable = REACHABLE_VIA_ANON.get(src);
+    } catch (ExecutionException ex) {
+      throw (AssertionError) new AssertionError(src).initCause(ex);
+    }
+    return Sets.filter(
+        reachable,
+        new Predicate<NodeType>() {
+
+          @Override
+          public boolean apply(NodeType t) {
+            return t != null && isLeafNodeType(t);
+          }
+
+        });
+  }
+
+  static boolean isLeafNodeType(NodeType nt) {
+    return BaseLeafNode.class.isAssignableFrom(nt.getNodeBaseType());
+  }
+
 }

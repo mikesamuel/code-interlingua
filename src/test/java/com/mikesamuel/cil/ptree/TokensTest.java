@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ptree;
 
+import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -109,6 +110,31 @@ public final class TokensTest extends TestCase {
       long j = Tokens.decodeChar(octal, 0);
       assertEquals(octal.length(), j >>> 32);
       assertEquals(i, (int) j);
+    }
+  }
+
+  @Test
+  public static void testDecodeOfEncode() throws IOException {
+    StringBuilder sb = new StringBuilder();
+    for (int[] range : new int[][] {
+           { 0, 0x301 }, { 0xFFF, 0xC000 }, { 0xE000, 0x1001F }
+         }) {
+      int lt = range[0], rt = range[1];
+      for (int i = lt; i <= rt; ++i) {
+        sb.setLength(0);
+        Tokens.encodeCodepointOnto(i, sb);
+
+        String enc = sb.toString();
+        sb.setLength(0);
+        for (int p = 0, n = enc.length(); p < n;) {
+          long d = Tokens.decodeChar(enc, p);
+          sb.appendCodePoint((int) (d & 0xffffffffL));
+          p = (int) (d >> 32);
+        }
+        int ii = sb.codePointAt(0);
+        assertEquals(enc, i, ii);
+        assertEquals(enc, sb.length(), Character.charCount(ii));
+      }
     }
   }
 
