@@ -6,6 +6,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 /**
@@ -50,22 +51,30 @@ public abstract class BaseInnerNode extends BaseNode {
 
   // MUTATORS
   /** Adds a child node. */
-  public void add(BaseNode child) {
+  public final void add(BaseNode child) {
     add(getNChildren(), child);
   }
 
   /** Adds a child node at the given index. */
-  public void add(int index, BaseNode child) {
+  public final void add(int index, BaseNode child) {
     children.add(index, Preconditions.checkNotNull(child));
   }
 
-  /** Adds a child node at the given index. */
-  public void replace(int index, BaseNode child) {
+  /** Replaces the child node at the given index with the given child. */
+  public final void replace(int index, BaseNode child) {
     children.set(index, Preconditions.checkNotNull(child));
   }
 
+  /** Equivalent to removing all children and adding the given ones. */
+  public final void replaceChildren(Iterable<? extends BaseNode> newChildren) {
+    ImmutableList<BaseNode> newChildrenKnownNotNull =
+        ImmutableList.copyOf(newChildren);
+    children.clear();
+    children.addAll(newChildrenKnownNotNull);
+  }
+
   /** Adds a child node at the given index. */
-  public void remove(int index) {
+  public final void remove(int index) {
     children.remove(index);
   }
 
