@@ -253,4 +253,9 @@ public interface InterpretationContext<VALUE> {
    */
   StaticType runtimeType(VALUE v);
 
+  /** True iff the completion is a normal, non-error result. */
+  default boolean completedNormallyWithoutError(Completion<VALUE> c) {
+    return c.kind == Completion.Kind.NORMAL && !isErrorValue(c.value);
+  }
+
 }

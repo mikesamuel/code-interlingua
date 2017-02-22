@@ -29,7 +29,8 @@ public final class Locals<VALUE> {
     this(null);
   }
 
-  Locals(@Nullable Locals<VALUE> outer) {
+  /** */
+  public Locals(@Nullable Locals<VALUE> outer) {
     this.outer = outer;
   }
 
