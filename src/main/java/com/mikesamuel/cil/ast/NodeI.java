@@ -136,6 +136,12 @@ public interface NodeI {
     return toAsciiArt(prefix, Functions.constant(null));
   }
 
+  /** A clone that has the same children. */
+  NodeI shallowClone();
+
+  /** A clone whose children are deep clones of this node's children. */
+  NodeI deepClone();
+
 }
 
 final class NodeIHelpers {

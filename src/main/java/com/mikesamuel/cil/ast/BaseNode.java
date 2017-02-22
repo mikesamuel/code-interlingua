@@ -69,12 +69,6 @@ public abstract class BaseNode implements NodeI {
     }
   }
 
-  /** A clone that has the same children. */
-  public abstract BaseNode shallowClone();
-
-  /** A clone whose children are deep clones of this node's children. */
-  public abstract BaseNode deepClone();
-
   protected static <T extends BaseNode> T deepCopyChildren(T node) {
     int n = node.getNChildren();
     if (node instanceof BaseInnerNode) {
@@ -87,6 +81,12 @@ public abstract class BaseNode implements NodeI {
     }
     return node;
   }
+
+  @Override
+  public abstract BaseNode deepClone();
+
+  @Override
+  public abstract BaseNode shallowClone();
 
 
   @Override
