@@ -221,7 +221,7 @@ the Postconditions class passes when given the ParseState after the body is
 parsed.
 
 @nointerp means the production should not be allowed to contain template
-interpolations when parsed in non-standard mode.
+interpolations when parsed in non-standard mode without an explicit type hint.
 
 (@trait=Ident,Ident,...) attached to a production means that the corresponding
 *Node class implements that trait which might involve creating storage to back
@@ -631,11 +631,11 @@ AnnotationTypeElementModifier:
      "abstract"
 DefaultValue:
      "default" ElementValue
-Annotation:
+Annotation: @nointerp
      NormalAnnotation
      SingleElementAnnotation
      MarkerAnnotation
-Modifier:
+Modifier: @nointerp
      "abstract"
      "default"
      "final"
@@ -649,7 +649,7 @@ Modifier:
      "transient"
      "volatile"
      Annotation
-NormalAnnotation:
+NormalAnnotation: @nointerp
      "@" TypeName "(" [ElementValuePairList] ")"
 ElementValuePairList:
      ElementValuePair {"," ElementValuePair}
@@ -663,9 +663,9 @@ ElementValueArrayInitializer:
      "{" [ElementValueList] [","] "}"
 ElementValueList:
      ElementValue {"," ElementValue}
-MarkerAnnotation:
+MarkerAnnotation: @nointerp
      "@" TypeName
-SingleElementAnnotation:
+SingleElementAnnotation: @nointerp
      "@" TypeName "(" ElementValue ")"
 
 // Arrays
@@ -1020,25 +1020,28 @@ ConstantExpression:
 TemplateDirectives: @nonstandard @toplevel
     TemplateDirective {TemplateDirective}
 TemplateDirective: @nonstandard
-    "%%" "{" ["let" TemplateLocal {"," TemplateLocal} ";"]                          (@name=BlockStart)
-    "%%" "template" Identifier "(" [TemplateFormals] ")" "{"                        (@name=TemplateStart)
-    "%%" "if" "(" Expression ")" "{"                                                (@name=IfStart)
-    "%%" "} else" ["if" "(" Expression ")"] "{"                                     (@name=Else)
-    "%%" "for" "(" Identifier ":" Expression ")" "{"                                (@name=LoopStart)
-    "%%" "}"                                                                        (@name=End)
+    "%%" "{" ["let" TemplateLocal {"," TemplateLocal} ";"]   (@name=BlockStart)    @templateStart
+    "%%" "template" Identifier "(" [TemplateFormals] ")" "{" (@name=TemplateStart) @templateStart
+    "%%" "if" "(" Expression ")" "{"                         (@name=IfStart)       @templateStart
+    "%%" "} else" ["if" "(" Expression ")"] "{"              (@name=Else)          @templateEnd @templateStart
+    "%%" "for" "(" Identifier ":" Expression ")" "{"         (@name=LoopStart)     @templateStart
+    "%%" "}"                                                 (@name=End)           @templateEnd
 TemplateInterpolation: @nonstandard @toplevel
-    "(%" TemplateComprehension ")"
-    "{%" TemplateComprehension "}"
+    "(%" [NodeTypeHint] TemplateComprehension ")"
+    "{%" [NodeTypeHint] TemplateComprehension "}"
 TemplateComprehension: @nonstandard
     Expression {"," Expression} [TemplateLoop] [TemplateCondition]
 TemplateLoop: @nonstandard
-    "for" "(" Identifier ":" TemplateComprehension ")"
+    "for" "(" Identifier ":" Expression ")"
 TemplateCondition: @nonstandard
     "if" "(" Expression ")"
 TemplateLocal: @nonstandard
     !(Identifier Dims) VariableDeclarator @anon
 TemplateFormals: @nonstandard
     LocalName {"," LocalName}
+NodeTypeHint: @nonstandard
+// An @nointerp production can be interpolated into with an explicit type hint.
+    Identifier ":"
 
 // A parse tree has to have a single root.  When parsing a compilation unit that is
 // within a block template, we start with a compilation unit, and after the

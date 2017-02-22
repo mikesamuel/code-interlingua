@@ -81,4 +81,18 @@ public interface NodeVariant extends ParSerable {
   default @Nullable NodeType getDelegate() {
     return null;
   }
+
+  /**
+   * True iff it starts a template scope.
+   */
+  default boolean isTemplateStart() {
+    return false;
+  }
+
+  /**
+   * True iff it ends a template scope.
+   */
+  default boolean isTemplateEnd() {
+    return false;
+  }
 }

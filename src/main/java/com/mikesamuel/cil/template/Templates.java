@@ -375,19 +375,14 @@ public final class Templates {
       DirectiveKind dk = null;
       switch (event0.getNodeType()) {
         case TemplateDirective:
-          switch ((TemplateDirectiveNode.Variant) event0.getNodeVariant()) {
-            case BlockStart:
-            case IfStart:
-            case LoopStart:
-            case TemplateStart:
-              dk = DirectiveKind.START;
-              break;
-            case Else:
-              dk = DirectiveKind.INFIX;
-              break;
-            case End:
-              dk = DirectiveKind.END;
-              break;
+          TemplateDirectiveNode.Variant v =
+              (TemplateDirectiveNode.Variant) event0.getNodeVariant();
+          if (v.isTemplateStart()) {
+            dk = v.isTemplateEnd()
+                ? dk = DirectiveKind.INFIX  // TODO: need to readjust later
+                : DirectiveKind.START;
+          } else if (v.isTemplateEnd()) {
+            dk = DirectiveKind.END;
           }
           break;
         case TemplateInterpolation:
