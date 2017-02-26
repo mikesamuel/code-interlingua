@@ -33,9 +33,11 @@ import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.TemplateComprehensionNode;
 import com.mikesamuel.cil.ast.TemplateConditionNode;
 import com.mikesamuel.cil.ast.TemplateDirectiveNode;
+import com.mikesamuel.cil.ast.TemplateDirectivesNode;
 import com.mikesamuel.cil.ast.TemplateInterpolationNode;
 import com.mikesamuel.cil.ast.TemplateLocalNode;
 import com.mikesamuel.cil.ast.TemplateLoopNode;
+import com.mikesamuel.cil.ast.TemplatePseudoRootNode;
 import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
@@ -181,6 +183,10 @@ public class TemplateBundle {
       if (optsIntoTemplateProcessing(fn)) {
         apply(fn, inputObj, passes, b);
       } else {
+        LogUtils.log(
+            logger, Level.FINE, fn,
+            "Skipping template processing for file that does not opt-in.",
+            null);
         // TODO: better error when fn contains template instructions or is
         // a pseudo root.
         b.add((CompilationUnitNode) fn);
@@ -273,10 +279,13 @@ public class TemplateBundle {
       if (node.getVariant().isTemplateEnd()) {
         this.templateScopes.remove(templateScopes.size() - 1);
       }
-      if (templateScopes.getLast().elide) {
+      TemplateScope templateScope = templateScopes.getLast();
+      // If we have elided something, e.g. due to %%if(false), we still need to
+      // descend into TemplateDirectives so we can find the end of scope above.
+      if (node.getNodeType() != NodeType.TemplateDirectives
+          && templateScope.elide) {
         return ProcessingStatus.REMOVE;
       }
-      TemplateScope templateScope = templateScopes.getLast();
       if (node.getVariant().isTemplateStart()) {
         Locals<Object> locals = new Locals<>(templateScope.locals);
         templateScope = new TemplateScope(locals);
@@ -366,9 +375,11 @@ public class TemplateBundle {
         int n = node.getNChildren();
         ImmutableList.Builder<ForceFitState.FitPart> parts =
             ImmutableList.builder();
-        for (Interpolation interp : parentToInterpolations.get(node)) {
+        for (Interpolation interp : parentToInterpolations.removeAll(node)) {
           Preconditions.checkState(interp.indexInParent >= pos);
           for (; pos < interp.indexInParent; ++pos) {
+            // This fixed node might actually be a template interpolation that
+            // failed to produce a result.  That's OK.
             parts.add(ForceFitState.FitPart.fixedNode(node.getChild(pos)));
           }
           for (Object value : interp.results) {
@@ -391,7 +402,10 @@ public class TemplateBundle {
           System.err.println("\tstate parts=" + state.parts);
           System.err.println("\tafter=" + after.fits);
         }
-        if (!after.fits.isEmpty()) {
+        if (after.fits.isEmpty()) {
+          error(node, node.getVariant() + " does not fit " + state.parts);
+          return ProcessingStatus.BREAK;
+        } else {
           ForceFitState.PartialFit bestFit = Iterables.getFirst(
               after.fits, null);
           Iterator<BaseNode> insertions =
@@ -407,8 +421,6 @@ public class TemplateBundle {
           }
           Preconditions.checkState(!insertions.hasNext());
           ((BaseInnerNode) node).replaceChildren(fixed.build());
-        } else {
-          throw new AssertionError(after.fits);
         }
       }
 
@@ -432,7 +444,7 @@ public class TemplateBundle {
               } else {
                 Completion<Object> conditionResult = interpreter.interpret(
                     condition, templateScope.locals);
-                switch (context.toBoolean(conditionResult)) {
+                switch (context.toBoolean(conditionResult.value)) {
                   case FALSE:
                     templateScope.elide = true;
                     return ProcessingStatus.REMOVE;
@@ -449,9 +461,53 @@ public class TemplateBundle {
               return ProcessingStatus.REMOVE;
             case End:
               return ProcessingStatus.REMOVE;
-            case LoopStart:
-              // TODO: evaluate iterable, then clone out the body.
-              return ProcessingStatus.REMOVE;
+            case LoopStart: {
+              IdentifierNode elementNameNode =
+                  node.firstChildWithType(IdentifierNode.class);
+              ExpressionNode seriesExprNode =
+                  node.firstChildWithType(ExpressionNode.class);
+              // Skip the body.  Below we extract and clone it
+              templateScope.elide = true;
+              if (elementNameNode == null || seriesExprNode == null) {
+                error(node, "Malformed %%for loop");
+                return ProcessingStatus.BREAK;
+              }
+              Name elementVarName = Name.root(
+                  elementNameNode.getValue(), Name.Type.LOCAL);
+              Locals<Object> loopLocals = new Locals<>(templateScope.locals);
+              loopLocals.declare(elementVarName, Functions.identity());
+              Completion<Object> seriesResult = interpreter.interpret(
+                  seriesExprNode, loopLocals);
+              if (!context.completedNormallyWithoutError(seriesResult)) {
+                return ProcessingStatus.BREAK;
+              }
+              @SuppressWarnings("synthetic-access")
+              TemplatePseudoRootNode bodyOfDirective =
+                  getBodyOfDirective(pathFromRoot);
+              ImmutableList.Builder<BaseNode> replacements =
+                  ImmutableList.builder();
+              this.templateScopes.add(new TemplateScope(loopLocals));
+              interpreter.forEach(seriesExprNode, null, seriesResult.value,
+                  new Function<Object, Completion<Object>>() {
+
+                    @Override
+                    public Completion<Object> apply(Object element) {
+                      TemplatePseudoRootNode copy = bodyOfDirective.deepClone();
+                      loopLocals.set(elementVarName, element);
+                      @SuppressWarnings("synthetic-access")
+                      ProcessingStatus result = visit(copy, null);
+                      Preconditions.checkState(
+                          result.replacements.size() == 1
+                          && copy == result.replacements.get(0));
+                      replacements.addAll(copy.getChildren());
+                      return Completion.normal(context.nullValue());
+                    }
+
+                  },
+                  context.runtimeType(seriesResult.value));
+              this.templateScopes.removeLast();
+              return ProcessingStatus.replace(replacements.build());
+            }
             case TemplateStart:
               // TODO: store in scope
               return ProcessingStatus.REMOVE;
@@ -459,6 +515,9 @@ public class TemplateBundle {
           throw new AssertionError(v);
         }
         case TemplateInterpolation: {
+          if (DEBUG_INTERP) {
+            System.err.println("Entering " + node.getSourcePosition());
+          }
           TemplateInterpolationNode interp = (TemplateInterpolationNode) node;
           NodeTypeHintNode typeHintNode = interp.firstChildWithType(
               NodeTypeHintNode.class);
@@ -550,8 +609,7 @@ public class TemplateBundle {
             Locals<Object> loopLocals = new Locals<>(templateScope.locals);
             Completion<Object> iterableResult = interpreter.interpret(
                 iterableExpr, loopLocals);
-            if (!context.completedNormallyWithoutError(
-                    iterableResult)) {
+            if (!context.completedNormallyWithoutError(iterableResult)) {
               hadError = true;
             } else {
               StaticType iterableType =
@@ -569,8 +627,7 @@ public class TemplateBundle {
                       if (condExpr != null) {
                         Completion<Object> condResult = interpreter.interpret(
                             condExpr, loopLocals);
-                        if (context.completedNormallyWithoutError(
-                                condResult)) {
+                        if (context.completedNormallyWithoutError(condResult)) {
                           switch (context.toBoolean(condResult.value)) {
                             case FALSE:
                               include = false;
@@ -603,12 +660,19 @@ public class TemplateBundle {
           if (!hadError) {
             @SuppressWarnings("synthetic-access")
             ImmutableList<Object> flatResults = flatten(results.build());
+            if (DEBUG_INTERP) {
+              System.err.println("\tflatResults=" + flatResults);
+            }
             parentToInterpolations.put(
                 pathFromRoot.x.parent,
                 new Interpolation(
                     pathFromRoot.x.indexInParent,
                     typeHint,
                     flatResults));
+          } else {
+            if (DEBUG_INTERP) {
+              System.err.println("\tHAS ERROR");
+            }
           }
           return ProcessingStatus.BREAK;
         }
@@ -616,6 +680,25 @@ public class TemplateBundle {
           TemplateLocalNode local = (TemplateLocalNode) node;
           // TODO
           break;
+        }
+        case TemplateDirectives: {
+          // When a TemplateDirective has output we need to extract its output
+          // out of the directives node.
+          TemplateDirectivesNode ds = (TemplateDirectivesNode) node;
+          ImmutableList.Builder<BaseNode> b = ImmutableList.builder();
+          for (int i = 0; i < ds.getNChildren();) {
+            BaseNode child = ds.getChild(i);
+            if (child instanceof TemplateDirectiveNode) {
+              ++i;
+            } else {
+              ds.remove(i);
+              b.add(child);
+            }
+          }
+          if (ds.getNChildren() != 0) {
+            b.add(ds);
+          }
+          return ProcessingStatus.replace(b.build());
         }
         default:
       }
@@ -643,5 +726,77 @@ public class TemplateBundle {
       }
     }
     return ls;
+  }
+
+  private static TemplatePseudoRootNode getBodyOfDirective(
+      SList<AbstractRewritingPass.Parent> pathFromRootToStart) {
+    ImmutableList.Builder<BaseNode> body = ImmutableList.builder();
+
+    // Each TemplateDirective occurs inside a TemplateDirective.
+
+    int nStarts = 1;
+
+    // First, consider later Directive nodes in the same Directives node
+    {
+      SList<AbstractRewritingPass.Parent> siblings = pathFromRootToStart;
+      TemplateDirectivesNode ds = (TemplateDirectivesNode) siblings.x.parent;
+      int start = siblings.x.indexInParent + 1;
+      int n = ds.getNChildren();
+      int end = n;
+      for (int i = start; i < n; ++i) {
+        TemplateDirectiveNode d = (TemplateDirectiveNode) ds.getChild(i);
+        TemplateDirectiveNode.Variant v = d.getVariant();
+        if (v.isTemplateEnd()) {
+          --nStarts;
+          if (nStarts == 0) {
+            end = i;
+            break;
+          }
+        }
+        if (v.isTemplateStart()) { ++nStarts; }
+      }
+      if (start < end) {
+        TemplateDirectivesNode clone = ds.shallowClone();
+        clone.replaceChildren(ds.getChildren().subList(start, end));
+        body.add(clone);
+      }
+      if (end < n) {
+        return TemplatePseudoRootNode.Variant.CompilationUnit.buildNode(
+            body.build());
+      }
+    }
+
+    // Next, add whole siblings of the containing TemplateDirectivesNode.
+    SList<AbstractRewritingPass.Parent> grandparent = pathFromRootToStart.prev;
+    BaseNode container = grandparent.x.parent;
+    for (int i = grandparent.x.indexInParent + 1, n = container.getNChildren();
+        i < n; ++i) {
+      BaseNode directivesSibling = container.getChild(i);
+      if (directivesSibling instanceof TemplateDirectivesNode) {
+        // Scan the children.  If the template block ends inside the directives
+        // then add any directive nodes prior to the end.
+        TemplateDirectivesNode ds = (TemplateDirectivesNode) directivesSibling;
+        for (int j = 0, m = ds.getNChildren(); j < m; ++j) {
+          TemplateDirectiveNode d = (TemplateDirectiveNode) ds.getChild(j);
+          TemplateDirectiveNode.Variant v = d.getVariant();
+          if (v.isTemplateEnd()) {
+            --nStarts;
+            if (nStarts == 0) {
+              if (j != 0) {
+                TemplateDirectivesNode clone = ds.shallowClone();
+                clone.replaceChildren(ds.getChildren().subList(0, j));
+                body.add(clone);
+              }
+              return TemplatePseudoRootNode.Variant.CompilationUnit.buildNode(
+                  body.build());
+            }
+          }
+          if (v.isTemplateStart()) { ++nStarts; }
+        }
+      }
+      body.add(directivesSibling);
+    }
+    throw new AssertionError(
+        "Unclosed directive nStart=" + nStarts + " in " + body.build());
   }
 }

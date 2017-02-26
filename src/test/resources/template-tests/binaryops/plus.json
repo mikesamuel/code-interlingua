@@ -1,0 +1,4 @@
+{
+    "x": { "nodeType": "AdditiveExpression", "code": "1 + 2" },
+    "y": { "nodeType": "AdditiveExpression", "code": "2 + 3" },
+}

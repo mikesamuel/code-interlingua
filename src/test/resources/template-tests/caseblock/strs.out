@@ -1,0 +1,19 @@
+package foo;
+
+class C {
+  C(java.lang.String x) {
+    switch (x) {
+    case "foo":
+      {
+        foo();
+      }
+      break;
+    case "bar":
+      bar();
+      break;
+    default:
+      { baz(); }
+    }
+  }
+
+}

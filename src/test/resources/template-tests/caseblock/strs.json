@@ -1,0 +1,22 @@
+{
+  "type": "java.lang.String",
+  "cases": [
+    {
+      "value": "foo",
+      "stmts": [
+        { "nodeType": "Statement", "code": "{ foo(); }" }
+      ]
+    },
+    {
+      "value": "bar",
+      "stmts": [
+        { "nodeType": "ExpressionStatement", "code": "bar();" }
+      ]
+    }
+  ],
+  "defaultCase": {
+    "stmts": [
+      "baz();"
+    ]
+  }
+}

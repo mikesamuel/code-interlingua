@@ -748,7 +748,7 @@ SwitchBlockStatementGroup:
      SwitchLabels [BlockStatements]
 SwitchLabels:
      SwitchLabel {SwitchLabel}
-SwitchLabel:
+SwitchLabel: @nointerp
      "case" CaseValue ":"
      "default" ":"
 CaseValue: (@trait=Typed)
@@ -887,11 +887,11 @@ DimExprs:
      DimExpr {DimExpr}
 DimExpr:
      {Annotation} "[" Expression "]"
-Expression: (@trait=Typed)
+Expression: (@trait=Typed) @nointerp
      Assignment
      LambdaExpression
      ConditionalExpression
-LambdaExpression:
+LambdaExpression: @nointerp
      LambdaParameters "->" LambdaBody
 LambdaParameters:
      Identifier
@@ -902,7 +902,7 @@ InferredFormalParameterList:
 LambdaBody:
      Expression
      Block
-Assignment: (@trait=Typed)
+Assignment: (@trait=Typed) @nointerp
      LeftHandSide AssignmentOperator Expression
 AssignmentOperator: @operator
      "="
@@ -917,86 +917,86 @@ AssignmentOperator: @operator
      "&="
      "^="
      "|="
-ConditionalExpression: (@trait=Typed)
+ConditionalExpression: (@trait=Typed) @nointerp
      ConditionalOrExpression "?" Expression ":" LambdaExpression
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
      ConditionalOrExpression @anon
-ConditionalOrExpression: (@trait=Typed,BinaryOp)
+ConditionalOrExpression: (@trait=Typed,BinaryOp) @nointerp
      ConditionalOrExpression "||" ConditionalAndExpression
      ConditionalAndExpression @anon
-ConditionalAndExpression: (@trait=Typed,BinaryOp)
+ConditionalAndExpression: (@trait=Typed,BinaryOp) @nointerp
      ConditionalAndExpression "&&" InclusiveOrExpression
      InclusiveOrExpression @anon
-InclusiveOrExpression: (@trait=Typed,BinaryOp)
+InclusiveOrExpression: (@trait=Typed,BinaryOp) @nointerp
      InclusiveOrExpression "|" ExclusiveOrExpression
      ExclusiveOrExpression @anon
-ExclusiveOrExpression: (@trait=Typed,BinaryOp)
+ExclusiveOrExpression: (@trait=Typed,BinaryOp) @nointerp
      ExclusiveOrExpression "^" AndExpression
      AndExpression @anon
-AndExpression: (@trait=Typed,BinaryOp)
+AndExpression: (@trait=Typed,BinaryOp) @nointerp
      AndExpression "&" EqualityExpression
      EqualityExpression @anon
-EqualityExpression: (@trait=Typed,BinaryOp)
+EqualityExpression: (@trait=Typed,BinaryOp) @nointerp
      EqualityExpression EqualityOperator RelationalExpression
      RelationalExpression @anon
 // TODO: Attach metadata about whether primitive or reference comparison
 // is done.
-EqualityOperator: @operator
+EqualityOperator: @operator @nointerp
      "=="
      "!="
-RelationalExpression: (@trait=Typed,BinaryOp)
+RelationalExpression: (@trait=Typed,BinaryOp) @nointerp
      RelationalExpression RelationalOperator ShiftExpression
      RelationalExpression "instanceof" ReferenceType
      ShiftExpression @anon
-RelationalOperator: @operator
+RelationalOperator: @operator @nointerp
      "<="
      ">="
      "<"
      ">"
-ShiftExpression: (@trait=Typed,BinaryOp)
+ShiftExpression: (@trait=Typed,BinaryOp) @nointerp
      ShiftExpression ShiftOperator AdditiveExpression
      AdditiveExpression @anon
-ShiftOperator: @operator
+ShiftOperator: @operator @nointerp
      "<<"
      ">>>"
      ">>"
-AdditiveExpression: (@trait=Typed,BinaryOp)
+AdditiveExpression: (@trait=Typed,BinaryOp) @nointerp
      AdditiveExpression AdditiveOperator MultiplicativeExpression
      MultiplicativeExpression @anon
 // TODO: Attach metadata about whether numeric addition or
 // string concatenation is done.
-AdditiveOperator: @operator
+AdditiveOperator: @operator @nointerp
      "+"
      "-"
-MultiplicativeExpression: (@trait=Typed,BinaryOp)
+MultiplicativeExpression: (@trait=Typed,BinaryOp) @nointerp
      MultiplicativeExpression MultiplicativeOperator UnaryExpression
      UnaryExpression @anon
-MultiplicativeOperator: @operator
+MultiplicativeOperator: @operator @nointerp
      "*"
      "/"
      "%"
-UnaryExpression: (@trait=Typed)
+UnaryExpression: (@trait=Typed) @nointerp
      CastExpression
      PreExpression
      PostExpression
      PrefixOperator UnaryExpression
      Primary @anon
-PrefixOperator: @operator
+PrefixOperator: @operator @nointerp
      "+"
      "-"
      "~"
      "!"
-IncrDecrOperator: @operator
+IncrDecrOperator: @operator @nointerp
      "++"
      "--"
-PreExpression: (@trait=Typed)
+PreExpression: (@trait=Typed) @nointerp
      IncrDecrOperator LeftHandSideExpression
-PostExpression: (@trait=Typed)
+PostExpression: (@trait=Typed) @nointerp
      LeftHandSideExpression IncrDecrOperator
 LeftHandSideExpression:
      LeftHandSide @anon
      "(" LeftHandSideExpression ")"
-CastExpression: (@trait=Typed)
+CastExpression: (@trait=Typed) @nointerp
      ConfirmCast LambdaExpression (@name=Lambda)
      Cast        UnaryExpression  (@name=Expression)
 Cast: @nointerp

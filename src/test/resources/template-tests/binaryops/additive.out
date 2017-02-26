@@ -1,0 +1,8 @@
+package com.example;
+
+public class C {
+  Object f() {
+    return 1 - 2 - (4 - 3);
+  }
+  public C() {}
+}

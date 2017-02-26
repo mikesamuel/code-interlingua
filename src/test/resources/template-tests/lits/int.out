@@ -1,0 +1,7 @@
+package foo.bar;
+
+class C {
+  static final int X = 42;
+
+  public C() {}
+}

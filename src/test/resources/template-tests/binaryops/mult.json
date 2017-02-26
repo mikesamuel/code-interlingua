@@ -1,0 +1,4 @@
+{
+    "x": { "nodeType": "MultiplicativeExpression", "code": "1 * 1" },
+    "y": { "nodeType": "MultiplicativeExpression", "code": "2 / 3" },
+}

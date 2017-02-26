@@ -1,0 +1,19 @@
+{
+  "type": "int",
+  "cases": [
+    {
+      "value": 1,
+      "stmts": [
+        { "nodeType": "Statement", "code": "System.out.println(\"one\");" },
+        { "nodeType": "Statement", "code": "System.out.flush();" }
+      ]
+    },
+    {
+      "value": 2,
+      "stmts": [
+        { "nodeType": "Statement", "code": "System.out.println(\"two!\");" }
+      ]
+    }
+  ],
+  "defaultCase": null
+}

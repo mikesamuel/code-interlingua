@@ -1,0 +1,4 @@
+{
+    "x": { "nodeType": "ShiftExpression", "code": "1 << 1" },
+    "y": { "nodeType": "ShiftExpression", "code": "2 >>> 3" },
+}
