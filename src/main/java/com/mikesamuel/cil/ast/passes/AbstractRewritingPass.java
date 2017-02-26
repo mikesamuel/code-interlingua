@@ -68,7 +68,8 @@ extends AbstractPass<ImmutableList<FileNode>> {
     }
 
     final Mutation mut;
-    final ImmutableList<BaseNode> replacements;
+    /** The set of replacements. */
+    public final ImmutableList<BaseNode> replacements;
 
     private ProcessingStatus(Mutation mut) {
       this(mut, ImmutableList.of());
@@ -169,7 +170,7 @@ extends AbstractPass<ImmutableList<FileNode>> {
     for (int i = 0, n = children.size(); i < n; ++i, ++j) {
       BaseNode child = children.get(i);
       ProcessingStatus childStatus = visit(
-          child, SList.append(pathFromRoot, makeParent(i, node)));
+          child, SList.append(pathFromRoot, makeParent(j, node)));
 
       Preconditions.checkState(childStatus.mut == Mutation.REPLACE);
       Preconditions.checkState(node.getChild(j) == child);
