@@ -161,6 +161,15 @@ public final class Tokens {
     }
   }
 
+  /** Like {@link #encodeCodepointOnto(int, Appendable)} but does not throw. */
+  public static void encodeCodepointOnto(int codePoint, StringBuilder out) {
+    try {
+      encodeCodepointOnto(codePoint, (Appendable) out);
+    } catch (IOException e) {
+      throw new AssertionError(null, e);
+    }
+  }
+
   private static final char[] HEX_DIGITS = {
     '0', '1', '2', '3', '4', '5', '6', '7',
     '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
@@ -186,12 +195,7 @@ public final class Tokens {
     for (int i = 0, cc; i < n; i += cc) {
       int cp = Character.codePointAt(s, i);
       cc = Character.charCount(cp);
-
-      try {
-        encodeCodepointOnto(cp, sb);
-      } catch (IOException ex) {
-        throw new AssertionError("StringBuilders should not throw", ex);
-      }
+      encodeCodepointOnto(cp, sb);
     }
     return sb.append('"').toString();
   }
