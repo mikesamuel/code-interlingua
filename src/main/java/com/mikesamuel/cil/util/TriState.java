@@ -9,4 +9,9 @@ public enum TriState {
   /** */
   OTHER,
   ;
+
+  /** */
+  public static TriState of(boolean b) {
+    return b ? TRUE : FALSE;
+  }
 }
