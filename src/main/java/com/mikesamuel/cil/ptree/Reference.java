@@ -367,7 +367,8 @@ final class Reference extends PTParSer {
         }
       }
 
-      if (stage != Stage.GROWING && shouldHandleTemplateInterpolation(state)) {
+      if (stage != Stage.GROWING && nodeType != NodeType.TemplateInterpolation
+          && shouldHandleTemplateInterpolation(state)) {
         Optional<NodeType> nodeTypeHint = preparseNodeTypeHint(state, err);
         if (nodeTypeHint.isPresent()
             ? nodeTypeHint.get() == nodeType
@@ -623,6 +624,7 @@ final class Reference extends PTParSer {
     int nParts = state.parts.size();
 
     ImmutableSet.Builder<ForceFitState.PartialFit> b = ImmutableSet.builder();
+    // Try to advance each fit by one.
     for (ForceFitState.PartialFit f : state.fits) {
       if (f.index == nParts) { continue; }
       ForceFitState.FitPart p = state.parts.get(f.index);
@@ -634,16 +636,61 @@ final class Reference extends PTParSer {
       } else if (p instanceof ForceFitState.InterpolatedValue) {
         ForceFitState.InterpolatedValue iv = (InterpolatedValue) p;
         Object value = iv.value;
+
+        // Try a variety of strategies to coerce value to something that can be
+        // injected into an AST.
         if (value instanceof NodeVariant) {
           value = ((NodeVariant) value).buildNode(ImmutableList.of());
         }
+
+        NodeType srcNt = iv.typeHint.or(nodeType);
+        boolean allowStringLit = true;
+        // Treat primitive wrappers as substitutable for the corresponding
+        // Literal node types.
+        if (value instanceof Number) {
+          boolean isFloat = value instanceof Double || value instanceof Float;
+          NodeType literal = isFloat
+              ? NodeType.FloatingPointLiteral
+              : NodeType.IntegerLiteral;
+
+          if (Intermediates.reachedFrom(literal, srcNt)) {
+            String suffix = "";
+            if (value instanceof Float) {
+              suffix = "F";
+            } else if (value instanceof Long) {
+              suffix = "L";
+            }
+            value = value + suffix;
+            allowStringLit = false;
+          }
+        } else if (value instanceof Character) {
+          if (Intermediates.reachedFrom(NodeType.CharacterLiteral, srcNt)) {
+            StringBuilder sb = new StringBuilder();
+            sb.append('\'');
+            Tokens.encodeCodepointOnto(((Character) value).charValue(), sb);
+            sb.append('\'');
+            value = sb.toString();
+            allowStringLit = false;
+          }
+        } else if (value instanceof Boolean) {
+          if (Intermediates.reachedFrom(NodeType.BooleanLiteral, srcNt)) {
+            value = value.toString();
+            allowStringLit = false;
+          }
+        }
+
+        // Invoke a brief parser to allow substituting
+        // 1. "public" for Modifier.Public
+        // 2. "123" for IntegerLiteral.Builtin
+        // 3. other strings for a StringLiteral
+        // when such are reachable from NodeType.
         if (value instanceof CharSequence) {
           String content = new StringBuilder()
               .append((CharSequence) value)
               .toString();
-          NodeType srcNt = iv.typeHint.or(nodeType);
 
-          if (Intermediates.reachedFrom(NodeType.StringLiteral, srcNt)) {
+          if (allowStringLit
+              && Intermediates.reachedFrom(NodeType.StringLiteral, srcNt)) {
             value = StringLiteralNode.Variant.Builtin.buildNode(
                 Tokens.encodeString(content));
           } else {
@@ -655,11 +702,11 @@ final class Reference extends PTParSer {
               value = Trees.of(result.next());
             }
           }
-        } else if (value instanceof Number) {
-          // TODO
-        } else if (value instanceof Boolean) {
-          // TODO
         }
+
+        // If what we end up with after that coercion is a node, check that it
+        // can be reached from this nodeType and generate any intermediates we
+        // need.
         if (value instanceof BaseNode) {
           Optional<BaseNode> wrapped = Intermediates.wrap(
               (BaseNode) value, nodeType, Functions.constant(null));
