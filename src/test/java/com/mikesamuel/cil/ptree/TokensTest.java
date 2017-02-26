@@ -1,6 +1,5 @@
 package com.mikesamuel.cil.ptree;
 
-import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -114,7 +113,7 @@ public final class TokensTest extends TestCase {
   }
 
   @Test
-  public static void testDecodeOfEncode() throws IOException {
+  public static void testDecodeOfEncode() {
     StringBuilder sb = new StringBuilder();
     for (int[] range : new int[][] {
            { 0, 0x301 }, { 0xFFF, 0xC000 }, { 0xE000, 0x1001F }
