@@ -247,7 +247,11 @@ public final class RatPack {
               // argument check above.
               --popCount;
               if (popCount == 0) {
-                Preconditions.checkState(nodeType == e.getNodeType());
+                NodeType ent = e.getNodeType();
+                Preconditions.checkState(
+                    nodeType == ent
+                    || ent == NodeType.TemplateInterpolation,
+                    "%s != %s", nodeType, ent);
                 break apply_loop;
               }
               break;
