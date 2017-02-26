@@ -67,7 +67,6 @@ import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
-import com.mikesamuel.cil.ast.meta.StaticType.PrimitiveType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ClassOrInterfaceType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
@@ -782,30 +781,49 @@ public final class Interpreter<VALUE> {
         EqualityExpressionNode e = (EqualityExpressionNode) node;
 
         return new BinaryOp<EqualityOperatorNode>() {
-          boolean isPrimitiveComparison;
+          TriState isPrimitiveComparison;
 
           @Override
           void previewOperands(BaseNode left, BaseNode right) {
-            isPrimitiveComparison = true;
+            isPrimitiveComparison = TriState.OTHER;
             // Do primitive comparison if either is primitive.
             StaticType ltype = ((Typed) left).getStaticType();
-            if (ltype instanceof PrimitiveType) {
+            if (ltype == null) {
               return;
             }
             StaticType rtype = ((Typed) right).getStaticType();
-            if (rtype instanceof PrimitiveType) {
+            if (rtype == null) {
               return;
             }
-            isPrimitiveComparison = !(
-                ltype instanceof ReferenceType
-                && rtype instanceof ReferenceType);
+            isPrimitiveComparison = TriState.of(
+                !(ltype instanceof ReferenceType
+                  && rtype instanceof ReferenceType));
           }
 
           @Override
           VALUE apply(VALUE left, EqualityOperatorNode op, VALUE right) {
-            VALUE equal = isPrimitiveComparison
-                ? context.primitiveEquals(left, right)
-                : context.sameReference(left, right);
+            TriState kind = isPrimitiveComparison;
+            if (kind == TriState.OTHER) {
+              if ((left instanceof Number && right instanceof Number)
+                  || (left instanceof Boolean && right instanceof Boolean)
+                  || (left instanceof Character && right instanceof Character)
+                  ) {
+                kind = TriState.TRUE;
+              } else {
+                kind = TriState.FALSE;
+              }
+            }
+            VALUE equal;
+            switch (kind) {
+              case TRUE:
+                equal = context.primitiveEquals(left, right);
+                break;
+              case FALSE:
+                equal = context.sameReference(left, right);
+                break;
+              default:
+                throw new AssertionError();
+            }
             switch (op.getVariant()) {
               case BngEq: return context.primitiveLogicalNot(equal);
               case EqEq:  return equal;
@@ -1046,25 +1064,30 @@ public final class Interpreter<VALUE> {
                 ArgumentListNode.class);
             TypeSpecification declType = name.getMethodDeclaringType();
             String descriptor = name.getMethodDescriptor();
+            Optional<CallableInfo> infoOpt;
+            boolean isStatic;
             if (declType == null || descriptor == null) {
-              error(e, "Call missing method name");
-              return errorCompletion;
-            }
+              infoOpt = Optional.absent();
+              isStatic = false;
+            } else {
+              infoOpt = callableForType(declType, ident, descriptor);
+              if (!infoOpt.isPresent()) {
+                error(name,
+                    "Failed to resolve " + declType + "." + ident + descriptor);
+                return errorCompletion;
+              }
 
-            Optional<CallableInfo> infoOpt = callableForType(
-                declType, ident, descriptor);
-            if (!infoOpt.isPresent()) {
-              error(name,
-                  "Failed to resolve " + declType + "." + ident + descriptor);
-              return errorCompletion;
+              isStatic = Modifier.isStatic(infoOpt.get().modifiers);
             }
-
-            CallableInfo info = infoOpt.get();
-            boolean isStatic = Modifier.isStatic(info.modifiers);
 
             Completion<VALUE> objResult = isStatic
                 ? null
                 : interpret(objNode, locals, null);
+
+            if (objResult != null
+                && !context.completedNormallyWithoutError(objResult)) {
+              return objResult;
+            }
 
             List<VALUE> actualValues = Lists.newArrayList();
             if (actuals != null) {
@@ -1078,14 +1101,18 @@ public final class Interpreter<VALUE> {
               }
             }
 
-            if (isStatic) {
-              return normal(context.invokeStatic(info, actualValues));
-            } else {
-              if (!context.completedNormallyWithoutError(objResult)) {
-                return objResult;
+            if (infoOpt.isPresent()) {
+              CallableInfo info = infoOpt.get();
+              if (isStatic) {
+                return normal(context.invokeStatic(info, actualValues));
+              } else {
+                return normal(context.invokeVirtual(
+                    info, Preconditions.checkNotNull(objResult).value,
+                    actualValues));
               }
-              return normal(context.invokeVirtual(
-                  info, Preconditions.checkNotNull(objResult).value,
+            } else {
+              return normal(context.invokeDynamic(
+                  ident, Preconditions.checkNotNull(objResult).value,
                   actualValues));
             }
           }

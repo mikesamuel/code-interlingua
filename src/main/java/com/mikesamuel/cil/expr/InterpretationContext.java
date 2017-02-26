@@ -234,19 +234,33 @@ public interface InterpretationContext<VALUE> {
       CallableInfo constructor, List<? extends VALUE> constructorActuals);
 
   /**
-   * Invokes the given.
+   * Invokes the given method with receiver as this,
+   * passing the actual arguments.
    *
-   * @return if an error value is returned.
+   * @return on failure to invoke, an error value is returned.
    */
   VALUE invokeVirtual(
       CallableInfo method, VALUE receiver, List<? extends VALUE> actuals);
 
   /**
-   * Invokes the given.
+   * Invokes the given method with receiver as this,
+   * passing the actual arguments.
    *
-   * @return if an error value is returned.
+   * @return on failure to invoke, an error value is returned.
    */
   VALUE invokeStatic(CallableInfo method, List<? extends VALUE> actuals);
+
+  /**
+   * Looks up a method with the given name using receiver's runtime type,
+   * and passes the actual arguments.
+   * <p>
+   * The name is similar to a JVM bytecode, but this is only tangentially
+   * related to that bytecode.
+   *
+   * @return on failure to invoke, an error value is returned.
+   */
+  VALUE invokeDynamic(
+      String methodName, VALUE receiver, List<? extends VALUE> actuals);
 
   /**
    * The runtime type of the given value.

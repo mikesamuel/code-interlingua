@@ -17,6 +17,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
+import com.google.common.base.Objects;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
@@ -206,7 +207,7 @@ implements InterpretationContext<Object> {
   @Override
   public Object primitiveEquals(Object u, Object v) {
     if (isErrorValue(u) || isErrorValue(v)) { return ErrorValue.INSTANCE; }
-    return u == v;
+    return Objects.equal(u, v);
   }
 
   enum NumericOperandType {
@@ -840,9 +841,9 @@ implements InterpretationContext<Object> {
         } catch (IllegalAccessException | IllegalArgumentException
                  | NullPointerException ex) {
           // return error below
-          log(Level.SEVERE, "Failure in constructor", ex);
+          log(Level.SEVERE, "Failure in method", ex);
         } catch (InvocationTargetException ex) {
-          log(Level.SEVERE, "Failure in constructor", ex.getTargetException());
+          log(Level.SEVERE, "Failure in method", ex.getTargetException());
         }
       } else {
         log(Level.SEVERE, "Executable " + exec + " is not a method", null);
@@ -869,12 +870,28 @@ implements InterpretationContext<Object> {
                  | NullPointerException ex) {
           // return error below
         } catch (InvocationTargetException ex) {
-          log(Level.SEVERE, "Failure in constructor", ex.getTargetException());
+          log(Level.SEVERE, "Failure in static method", ex.getTargetException());
         }
       }
     }
     return ErrorValue.INSTANCE;
   }
+
+
+  @Override
+  public Object invokeDynamic(
+      String methodName, Object receiver, List<? extends Object> actuals) {
+    if (receiver instanceof DataBundle && methodName.startsWith("is")
+        && methodName.length() > 2) {
+      // Alias x.isFoo() to Boolean.TRUE.equals(x.foo)
+      String fieldName = Character.toLowerCase(methodName.charAt(2))
+          + methodName.substring(3);
+      return Boolean.TRUE.equals(
+          ((DataBundle) receiver).getOrDefault(fieldName, Boolean.FALSE));
+    }
+    return ErrorValue.INSTANCE;
+  }
+
 
 
   private static final ImmutableMap<Class<?>, Name> PRIM_NAMES;
