@@ -48,6 +48,18 @@ public final class PassTestHelpers {
    */
   public static ImmutableList<FileNode> parseCompilationUnits(
       String[]... linesPerFile) {
+    return maybeParseCompilationUnits(linesPerFile).get();
+  }
+
+  /**
+   * Parses inputs to compilation units.
+   *
+   * @param linesPerFile {@code linesPerFile[f][i]} is line i (zero-indexed)
+   *   in the f-th file.
+   * @return absent if there was a parse failure.
+   */
+  public static Optional<ImmutableList<FileNode>> maybeParseCompilationUnits(
+      String[]... linesPerFile) {
     ImmutableList.Builder<FileNode> b = ImmutableList.builder();
     for (String[] lines : linesPerFile) {
       Input.Builder inputBuilder = Input.builder()
@@ -59,13 +71,13 @@ public final class PassTestHelpers {
       ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
           .parse(new ParseState(inp), new LeftRecursion(),
               ParseErrorReceiver.DEV_NULL);
-      Assert.assertEquals(
-          inp.content().toString(),
-          ParseResult.Synopsis.SUCCESS, result.synopsis);
+      if (ParseResult.Synopsis.SUCCESS != result.synopsis) {
+        return Optional.absent();
+      }
       ParseState afterParse = result.next();
       b.add((FileNode) Trees.of(inp, afterParse.output));
     }
-    return b.build();
+    return Optional.of(b.build());
   }
 
   /**
@@ -229,9 +241,14 @@ public final class PassTestHelpers {
    * indentation and formatting issues when comparing expected output to
    * actual output.
    */
-  public static String normalizeCompilationUnitSource(String[][] linesPerFile)
+  public static Optional<String> normalizeCompilationUnitSource(
+      String[][] linesPerFile)
   throws UnparseVerificationException {
-    return serializeNodes(parseCompilationUnits(linesPerFile), null);
+    Optional<ImmutableList<FileNode>> files =
+        maybeParseCompilationUnits(linesPerFile);
+    return files.isPresent()
+        ? Optional.of(serializeNodes(files.get(), null))
+        : Optional.absent();
   }
 
   /**

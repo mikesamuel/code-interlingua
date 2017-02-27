@@ -3,6 +3,8 @@ package com.mikesamuel.cil.expr;
 import java.util.List;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Supplier;
@@ -57,10 +59,10 @@ public interface InterpretationContext<VALUE> {
   TypeInfo getThisType();
 
   /** If className is {@code Foo} then the value of {@code Foo.this}. */
-  VALUE getThisValue(Name className);
+  VALUE getThisValue(@Nullable Name className);
 
   /** @see #getThisValue */
-  void setThisValue(Name className, VALUE thisValue);
+  void setThisValue(@Nullable Name className, VALUE thisValue);
 
   /** @see #getThisType */
   void setThisType(TypeInfo info);

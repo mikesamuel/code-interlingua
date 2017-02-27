@@ -673,8 +673,19 @@ public final class Interpreter<VALUE> {
             VALUE v;
             if (result == null) {
               Name name = Name.root(ident, Name.Type.AMBIGUOUS);
-              v = locals.get(name, context.errorValue());
-              // TODO: or dynamic field on the this value.
+              if (locals.has(name)) {
+                v = locals.get(name, context.errorValue());
+              } else {
+                TypeInfo thisType = context.getThisType();
+                VALUE thisValue = context.getThisValue(
+                    thisType != null ? thisType.canonName : null);
+                if (context.isErrorValue(thisValue)) {
+                  error(node, "missing this value for free field " + ident);
+                  return errorCompletion;
+                } else {
+                  v = context.getFieldDynamic(ident, thisValue);
+                }
+              }
             } else {
               v = context.getFieldDynamic(ident, result.value);
             }
@@ -2095,22 +2106,29 @@ public final class Interpreter<VALUE> {
         FieldNameNode nameNode = e.firstChildWithType(FieldNameNode.class);
         Optional<IdentifierNode> identNode =
             nameNode.finder(IdentifierNode.class).findOne();
-        TypeInfo thisType = context.getThisType();
-        if (!identNode.isPresent() || thisType == null) {
+        if (!identNode.isPresent()) {
           error(e, "Malformed free field");
           return handler.error(nameNode);
         }
+        TypeInfo thisType = context.getThisType();
         String ident = identNode.get().getValue();
-        // TODO: cache this.
-        Optional<FieldInfo> fieldInfoOpt = fieldForType(thisType, ident, false);
-        if (!fieldInfoOpt.isPresent()) {
-          // TODO: fall back to outer class.
-          error(e, "Missing field " + ident);
-          return handler.error(nameNode);
+        VALUE thisValue = context.getThisValue(
+            thisType != null ? thisType.canonName : null);
+        if (context.isErrorValue(thisValue)) {
+          error(e, "No such this value in context");
+          return handler.error(e);
         }
-        VALUE thisValue = context.getThisValue(thisType.canonName);
-
-        return handler.fieldAccess(fieldInfoOpt.get(), thisValue);
+        if (thisType != null) {
+          Optional<FieldInfo> fieldInfoOpt = fieldForType(
+              thisType, ident, false);
+          if (!fieldInfoOpt.isPresent()) {
+            error(e, "Missing field info for " + thisType.canonName + ident);
+            return handler.error(e);
+          }
+          return handler.fieldAccess(fieldInfoOpt.get(), thisValue);
+        } else {
+          return handler.fieldAccess(ident, thisValue);
+        }
       }
       case Local: {
         LocalNameNode nameNode = e.firstChildWithType(LocalNameNode.class);

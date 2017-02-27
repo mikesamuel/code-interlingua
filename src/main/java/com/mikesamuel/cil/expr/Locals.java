@@ -34,21 +34,6 @@ public final class Locals<VALUE> {
     this.outer = outer;
   }
 
-  /**
-   * Initialize bindings dynamically from the given data bundle.
-   */
-  public void initializeFrom(
-      DataBundle db, InterpretationContext<VALUE> context,
-      Function<Object, VALUE> valueMaker) {
-    for (String key : db.keySet()) {
-      Name name = Name.root(key, Name.Type.AMBIGUOUS);
-      VALUE value = valueMaker.apply(
-          db.getOrDefault(key, context.errorValue()));
-      declare(name, context.coercion(context.runtimeType(value)));
-      set(name, value);
-    }
-  }
-
   /** Adds a binding for the given name. */
   public void declare(
       Name name, Function<? super VALUE, ? extends VALUE> coercion) {
@@ -105,5 +90,13 @@ public final class Locals<VALUE> {
       return outer.set(name, value);
     }
     throw new IllegalArgumentException("Undeclared name " + name);
+  }
+
+  /**
+   * True if the name corresponds to a
+   */
+  public boolean has(Name name) {
+    Name uname = fixName(name);
+    return values.containsKey(uname) || outer != null && outer.has(name);
   }
 }

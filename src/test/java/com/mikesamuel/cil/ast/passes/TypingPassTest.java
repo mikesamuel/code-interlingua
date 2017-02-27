@@ -95,6 +95,7 @@ public final class TypingPassTest extends TestCase {
       String got = PassTestHelpers.serializeNodes(processedFiles, decorator);
       String want = decorator == null
           ? PassTestHelpers.normalizeCompilationUnitSource(expectedWithCasts)
+            .get()
           : PassTestHelpers.joinExpectedLines(expectedWithCasts);
       assertEquals(want, got);
     }

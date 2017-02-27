@@ -1,0 +1,18 @@
+{
+  "type": "java.lang.annotation.RetentionType",
+  "cases": [
+    {
+      "value": { "nodeType": "EnumConstantName", "code": "FIELD" },
+      "stmts": [
+        { "nodeType": "Statement", "code": "foo(x);" },
+        { "nodeType": "Statement", "code": "bar();" }
+      ]
+    },
+    {
+      "value": { "nodeType": "EnumConstantName", "code": "METHOD" },
+      "stmts": [
+        { "nodeType": "Statement", "code": "baz();" }
+      ]
+    }
+  ]
+}

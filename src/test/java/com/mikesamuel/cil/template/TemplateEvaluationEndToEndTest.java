@@ -16,6 +16,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.AllTests;
 
 import static com.google.common.base.Charsets.UTF_8;
+
+import com.google.common.base.Objects;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -136,9 +139,8 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
         @Nullable File log = prefixToLog.get(prefix);
 
         String name = testRoot.getName() + "$" + prefix;
-        File logOutputFile = File.createTempFile(name, ".log");
         suite.addTest(new EndToEndTestCase(
-            name, prefix, logger, bundle, input, output, log, logOutputFile));
+            name, prefix, logger, bundle, input, output, log));
       }
     }
 
@@ -146,10 +148,8 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
     final Logger logger;
     final TemplateBundle bundle;
     final File input;
-    final File output;
-    final File log;
-    final File logOutputFile;
-
+    final File expectedOutput;
+    final File expectedLog;
 
     EndToEndTestCase(
         String name,
@@ -158,16 +158,14 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
         TemplateBundle bundle,
         File input,
         File output,
-        File log,
-        File logOutputFile) {
+        File log) {
       super(name);
       this.prefix = prefix;
       this.logger = logger;
       this.bundle = bundle;
       this.input = input;
-      this.output = output;
-      this.log = log;
-      this.logOutputFile = logOutputFile;
+      this.expectedOutput = output;
+      this.expectedLog = log;
     }
 
     @Override
@@ -178,6 +176,7 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
 
       ImmutableList<CompilationUnitNode> got;
 
+      File logOutputFile = File.createTempFile(getName(), ".log");
       try (Writer logOut = Files.asCharSink(logOutputFile, UTF_8)
           .openBufferedStream()) {
         Handler logHandler = new Handler() {
@@ -220,20 +219,56 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
 
       File gotFile = writeToTempFile(prefix, got);
 
-      if (log != null) {
-        Truth.assertWithMessage(prefix + " log")
-            .that(Files.toString(logOutputFile, UTF_8))
-            .isEqualTo(Files.toString(log, UTF_8));
+      String gotFileContent = null;
+      String expectedOutputContent = null;
+      Unparse.UnparseVerificationException canonFailure = null;
+      // Make a best effort to read and canonicalize the Java compilation units
+      try {
+        gotFileContent = canonCompilationUnit(
+            Files.toString(expectedOutput, UTF_8));
+        expectedOutputContent = canonCompilationUnit(
+            Files.toString(gotFile, UTF_8));
+      } catch (Unparse.UnparseVerificationException ex) {
+        canonFailure = ex;
       }
+
+      String expectedLogContent =
+          expectedLog != null ? Files.toString(expectedLog, UTF_8) : null;
+      String logContent = Files.toString(logOutputFile, UTF_8);
+
+      // Dump some state if it looks like there's a problem.
+      if (canonFailure != null
+          || !Objects.equal(gotFileContent, expectedOutputContent)
+          || (expectedLogContent != null
+              && !expectedLogContent.equals(logContent))) {
+        System.err.println("\n\n" + getName());
+        System.err.println("\tOutput: " + gotFile);
+        System.err.println("\tLog: " + logOutputFile);
+        if (expectedLog == null) {
+          System.err.println(logContent);
+        }
+      }
+
+      if (expectedLog != null) {
+        Truth.assertWithMessage(prefix + " log")
+            .that(logContent)
+            .isEqualTo(expectedLogContent);
+      }
+
+      if (canonFailure != null) {
+        throw canonFailure;
+      }
+
       Truth.assertWithMessage(prefix + " logged to " + logOutputFile)
-          .that(canonCompilationUnit(Files.toString(gotFile, UTF_8)))
-          .isEqualTo(canonCompilationUnit(Files.toString(output, UTF_8)));
+          .that(gotFileContent)
+          .isEqualTo(expectedOutputContent);
     }
 
     private static String canonCompilationUnit(String code)
-    throws UnparseVerificationException {
-      return PassTestHelpers.normalizeCompilationUnitSource(
-          new String[][] { { code } });
+    throws Unparse.UnparseVerificationException {
+       Optional<String> canonStr = PassTestHelpers
+           .normalizeCompilationUnitSource(new String[][] { { code } });
+       return canonStr.isPresent() ? canonStr.get() : code;
     }
 
     private static File writeToTempFile(

@@ -200,8 +200,8 @@ public class TemplateBundle {
       ImmutableList.Builder<CompilationUnitNode> out) {
     InterpretationContext<Object> context = new InterpretationContextImpl(
         logger, getLoader(), passes.getTypePool());
+    context.setThisValue(null, input);
     Locals<Object> fileLocals = new Locals<>();
-    fileLocals.initializeFrom(input, context, Functions.identity());
 
     Interpreter<Object> interpreter = new Interpreter<>(context);
     TemplateProcessingPass ppass = new TemplateProcessingPass(

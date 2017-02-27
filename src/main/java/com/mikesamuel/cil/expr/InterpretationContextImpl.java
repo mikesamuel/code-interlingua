@@ -71,11 +71,11 @@ implements InterpretationContext<Object> {
     LogUtils.log(logger, level, sourcePositionSupplier.get(), msg, th);
   }
 
-  private Object errorOut(String msg) {
-    return errorOut(msg, null);
+  private Object error(String msg) {
+    return error(msg, null);
   }
 
-  private Object errorOut(String msg, Throwable th) {
+  private Object error(String msg, Throwable th) {
     LogUtils.log(logger, Level.SEVERE, sourcePositionSupplier.get(), msg, th);
     return ErrorValue.INSTANCE;
   }
@@ -123,8 +123,13 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public @Nullable Object getThisValue(Name className) {
-    return this.thisValues.get(className);
+  public @Nullable Object getThisValue(@Nullable Name className) {
+    Object result = this.thisValues.get(className);
+    if (result == null) {
+      return ErrorValue.INSTANCE;
+    } else {
+      return result;
+    }
   }
 
   @Override
@@ -133,7 +138,7 @@ implements InterpretationContext<Object> {
   }
 
   @Override
-  public void setThisValue(Name className, Object thisValue) {
+  public void setThisValue(@Nullable Name className, Object thisValue) {
     thisValues.put(className, thisValue);
   }
 
@@ -330,7 +335,7 @@ implements InterpretationContext<Object> {
         break;
     }
     if (!isErrorValue(v)) {
-      errorOut("Cannot convert " + v + " to " + primType.getSimpleName());
+      error("Cannot convert " + v + " to " + primType.getSimpleName());
     }
     return ErrorValue.INSTANCE;
   }
@@ -348,7 +353,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " < " + v);
+      error("Failed to compute " + u + " < " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -366,7 +371,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " + " + v);
+      error("Failed to compute " + u + " + " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -384,7 +389,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " - " + v);
+      error("Failed to compute " + u + " - " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -422,7 +427,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " % " + v);
+      error("Failed to compute " + u + " % " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -452,7 +457,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " / " + v);
+      error("Failed to compute " + u + " / " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -474,7 +479,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " | " + v);
+      error("Failed to compute " + u + " | " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -496,7 +501,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " & " + v);
+      error("Failed to compute " + u + " & " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -518,7 +523,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " ^ " + v);
+      error("Failed to compute " + u + " ^ " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -537,7 +542,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " << " + v);
+      error("Failed to compute " + u + " << " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -556,7 +561,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " >> " + v);
+      error("Failed to compute " + u + " >> " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -575,7 +580,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " >>> " + v);
+      error("Failed to compute " + u + " >>> " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -594,7 +599,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!(isErrorValue(u) || isErrorValue(v))) {
-      errorOut("Failed to compute " + u + " * " + v);
+      error("Failed to compute " + u + " * " + v);
     }
     return ErrorValue.INSTANCE;
   }
@@ -611,7 +616,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!isErrorValue(u)) {
-      errorOut("Failed to compute -" + u);
+      error("Failed to compute -" + u);
     }
     return ErrorValue.INSTANCE;
   }
@@ -622,7 +627,7 @@ implements InterpretationContext<Object> {
       return !((Boolean) u);
     }
     if (!isErrorValue(u)) {
-      errorOut("Failed to compute !" + u);
+      error("Failed to compute !" + u);
     }
     return ErrorValue.INSTANCE;
   }
@@ -640,7 +645,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!isErrorValue(u)) {
-      errorOut("Failed to compute ~" + u);
+      error("Failed to compute ~" + u);
     }
     return ErrorValue.INSTANCE;
   }
@@ -660,7 +665,7 @@ implements InterpretationContext<Object> {
       return Array.get(arr, index);
     }
     if (!isErrorValue(arr)) {
-      errorOut("Failed to read arr[" + index + "]");
+      error("Failed to read arr[" + index + "]");
     }
     return ErrorValue.INSTANCE;
   }
@@ -685,7 +690,7 @@ implements InterpretationContext<Object> {
       }
     }
     if (!isErrorValue(arr)) {
-      errorOut("Failed to assign arr[" + index + "] = ...");
+      error("Failed to assign arr[" + index + "] = ...");
     }
     return ErrorValue.INSTANCE;
   }
@@ -696,7 +701,7 @@ implements InterpretationContext<Object> {
     if (elementClass.isPresent()) {
       return Array.newInstance(elementClass.get(), length);
     }
-    return errorOut("Failed to resolve class for " + elementType);
+    return error("Failed to resolve class for " + elementType);
   }
 
   @Override
@@ -715,7 +720,7 @@ implements InterpretationContext<Object> {
         th = ex;
       }
     }
-    return errorOut("Failed to set field " + field.canonName, th);
+    return error("Failed to set field " + field.canonName, th);
   }
 
   @Override
@@ -732,7 +737,7 @@ implements InterpretationContext<Object> {
         th = ex;
       }
     }
-    return errorOut("Failed to set field " + field.canonName, th);
+    return error("Failed to set field " + field.canonName, th);
   }
 
   @Override
@@ -749,21 +754,16 @@ implements InterpretationContext<Object> {
         th = ex;
       }
     }
-    return errorOut("Failed to read field " + field.canonName, th);
+    return error("Failed to read field " + field.canonName, th);
   }
 
   @Override
   public Object getFieldDynamic(String key, @Nullable Object container) {
     if (container == null) {
-      return errorOut("Null dereferenced via (null)." + key);
+      return error("Null dereferenced via (null)." + key);
     }
     if (container instanceof DataBundle) {
-      DataBundle b = (DataBundle) container;
-      Object result = b.getOrDefault(key, ErrorValue.INSTANCE);
-      if (isErrorValue(result)) {
-        errorOut("Missing value for field name " + key);
-      }
-      return result;
+      return ((DataBundle) container).getOrDefault(key, null);
     }
     Class<?> cl = container.getClass();
     if ("length".equals(key) && cl.isArray()) {
@@ -773,7 +773,7 @@ implements InterpretationContext<Object> {
     try {
       f = cl.getField(key);
     } catch (NoSuchFieldException ex) {
-      return errorOut(
+      return error(
           "Missing field " + key + " on " + cl.getSimpleName(),
           ex);
     }
@@ -782,7 +782,7 @@ implements InterpretationContext<Object> {
     } catch (IllegalArgumentException ex) {
       throw new AssertionError(null, ex);
     } catch (IllegalAccessException ex) {
-      return errorOut(
+      return error(
           "Access denied to field " + key + " on " + cl.getSimpleName(),
           ex);
     }
@@ -801,7 +801,7 @@ implements InterpretationContext<Object> {
         th = ex;
       }
     }
-    return errorOut("Failed to read field " + field.canonName, th);
+    return error("Failed to read field " + field.canonName, th);
   }
 
   @Override

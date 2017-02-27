@@ -1,0 +1,15 @@
+package foo;
+
+class C {
+  C(java.lang.annotation.RetentionType x) {
+    switch (x) {
+      case FIELD :
+        foo(x);
+        bar();
+        break;
+      case METHOD :
+        baz();
+        break;
+    }
+  }
+}
