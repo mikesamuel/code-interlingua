@@ -6,6 +6,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -71,11 +72,12 @@ public final class Templates {
     if (!f.hasNonStandard) {
       return eventList;
     }
+
     if (DEBUG) {
       Debug.dumpEvents(eventList);
     }
 
-    Events head = null;
+    List<Events> chain = Lists.newArrayList();
     {
       // We number push/pop pairs with serial numbers so that we can easily tell
       // whether moving a start directive and an end directive into a particular
@@ -87,7 +89,6 @@ public final class Templates {
       //    nodeIndex1, indexOfPush1InEventList, ...]
       List<Integer> nodeAndPushIndices = Lists.newArrayList();
 
-      Events tail = null;
       int nonStandardAncestorDepth = -1;
       for (int i = 0, n = eventList.size(); i < n; ++i) {
         Event e = eventList.get(i);
@@ -152,14 +153,7 @@ public final class Templates {
             throw new IllegalArgumentException(e.toString());
         }
         Preconditions.checkNotNull(toAdd);
-        if (tail != null) {
-          tail.next = toAdd;
-          toAdd.prev = tail;
-          tail = toAdd;
-        } else {
-          Preconditions.checkState(head == null);
-          head = tail = toAdd;
-        }
+        chain.add(toAdd);
       }
       Preconditions.checkState(
           nonStandardAncestorDepth < 0 && currentNodeIndex == 0);
@@ -167,16 +161,16 @@ public final class Templates {
 
     if (DEBUG) {
       System.err.println("Events");
-      for (Events es = head; es != null; es = es.next) {
+      for (Events es : chain) {
         System.err.println("\t" + es);
       }
     }
     // If the event list were empty we should have early outed above.
-    Preconditions.checkNotNull(head);
+    Preconditions.checkState(!chain.isEmpty());
 
     {
       List<NonstandardEvents> starts = Lists.newArrayList();
-      for (Events es = head; es != null; es = es.next) {
+      for (Events es : chain) {
         if (es instanceof NonstandardEvents) {
           NonstandardEvents nes = (NonstandardEvents) es;
           switch (nes.k) {
@@ -208,14 +202,14 @@ public final class Templates {
     // subsequent rebalances.
     // This is a poor-man's constraint satisfaction, but I'm not good at
     // writing sats.
-    head = head.rebalance(DirectiveKind.START, input);
+    chain.get(0).rebalance(0, chain, DirectiveKind.START, input);
     // Next, we rebalance infix operators.  This generalizes
-    head = head.rebalance(DirectiveKind.INFIX, input);
+    chain.get(0).rebalance(0, chain, DirectiveKind.INFIX, input);
     // Rebalancing the start takes care of rebalancing the corresponding ends.
 
     boolean inDirectives = false;
     ImmutableList.Builder<Event> rebalanced = ImmutableList.builder();
-    for (Events es = head; es != null; es = es.next) {
+    for (Events es : chain) {
       ImmutableList<Event> esEvents = es.events();
       Event esEvent0 = esEvents.get(0);
       boolean isDirective = esEvent0.getKind() == Event.Kind.PUSH
@@ -314,24 +308,16 @@ public final class Templates {
   }
 
   static abstract class Events {
-    Events prev;
-    Events next;
-
     Events() {}
 
     abstract ImmutableList<Event> events();
 
-    Events rebalance(DirectiveKind k, Input input) {
-      if (next != null) {
-        return next.rebalance(k, input);
-      } else {
-        // Now that we've rebalanced everything left, make sure the original
-        // caller has the right head.
-        Events head;
-        for (head = this; head.prev != null;) {
-          head = head.prev;
-        }
-        return head;
+    void rebalance(
+        int pos, List<Events> chain,
+        DirectiveKind k, Input input) {
+      Preconditions.checkState(chain.get(pos) == this);
+      if (pos + 1 < chain.size()) {
+        chain.get(pos + 1).rebalance(pos + 1, chain, k, input);
       }
     }
   }
@@ -400,30 +386,39 @@ public final class Templates {
     }
 
     @Override
-    Events rebalance(DirectiveKind kindToRebalance, Input input) {
+    void rebalance(
+        int pos, List<Events> chain,
+        DirectiveKind kindToRebalance, Input input) {
+      Preconditions.checkState(chain.get(pos) == this);
+
+      int i = pos;
       if (this.k == kindToRebalance) {
         switch (this.k) {
           case INFIX: {
-            int nPushes = nLeft(this.prev, EnumSet.of(Event.Kind.PUSH));
-            int nPops = nRight(this.next, EnumSet.of(Event.Kind.POP));
-            int nToRemove = Math.min(nPushes, nPops);
-            for (int i = 0; i < nToRemove; ++i) {
-              Events newNext = this.next.next;
-              this.next = newNext;
-
-              Events newPrev = this.prev.prev;
-              this.prev = newPrev;
+            int nPushes = nLeft(i - 1, chain, EnumSet.of(Event.Kind.PUSH));
+            int nPops = nRight(i + 1, chain, EnumSet.of(Event.Kind.POP));
+            int nToRemove = Math.min(nPushes, nPops);  // Number of pairs
+            if (nToRemove != 0) {
+              List<Events> region = chain.subList(
+                  i - nToRemove, i + nToRemove + 1);
+              // Splice out the pushes and pops.
+              region.clear();
+              region.add(this);
+              i -= nToRemove;
+              Preconditions.checkState(chain.get(i) == this);
             }
-            this.next.prev = this.prev.next = this;
             break;
           }
           case START: {
             NonstandardEvents start = this;
             NonstandardEvents end = dual;
+            int startIndex = pos;
+            int endIndex = chain.indexOf(dual);
             Preconditions.checkState(
-                end.k == DirectiveKind.END && end.dual == start);
-            Deltas startDeltas = new Deltas(start);
-            Deltas endDeltas = new Deltas(end);
+                end.k == DirectiveKind.END && end.dual == start
+                && endIndex > startIndex);
+            Deltas startDeltas = new Deltas(startIndex, chain);
+            Deltas endDeltas = new Deltas(endIndex, chain);
 
             if (DEBUG) {
               System.err.println("StartDeltas=" + startDeltas);
@@ -457,21 +452,21 @@ public final class Templates {
             int newNodeIndex = -1;
             for (int startDelta = 0; startDelta >= -startDeltaLimit;
                 --startDelta) {
-             int ni = startDeltas.nodeIndexForDelta(startDelta);
-             if (ni >= 0) {
-               Integer endDelta = nodeIndexToEndDelta.get(ni);
-               if (endDelta != null) {
-                 bestEndDelta = endDelta;
-                 bestStartDelta = startDelta;
-                 newNodeIndex = ni;
-                 break;
-               }
-             }
-           }
+              int ni = startDeltas.nodeIndexForDelta(startDelta);
+              if (ni >= 0) {
+                Integer endDelta = nodeIndexToEndDelta.get(ni);
+                if (endDelta != null) {
+                  bestEndDelta = endDelta;
+                  bestStartDelta = startDelta;
+                  newNodeIndex = ni;
+                  break;
+                }
+              }
+            }
 
             if (bestStartDelta < 0) {
               for (int startDelta = 0; startDelta <= startDeltaLimit;
-                  ++startDelta) {
+                   ++startDelta) {
                 int ni = startDeltas.nodeIndexForDelta(startDelta);
                 if (ni >= 0) {
                   Integer endDelta = nodeIndexToEndDelta.get(ni);
@@ -498,8 +493,9 @@ public final class Templates {
                   + " and end @ " + end.getPosition(input)
                   + " by " + bestEndDelta);
             }
-            startDeltas.pushAround(start, bestStartDelta);
-            endDeltas.pushAround(end, bestEndDelta);
+            startDeltas.pushAround(startIndex, chain, bestStartDelta);
+            endDeltas.pushAround(endIndex, chain, bestEndDelta);
+            i += bestStartDelta;
             break;
           }
           case END:
@@ -507,7 +503,8 @@ public final class Templates {
             break;
         }
       }
-      return super.rebalance(kindToRebalance, input);
+      // Recurse right.
+      super.rebalance(i, chain, kindToRebalance, input);
     }
 
 
@@ -538,28 +535,34 @@ public final class Templates {
     }
   }
 
-  static int nLeft(Events start, EnumSet<Event.Kind> kinds) {
+  static int nLeft(int pos, List<Events> chain, EnumSet<Event.Kind> kinds) {
     int n = 0;
-    for (Events es = start; es instanceof StandardEvents; es = es.prev) {
-      Event.Kind ek = ((StandardEvents) es).e.getKind();
-      if (kinds.contains(ek)) {
-        n += 1;
-      } else {
-        break;
+    for (int i = pos; i >= 0; --i) {
+      Events es = chain.get(i);
+      if (es instanceof StandardEvents) {
+        Event.Kind ek = ((StandardEvents) es).e.getKind();
+        if (kinds.contains(ek)) {
+          n += 1;
+          continue;
+        }
       }
+      break;
     }
     return n;
   }
 
-  static int nRight(Events start, EnumSet<Event.Kind> kinds) {
+  static int nRight(int pos, List<Events> chain, EnumSet<Event.Kind> kinds) {
     int n = 0;
-    for (Events es = start; es instanceof StandardEvents; es = es.next) {
-      Event.Kind ek = ((StandardEvents) es).e.getKind();
-      if (kinds.contains(ek)) {
-        n += 1;
-      } else {
-        break;
+    for (int i = pos, chainSize = chain.size(); i < chainSize; ++i) {
+      Events es = chain.get(i);
+      if (es instanceof StandardEvents) {
+        Event.Kind ek = ((StandardEvents) es).e.getKind();
+        if (kinds.contains(ek)) {
+          n += 1;
+          continue;
+        }
       }
+      break;
     }
     return n;
   }
@@ -570,49 +573,61 @@ public final class Templates {
     private final int countToPushLeft;
     private final int countToPushRight;
 
-    Deltas(NonstandardEvents nes) {
+    Deltas(int pos, List<Events> chain) {
+      NonstandardEvents nes = (NonstandardEvents) chain.get(pos);
       if (DEBUG) {
-        System.err.println("Computing deltas for " + nes);
+        System.err.println("Computing deltas for " + nes + " at " + pos);
       }
 
       // Assume we can push infix elements around.
       int nToPushLeft = 0;
-      Events left = nes.prev;
-      while (left instanceof NonstandardEvents
-          && ((NonstandardEvents) left).k == DirectiveKind.INFIX) {
-        left = left.prev;
-        ++nToPushLeft;
-      }
-      if (DEBUG) {
-        System.err.println("\tleft=" + left + ", nToPushLeft=" + nToPushLeft);
-      }
-
-      Events right = nes.next;
-      // Assume we can push infix and start elements right.
-      int nToPushRight = 0;
-      while (right instanceof NonstandardEvents) {
-        DirectiveKind rightKind = ((NonstandardEvents) right).k;
-        if (rightKind == DirectiveKind.INFIX
-            || rightKind == DirectiveKind.START
-            // if rightKind is END and nes is a START, then it's nes's end so
-            // we will conclude that delta=0 is fine above.
-            // An end cannot push an another end right because that end
-            // corresponds to an earlier end so doing so would invalidate a
-            // decision committed to earlier.
-            ) {
-          right = right.next;
-          ++nToPushRight;
+      int leftIndex = pos - 1;
+      while (leftIndex >= 0) {
+        Events left = chain.get(leftIndex);
+        if (left instanceof NonstandardEvents
+             && ((NonstandardEvents) left).k == DirectiveKind.INFIX) {
+          --leftIndex;
+          ++nToPushLeft;
+        } else {
+          break;
         }
       }
       if (DEBUG) {
         System.err.println(
-            "\tright=" + right + ", nToPushRight=" + nToPushRight);
+            "\tleftIndex=" + leftIndex + ", nToPushLeft=" + nToPushLeft);
+      }
+
+      int rightIndex = pos + 1;
+      // Assume we can push infix and start elements right.
+      int nToPushRight = 0;
+      while (rightIndex < chain.size()) {
+        Events right = chain.get(rightIndex);
+        if (right instanceof NonstandardEvents) {
+          DirectiveKind rightKind = ((NonstandardEvents) right).k;
+          if (rightKind == DirectiveKind.INFIX
+              || rightKind == DirectiveKind.START
+              // if rightKind is END and nes is a START, then it's nes's end so
+              // we will conclude that delta=0 is fine above.
+              // An end cannot push an another end right because that end
+              // corresponds to an earlier end so doing so would invalidate a
+              // decision committed to earlier.
+              ) {
+            ++rightIndex;
+            ++nToPushRight;
+            continue;
+          }
+        }
+        break;
+      }
+      if (DEBUG) {
+        System.err.println(
+            "\trightIndex=" + rightIndex + ", nToPushRight=" + nToPushRight);
       }
 
       EnumSet<Event.Kind> popsAndPushes = EnumSet.of(
           Event.Kind.POP, Event.Kind.PUSH);
-      int nPopsAndPushesLeft = nLeft(left, popsAndPushes);
-      int nPopsAndPushesRight = nRight(right, popsAndPushes);
+      int nPopsAndPushesLeft = nLeft(leftIndex, chain, popsAndPushes);
+      int nPopsAndPushesRight = nRight(rightIndex, chain, popsAndPushes);
       if (DEBUG) {
         System.err.println(
             "\tnPopsAndPushesLeft =" + nPopsAndPushesLeft);
@@ -620,26 +635,28 @@ public final class Templates {
             "\tnPopsAndPushesRight=" + nPopsAndPushesRight);
       }
 
+      Events left = leftIndex >= 0 ? chain.get(leftIndex) : null;
+      Events right = rightIndex < chain.size() ? chain.get(rightIndex) : null;
       int[] deltaToNodeIndexArray = new int[
-        1 + Math.max(nPopsAndPushesLeft, nPopsAndPushesRight) * 2];
+          1 + Math.max(nPopsAndPushesLeft, nPopsAndPushesRight) * 2];
       Arrays.fill(deltaToNodeIndexArray, -1);
       deltaToNodeIndexArray[0] =
           nPopsAndPushesLeft != 0
-          ? ((StandardEvents) left).nodeIndexRight
+          ? ((StandardEvents) Preconditions.checkNotNull(left)).nodeIndexRight
           : nPopsAndPushesRight != 0
-          ? ((StandardEvents) right).nodeIndexLeft
+          ? ((StandardEvents) Preconditions.checkNotNull(right)).nodeIndexLeft
           : -1;
       {
         int k = 1;  // Odds are negative (left) deltas
-        for (Events es = left;
-             k / 2 < nPopsAndPushesLeft; es = es.prev, k += 2) {
+        for (int i = leftIndex; k / 2 < nPopsAndPushesLeft; --i, k += 2) {
+          Events es = chain.get(i);
           deltaToNodeIndexArray[k] = ((StandardEvents) es).nodeIndexLeft;
         }
       }
       {
         int k = 2;  // Non-zero evens are (right) deltas
-        for (Events es = right;
-             k / 2 <= nPopsAndPushesRight; es = es.next, k += 2) {
+        for (int i = rightIndex; k / 2 <= nPopsAndPushesRight; ++i, k += 2) {
+          Events es = chain.get(i);
           deltaToNodeIndexArray[k] = ((StandardEvents) es).nodeIndexRight;
         }
       }
@@ -649,54 +666,19 @@ public final class Templates {
       this.countToPushRight = nToPushRight;
     }
 
-    public void pushAround(NonstandardEvents es, int delta) {
-      Events before = es.prev;
-      for (int i = 0; i < countToPushLeft; ++i) {
-        before = before.prev;
-      }
-
-      Events after = es.next;
-      for (int i = 0; i < countToPushRight; ++i) {
-        after = after.next;
-      }
-
+    public void pushAround(int pos, List<Events> chain, int delta) {
+      int startOfRegion;
+      int endOfRegion;
       if (delta < 0) {
-        for (int i = 0; i < -delta; ++i) {
-          Events toMove = before;
-          Events toMovePrev = toMove.prev;
-          Events toMoveNext = toMove.next;
-
-          toMove.next = after;
-          after.prev.next = toMove;
-          toMove.prev = after.prev;
-          after.prev = toMove;
-          after = toMove;
-
-          toMovePrev.next = toMoveNext;
-          toMoveNext.prev = toMovePrev;
-          before = toMovePrev;
-        }
+        startOfRegion = pos - this.countToPushLeft;
+        endOfRegion = pos + 1;
+      } else if (delta > 0) {
+        startOfRegion = pos;
+        endOfRegion = pos + 1 + this.countToPushRight;
       } else {
-        for (int i = 0; i < delta; ++i) {
-          Events toMove = after;
-          Events toMovePrev = toMove.prev;
-          Events toMoveNext = toMove.next;
-
-          toMove.prev = before;
-          before.next.prev = toMove;
-          toMove.next = before.next;
-          before.next = toMove;
-          before = toMove;
-
-          if (toMoveNext != null) {
-            toMoveNext.prev = toMovePrev;
-          }
-          if (toMovePrev != null) {
-            toMovePrev.next = toMoveNext;
-          }
-          after = toMoveNext;
-        }
+        return;
       }
+      shift(chain, startOfRegion, endOfRegion, delta);
     }
 
     static int keyForDelta(int delta) {
@@ -730,6 +712,59 @@ public final class Templates {
       }
       sb.append(')');
       return sb.toString();
+    }
+  }
+
+  @VisibleForTesting
+  static <T> void shift(
+      List<T> ls, int startOfRegion, int endOfRegion, int delta) {
+    Preconditions.checkArgument(startOfRegion <= endOfRegion);
+    if (delta == 0 || startOfRegion == endOfRegion) { return; }
+    ImmutableList<T> region = ImmutableList.copyOf(
+        ls.subList(startOfRegion, endOfRegion));
+    int nToMove = region.size();
+    int startOfDestination = startOfRegion + delta;
+    int endOfDestination = startOfDestination + nToMove;
+    // Shift the stuff that will be clobbered.
+    // Two cases.
+    // I. delta < 0
+    //   0 1 2[3 4 5]6 7 8    shifting 3 by 2
+    //          \ \ \
+    //            \ \ \
+    //   0 1 2 6 7 3 4 5 8
+    //
+    //   0 1 2[3]4 5 6 7 8   shifting 1 by 3
+    //          \
+    //           \
+    //            \
+    //             \
+    //              \
+    //   0 1 2 4 5 6 3 7 8
+    if (delta > 0) {
+      for (int i = 0; i < delta; ++i) {
+        ls.set(startOfRegion + i, ls.get(endOfRegion + i));
+      }
+    } else {
+      // II. delta > 0
+      //   0 1 2[3 4 5]6 7 8    shifting 3 by -2
+      //        / / /
+      //       / / /
+      //   0 3 4 5 1 2 6 7 8
+      //
+      //   0 1 2 3[4]5 6 7 8    shifting 1 by -3
+      //          /
+      //         /
+      //        /
+      //       /
+      //      /
+      //   0 4 1 2 3 5 6 7 8
+      for (int i = delta; ++i <= 0;) {
+        ls.set(endOfDestination - i, ls.get(startOfDestination - i));
+      }
+    }
+
+    for (int i = 0; i < nToMove; ++i) {
+      ls.set(startOfDestination + i, region.get(i));
     }
   }
 }
