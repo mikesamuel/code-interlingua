@@ -1036,7 +1036,7 @@ TemplateLoop: @nonstandard
 TemplateCondition: @nonstandard
     "if" "(" Expression ")"
 TemplateLocal: @nonstandard
-    !(Identifier Dims) VariableDeclarator @anon
+    !(Identifier Dims) VariableDeclarator
 TemplateFormals: @nonstandard
     LocalName {"," LocalName}
 NodeTypeHint: @nonstandard

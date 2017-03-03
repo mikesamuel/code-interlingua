@@ -1,0 +1,11 @@
+package foo;
+
+class C {
+  int x = 1;
+
+  public static final int F = 42;
+
+  C() {
+    this.x = 3;
+  }
+}

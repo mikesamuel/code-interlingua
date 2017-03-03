@@ -39,6 +39,9 @@ import com.mikesamuel.cil.ast.TemplateLocalNode;
 import com.mikesamuel.cil.ast.TemplateLoopNode;
 import com.mikesamuel.cil.ast.TemplatePseudoRootNode;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.VariableDeclaratorNode;
+import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -95,7 +98,10 @@ public class TemplateBundle {
   public static boolean optsIntoTemplateProcessing(FileNode node) {
     for (SingleStaticImportDeclarationNode imp
          : ((BaseNode) node).finder(SingleStaticImportDeclarationNode.class)
-              .exclude(NodeType.TypeDeclaration)
+              .exclude(NodeType.TypeDeclaration,
+                       NodeType.TemplateDirectives,
+                       NodeType.TemplateInterpolation)
+              .allowNonStandard(true)  // Descend into pseudo roots.
               .find()) {
       if (isOptInDeclaration(imp)) {
         return true;
@@ -140,7 +146,6 @@ public class TemplateBundle {
           bestMessage = message;
         }
       }
-
     }
 
     ParseErrorReceiverImpl err = new ParseErrorReceiverImpl();
@@ -275,7 +280,6 @@ public class TemplateBundle {
     protected ProcessingStatus previsit(
         BaseNode node,
         @Nullable SList<AbstractRewritingPass.Parent> pathFromRoot) {
-
       if (node.getVariant().isTemplateEnd()) {
         this.templateScopes.remove(templateScopes.size() - 1);
       }
@@ -596,13 +600,16 @@ public class TemplateBundle {
             for (ExpressionNode nodeExpr : nodeExprs) {
               Completion<Object> result = interpreter.interpret(
                   nodeExpr, templateScope.locals);
-              if (context.completedNormallyWithoutError(result)) {
-                results.add(result.value);
-              } else {
+              if (!context.completedNormallyWithoutError(result)) {
                 error(
                     nodeExpr,
                     "Failed to compute interpolation result: " + result);
                 hadError = true;
+              } else if (result.value == null) {
+                error(nodeExpr, "Cannot interpolate null");
+                hadError = true;
+              } else {
+                results.add(result.value);
               }
             }
           } else {
@@ -674,11 +681,43 @@ public class TemplateBundle {
               System.err.println("\tHAS ERROR");
             }
           }
+          // This will be removed when post-processing reaches the container.
           return ProcessingStatus.BREAK;
         }
         case TemplateLocal: {
           TemplateLocalNode local = (TemplateLocalNode) node;
-          // TODO
+          VariableDeclaratorNode decl = local.firstChildWithType(
+              VariableDeclaratorNode.class);
+          if (decl != null) {
+            VariableDeclaratorIdNode declId = decl.firstChildWithType(
+                VariableDeclaratorIdNode.class);
+            VariableInitializerNode initializer = decl.firstChildWithType(
+                VariableInitializerNode.class);
+            if (declId != null) {
+              IdentifierNode ident = declId.firstChildWithType(
+                  IdentifierNode.class);
+              if (ident != null) {
+                Name name = Name.root(ident.getValue(), Name.Type.LOCAL);
+                if (!templateScope.locals.hasOwn(name)) {
+                  // Redeclare in case it was not declared in the previsit which
+                  // may occur when the local name is itself the result of an
+                  // interpolation.
+                  templateScope.locals.declare(name, Functions.identity());
+                }
+                if (initializer != null) {
+                  Completion<Object> result = interpreter.interpret(
+                      initializer, templateScope.locals);
+                  if (context.completedNormallyWithoutError(result)) {
+                    templateScope.locals.set(name, result.value);
+                  } else {
+                    break;
+                  }
+                }
+                return ProcessingStatus.REMOVE;
+              }
+            }
+          }
+          error(local, "Malformed local");
           break;
         }
         case TemplateDirectives: {
@@ -773,8 +812,8 @@ public class TemplateBundle {
         i < n; ++i) {
       BaseNode directivesSibling = container.getChild(i);
       if (directivesSibling instanceof TemplateDirectivesNode) {
-        // Scan the children.  If the template block ends inside the directives
-        // then add any directive nodes prior to the end.
+        // Scan the children looking for the end and adding whole siblings to
+        // the body.
         TemplateDirectivesNode ds = (TemplateDirectivesNode) directivesSibling;
         for (int j = 0, m = ds.getNChildren(); j < m; ++j) {
           TemplateDirectiveNode d = (TemplateDirectiveNode) ds.getChild(j);
@@ -782,6 +821,8 @@ public class TemplateBundle {
           if (v.isTemplateEnd()) {
             --nStarts;
             if (nStarts == 0) {
+              // If the template block ends inside the directives
+              // then add any directive nodes prior to the end.
               if (j != 0) {
                 TemplateDirectivesNode clone = ds.shallowClone();
                 clone.replaceChildren(ds.getChildren().subList(0, j));

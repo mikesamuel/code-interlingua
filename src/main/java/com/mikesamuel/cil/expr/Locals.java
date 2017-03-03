@@ -93,10 +93,18 @@ public final class Locals<VALUE> {
   }
 
   /**
-   * True if the name corresponds to a
+   * True if the name corresponds to a declared variable.
    */
   public boolean has(Name name) {
     Name uname = fixName(name);
     return values.containsKey(uname) || outer != null && outer.has(name);
+  }
+
+  /**
+   * True if the name corresponds to a variable declared in this scope without
+   * regards to outer scopes.
+   */
+  public boolean hasOwn(Name name) {
+    return values.containsKey(fixName(name));
   }
 }

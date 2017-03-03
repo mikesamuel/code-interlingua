@@ -39,7 +39,6 @@ import junit.framework.TestSuite;
 public final class TemplateEvaluationEndToEndTest extends TestCase {
 
   public static TestSuite suite() throws IOException {
-    ImmutableList<File> testRoots;
     TestSuite suite = new TestSuite();
     for (String prop : new String[] {
         "basedir",  // Set by mvn
@@ -57,18 +56,14 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
         if (testsDirFiles == null) {
           fail("No such dir " + testsDir);
         } else {
-          ImmutableList.Builder<File> testDirs = ImmutableList.builder();
+          boolean foundOne = false;
           for (File f : testsDirFiles) {
             if (f.isDirectory()) {
-              testDirs.add(f);
+              EndToEndTestCase.addToTestSuite(f, suite);
+              foundOne = true;
             }
           }
-          testRoots = testDirs.build();
-          assertFalse(testsDir.getPath(), testRoots.isEmpty());
-
-          for (File testRoot : testRoots) {
-            EndToEndTestCase.addToTestSuite(testRoot, suite);
-          }
+          assertTrue(testsDir.getPath(), foundOne);
           return suite;
         }
       }
@@ -85,6 +80,7 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       final Map<String, File> prefixToInput = Maps.newTreeMap();
       final Map<String, File> prefixToOutput = Maps.newTreeMap();
       final Map<String, File> prefixToLog = Maps.newTreeMap();
+
       for (File f : testRoot.listFiles()) {
         if (f.isFile()) {
           String name = f.getName();
@@ -124,11 +120,12 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       Logger logger = Logger.getAnonymousLogger();
       TemplateBundle bundle = new TemplateBundle(logger);
       for (File javaFile : javaFiles) {
-        bundle.addCompilationUnit(Input.builder()
+        Input inp = Input.builder()
             .source(javaFile.getName())
             .code(Files.toString(javaFile, UTF_8))
             .allowNonStandardProductions(true)
-            .build());
+            .build();
+        bundle.addCompilationUnit(inp);
       }
 
       // During test running we redirect all logging to a per-prefix output file

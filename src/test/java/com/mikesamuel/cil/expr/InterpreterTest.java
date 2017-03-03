@@ -14,7 +14,6 @@ import javax.annotation.Nullable;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
-import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
@@ -220,10 +219,9 @@ public final class InterpreterTest extends TestCase {
         NodeType.Expression, "null", getName());
     InterpretationContext<Object> context = new InterpretationContextImpl(
         tc.logger, tc.loader, tc.typePool);
-    locals.initializeFrom(b, context, Functions.identity());
+    context.setThisValue(null, b);
 
-    Object nm = locals.get(
-        Name.root("nm", Name.Type.AMBIGUOUS), context.errorValue());
+    Object nm = context.getFieldDynamic("nm", b);
     assertTrue(nm instanceof BaseNode);
 
     Interpreter<Object> interpreter = new Interpreter<>(context);
