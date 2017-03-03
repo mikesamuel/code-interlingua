@@ -457,15 +457,16 @@ public interface TypeNameResolver {
       }
     }
 
+    private static final TypeNameResolver NULL_RESOLVER = new EitherOr(
+        ImmutableList.of());
+
+    /**
+     * A resolver that resolves no names.
+     * This resolver is suitable for pseudo roots which are not
+     * in any particular package.
+     */
     public static TypeNameResolver nullResolver() {
-      return new TypeNameResolver() {
-
-        @Override
-        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
-          return ImmutableList.of();
-        }
-
-      };
+      return NULL_RESOLVER;
     }
   }
 
