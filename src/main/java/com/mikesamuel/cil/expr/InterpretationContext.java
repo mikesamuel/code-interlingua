@@ -49,10 +49,17 @@ public interface InterpretationContext<VALUE> {
   /** True iff the given value is an {@linkplain #errorValue error value}. */
   boolean isErrorValue(VALUE v);
 
-  /** A null reference value. */
+  /**
+   * A null reference value.
+   * <p>
+   * This is the value of the valid expression {@code (null)} and the
+   * interpreter uses this internally as the {@code this} value for static
+   * field and method lookups in some instances, so it must be the case that
+   * {@code !isErrorValue(nullValue())}.
+   */
   VALUE nullValue();
 
-  /** True iff the given value is an {@linkplain #nullValue null value}. */
+  /** True iff the given value is a {@linkplain #nullValue null value}. */
   boolean isNullValue(VALUE v);
 
   /** The type of {@code this}. */
