@@ -2110,21 +2110,32 @@ public final class Interpreter<VALUE> {
           error(e, "Malformed free field");
           return handler.error(nameNode);
         }
-        TypeInfo thisType = context.getThisType();
         String ident = identNode.get().getValue();
-        VALUE thisValue = context.getThisValue(
-            thisType != null ? thisType.canonName : null);
-        if (context.isErrorValue(thisValue)) {
-          error(e, "No such this value in context");
-          return handler.error(e);
-        }
+        TypeInfo thisType = context.getThisType();
+
+        Optional<FieldInfo> fieldInfoOpt;
+        boolean isStatic;
         if (thisType != null) {
-          Optional<FieldInfo> fieldInfoOpt = fieldForType(
-              thisType, ident, false);
+          fieldInfoOpt = fieldForType(thisType, ident, false);
           if (!fieldInfoOpt.isPresent()) {
             error(e, "Missing field info for " + thisType.canonName + ident);
             return handler.error(e);
           }
+          isStatic = Modifier.isStatic(fieldInfoOpt.get().modifiers);
+        } else {
+          fieldInfoOpt = Optional.absent();
+          isStatic = false;
+        }
+
+        VALUE thisValue = isStatic
+            ? context.nullValue()
+            : context.getThisValue(
+                thisType != null ? thisType.canonName : null);
+        if (context.isErrorValue(thisValue)) {
+          error(e, "No such this value in context");
+          return handler.error(e);
+        }
+        if (fieldInfoOpt.isPresent()) {
           return handler.fieldAccess(fieldInfoOpt.get(), thisValue);
         } else {
           return handler.fieldAccess(ident, thisValue);
