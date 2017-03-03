@@ -135,13 +135,13 @@ loading it in a browser and copy/pasting the text form.
 
 CHANGES
 =======
-The expression grammar has been rewritten to make it PEG-compatible and statement
-productions have been re-ordered for the same reason.
+The expression grammar has been rewritten to make it PEG-compatible and
+statement productions have been re-ordered for the same reason.
 
 Name productions have been reworked because, in a context-free parse,
     foo
-can be multiple of variable name, field name, interface type, class type, type variable
-in many positions.
+can be multiple of variable name, field name, interface type, class type,
+type variable in many positions.
 
 
 GRAMMAR SYNTAX
