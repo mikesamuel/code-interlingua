@@ -16,6 +16,7 @@ import com.mikesamuel.cil.ast.PackageDeclarationNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.SwitchBlockNode;
+import com.mikesamuel.cil.ast.TemplateDirectivesNode;
 import com.mikesamuel.cil.ast.TypeNameNode;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
@@ -57,6 +58,12 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     ExpressionNameResolver childResolver = r;
     DeclarationPositionMarker currentMarker = m;
     Name childOuter = outer;
+
+    if (node instanceof TemplateDirectivesNode) {
+      // The scopes introduced by directives are disjoint from those introduced
+      // by Java.
+      return m;
+    }
 
     if (node instanceof TypeDeclaration) {
       TypeInfo ti = ((TypeDeclaration) node).getDeclaredTypeInfo();

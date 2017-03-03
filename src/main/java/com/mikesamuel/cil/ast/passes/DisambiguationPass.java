@@ -230,21 +230,26 @@ final class DisambiguationPass extends AbstractRewritingPass {
         {
           Decomposed seedDecomp = ds.get(0);
           switch (seedDecomp.name.type) {
-            case LOCAL:
+            case LOCAL: {
               Preconditions.checkState(seedDecomp.idents.size() == 1);
+              IdentifierNode ident = seedDecomp.idents.get(0).identifier;
               LocalNameNode localName =
-                  LocalNameNode.Variant.Identifier.buildNode(
-                      seedDecomp.idents.get(0).identifier);
+                  LocalNameNode.Variant.Identifier.buildNode(ident);
+              localName.setSourcePosition(ident.getSourcePosition());
               localName.setReferencedExpressionName(seedDecomp.name);
               seed = ExpressionAtomNode.Variant.Local.buildNode(localName);
               break;
-            case FIELD:
+            }
+            case FIELD: {
               Preconditions.checkState(seedDecomp.idents.size() == 1);
               FieldNameNode fieldName = FieldNameNode.Variant.Identifier
                   .buildNode(seedDecomp.idents.get(0).identifier);
+              IdentifierNode ident = seedDecomp.idents.get(0).identifier;
+              fieldName.setSourcePosition(ident.getSourcePosition());
               fieldName.setReferencedExpressionName(seedDecomp.name);
               seed = ExpressionAtomNode.Variant.FreeField.buildNode(fieldName);
               break;
+            }
             case CLASS:
             case TYPE_PARAMETER:
               // It's legit to use a type parameter to the left of a static

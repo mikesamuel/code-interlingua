@@ -261,6 +261,8 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       case ClassDeclaration:
       case InterfaceDeclaration:
         break;
+      case TemplateDirectives:
+        break;
       default:
         throw new AssertionError(bodyElement);
     }

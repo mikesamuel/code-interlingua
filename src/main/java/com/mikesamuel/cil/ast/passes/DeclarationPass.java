@@ -30,6 +30,7 @@ import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.InterfaceTypeListNode;
 import com.mikesamuel.cil.ast.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.ModifierNode;
+import com.mikesamuel.cil.ast.TemplatePseudoRootNode;
 import com.mikesamuel.cil.ast.TypeArgumentNode;
 import com.mikesamuel.cil.ast.TypeVariableNode;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -193,12 +194,15 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
       if (scope instanceof CompilationUnitNode) {
         resolver = resolverFor((CompilationUnitNode) scope);
+      } else if (scope instanceof TemplatePseudoRootNode) {
+        resolver = TypeNameResolver.Resolvers.nullResolver();
       } else {
         TypeNameResolver parentResolver;
         {
           TypeScope parentScope = scopeToParent.get(scope);
           // Compilation units handled above.
-          Preconditions.checkNotNull(parentScope);
+          Preconditions.checkNotNull(
+              parentScope, "%s has no parent scope", scope);
           parentResolver = resolverForScope(parentScope, loop);
         }
         // To resolve a scope, we need to resolve all the outer scopes, because

@@ -456,6 +456,17 @@ public interface TypeNameResolver {
         return "(EitherOr " + resolvers + ")";
       }
     }
+
+    public static TypeNameResolver nullResolver() {
+      return new TypeNameResolver() {
+
+        @Override
+        public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
+          return ImmutableList.of();
+        }
+
+      };
+    }
   }
 
 }
