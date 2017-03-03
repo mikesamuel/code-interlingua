@@ -86,10 +86,14 @@ public final class DataBundle {
     return arr;
   }
 
+  private static final String[] ZERO_STRINGS = new String[0];
+
   private static Object from(
       String source, SList<Object> keyChain, JSONObject obj) {
     String[] keys = JSONObject.getNames(obj);
-    if (keys.length == 2 && obj.has("nodeType") && obj.has("code")) {
+    if (keys == null) { keys = ZERO_STRINGS; }
+    if (keys.length == 2 && obj.has("nodeType")
+        && obj.has("code")) {
       // Recognize
       //   { "nodeType": "Foo", "code": "..." }
       // and parse "..." using NodeType.Foo to get a FooNode AST.
