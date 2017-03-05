@@ -5,8 +5,10 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Ignorables;
@@ -79,7 +81,15 @@ public final class Trees {
         ++compilationUnitCount;
       } else if (!NodeTypeTables.NONSTANDARD.contains(nt)) {
         throw new IllegalArgumentException(
-            "Expected 1 root node.  " + nt
+            "Expected 1 root node.  "
+            + Lists.transform(tier.nodes, new Function<NodeI, NodeVariant>() {
+
+              @Override
+              public NodeVariant apply(NodeI n) {
+                return n.getVariant();
+              }
+
+            })
             + " cannot be coalesced into a template pseudo root");
       }
     }
