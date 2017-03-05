@@ -13,6 +13,7 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
+import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.TokenStrings;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.SList;
@@ -543,12 +544,20 @@ public final class Tokens {
   public static final ParSer JAVA_DOC_COMMENT = new JavaDocLookback();
 
   /**
+   * TemplateBody is an inner node whose content depends on a node type hint
+   * that precedes it.
+   */
+  @SuppressWarnings("synthetic-access")
+  public static final ParSer TEMPLATE_BODY = new TemplateBodyLookback();
+
+  /**
    * True if the given content is a valid Java block comment.
    *
    * @param s post <code>&bsol;uXXXX</code> decoding.
    */
   public static boolean isBlockComment(String s) {
-    return s.startsWith("/*") && s.indexOf("*/", 2) == s.length() - 2;
+    return s.length() >= 4 && s.startsWith("/*")
+        && s.indexOf("*/", 2) == s.length() - 2;
   }
 
   private static final class JavaDocLookback extends ParSer {
@@ -726,5 +735,47 @@ public final class Tokens {
   private static String fixupNumericLiteral(String literal) {
     // Strip out myriad separators because 1_000_000 == 1e6
     return literal.replace("_", "");
+  }
+
+
+  private static final class TemplateBodyLookback extends ParSer {
+
+    @Override
+    public ParseResult parse(
+        ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
+      // TemplateBody is highly context dependent, so do special handling here.
+      Optional<NodeType> nodeTypeHint = state.output != null
+          ? Reference.nodeTypeHintAtEndOf(state.output.prev)  // Skip push
+          : Optional.absent();
+      if (nodeTypeHint.isPresent()) {
+        NodeType bodyType = nodeTypeHint.get();
+        if (bodyType != NodeType.TemplateBody) {  // No inf. recurse
+          return bodyType.getParSer().parse(state, new LeftRecursion(), err);
+        }
+      }
+      return ParseResult.failure();
+    }
+
+    @Override
+    public Optional<SerialState> unparse(
+        SerialState state, SerialErrorReceiver err) {
+      Optional<NodeType> nodeTypeHint = state.output != null
+          ? Reference.nodeTypeHintAtEndOf(state.output.prev)  // Skip push
+          : Optional.absent();
+      if (nodeTypeHint.isPresent()) {
+        return nodeTypeHint.get().getParSer().unparse(state, err);
+      }
+      return Optional.absent();
+    }
+
+    @Override
+    public Optional<MatchState> match(MatchState state, MatchErrorReceiver err) {
+      throw new Error("TODO");   // TODO
+    }
+
+    @Override
+    public ForceFitState forceFit(ForceFitState state) {
+      throw new Error("TODO");   // TODO
+    }
   }
 }

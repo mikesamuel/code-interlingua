@@ -6,6 +6,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -13,6 +15,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
+import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.TemplateDirectiveNode;
 import com.mikesamuel.cil.ast.TemplateDirectivesNode;
 import com.mikesamuel.cil.event.Debug;
@@ -36,7 +39,13 @@ public final class Templates {
    * most general context possible, and that directives bracket
    * complete sub-trees.
    */
-  public static ImmutableList<Event> generalize(
+  public static ImmutableList<Event> postprocess(
+      Input input, Iterable<? extends Event> events)
+  throws IllegalArgumentException {
+    return hoistTemplateDecls(generalize(input, events));
+  }
+
+  private static ImmutableList<Event> generalize(
       Input input, Iterable<? extends Event> events)
   throws IllegalArgumentException {
 
@@ -123,7 +132,7 @@ public final class Templates {
             currentNodeIndex = nodeIndexAfterPush;
             NodeType nt = e.getNodeType();
             if (nonStandardAncestorDepth < 0
-                && NodeTypeTables.NONSTANDARD.contains(nt)) {
+                && NodeTypeTables.TEMPLATEINSTR.contains(nt)) {
               nonStandardAncestorDepth = nodeAndPushIndices.size() / 2;
             }
             nodeAndPushIndices.add(currentNodeIndex);
@@ -211,6 +220,16 @@ public final class Templates {
     ImmutableList.Builder<Event> rebalanced = ImmutableList.builder();
     for (Events es : chain) {
       ImmutableList<Event> esEvents = es.events();
+      if (es instanceof NonstandardEvents) {
+        // Recurse to handle nested template instructions.
+        int nEvents = esEvents.size();
+        Preconditions.checkState(nEvents >= 2);
+        esEvents = ImmutableList.<Event>builder()
+            .add(esEvents.get(0))  // The push
+            .addAll(generalize(input, esEvents.subList(1, nEvents - 2)))
+            .add(esEvents.get(nEvents - 1))  // The corresponding pop
+            .build();
+      }
       Event esEvent0 = esEvents.get(0);
       boolean isDirective = esEvent0.getKind() == Event.Kind.PUSH
           && esEvent0.getNodeType() == NodeType.TemplateDirective;
@@ -369,6 +388,8 @@ public final class Templates {
                 : DirectiveKind.START;
           } else if (v.isTemplateEnd()) {
             dk = DirectiveKind.END;
+          } else {
+            dk = DirectiveKind.INFIX;
           }
           break;
         case TemplateInterpolation:
@@ -765,6 +786,96 @@ public final class Templates {
 
     for (int i = 0; i < nToMove; ++i) {
       ls.set(startOfDestination + i, region.get(i));
+    }
+  }
+
+  /**
+   * Shift all {@link NodeType#TemplateDecl} blocks to the start of the closest
+   * enclosing {@linkplain NodeVariant#isTemplateStart template start} so that
+   * every use of a template occurs after (in an in-order traversal) the
+   * declaration.
+   */
+  private static ImmutableList<Event> hoistTemplateDecls(
+      ImmutableList<Event> events) {
+    // For each open template scope, keep the index of the start event,
+    // a list of hoisted template declarations, and the rest of the content.
+    List<HoistState> stack = Lists.newArrayList();
+    HoistState top = new HoistState(null);
+    stack.add(top);
+    hoist_loop:
+    for (int i = 0, n = events.size(); i < n; ++i) {
+      Event e = events.get(i);
+      if (e.getKind() == Event.Kind.PUSH) {
+        NodeVariant v = e.getNodeVariant();
+        if (v.isTemplateEnd()) {
+          HoistState oldTop = stack.remove(stack.size() - 1);
+          top = stack.get(stack.size() - 1);
+          top.rest.addAll(oldTop.getAllEvents());
+        }
+        if (v.isTemplateStart()) {
+          HoistState newTop = new HoistState(e);
+          stack.add(newTop);
+          top = newTop;
+          continue hoist_loop;
+        }
+        if (v == TemplateDirectiveNode.Variant.TemplateDecl) {
+          int depth = 1;
+          int end = i + 1;
+          for (; ; ++end) {
+            Preconditions.checkState(end < n);  // No pop for push
+            Event f = events.get(end);
+            Event.Kind k = f.getKind();
+            if (k == Event.Kind.POP) {
+              --depth;
+              if (depth == 0) {
+                top.hoisted.addAll(events.subList(i, end + 1));
+                int nRest = top.rest.size();
+                if (nRest != 0 && end + 1 < n
+                    && events.get(end + 1).getKind() == Event.Kind.POP) {
+                  Event lastRest = top.rest.get(nRest - 1);
+                  if (lastRest.getKind() == Event.Kind.PUSH
+                      && lastRest.getNodeType()
+                         == NodeType.TemplateDirectives) {
+                    // Get rid of newly empty template directives node.
+                    top.rest.remove(nRest - 1);
+                    ++end;
+                  }
+                }
+                i = end;
+                continue hoist_loop;
+              }
+            } else if (k == Event.Kind.PUSH) {
+              ++depth;
+            }
+          }
+        }
+      }
+      top.rest.add(e);
+    }
+    return top.getAllEvents();
+  }
+
+  static final class HoistState {
+    final Event start;
+    final List<Event> hoisted = Lists.newArrayList();
+    final List<Event> rest = Lists.newArrayList();
+
+    HoistState(@Nullable Event start) {
+      this.start = start;
+    }
+
+    ImmutableList<Event> getAllEvents() {
+      ImmutableList.Builder<Event> b = ImmutableList.builder();
+      if (start != null) {
+        b.add(start);
+      }
+      if (!hoisted.isEmpty()) {
+        b.add(Event.push(
+            TemplateDirectivesNode.Variant.TemplateDirectiveTemplateDirective));
+        b.addAll(hoisted);
+        b.add(Event.pop());
+      }
+      return b.addAll(rest).build();
     }
   }
 }

@@ -1354,10 +1354,14 @@ public final class Interpreter<VALUE> {
       case SynchronizedStatement:
         // TODO
         break;
+      case TemplateBody:
+        break;
       case TemplateComprehension:
-        // TODO
+        // TODO: Maybe move interpretation out of TemplateBundle to here.
         break;
       case TemplateCondition:
+        break;
+      case TemplateDecl:
         break;
       case TemplateDirective:
         break;

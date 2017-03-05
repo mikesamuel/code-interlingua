@@ -31,7 +31,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "        Literal.IntegerLiteral",
         "          IntegerLiteral.Builtin 1",
         "      AdditiveOperator.Pls",
-        "      TemplateInterpolation.LpPctNodeTypeHintTemplateComprehensionRp",
+        "      TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
         "        TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
         "          Expression.ConditionalExpression",
         "            Primary.Ambiguous",
@@ -42,6 +42,29 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "    ExpressionAtom.Literal",
         "      Literal.IntegerLiteral",
         "        IntegerLiteral.Builtin 3");
+  }
+
+
+  @Test
+  public final void testInterpolationInExpressionContextWithExplicitTypeHint() {
+    assertParseTree(
+        PTree.complete(NodeType.Expression),
+        "1 + (%x : MultiplicativeExpression)",
+        "Expression.ConditionalExpression",
+        "  AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
+        "    ExpressionAtom.Literal",
+        "      Literal.IntegerLiteral",
+        "        IntegerLiteral.Builtin 1",
+        "    AdditiveOperator.Pls",
+        "    TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
+        "      TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
+        "        Expression.ConditionalExpression",
+        "          Primary.Ambiguous",
+        "            ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "              ContextFreeName.Name",
+        "                Identifier.Builtin x",
+        "      NodeTypeHint.ClnIdentifier",
+        "        Identifier.Builtin MultiplicativeExpression");
   }
 
   @Test
@@ -99,7 +122,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "            PrimitiveType.AnnotationNumericType",
         "              NumericType.IntegralType",
         "                IntegralType.Int",
-        "        TemplateInterpolation.LpPctNodeTypeHintTemplateComprehensionRp",
+        "        TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
         "          TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
         "            Expression.ConditionalExpression",
         "              Primary.Ambiguous",
@@ -135,7 +158,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "    TypeDeclaration.ClassDeclaration",
         "      ClassDeclaration.NormalClassDeclaration",
         "        NormalClassDeclaration.Declaration",
-        "          TemplateInterpolation.LpPctNodeTypeHintTemplateComprehensionRp",
+        "          TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
         "            TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
         "              Expression.ConditionalExpression",
         "                Primary.Ambiguous",
@@ -145,5 +168,60 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "          ClassBody.LcClassBodyDeclarationRc",
         "  TemplateDirectives.TemplateDirectiveTemplateDirective",
         "    TemplateDirective.End");
+  }
+
+  @Test
+  public final void testTemplateDecls() {
+    assertParseTree(
+        PTree.complete(NodeType.CompilationUnit),
+        ""
+        + "package p;\n"
+        + "%%template foo(a, b, c) : Expression { (%a) + (%b) * (%c) }",
+
+        "TemplatePseudoRoot.CompilationUnit",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
+        "    TemplateDirective.TemplateDecl",
+        "      TemplateDecl.Declaration",
+        "        Identifier.Builtin foo",
+        "        TemplateFormals.LocalNameComLocalName",
+        "          LocalName.Identifier",
+        "            Identifier.Builtin a",
+        "          LocalName.Identifier",
+        "            Identifier.Builtin b",
+        "          LocalName.Identifier",
+        "            Identifier.Builtin c",
+        "        NodeTypeHint.ClnIdentifier",
+        "          Identifier.Builtin Expression",
+        "      TemplateBody.Any",
+        "        Expression.ConditionalExpression",
+        "          AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
+        "            TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
+        "              TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
+        "                Expression.ConditionalExpression",
+        "                  Primary.Ambiguous",
+        "                    ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "                      ContextFreeName.Name",
+        "                        Identifier.Builtin a",
+        "            AdditiveOperator.Pls",
+        "            MultiplicativeExpression.MultiplicativeExpressionMultiplicativeOperatorUnaryExpression",
+        "              TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
+        "                TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
+        "                  Expression.ConditionalExpression",
+        "                    Primary.Ambiguous",
+        "                      ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "                        ContextFreeName.Name",
+        "                          Identifier.Builtin b",
+        "              MultiplicativeOperator.Str",
+        "              TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
+        "                TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
+        "                  Expression.ConditionalExpression",
+        "                    Primary.Ambiguous",
+        "                      ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "                        ContextFreeName.Name",
+        "                          Identifier.Builtin c",
+        "  CompilationUnit.PackageDeclarationImportDeclarationTypeDeclaration",
+        "    PackageDeclaration.Declaration",
+        "      PackageName.IdentifierDotIdentifier",
+        "        Identifier.Builtin p");
   }
 }

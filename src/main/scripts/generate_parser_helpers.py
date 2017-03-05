@@ -7,6 +7,7 @@ import re
 
 _JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
 
+BUILTINS = ('builtin', 'any')
 
 # Maps trait interfaces to metadata fields specified and imports required.
 _TRAITS = {
@@ -731,7 +732,7 @@ public enum Chapter {
             name = pt['name']
             if name == 'ref':
                 delegate = pt['pleaf'][0]
-                if delegate == 'builtin':
+                if delegate in BUILTINS:
                     return False
                 else:
                     return delegate
@@ -874,7 +875,7 @@ public enum NodeType implements ParSerable {
         computed = set()
         empty_matching = set()
 
-        computed.add('builtin')
+        computed.update(BUILTINS)
 
         EMPTY_PATH = True
         NON_EMPTY_PATH = False
@@ -998,7 +999,7 @@ public enum NodeType implements ParSerable {
                     add_left_calls(pt['ptree'])
                 elif ptn == 'ref':
                     name = pt['pleaf'][0]
-                    if name == 'builtin':
+                    if name in BUILTINS:
                         break
                     left_calls.append(name)
                     if name not in empty_matching:
@@ -1106,7 +1107,7 @@ public enum NodeType implements ParSerable {
         else:
             (leaf_text, (leaf_ln, leaf_co, leaf_ci)) = pt['pleaf']
             if name == 'ref':
-                if leaf_text == 'builtin':
+                if leaf_text in BUILTINS:
                     sub = '%s.add(Tokens.%s)' % (
                         prefix_plus,
                         _camel_to_underscores(prod['name']))
@@ -1666,7 +1667,7 @@ public final class NodeTypeTables {
             for caller_pn, callees in callees_by_pn.iteritems():
                 caller_cn = prods_by_chapter[caller_pn]
                 for callee_pn in callees:
-                    if callee_pn == 'builtin': continue
+                    if callee_pn in BUILTINS: continue
                     callee_cn = prods_by_chapter[callee_pn]
                     if caller_cn != callee_cn:
                         s = called_cross_chapter.get(callee_cn)

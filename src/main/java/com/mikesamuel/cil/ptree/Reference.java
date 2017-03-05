@@ -7,7 +7,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Matcher;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Optional;
@@ -369,24 +368,27 @@ final class Reference extends PTParSer {
 
       if (stage != Stage.GROWING && nodeType != NodeType.TemplateInterpolation
           && shouldHandleTemplateInterpolation(state)) {
-        Optional<NodeType> nodeTypeHint = preparseNodeTypeHint(state, err);
-        if (nodeTypeHint.isPresent()
-            ? nodeTypeHint.get() == nodeType
-            : !NodeTypeTables.NOINTERP.contains(nodeType)) {
-          // Try parsing a template element.
-          ParseResult nonStandardResult =
-              NodeType.TemplateInterpolation.getParSer()
-              .parse(state, new LeftRecursion(), err);
-          switch (nonStandardResult.synopsis) {
-            case FAILURE: break;
-            case SUCCESS:
-              failureExclusionsTriggered.addAll(
-                  nonStandardResult.lrExclusionsTriggered);
+        // Try parsing a template interpolation.
+        ParseResult nonStandardResult =
+            NodeType.TemplateInterpolation.getParSer()
+            .parse(state, new LeftRecursion(), err);
+        switch (nonStandardResult.synopsis) {
+          case FAILURE: break;
+          case SUCCESS:
+            failureExclusionsTriggered.addAll(
+                nonStandardResult.lrExclusionsTriggered);
+            ParseState afterInterpolation = nonStandardResult.next();
+            Optional<NodeType> nodeTypeHint = nodeTypeHintAtEndOf(
+                afterInterpolation.output);
+            if (nodeTypeHint.isPresent()
+                ? nodeTypeHint.get() == nodeType
+                : !NodeTypeTables.NOINTERP.contains(nodeType)) {
               return ParseResult.success(
-                  nonStandardResult.next(),
+                  afterInterpolation,
                   nonStandardResult.writeBack,
                   failureExclusionsTriggered);
-          }
+            }
+            break;
         }
       }
     } finally {
@@ -410,26 +412,63 @@ final class Reference extends PTParSer {
     return false;
   }
 
-  private static Optional<NodeType> preparseNodeTypeHint(
-      ParseState state,
-      ParseErrorReceiver err) {
-    ParseState afterInterpStart = state.advance(2);
-    Matcher m = afterInterpStart.matcherAtStart(Tokens.IDENTIFIER.p);
-    if (m.find() && m.start() == state.index) {
-      String s = m.group();
-      ParseState afterIdentifier = state.withIndex(m.end());
-      if (afterIdentifier.startsWith(":", Optional.absent())) {
-        NodeType nt;
-        try {
-          nt = NodeType.valueOf(s);
-        } catch (@SuppressWarnings("unused") IllegalArgumentException ex) {
-          err.error(afterInterpStart, "No such node type " + s);
-          return Optional.absent();
-        }
-        return Optional.of(nt);
-      }
+  private static SList<Event> stepBack(SList<Event> start) {
+    SList<Event> ls = start.prev;
+    while (ls != null && ls.x.getKind() == Event.Kind.POSITION_MARK) {
+      ls = ls.prev;
     }
-    return Optional.absent();
+    return ls;
+  }
+
+  static Optional<NodeType> nodeTypeHintAtEndOf(SList<Event> output) {
+    // Expect a sequence of events at the end like.
+    //   (PUSH NodeTypeHint) ":" (PUSH Identifier) "MyNodeType" POP POP ")" POP
+    // The ")" might be a "}" or a "{" for a template decl.
+    SList<Event> ls = output;
+    while (ls != null && ls.x.getKind() == Event.Kind.POSITION_MARK) {
+      ls = ls.prev;
+    }
+    if (ls == null || ls.x.getKind() != Event.Kind.POP) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.TOKEN) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.POP) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.POP) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.CONTENT) {
+      return Optional.absent();
+    }
+    String content = ls.x.getContent();
+    NodeType nodeType;
+    try {
+      nodeType = NodeType.valueOf(content);
+    } catch (@SuppressWarnings("unused") IllegalArgumentException ex) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.PUSH
+        || ls.x.getNodeType() != NodeType.Identifier) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.TOKEN) {
+      return Optional.absent();
+    }
+    ls = stepBack(ls);
+    if (ls == null || ls.x.getKind() != Event.Kind.PUSH
+        || ls.x.getNodeType() != NodeType.NodeTypeHint) {
+      return Optional.absent();
+    }
+    return Optional.of(nodeType);
   }
 
   private boolean shouldHandleTemplateDirective(ParseState state) {
@@ -821,7 +860,8 @@ final class Reference extends PTParSer {
             --popDepth;
             if (popDepth == 0) {
               Preconditions.checkState(
-                  nodeTypeToPushback == e.getNodeType());
+                  nodeTypeToPushback == e.getNodeType()
+                  || e.getNodeType() == NodeType.TemplateInterpolation);
               SList<Event> pushedBack = out.prev;
               if (DEBUG_LR) {
                 System.err.println(indent() + "Pushback = " + pushback);

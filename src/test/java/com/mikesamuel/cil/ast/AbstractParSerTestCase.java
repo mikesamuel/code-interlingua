@@ -81,7 +81,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
             ImmutableList<Event> want = ImmutableList.copyOf(expected);
             ImmutableList<Event> got = filterEvents(
                 relevant,
-                Templates.generalize(
+                Templates.postprocess(
                     afterParse.input,
                     SList.forwardIterable(afterParse.output)));
             if (!want.equals(got)) {
@@ -106,7 +106,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
           @Override
           public boolean apply(ParseState afterParse) {
-            ImmutableList<Event> generalized = Templates.generalize(
+            ImmutableList<Event> generalized = Templates.postprocess(
                 afterParse.input,
                 SList.forwardIterable(afterParse.output));
             BaseNode root = Trees.of(afterParse.input, generalized);
@@ -202,7 +202,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
-        ImmutableList<Event> events = Templates.generalize(
+        ImmutableList<Event> events = Templates.postprocess(
             afterParse.input,
             SList.forwardIterable(afterParse.output));
         for (Event e : events) {

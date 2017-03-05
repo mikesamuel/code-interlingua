@@ -1019,16 +1019,16 @@ ConstantExpression:
 (chapter=Template)
 TemplateDirectives: @nonstandard @toplevel
     TemplateDirective {TemplateDirective}
-TemplateDirective: @nonstandard
+TemplateDirective: @nonstandard @templateinstr
     "%%" "{" ["let" TemplateLocal {"," TemplateLocal} ";"]   (@name=BlockStart)    @templateStart
-    "%%" "template" Identifier "(" [TemplateFormals] ")" "{" (@name=TemplateStart) @templateStart
+    "%%" "template" TemplateDecl TemplateBody "}"            (@name=TemplateDecl)
     "%%" "if" "(" Expression ")" "{"                         (@name=IfStart)       @templateStart
     "%%" "} else" ["if" "(" Expression ")"] "{"              (@name=Else)          @templateEnd @templateStart
     "%%" "for" "(" Identifier ":" Expression ")" "{"         (@name=LoopStart)     @templateStart
     "%%" "}"                                                 (@name=End)           @templateEnd
-TemplateInterpolation: @nonstandard @toplevel
-    "(%" [NodeTypeHint] TemplateComprehension ")"
-    "{%" [NodeTypeHint] TemplateComprehension "}"
+TemplateInterpolation: @nonstandard @toplevel @templateinstr
+    "(%" TemplateComprehension [NodeTypeHint] ")"
+    "{%" TemplateComprehension [NodeTypeHint] "}"
 TemplateComprehension: @nonstandard
     Expression {"," Expression} [TemplateLoop] [TemplateCondition]
 TemplateLoop: @nonstandard
@@ -1039,9 +1039,13 @@ TemplateLocal: @nonstandard
     !(Identifier Dims) VariableDeclarator
 TemplateFormals: @nonstandard
     LocalName {"," LocalName}
+TemplateDecl: @nonstandard
+    Identifier "(" [TemplateFormals] ")" NodeTypeHint "{"    (@name=Declaration)
+TemplateBody: @nonstandard
+    any   // Faked based on the node type hint
 NodeTypeHint: @nonstandard
 // An @nointerp production can be interpolated into with an explicit type hint.
-    Identifier ":"
+    ":" Identifier
 
 // A parse tree has to have a single root.  When parsing a compilation unit that is
 // within a block template, we start with a compilation unit, and after the

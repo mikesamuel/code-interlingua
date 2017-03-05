@@ -156,7 +156,7 @@ public class TemplateBundle {
       case SUCCESS: {
         ParseState afterParse = result.next();
         SList<Event> parseEvents = afterParse.output;
-        ImmutableList<Event> fixedEvents = Templates.generalize(
+        ImmutableList<Event> fixedEvents = Templates.postprocess(
             inp, SList.forwardIterable(parseEvents));
         BaseNode root = Trees.of(inp, fixedEvents);
         fileNodes.add((FileNode) root);
@@ -187,14 +187,17 @@ public class TemplateBundle {
     for (FileNode fn : processed) {
       if (optsIntoTemplateProcessing(fn)) {
         apply(fn, inputObj, passes, b);
-      } else {
+      } else if (fn instanceof CompilationUnitNode) {
         LogUtils.log(
             logger, Level.FINE, fn,
             "Skipping template processing for file that does not opt-in.",
             null);
-        // TODO: better error when fn contains template instructions or is
-        // a pseudo root.
         b.add((CompilationUnitNode) fn);
+      } else {
+        LogUtils.log(
+            logger, Level.SEVERE,
+            fn, fn.getVariant() + " does not opt into template processing",
+            null);
       }
     }
     return b.build();
@@ -355,9 +358,8 @@ public class TemplateBundle {
             case LoopStart:
               return ProcessingStatus.CONTINUE;
 
-            case TemplateStart:
-              templateScope.elide = true;
-              return ProcessingStatus.REMOVE;
+            case TemplateDecl:
+              throw new AssertionError("TODO");
           }
           throw new AssertionError(d);
         }
@@ -512,7 +514,7 @@ public class TemplateBundle {
               this.templateScopes.removeLast();
               return ProcessingStatus.replace(replacements.build());
             }
-            case TemplateStart:
+            case TemplateDecl:
               // TODO: store in scope
               return ProcessingStatus.REMOVE;
           }
