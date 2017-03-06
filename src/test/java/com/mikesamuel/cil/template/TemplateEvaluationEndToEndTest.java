@@ -121,7 +121,7 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       TemplateBundle bundle = new TemplateBundle(logger);
       for (File javaFile : javaFiles) {
         Input inp = Input.builder()
-            .source(javaFile.getName())
+            .source(testRoot.getName() + "/" + javaFile.getName())
             .code(Files.toString(javaFile, UTF_8))
             .allowNonStandardProductions(true)
             .build();
