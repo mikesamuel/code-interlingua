@@ -2350,6 +2350,10 @@ final class TypingPass extends AbstractRewritingPass {
       System.err.println("typeArguments=" + typeArguments);
       System.err.println("actualTypes=" + actualTypes);
     }
+    if (containingTypes.isEmpty()) {
+      error(sourceNode, "no containing type for " + methodName);
+      return Optional.absent();
+    }
     Name sourceType = containingTypes.peekLast().canonName;
 
     ImmutableList<ParameterizedMember<CallableInfo>> methods = findMembers(
