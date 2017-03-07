@@ -65,7 +65,12 @@ public interface InterpretationContext<VALUE> {
   /** The type of {@code this}. */
   TypeInfo getThisType();
 
-  /** If className is {@code Foo} then the value of {@code Foo.this}. */
+  /**
+   * If className is {@code Foo} then the value of {@code Foo.this}.
+   *
+   * @return an error value if there is no this value for the given type in
+   *   scope.
+   */
   VALUE getThisValue(@Nullable Name className);
 
   /** @see #getThisValue */

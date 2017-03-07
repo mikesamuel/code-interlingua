@@ -4,7 +4,6 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -868,7 +867,7 @@ public final class Interpreter<VALUE> {
           case Literal:
             break;
           case MethodInvocation:
-            break;
+            return invokeMethod(Optional.absent(), e, locals);
           case Parenthesized:
             break;
           case QuotedName:
@@ -878,8 +877,10 @@ public final class Interpreter<VALUE> {
           case StaticReference:
             break;
           case Super:
+            // TODO
             break;
           case This:
+            // TODO
             break;
           case UnqualifiedClassInstanceCreationExpression:
             break;
@@ -1059,73 +1060,7 @@ public final class Interpreter<VALUE> {
             break;
           case MethodInvocation: {
             BaseNode objNode = e.getChild(0);
-            MethodNameNode name = e.firstChildWithType(MethodNameNode.class);
-            if (name == null) {
-              error(e, "Call missing method name");
-              return errorCompletion;
-            }
-            IdentifierNode identNode = name.firstChildWithType(
-                IdentifierNode.class);
-            if (identNode == null) {
-              error(e, "Call missing method name");
-              return errorCompletion;
-            }
-            String ident = identNode.getValue();
-            @Nullable ArgumentListNode actuals = e.firstChildWithType(
-                ArgumentListNode.class);
-            TypeSpecification declType = name.getMethodDeclaringType();
-            String descriptor = name.getMethodDescriptor();
-            Optional<CallableInfo> infoOpt;
-            boolean isStatic;
-            if (declType == null || descriptor == null) {
-              infoOpt = Optional.absent();
-              isStatic = false;
-            } else {
-              infoOpt = callableForType(declType, ident, descriptor);
-              if (!infoOpt.isPresent()) {
-                error(name,
-                    "Failed to resolve " + declType + "." + ident + descriptor);
-                return errorCompletion;
-              }
-
-              isStatic = Modifier.isStatic(infoOpt.get().modifiers);
-            }
-
-            Completion<VALUE> objResult = isStatic
-                ? null
-                : interpret(objNode, locals, null);
-
-            if (objResult != null
-                && !context.completedNormallyWithoutError(objResult)) {
-              return objResult;
-            }
-
-            List<VALUE> actualValues = Lists.newArrayList();
-            if (actuals != null) {
-              for (BaseNode child : actuals.getChildren()) {
-                Completion<VALUE> actualResult = interpret(child, locals, null);
-                if (context.completedNormallyWithoutError(actualResult)) {
-                  actualValues.add(actualResult.value);
-                } else {
-                  return errorCompletion;
-                }
-              }
-            }
-
-            if (infoOpt.isPresent()) {
-              CallableInfo info = infoOpt.get();
-              if (isStatic) {
-                return normal(context.invokeStatic(info, actualValues));
-              } else {
-                return normal(context.invokeVirtual(
-                    info, Preconditions.checkNotNull(objResult).value,
-                    actualValues));
-              }
-            } else {
-              return normal(context.invokeDynamic(
-                  ident, Preconditions.checkNotNull(objResult).value,
-                  actualValues));
-            }
+            return invokeMethod(Optional.of(objNode), e, locals);
           }
           case MethodReference:
             // TODO
@@ -1361,7 +1296,7 @@ public final class Interpreter<VALUE> {
         break;
       case TemplateCondition:
         break;
-      case TemplateDecl:
+      case TemplateHeader:
         break;
       case TemplateDirective:
         break;
@@ -1681,7 +1616,8 @@ public final class Interpreter<VALUE> {
     return errorCompletion;
   }
 
-  private Optional<CallableInfo> findMethod(TypeInfo ti, String name, String desc) {
+  private Optional<CallableInfo> findMethod(
+      TypeInfo ti, String name, String desc) {
     TypeInfoResolver r = context.getTypePool().r;
     Optional<MemberInfo> mi = ti.memberMatching(
         r,
@@ -1706,6 +1642,101 @@ public final class Interpreter<VALUE> {
     return mi.isPresent()
         ? Optional.of((CallableInfo) mi.get())
             : Optional.absent();
+  }
+
+  private Completion<VALUE> invokeMethod(
+      Optional<BaseNode> objNodeOpt, BaseNode call, Locals<VALUE> locals) {
+    MethodNameNode name = call.firstChildWithType(MethodNameNode.class);
+    if (name == null) {
+      error(call, "Call missing method name");
+      return errorCompletion;
+    }
+    IdentifierNode identNode = name.firstChildWithType(IdentifierNode.class);
+    if (identNode == null) {
+      error(call, "Call missing method name");
+      return errorCompletion;
+    }
+    String ident = identNode.getValue();
+    @Nullable ArgumentListNode actuals = call.firstChildWithType(
+        ArgumentListNode.class);
+    TypeSpecification declType = name.getMethodDeclaringType();
+    String descriptor = name.getMethodDescriptor();
+    Optional<CallableInfo> infoOpt;
+    boolean isStatic;
+    if (declType == null || descriptor == null) {
+      infoOpt = Optional.absent();
+      isStatic = false;
+    } else {
+      infoOpt = callableForType(declType, ident, descriptor);
+      if (!infoOpt.isPresent()) {
+        error(name,
+              "Failed to resolve " + declType + "." + ident + descriptor);
+        return errorCompletion;
+      }
+      isStatic = Modifier.isStatic(infoOpt.get().modifiers);
+    }
+
+    VALUE methodReceiver;
+    if (isStatic) {
+      methodReceiver = context.nullValue();
+    } else if (objNodeOpt.isPresent()) {
+      Completion<VALUE> objResult = interpret(objNodeOpt.get(), locals, null);
+      if (!context.completedNormallyWithoutError(objResult)) {
+        return objResult;
+      }
+      methodReceiver = objResult.value;
+    } else {
+      methodReceiver = context.errorValue();
+      if (infoOpt.isPresent()) {
+        // Bare method invocation.
+        // Look for an appropriate this type.
+        methodReceiver = context.getThisValue(
+            infoOpt.get().canonName.getContainingClass());
+        // TODO: should we really be looking for the innermost subclass of
+        // infoOpt.get() in scope?
+      }
+      if (context.isErrorValue(methodReceiver)) {
+        TypeInfo ti = context.getThisType();
+        if (ti != null) {
+          methodReceiver = context.getThisValue(ti.canonName);
+        }
+      }
+      if (context.isErrorValue(methodReceiver)) {
+        if (infoOpt.isPresent()) {
+          error(
+              call, "Cannot find message receiver for " + infoOpt.get());
+          return errorCompletion;
+        } else {
+          // Let the dynamic invocation handler in context handle any error.
+          methodReceiver = context.nullValue();
+        }
+      }
+    }
+
+    List<VALUE> actualValues = Lists.newArrayList();
+    if (actuals != null) {
+      for (BaseNode child : actuals.getChildren()) {
+        Completion<VALUE> actualResult = interpret(child, locals, null);
+        if (context.completedNormallyWithoutError(actualResult)) {
+          actualValues.add(actualResult.value);
+        } else {
+          return errorCompletion;
+        }
+      }
+    }
+
+    if (infoOpt.isPresent()) {
+      CallableInfo info = infoOpt.get();
+      if (isStatic) {
+        return normal(context.invokeStatic(info, actualValues));
+      } else {
+        return normal(context.invokeVirtual(
+            info, methodReceiver, actualValues));
+      }
+    } else {
+      return normal(context.invokeDynamic(
+          ident, methodReceiver, actualValues));
+    }
   }
 
   private Completion<VALUE> interpretLoop(
