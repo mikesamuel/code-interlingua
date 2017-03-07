@@ -378,7 +378,7 @@ final class Reference extends PTParSer {
             failureExclusionsTriggered.addAll(
                 nonStandardResult.lrExclusionsTriggered);
             ParseState afterInterpolation = nonStandardResult.next();
-            Optional<NodeType> nodeTypeHint = nodeTypeHintAtEndOf(
+            Optional<NodeType> nodeTypeHint = lookbackForNodeTypeHint(
                 afterInterpolation.output);
             if (nodeTypeHint.isPresent()
                 ? nodeTypeHint.get() == nodeType
@@ -420,31 +420,34 @@ final class Reference extends PTParSer {
     return ls;
   }
 
-  static Optional<NodeType> nodeTypeHintAtEndOf(SList<Event> output) {
+  static Optional<NodeType> lookbackForNodeTypeHint(SList<Event> output) {
     // Expect a sequence of events at the end like.
-    //   (PUSH NodeTypeHint) ":" (PUSH Identifier) "MyNodeType" POP POP ")" POP
-    // The ")" might be a "}" or a "{" for a template decl.
+    //   (PUSH NodeTypeHint) ":" (PUSH Identifier) "MyNodeType" POP POP
     SList<Event> ls = output;
-    while (ls != null && ls.x.getKind() == Event.Kind.POSITION_MARK) {
-      ls = ls.prev;
+    // First we skip back over any pushes and tokens.
+    while (ls != null) {
+      switch (ls.x.getKind()) {
+        case POSITION_MARK:
+        case PUSH:
+        case TOKEN:
+          ls = ls.prev;
+          continue;
+        default:
+          break;
+      }
+      break;
     }
-    if (ls == null || ls.x.getKind() != Event.Kind.POP) {
-      return Optional.absent();
+    // Now we should see a run of pops of at least length 2.
+    int nPopsSeen = 0;
+    while (ls != null) {
+      ls = stepBack(ls);
+      if (ls != null && ls.x.getKind() == Event.Kind.POP) {
+        ++nPopsSeen;
+      } else {
+        break;
+      }
     }
-    ls = stepBack(ls);
-    if (ls == null || ls.x.getKind() != Event.Kind.TOKEN) {
-      return Optional.absent();
-    }
-    ls = stepBack(ls);
-    if (ls == null || ls.x.getKind() != Event.Kind.POP) {
-      return Optional.absent();
-    }
-    ls = stepBack(ls);
-    if (ls == null || ls.x.getKind() != Event.Kind.POP) {
-      return Optional.absent();
-    }
-    ls = stepBack(ls);
-    if (ls == null || ls.x.getKind() != Event.Kind.CONTENT) {
+    if (ls == null || nPopsSeen < 2 || ls.x.getKind() != Event.Kind.CONTENT) {
       return Optional.absent();
     }
     String content = ls.x.getContent();

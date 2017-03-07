@@ -180,8 +180,8 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
 
         "TemplatePseudoRoot.CompilationUnit",
         "  TemplateDirectives.TemplateDirectiveTemplateDirective",
-        "    TemplateDirective.TemplateDecl",
-        "      TemplateDecl.Declaration",
+        "    TemplateDirective.Function",
+        "      TemplateHeader.Declaration",
         "        Identifier.Builtin foo",
         "        TemplateFormals.LocalNameComLocalName",
         "          LocalName.Identifier",

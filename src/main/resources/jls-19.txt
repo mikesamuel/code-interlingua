@@ -1021,7 +1021,7 @@ TemplateDirectives: @nonstandard @toplevel
     TemplateDirective {TemplateDirective}
 TemplateDirective: @nonstandard @templateinstr
     "%%" "{" ["let" TemplateLocal {"," TemplateLocal} ";"]   (@name=BlockStart)    @templateStart
-    "%%" "template" TemplateDecl TemplateBody "}"            (@name=TemplateDecl)
+    "%%" "template" TemplateHeader "{" TemplateBody "}"      (@name=Function)
     "%%" "if" "(" Expression ")" "{"                         (@name=IfStart)       @templateStart
     "%%" "} else" ["if" "(" Expression ")"] "{"              (@name=Else)          @templateEnd @templateStart
     "%%" "for" "(" Identifier ":" Expression ")" "{"         (@name=LoopStart)     @templateStart
@@ -1039,8 +1039,8 @@ TemplateLocal: @nonstandard
     !(Identifier Dims) VariableDeclarator
 TemplateFormals: @nonstandard
     LocalName {"," LocalName}
-TemplateDecl: @nonstandard
-    Identifier "(" [TemplateFormals] ")" NodeTypeHint "{"    (@name=Declaration)
+TemplateHeader: @nonstandard
+    Identifier "(" [TemplateFormals] ")" NodeTypeHint        (@name=Declaration)
 TemplateBody: @nonstandard
     any   // Faked based on the node type hint
 NodeTypeHint: @nonstandard

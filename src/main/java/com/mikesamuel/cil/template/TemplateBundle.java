@@ -6,6 +6,7 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -19,6 +20,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import com.mikesamuel.cil.HereBe;
@@ -30,10 +32,13 @@ import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeHintNode;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
+import com.mikesamuel.cil.ast.TemplateBodyNode;
 import com.mikesamuel.cil.ast.TemplateComprehensionNode;
 import com.mikesamuel.cil.ast.TemplateConditionNode;
 import com.mikesamuel.cil.ast.TemplateDirectiveNode;
 import com.mikesamuel.cil.ast.TemplateDirectivesNode;
+import com.mikesamuel.cil.ast.TemplateFormalsNode;
+import com.mikesamuel.cil.ast.TemplateHeaderNode;
 import com.mikesamuel.cil.ast.TemplateInterpolationNode;
 import com.mikesamuel.cil.ast.TemplateLocalNode;
 import com.mikesamuel.cil.ast.TemplateLoopNode;
@@ -63,6 +68,7 @@ import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SList;
+import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.ptree.PTree;
 import com.mikesamuel.cil.util.LogUtils;
 
@@ -130,6 +136,13 @@ public class TemplateBundle {
   }
 
   /**
+   * The logger that receives messages about
+   */
+  public Logger getLogger() {
+    return logger;
+  }
+
+  /**
    * Adds a compilation unit to the bundle.
    */
   public TemplateBundle addCompilationUnit(Input inp) {
@@ -181,6 +194,7 @@ public class TemplateBundle {
     CommonPassRunner passes = new CommonPassRunner(logger);
     passes.setTypeInfoResolver(
         TypeInfoResolver.Resolvers.forClassLoader(getLoader()));
+    passes.setErrorLevel(Level.WARNING);
     ImmutableList<FileNode> processed = passes.run(fileNodes.build());
 
     ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
@@ -244,6 +258,7 @@ public class TemplateBundle {
 
     static final class TemplateScope {
       final Locals<Object> locals;
+      final Map<String, TemplateInfo> templateInfo = Maps.newLinkedHashMap();
       boolean elide;
 
       TemplateScope(Locals<Object> locals) {
@@ -358,8 +373,13 @@ public class TemplateBundle {
             case LoopStart:
               return ProcessingStatus.CONTINUE;
 
-            case TemplateDecl:
-              throw new AssertionError("TODO");
+            case Function: {
+              TemplateInfo templateInfo = TemplateInfo.from(logger, d);
+              if (templateInfo != null) {
+                templateScope.templateInfo.put(templateInfo.name, templateInfo);
+              }
+              return ProcessingStatus.REMOVE;
+            }
           }
           throw new AssertionError(d);
         }
@@ -467,6 +487,9 @@ public class TemplateBundle {
               return ProcessingStatus.REMOVE;
             case End:
               return ProcessingStatus.REMOVE;
+            case Function:
+              // TODO: store in scope
+              return ProcessingStatus.REMOVE;
             case LoopStart: {
               IdentifierNode elementNameNode =
                   node.firstChildWithType(IdentifierNode.class);
@@ -514,9 +537,6 @@ public class TemplateBundle {
               this.templateScopes.removeLast();
               return ProcessingStatus.replace(replacements.build());
             }
-            case TemplateDecl:
-              // TODO: store in scope
-              return ProcessingStatus.REMOVE;
           }
           throw new AssertionError(v);
         }
@@ -841,5 +861,62 @@ public class TemplateBundle {
     }
     throw new AssertionError(
         "Unclosed directive nStart=" + nStarts + " in " + body.build());
+  }
+}
+
+final class TemplateInfo {
+  final SourcePosition pos;
+  final String name;
+  final @Nullable TemplateFormalsNode formals;
+  final @Nullable NodeTypeHintNode nodeTypeHint;
+  final TemplateBodyNode body;
+
+  TemplateInfo(
+      SourcePosition pos,
+      String name,
+      @Nullable TemplateFormalsNode formals,
+      @Nullable NodeTypeHintNode nodeTypeHint,
+      TemplateBodyNode body) {
+    this.pos = pos;
+    this.name = name;
+    this.formals = formals;
+    this.nodeTypeHint = nodeTypeHint;
+    this.body = body;
+  }
+
+  static TemplateInfo from(Logger logger, TemplateDirectiveNode d) {
+    TemplateHeaderNode hdr = d.firstChildWithType(TemplateHeaderNode.class);
+    if (hdr == null) {
+      LogUtils.log(
+          logger, Level.SEVERE, d, "Missing header for template function",
+          null);
+      return null;
+    }
+    IdentifierNode ident = hdr.firstChildWithType(IdentifierNode.class);
+    TemplateFormalsNode formals =
+        hdr.firstChildWithType(TemplateFormalsNode.class);
+    NodeTypeHintNode nodeTypeHint =
+        hdr.firstChildWithType(NodeTypeHintNode.class);
+    TemplateBodyNode body = d.firstChildWithType(TemplateBodyNode.class);
+    if (ident == null) {
+      LogUtils.log(
+          logger, Level.SEVERE, d, "Missing name for template function",
+          null);
+      return null;
+    } else if (body == null) {
+      LogUtils.log(
+          logger, Level.SEVERE, d, "Missing body for template function",
+          null);
+      return null;
+    } else if (nodeTypeHint == null) {
+      LogUtils.log(
+          logger, Level.SEVERE, d, "Missing node type for template declaration",
+          null);
+      return null;
+    } else {
+      return new TemplateInfo(
+          d.getSourcePosition(), ident.getValue(),
+          formals, nodeTypeHint, body);
+    }
   }
 }

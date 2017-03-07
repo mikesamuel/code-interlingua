@@ -744,9 +744,8 @@ public final class Tokens {
     public ParseResult parse(
         ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
       // TemplateBody is highly context dependent, so do special handling here.
-      Optional<NodeType> nodeTypeHint = state.output != null
-          ? Reference.nodeTypeHintAtEndOf(state.output.prev)  // Skip push
-          : Optional.absent();
+      Optional<NodeType> nodeTypeHint = Reference.lookbackForNodeTypeHint(
+          state.output.prev.prev);
       if (nodeTypeHint.isPresent()) {
         NodeType bodyType = nodeTypeHint.get();
         if (bodyType != NodeType.TemplateBody) {  // No inf. recurse
@@ -759,9 +758,8 @@ public final class Tokens {
     @Override
     public Optional<SerialState> unparse(
         SerialState state, SerialErrorReceiver err) {
-      Optional<NodeType> nodeTypeHint = state.output != null
-          ? Reference.nodeTypeHintAtEndOf(state.output.prev)  // Skip push
-          : Optional.absent();
+      Optional<NodeType> nodeTypeHint = Reference.lookbackForNodeTypeHint(
+          state.output.prev.prev);
       if (nodeTypeHint.isPresent()) {
         return nodeTypeHint.get().getParSer().unparse(state, err);
       }

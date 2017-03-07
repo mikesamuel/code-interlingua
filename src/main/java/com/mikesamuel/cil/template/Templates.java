@@ -818,7 +818,7 @@ public final class Templates {
           top = newTop;
           continue hoist_loop;
         }
-        if (v == TemplateDirectiveNode.Variant.TemplateDecl) {
+        if (v == TemplateDirectiveNode.Variant.Function) {
           int depth = 1;
           int end = i + 1;
           for (; ; ++end) {
