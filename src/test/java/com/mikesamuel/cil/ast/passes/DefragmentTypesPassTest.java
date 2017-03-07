@@ -154,11 +154,11 @@ public final class DefragmentTypesPassTest extends TestCase {
     assertRewritten(
         "class C { void f()[] {} }",
         "class C { void f()[] {} }",
-        //23456789012345678901234567890
-        //        1         2
+        //123456789012345678901234567890
+        //         1         2
         //                 ^^
 
-        "//testNoReturnType:2+19-21: "
+        "//testNoReturnType:2+18-20: "
         + "Floating array dimensions [] could not be reattached to a type"
         );
   }

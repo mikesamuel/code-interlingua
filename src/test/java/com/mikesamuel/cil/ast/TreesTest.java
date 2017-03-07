@@ -36,9 +36,9 @@ public final class TreesTest extends TestCase {
 
     assertEquals("test-file", got.getSourcePosition().getSource());
     assertEquals(1, got.getSourcePosition().startLineInFile());
-    assertEquals(3, got.getSourcePosition().startCharInLine());
+    assertEquals(2, got.getSourcePosition().startCharInLine());
     assertEquals(1, got.getSourcePosition().endLineInFile());
-    assertEquals(6, got.getSourcePosition().endCharInLine());
+    assertEquals(5, got.getSourcePosition().endCharInLine());
   }
 
   @Test
@@ -90,23 +90,23 @@ public final class TreesTest extends TestCase {
     //
     // Line       1111111111111111111 22222222222222222222222
     //
-    // CharInLine            11111111          11111111112222
-    //            012345678 901234567 12345678901234567890123
+    // CharInLine             1111111           11111111112222
+    //             01234567 890123456 012345678901234567890123
 
     String golden = Joiner.on('\n').join(
-        "FieldDeclaration.Declaration : test:1+1 - 2+23",
-        "  JavaDocComment.Builtin /** In \u2124 */ : test:1+1-17",
-        "  Modifier.Public : test:2+1-7",
-        "  Modifier.Final : test:2+8-13",
-        "  UnannType.NotAtType : test:2+14-20",
-        "    Type.PrimitiveType : test:2+14-20",
-        "      PrimitiveType.AnnotationNumericType : test:2+14-20",
-        "        NumericType.FloatingPointType : test:2+14-20",
-        "          FloatingPointType.Double : test:2+14-20",
-        "  VariableDeclaratorList.VariableDeclaratorComVariableDeclarator : test:2+21-22",
-        "    VariableDeclarator.VariableDeclaratorIdEqVariableInitializer : test:2+21-22",
-        "      VariableDeclaratorId.IdentifierDims : test:2+21-22",
-        "        Identifier.Builtin x : test:2+21-22"
+        "FieldDeclaration.Declaration : test:1+0 - 2+22",
+        "  JavaDocComment.Builtin /** In \u2124 */ : test:1+0-16",
+        "  Modifier.Public : test:2+0-6",
+        "  Modifier.Final : test:2+7-12",
+        "  UnannType.NotAtType : test:2+13-19",
+        "    Type.PrimitiveType : test:2+13-19",
+        "      PrimitiveType.AnnotationNumericType : test:2+13-19",
+        "        NumericType.FloatingPointType : test:2+13-19",
+        "          FloatingPointType.Double : test:2+13-19",
+        "  VariableDeclaratorList.VariableDeclaratorComVariableDeclarator : test:2+20-21",
+        "    VariableDeclarator.VariableDeclaratorIdEqVariableInitializer : test:2+20-21",
+        "      VariableDeclaratorId.IdentifierDims : test:2+20-21",
+        "        Identifier.Builtin x : test:2+20-21"
         );
 
 

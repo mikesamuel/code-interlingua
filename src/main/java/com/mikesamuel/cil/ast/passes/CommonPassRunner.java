@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.google.common.base.Preconditions;
@@ -27,6 +28,7 @@ import com.mikesamuel.cil.ptree.PTree;
 public final class CommonPassRunner {
   /** Receives warnings about passes. */
   public final Logger logger;
+  private Level errorLevel = Level.SEVERE;
 
   private boolean useLongNames;
   private boolean injectCasts;
@@ -43,7 +45,7 @@ public final class CommonPassRunner {
    */
   public ImmutableList<FileNode> run(Iterable<? extends FileNode> unprocessed) {
     ImmutableList<FileNode> cus = ImmutableList.copyOf(unprocessed);
-    cus = new DefragmentTypesPass(logger).run(cus);
+    cus = new DefragmentTypesPass(logger).setErrorLevel(errorLevel).run(cus);
 
     DeclarationPass dp = new DeclarationPass(logger) {
       @SuppressWarnings("synthetic-access")
@@ -56,23 +58,28 @@ public final class CommonPassRunner {
         }
       }
     };
+    dp.setErrorLevel(errorLevel);
     typeInfoResolver = dp.run(cus);
 
     ExpressionScopePass scopePass = new ExpressionScopePass(
         typeInfoResolver, logger);
+    scopePass.setErrorLevel(errorLevel);
     scopePass.run(cus);
 
     DisambiguationPass disambigPass = new DisambiguationPass(
         typeInfoResolver, logger, useLongNames);
+    disambigPass.setErrorLevel(errorLevel);
     cus = disambigPass.run(cus);
 
     // TODO: should the type pool be linked to any previous type pool?
     typePool = new TypePool(typeInfoResolver);
     ClassMemberPass classMemberPass = new ClassMemberPass(
         logger, typePool);
+    classMemberPass.setErrorLevel(errorLevel);
     classMemberPass.run(cus);
 
     TypingPass tp = new TypingPass(logger, typePool, injectCasts);
+    tp.setErrorLevel(errorLevel);
     return tp.run(cus);
   }
 
@@ -83,8 +90,8 @@ public final class CommonPassRunner {
    * since that way only one type pool is allocated, and each compilation unit
    * can refer to types declared in the others.
    */
-  public FileNode run(CompilationUnitNode cu) {
-    ImmutableList<FileNode> after = run(ImmutableList.of(cu));
+  public FileNode run(FileNode fn) {
+    ImmutableList<FileNode> after = run(ImmutableList.of(fn));
     Preconditions.checkState(after.size() == 1);
     return after.get(0);
   }
@@ -152,6 +159,20 @@ public final class CommonPassRunner {
   /** The logger that receives errors and warnings. */
   public Logger getLogger() {
     return logger;
+  }
+
+  /**
+   * The log level used for error messages noted by this pass.
+   */
+  public Level getErrorLevel() {
+    return errorLevel;
+  }
+
+  /**
+   * Sets the log level used for error messages noted by this pass.
+   */
+  public void setErrorLevel(Level newErrorLevel) {
+    this.errorLevel = Preconditions.checkNotNull(newErrorLevel);
   }
 
 

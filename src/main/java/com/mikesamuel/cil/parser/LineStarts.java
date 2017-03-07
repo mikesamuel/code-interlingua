@@ -62,11 +62,11 @@ public final class LineStarts {
   /**
    * The column on which the character at the given index occurs.
    *
-   * @return one-indexed because text editors typically treat the start of a
+   * @return zero-indexed because text editors typically treat the start of a
    *     file as position 1:1.
    */
   public int charInLine(int charInFile) {
     int ln = getZeroIndexedLineNumber(charInFile);
-    return 1 + (charInFile - startsOfLines[ln]);
+    return 0 + (charInFile - startsOfLines[ln]);
   }
 }

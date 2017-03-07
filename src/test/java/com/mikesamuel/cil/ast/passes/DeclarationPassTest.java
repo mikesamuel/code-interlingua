@@ -336,8 +336,8 @@ public class DeclarationPassTest extends TestCase {
             "}",
           },
         },
-        "//Foo.java:5+3-17: Duplicate definition for /foo/C$I"
-        + " originally defined at //Foo.java:4+3-17");
+        "//Foo.java:5+2-16: Duplicate definition for /foo/C$I"
+        + " originally defined at //Foo.java:4+2-16");
   }
 
   @Test

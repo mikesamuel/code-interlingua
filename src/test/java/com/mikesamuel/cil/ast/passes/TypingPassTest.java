@@ -1314,12 +1314,12 @@ public final class TypingPassTest extends TestCase {
           "d >>> i : /error/ErrorType.TYPE",
         },
         null,
-        "//C:25+7-13: Expected integral shift operands not float * float",
-        "//C:26+7-13: Expected integral shift operands not double * double",
-        "//C:32+7-14: Expected integral shift operands not int * float",
-        "//C:33+7-13: Expected integral shift operands not int * double",
-        "//C:39+7-13: Expected integral shift operands not float * int",
-        "//C:40+7-14: Expected integral shift operands not double * int");
+        "//C:25+6-12: Expected integral shift operands not float * float",
+        "//C:26+6-12: Expected integral shift operands not double * double",
+        "//C:32+6-13: Expected integral shift operands not int * float",
+        "//C:33+6-12: Expected integral shift operands not int * double",
+        "//C:39+6-12: Expected integral shift operands not float * int",
+        "//C:40+6-13: Expected integral shift operands not double * int");
   }
 
   @Test
@@ -1471,15 +1471,15 @@ public final class TypingPassTest extends TestCase {
         null,
         null,
         null,
-        "//C:45+12-13: Cannot unbox /java/lang/Object",
-        "//C:46+12-16: Invalid operand of type <null>",
-        "//C:54+7-8: Cannot unbox /java/lang/Object",
-        "//C:55+7-11: Invalid operand of type <null>",
-        "//C:57+7-11: Invalid operand of type <null>",
-        "//C:58+12-13: Cannot unbox /java/lang/Object",
-        "//C:65+7-13: Incompatible types for comparison"
+        "//C:45+11-12: Cannot unbox /java/lang/Object",
+        "//C:46+11-15: Invalid operand of type <null>",
+        "//C:54+6-7: Cannot unbox /java/lang/Object",
+        "//C:55+6-10: Invalid operand of type <null>",
+        "//C:57+6-10: Invalid operand of type <null>",
+        "//C:58+11-12: Cannot unbox /java/lang/Object",
+        "//C:65+6-12: Incompatible types for comparison"
         + " /java/lang/Integer * /java/lang/Boolean",
-        "//C:66+7-13: Incompatible types for comparison boolean * int");
+        "//C:66+6-12: Incompatible types for comparison boolean * int");
   }
 
   @Test
@@ -1746,13 +1746,13 @@ public final class TypingPassTest extends TestCase {
         null,
         null,
         null,
-        "//C:23+5-10: Incompatible types for assignment: /java/lang/String * float",
-        "//C:25+5-6: Cast needed before assigning byte * /java/lang/Long -> long -> byte",
-        "//C:27+5-6: Cannot unbox /java/lang/String",
-        "//C:30+5-6: Cast needed before assigning short * int -> int -> short",
-        "//C:31+5-6: Cast needed before assigning char * int -> int -> char",
-        "//C:36+5-13: Expected integral shift operands not double * int",
-        "//C:40+5-6: Cast needed before assigning /java/lang/Long * byte -> long -> /java/lang/Long",
+        "//C:23+4-9: Incompatible types for assignment: /java/lang/String * float",
+        "//C:25+4-5: Cast needed before assigning byte * /java/lang/Long -> long -> byte",
+        "//C:27+4-5: Cannot unbox /java/lang/String",
+        "//C:30+4-5: Cast needed before assigning short * int -> int -> short",
+        "//C:31+4-5: Cast needed before assigning char * int -> int -> char",
+        "//C:36+4-12: Expected integral shift operands not double * int",
+        "//C:40+4-5: Cast needed before assigning /java/lang/Long * byte -> long -> /java/lang/Long",
         "//C:41+");
   }
 

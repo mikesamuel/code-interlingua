@@ -255,12 +255,12 @@ public final class ExpressionScopePassTest extends TestCase {
             "//test",
             "import static java.lang.System.err.println;",
           },
-          //0         1    ^    2         3    ^    4         5
-          //012345678901234567890123456789012345678901234567890
+          // 0         1   ^     2         3   ^     4         5
+          // 012345678901234567890123456789012345678901234567890
           // For Line position below
         },
-        "//test:2+15-35: Cannot resolve name java.lang.System.err",
-        "//test:2+15-35: Unknown type java.lang.System.err");
+        "//test:2+14-34: Cannot resolve name java.lang.System.err",
+        "//test:2+14-34: Unknown type java.lang.System.err");
   }
 
   @Test
@@ -277,9 +277,6 @@ public final class ExpressionScopePassTest extends TestCase {
             "//test",
             "import static java.lang.Math.random;",
           },
-          //0         1    ^    2         3    ^    4         5
-          //012345678901234567890123456789012345678901234567890
-          // For Line position below
         });
   }
 

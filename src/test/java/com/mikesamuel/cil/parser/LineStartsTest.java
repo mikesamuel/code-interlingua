@@ -21,12 +21,12 @@ public final class LineStartsTest extends TestCase {
         4, 4, 4,
     };
     int[] colNumbers = new int[] {
-        1, 2, 3, 4,
-        1, 2, 3, 4,
-        1,
-        1, 2, 3,
+        0, 1, 2, 3,
+        0, 1, 2, 3,
+        0,
+        0, 1, 2,
         // After end of file
-        4, 5, 6,
+        3, 4, 5,
     };
 
     LineStarts ls = new LineStarts("foo", code);

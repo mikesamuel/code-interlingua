@@ -5,10 +5,11 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Formatter;
 import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 import javax.annotation.Nullable;
 
@@ -30,6 +31,7 @@ import com.mikesamuel.cil.expr.DataBundle;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.Unparse;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
+import com.mikesamuel.cil.util.MaxLogLevel;
 
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
@@ -104,20 +106,24 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
         }
       }
 
+      assertFalse("No inputs", prefixToInput.keySet().isEmpty());
       assertEquals(
           "Need input files for all output files and vice-versa",
           prefixToInput.keySet(), prefixToOutput.keySet());
       {
         Set<String> logPrefixes = Sets.newTreeSet(prefixToLog.keySet());
         logPrefixes.removeAll(prefixToInput.keySet());
-        if (!logPrefixes.isEmpty()) {
-          fail("Log files without inputs: " + logPrefixes);
-        }
+        assertTrue(
+            "Log files without inputs: " + logPrefixes,
+            logPrefixes.isEmpty());
       }
 
       assertFalse(testRoot.getPath(), javaFiles.isEmpty());
 
+      MaxLogLevel maxLogLevel = new MaxLogLevel();
+
       Logger logger = Logger.getAnonymousLogger();
+      logger.addHandler(maxLogLevel);
       TemplateBundle bundle = new TemplateBundle(logger);
       for (File javaFile : javaFiles) {
         Input inp = Input.builder()
@@ -127,9 +133,9 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
             .build();
         bundle.addCompilationUnit(inp);
       }
+      logger.removeHandler(maxLogLevel);
+      assertFalse("fatal errors during parse", maxLogLevel.hasFatalErrors());
 
-      // During test running we redirect all logging to a per-prefix output file
-      logger.setUseParentHandlers(false);
       for (String prefix : prefixToInput.keySet()) {
         File input = prefixToInput.get(prefix);
         File output = prefixToOutput.get(prefix);
@@ -137,12 +143,11 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
 
         String name = testRoot.getName() + "$" + prefix;
         suite.addTest(new EndToEndTestCase(
-            name, prefix, logger, bundle, input, output, log));
+            name, prefix, bundle, input, output, log));
       }
     }
 
     final String prefix;
-    final Logger logger;
     final TemplateBundle bundle;
     final File input;
     final File expectedOutput;
@@ -151,14 +156,12 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
     EndToEndTestCase(
         String name,
         String prefix,
-        Logger logger,
         TemplateBundle bundle,
         File input,
         File output,
         File log) {
       super(name);
       this.prefix = prefix;
-      this.logger = logger;
       this.bundle = bundle;
       this.input = input;
       this.expectedOutput = output;
@@ -174,18 +177,51 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       ImmutableList<CompilationUnitNode> got;
 
       File logOutputFile = File.createTempFile(getName(), ".log");
+      MaxLogLevel maxLogLevel = new MaxLogLevel();
       try (Writer logOut = Files.asCharSink(logOutputFile, UTF_8)
           .openBufferedStream()) {
         Handler logHandler = new Handler() {
-          SimpleFormatter formatter = new SimpleFormatter();
+          Formatter formatter = new Formatter() {
+
+            @Override
+            public String format(LogRecord record) {
+              StringBuilder sb = new StringBuilder();
+              // Output in format
+              //   Class:method:
+              //   LEVEL: message
+              // so that we don't complicate logging output with time-stamps
+              // and stack trace frames which change frequently from build to
+              // build and make it hard to compare log output against expected
+              // log output.
+              String sourceName = record.getSourceClassName();
+              String methodName = record.getSourceMethodName();
+              Level level = record.getLevel();
+              String message = record.getMessage();
+              if (sourceName != null || methodName != null) {
+                sb.append("@ ");
+                if (sourceName != null) {
+                  sb.append(sourceName);
+                }
+                if (methodName != null) {
+                  sb.append('.').append(methodName);
+                }
+                sb.append('\n');
+              }
+              sb.append(level).append(": ").append(message);
+              return sb.toString();
+            }
+
+          };
 
           @Override
           public void publish(LogRecord record) {
-            try {
-              logOut.write(formatter.format(record));
-              logOut.write('\n');
-            } catch (IOException ex) {
-              ex.printStackTrace();
+            if (record.getLevel().intValue() >= Level.SEVERE.intValue()) {
+              try {
+                logOut.write(formatter.format(record));
+                logOut.write('\n');
+              } catch (IOException ex) {
+                ex.printStackTrace();
+              }
             }
           }
 
@@ -208,11 +244,18 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
           }
 
         };
+        logHandler.setLevel(Level.SEVERE);
 
+        Logger logger = bundle.getLogger();
+        // During test running we redirect all logging to an output file
+        logger.setUseParentHandlers(false);
         logger.addHandler(logHandler);
+        logger.addHandler(maxLogLevel);
         got = bundle.apply(inputObj);
         logger.removeHandler(logHandler);
+        logger.removeHandler(maxLogLevel);
       }
+      boolean hasFatalErrors = maxLogLevel.hasFatalErrors();
 
       File gotFile = writeToTempFile(prefix, got);
 
@@ -237,7 +280,8 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       if (canonFailure != null
           || !Objects.equal(gotFileContent, expectedOutputContent)
           || (expectedLogContent != null
-              && !expectedLogContent.equals(logContent))) {
+              ? !expectedLogContent.equals(logContent)
+              : hasFatalErrors)) {
         System.err.println("\n\n" + getName());
         System.err.println("\tOutput: " + gotFile);
         System.err.println("\tLog: " + logOutputFile);
@@ -250,6 +294,10 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
         Truth.assertWithMessage(prefix + " log")
             .that(logContent)
             .isEqualTo(expectedLogContent);
+      } else {
+        assertFalse(
+            "fatal errors during template application",
+            hasFatalErrors);
       }
 
       if (canonFailure != null) {
