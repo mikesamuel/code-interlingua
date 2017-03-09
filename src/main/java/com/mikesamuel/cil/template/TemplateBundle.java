@@ -18,6 +18,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -31,6 +32,7 @@ import com.mikesamuel.cil.ast.ExpressionNode;
 import com.mikesamuel.cil.ast.IdentifierNode;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeHintNode;
+import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.TemplateBodyNode;
 import com.mikesamuel.cil.ast.TemplateComprehensionNode;
@@ -49,17 +51,18 @@ import com.mikesamuel.cil.ast.VariableDeclaratorNode;
 import com.mikesamuel.cil.ast.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
+import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.AbstractRewritingPass;
 import com.mikesamuel.cil.ast.passes.CommonPassRunner;
 import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.expr.Completion;
-import com.mikesamuel.cil.expr.DataBundle;
 import com.mikesamuel.cil.expr.InterpretationContext;
 import com.mikesamuel.cil.expr.InterpretationContextImpl;
 import com.mikesamuel.cil.expr.Interpreter;
 import com.mikesamuel.cil.expr.Locals;
+import com.mikesamuel.cil.expr.NodeCoercion;
 import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -68,7 +71,6 @@ import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SList;
-import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.ptree.PTree;
 import com.mikesamuel.cil.util.LogUtils;
 
@@ -220,14 +222,9 @@ public class TemplateBundle {
   void apply(
       FileNode fn, DataBundle input, CommonPassRunner passes,
       ImmutableList.Builder<CompilationUnitNode> out) {
-    InterpretationContext<Object> context = new InterpretationContextImpl(
-        logger, getLoader(), passes.getTypePool());
-    context.setThisValue(null, input);
-    Locals<Object> fileLocals = new Locals<>();
-
-    Interpreter<Object> interpreter = new Interpreter<>(context);
     TemplateProcessingPass ppass = new TemplateProcessingPass(
-        logger, interpreter, out, fileLocals);
+        logger, passes.getTypePool(), getLoader(), input, out);
+
     ppass.run(ImmutableList.of(fn.deepClone()));
   }
 
@@ -236,6 +233,135 @@ public class TemplateBundle {
   static final class TemplateProcessingPass
   extends AbstractRewritingPass {
 
+    final class TemplateBundleInterpretationContext
+    extends InterpretationContextImpl {
+
+      public TemplateBundleInterpretationContext(
+          Logger logger, ClassLoader loader, TypePool typePool) {
+        super(logger, loader, typePool);
+      }
+
+      @Override
+      public Object getFieldDynamic(String key, @Nullable Object container) {
+        if (container instanceof DataBundle) {
+          return ((DataBundle) container).getOrDefault(key, null);
+        }
+        return super.getFieldDynamic(key, container);
+      }
+
+      @Override @SuppressWarnings("synthetic-access")
+      public Object invokeDynamic(
+          String methodName, Object receiver, List<? extends Object> actuals) {
+        if (receiver instanceof DataBundle && methodName.startsWith("is")
+            && methodName.length() > 2 && actuals.isEmpty()) {
+          // Alias x.isFoo() to Boolean.TRUE.equals(x.foo)
+          String fieldName = Character.toLowerCase(methodName.charAt(2))
+              + methodName.substring(3);
+          return Boolean.TRUE.equals(
+              ((DataBundle) receiver).getOrDefault(fieldName, Boolean.FALSE));
+        }
+        // Search for template functions.
+        if (receiver == null) {  // TODO: Only do this for bare references.
+          TemplateInfo fnInfo = null;
+          for (int i = templateScopes.size(); --i >= 0;) {
+            TemplateScope scope = templateScopes.get(i);
+            fnInfo = scope.templateInfo.get(methodName);
+            if (fnInfo != null) {
+              break;
+            }
+          }
+          if (fnInfo != null) {
+            ImmutableList<IdentifierNode> formalNameNodes =
+                fnInfo.formals.finder(IdentifierNode.class)
+                .allowNonStandard(true).find();
+            int nFormals = formalNameNodes.size();
+            if (nFormals == actuals.size()) {
+              Locals<Object> callLocals = new Locals<>(
+                  templateScopes.getLast().locals);
+              for (int i = 0; i < nFormals; ++i) {
+                IdentifierNode formalNameNode = formalNameNodes.get(i);
+                Name formalName = Name.root(
+                    formalNameNode.getValue(), Name.Type.LOCAL);
+                if (callLocals.hasOwn(formalName)) {
+                  error(formalNameNode,
+                        "Duplicate formal name " + formalName.identifier);
+                } else {
+                  callLocals.declare(formalName, Functions.identity());
+                  callLocals.set(formalName, actuals.get(i));
+                }
+              }
+
+              TemplateBodyNode bodyClone = fnInfo.body.deepClone();
+
+              templateScopes.add(new TemplateScope(callLocals));
+              visitChildren(bodyClone, null);
+              templateScopes.removeLast();
+
+              Collection<Interpolation> interps =
+                  parentToInterpolations.get(bodyClone);
+
+              Object result = null;
+              boolean computedResult = false;
+              if (!interps.isEmpty()) {
+                if (interps.size() == bodyClone.getNChildren()) {
+                  // Pass through unchanged if there is no non-interpolated
+                  // content.  This is very convenient for recursive template
+                  // invocations.
+                  ImmutableList.Builder<Object> b = ImmutableList.builder();
+                  for (Interpolation interp : interps) {
+                    b.addAll(interp.results);
+                  }
+                  parentToInterpolations.removeAll(bodyClone);
+                  result = b.build();
+                  computedResult = true;
+                } else if (finishInterpolation(bodyClone)) {
+                  return context.errorValue();
+                }
+              }
+
+              // Strip off (TemplateBody ...) envelope.
+              if (!computedResult) {
+                result = bodyClone.getChildren();
+                computedResult = true;
+              }
+              Preconditions.checkState(computedResult);
+
+              Optional<NodeType> nodeTypeHint = Optional.absent();
+              if (fnInfo.nodeTypeHint != null) {
+                Optional<IdentifierNode> nodeTypeHintIdent = fnInfo.nodeTypeHint
+                    .finder(IdentifierNode.class).allowNonStandard(true)
+                    .findOne();
+                if (nodeTypeHintIdent.isPresent()) {
+                  try {
+                    nodeTypeHint = Optional.of(NodeType.valueOf(
+                        nodeTypeHintIdent.get().getValue()));
+                  } catch (@SuppressWarnings("unused")
+                           IllegalArgumentException ex) {
+                    error(
+                        fnInfo.nodeTypeHint,
+                        "Bad node type hint "
+                        + nodeTypeHintIdent.get().getValue());
+                    return context.errorValue();
+                  }
+                } else {
+                  error(fnInfo.nodeTypeHint, "Malformed node type hint");
+                  return context.errorValue();
+                }
+              }
+              return coerceEagerly(result, nodeTypeHint);
+            }
+          }
+        }
+        Function<List<? extends Object>, Object> builtin =
+            Builtins.getBuiltin(methodName);
+        if (builtin != null) {
+          return builtin.apply(actuals);
+        }
+        return super.invokeDynamic(methodName, receiver, actuals);
+      }
+
+    }
+
     final Interpreter<Object> interpreter;
     final InterpretationContext<Object> context;
     final ImmutableList.Builder<CompilationUnitNode> out;
@@ -243,16 +369,19 @@ public class TemplateBundle {
         Lists.newLinkedList();
 
 
-    TemplateProcessingPass(
-        Logger logger,
-        Interpreter<Object> interpreter,
-        ImmutableList.Builder<CompilationUnitNode> out,
-        Locals<Object> locals) {
+    public TemplateProcessingPass(
+        Logger logger, TypePool typePool, ClassLoader loader, DataBundle input,
+        Builder<CompilationUnitNode> out) {
       super(logger);
-      this.interpreter = interpreter;
-      this.context = interpreter.context;
+
+      this.context = new TemplateBundleInterpretationContext(
+          logger, loader, typePool);
+      context.setThisValue(null, input);
+      this.interpreter = new Interpreter<>(context);
+      Locals<Object> fileLocals = new Locals<>();
+
       this.out = out;
-      this.templateScopes.add(new TemplateScope(locals));
+      this.templateScopes.add(new TemplateScope(fileLocals));
     }
 
 
@@ -281,15 +410,12 @@ public class TemplateBundle {
 
     static final class Interpolation {
       final int indexInParent;
-      final Optional<NodeType> typeHint;
       final ImmutableList<Object> results;
 
       Interpolation(
           int indexInParent,
-          Optional<NodeType> typeHint,
           ImmutableList<Object> results) {
         this.indexInParent = indexInParent;
-        this.typeHint = typeHint;
         this.results = results;
       }
     }
@@ -370,19 +496,16 @@ public class TemplateBundle {
             case End:
 
             // Handled in post.
+            case Function:
             case LoopStart:
               return ProcessingStatus.CONTINUE;
-
-            case Function: {
-              TemplateInfo templateInfo = TemplateInfo.from(logger, d);
-              if (templateInfo != null) {
-                templateScope.templateInfo.put(templateInfo.name, templateInfo);
-              }
-              return ProcessingStatus.REMOVE;
-            }
           }
           throw new AssertionError(d);
         }
+
+        case TemplateBody:
+          // Do not descend into a body until it is called
+          return ProcessingStatus.BREAK;
 
         default:
           break;
@@ -390,12 +513,13 @@ public class TemplateBundle {
       return ProcessingStatus.CONTINUE;
     }
 
-    @Override
-    protected ProcessingStatus postvisit(
-        BaseNode node,
-        @Nullable SList<AbstractRewritingPass.Parent> pathFromRoot) {
-      // After we've processed all the children, we should have all the
-      // interpolation results, and so are ready to do replacements.
+    /**
+     * Look at the result of interpolations of children and try to fit them
+     * around the existing node's structure.
+     *
+     * @return true to abort further processing due to an error.
+     */
+    private boolean finishInterpolation(BaseNode node) {
       if (parentToInterpolations.containsKey(node)) {
         int pos = 0;
         int n = node.getNChildren();
@@ -409,8 +533,7 @@ public class TemplateBundle {
             parts.add(ForceFitState.FitPart.fixedNode(node.getChild(pos)));
           }
           for (Object value : interp.results) {
-            parts.add(ForceFitState.FitPart.interpolatedValue(
-                interp.typeHint, value));
+            parts.add(ForceFitState.FitPart.interpolatedValue(value));
           }
           ++pos;
         }
@@ -430,7 +553,7 @@ public class TemplateBundle {
         }
         if (after.fits.isEmpty()) {
           error(node, node.getVariant() + " does not fit " + state.parts);
-          return ProcessingStatus.BREAK;
+          return true;
         } else {
           ForceFitState.PartialFit bestFit = Iterables.getFirst(
               after.fits, null);
@@ -448,6 +571,18 @@ public class TemplateBundle {
           Preconditions.checkState(!insertions.hasNext());
           ((BaseInnerNode) node).replaceChildren(fixed.build());
         }
+      }
+      return false;
+    }
+
+    @Override
+    protected ProcessingStatus postvisit(
+        BaseNode node,
+        @Nullable SList<AbstractRewritingPass.Parent> pathFromRoot) {
+      // After we've processed all the children, we should have all the
+      // interpolation results, and so are ready to do replacements.
+      if (finishInterpolation(node)) {
+        return ProcessingStatus.BREAK;
       }
 
       // Now that we have replaced interpolations, we can process nodes.
@@ -487,9 +622,14 @@ public class TemplateBundle {
               return ProcessingStatus.REMOVE;
             case End:
               return ProcessingStatus.REMOVE;
-            case Function:
-              // TODO: store in scope
+            case Function: {
+              // Store in scope.
+              TemplateInfo templateInfo = TemplateInfo.from(logger, directive);
+              if (templateInfo != null) {
+                templateScope.templateInfo.put(templateInfo.name, templateInfo);
+              }
               return ProcessingStatus.REMOVE;
+            }
             case LoopStart: {
               IdentifierNode elementNameNode =
                   node.firstChildWithType(IdentifierNode.class);
@@ -554,7 +694,7 @@ public class TemplateBundle {
             return ProcessingStatus.BREAK;
           }
 
-          Optional<NodeType> typeHint = Optional.absent();
+          Optional<NodeType> typeHint;
           if (typeHintNode != null) {
             IdentifierNode hintIdent = typeHintNode.firstChildWithType(
                 IdentifierNode.class);
@@ -573,6 +713,8 @@ public class TemplateBundle {
               return ProcessingStatus.BREAK;
             }
             typeHint = Optional.of(typeHintNodeType);
+          } else {
+            typeHint = Optional.absent();
           }
 
           ImmutableList<ExpressionNode> nodeExprs;
@@ -627,11 +769,15 @@ public class TemplateBundle {
                     nodeExpr,
                     "Failed to compute interpolation result: " + result);
                 hadError = true;
-              } else if (result.value == null) {
-                error(nodeExpr, "Cannot interpolate null");
-                hadError = true;
               } else {
-                results.add(result.value);
+                @SuppressWarnings("synthetic-access")
+                Object value = coerceEagerly(result.value, typeHint);
+                if (value == null) {
+                  error(nodeExpr, "Cannot interpolate null");
+                  hadError = true;
+                } else {
+                  results.add(value);
+                }
               }
             }
           } else {
@@ -673,7 +819,7 @@ public class TemplateBundle {
                         }
                       }
                       if (include) {
-                        results.add(element);
+                        results.add(coerceEagerly(element, typeHint));
                       }
                       return Completion.normal(context.nullValue());
                     }
@@ -696,7 +842,6 @@ public class TemplateBundle {
                 pathFromRoot.x.parent,
                 new Interpolation(
                     pathFromRoot.x.indexInParent,
-                    typeHint,
                     flatResults));
           } else {
             if (DEBUG_INTERP) {
@@ -789,6 +934,68 @@ public class TemplateBundle {
     return ls;
   }
 
+  private static Object coerceEagerly(
+      Object exprResult, Optional<NodeType> nodeTypeHint) {
+    if (!nodeTypeHint.isPresent()) { return exprResult; }
+    NodeType nt = nodeTypeHint.get();
+    Object coerced;
+    if (exprResult instanceof Iterable<?>) {
+      Iterable<?> uncoerced = (Iterable<?>) exprResult;
+      ImmutableList.Builder<Object> b = ImmutableList.builder();
+      coerceAllEagerly(uncoerced, nt, b);
+      ImmutableList<Object> allCoerced = b.build();
+      coerced = allCoerced;
+      // If not all coerced successfully, then try to force fit to a node of the
+      // given type.
+      for (Object o : allCoerced) {
+        if (!(o instanceof BaseNode) || ((BaseNode) o).getNodeType() != nt) {
+          // TODO: Limit this to node types that have a single non-intermediate
+          // variant to avoid ambiguity, and look through intermediates.
+          // TODO: Move this into Intermediates and memoize
+          for (Enum<? extends NodeVariant> variantEnum :
+                   nt.getVariantType().getEnumConstants()) {
+            NodeVariant variant = (NodeVariant) variantEnum;
+            ParSer fitter = PTree.complete(variant).getParSer();
+            ForceFitState unfit = new ForceFitState(Iterables.transform(
+                uncoerced,
+                new Function<Object, ForceFitState.FitPart>() {
+
+                  @Override
+                  public ForceFitState.FitPart apply(Object x) {
+                    return ForceFitState.FitPart.interpolatedValue(x);
+                  }
+
+                }));
+            ForceFitState fit = fitter.forceFit(unfit);
+            if (!fit.fits.isEmpty()) {
+              coerced = variant.buildNode(SList.forwardIterable(
+                  Iterables.getFirst(fit.fits, null).resolutions));
+            }
+          }
+          break;
+        }
+      }
+    } else {
+      coerced = NodeCoercion.tryToCoerce(exprResult, nt);
+    }
+    return coerced;
+  }
+
+  private static void coerceAllEagerly(
+      Iterable<?> ls, NodeType nt, ImmutableList.Builder<Object> out) {
+    for (Object element : ls) {
+      if (element instanceof Iterable) {
+        coerceAllEagerly((Iterable<?>) element, nt, out);
+      } else {
+        Object coerced = NodeCoercion.tryToCoerce(element, nt);
+        if (coerced != null) {
+          out.add(coerced);
+        }
+      }
+    }
+  }
+
+
   private static TemplatePseudoRootNode getBodyOfDirective(
       SList<AbstractRewritingPass.Parent> pathFromRootToStart) {
     ImmutableList.Builder<BaseNode> body = ImmutableList.builder();
@@ -865,19 +1072,19 @@ public class TemplateBundle {
 }
 
 final class TemplateInfo {
-  final SourcePosition pos;
+  final TemplateDirectiveNode decl;
   final String name;
   final @Nullable TemplateFormalsNode formals;
   final @Nullable NodeTypeHintNode nodeTypeHint;
   final TemplateBodyNode body;
 
   TemplateInfo(
-      SourcePosition pos,
+      TemplateDirectiveNode decl,
       String name,
       @Nullable TemplateFormalsNode formals,
       @Nullable NodeTypeHintNode nodeTypeHint,
       TemplateBodyNode body) {
-    this.pos = pos;
+    this.decl = decl;
     this.name = name;
     this.formals = formals;
     this.nodeTypeHint = nodeTypeHint;
@@ -914,9 +1121,7 @@ final class TemplateInfo {
           null);
       return null;
     } else {
-      return new TemplateInfo(
-          d.getSourcePosition(), ident.getValue(),
-          formals, nodeTypeHint, body);
+      return new TemplateInfo(d, ident.getValue(), formals, nodeTypeHint, body);
     }
   }
 }

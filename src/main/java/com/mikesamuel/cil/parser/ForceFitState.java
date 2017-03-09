@@ -2,11 +2,9 @@ package com.mikesamuel.cil.parser;
 
 import javax.annotation.Nullable;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ptree.Tokens;
 
 /**
@@ -187,9 +185,8 @@ public final class ForceFitState {
      * into the parent node's child list.
      */
     @SuppressWarnings("synthetic-access")
-    public static InterpolatedValue interpolatedValue(
-        Optional<NodeType> typeHint, Object value) {
-      return new InterpolatedValue(typeHint, value);
+    public static InterpolatedValue interpolatedValue(Object value) {
+      return new InterpolatedValue(value);
     }
 
     @Override
@@ -258,9 +255,6 @@ public final class ForceFitState {
    * into the parent node's child list.
    */
   public static final class InterpolatedValue extends FitPart {
-    /** The type of node this is meant to be coerced to, if known. */
-    public final Optional<NodeType> typeHint;
-
     /**
      * An interpolated value that may need wrapping and type conversion to fit
      * into the parent node's child list.
@@ -269,8 +263,7 @@ public final class ForceFitState {
 
     /** */
     @SuppressWarnings("synthetic-access")
-    private InterpolatedValue(Optional<NodeType> typeHint, Object value) {
-      this.typeHint = typeHint;
+    private InterpolatedValue(Object value) {
       this.value = value;
     }
 
@@ -306,13 +299,14 @@ public final class ForceFitState {
 
     @Override
     public String toString() {
-      return "(~" + (typeHint.isPresent() ? typeHint.get() + ":" : "")
+      return (
+          "(~"
           + (value instanceof CharSequence
              ? Tokens.encodeString((CharSequence) value)
              : value instanceof BaseNode
              ? ((BaseNode) value).getNodeType()
              : value)
-          + ")";
+          + ")");
     }
   }
 }

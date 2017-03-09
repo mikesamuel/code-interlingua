@@ -417,6 +417,16 @@ public final class Templates {
         switch (this.k) {
           case INFIX: {
             int nPushes = nLeft(i - 1, chain, EnumSet.of(Event.Kind.PUSH));
+            for (int pi = 0; pi < nPushes; ++pi) {
+              StandardEvents es = (StandardEvents) chain.get(i - 1 - pi);
+              // Don't step out of a template body.
+              // An interpolation as the content of a template body means a
+              // body that
+              if (es.e.getNodeType() == NodeType.TemplateBody) {
+                nPushes = pi;
+                break;
+              }
+            }
             int nPops = nRight(i + 1, chain, EnumSet.of(Event.Kind.POP));
             int nToRemove = Math.min(nPushes, nPops);  // Number of pairs
             if (nToRemove != 0) {

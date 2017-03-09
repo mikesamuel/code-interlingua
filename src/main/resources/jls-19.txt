@@ -1041,7 +1041,7 @@ TemplateFormals: @nonstandard
     LocalName {"," LocalName}
 TemplateHeader: @nonstandard
     Identifier "(" [TemplateFormals] ")" NodeTypeHint        (@name=Declaration)
-TemplateBody: @nonstandard
+TemplateBody: @nonstandard @nointerp
     any   // Faked based on the node type hint
 NodeTypeHint: @nonstandard
 // An @nointerp production can be interpolated into with an explicit type hint.

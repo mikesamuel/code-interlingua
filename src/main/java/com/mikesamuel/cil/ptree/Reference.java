@@ -25,15 +25,13 @@ import com.mikesamuel.cil.ast.Intermediates;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.StringLiteralNode;
-import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
+import com.mikesamuel.cil.expr.NodeCoercion;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.ForceFitState.FixedNode;
 import com.mikesamuel.cil.parser.ForceFitState.InterpolatedValue;
-import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.LeftRecursion.Stage;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
@@ -679,72 +677,7 @@ final class Reference extends PTParSer {
         ForceFitState.InterpolatedValue iv = (InterpolatedValue) p;
         Object value = iv.value;
 
-        // Try a variety of strategies to coerce value to something that can be
-        // injected into an AST.
-        if (value instanceof NodeVariant) {
-          value = ((NodeVariant) value).buildNode(ImmutableList.of());
-        }
-
-        NodeType srcNt = iv.typeHint.or(nodeType);
-        boolean allowStringLit = true;
-        // Treat primitive wrappers as substitutable for the corresponding
-        // Literal node types.
-        if (value instanceof Number) {
-          boolean isFloat = value instanceof Double || value instanceof Float;
-          NodeType literal = isFloat
-              ? NodeType.FloatingPointLiteral
-              : NodeType.IntegerLiteral;
-
-          if (Intermediates.reachedFrom(literal, srcNt)) {
-            String suffix = "";
-            if (value instanceof Float) {
-              suffix = "F";
-            } else if (value instanceof Long) {
-              suffix = "L";
-            }
-            value = value + suffix;
-            allowStringLit = false;
-          }
-        } else if (value instanceof Character) {
-          if (Intermediates.reachedFrom(NodeType.CharacterLiteral, srcNt)) {
-            StringBuilder sb = new StringBuilder();
-            sb.append('\'');
-            Tokens.encodeCodepointOnto(((Character) value).charValue(), sb);
-            sb.append('\'');
-            value = sb.toString();
-            allowStringLit = false;
-          }
-        } else if (value instanceof Boolean) {
-          if (Intermediates.reachedFrom(NodeType.BooleanLiteral, srcNt)) {
-            value = value.toString();
-            allowStringLit = false;
-          }
-        }
-
-        // Invoke a brief parser to allow substituting
-        // 1. "public" for Modifier.Public
-        // 2. "123" for IntegerLiteral.Builtin
-        // 3. other strings for a StringLiteral
-        // when such are reachable from NodeType.
-        if (value instanceof CharSequence) {
-          String content = new StringBuilder()
-              .append((CharSequence) value)
-              .toString();
-
-          if (allowStringLit
-              && Intermediates.reachedFrom(NodeType.StringLiteral, srcNt)) {
-            value = StringLiteralNode.Variant.Builtin.buildNode(
-                Tokens.encodeString(content));
-          } else {
-            Input input = Input.builder().code(content).build();
-            ParseState start = new ParseState(input);
-            ParseResult result = PTree.complete(srcNt).getParSer()
-                .parse(start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
-            if (result.synopsis == ParseResult.Synopsis.SUCCESS) {
-              value = Trees.of(result.next());
-            }
-          }
-        }
+        value = NodeCoercion.tryToCoerce(value, nodeType);
 
         // If what we end up with after that coercion is a node, check that it
         // can be reached from this nodeType and generate any intermediates we

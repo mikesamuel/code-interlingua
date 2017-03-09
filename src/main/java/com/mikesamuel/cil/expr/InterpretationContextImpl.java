@@ -762,9 +762,6 @@ implements InterpretationContext<Object> {
     if (container == null) {
       return error("Null dereferenced via (null)." + key);
     }
-    if (container instanceof DataBundle) {
-      return ((DataBundle) container).getOrDefault(key, null);
-    }
     Class<?> cl = container.getClass();
     if ("length".equals(key) && cl.isArray()) {
       return arrayLength(container);
@@ -881,15 +878,9 @@ implements InterpretationContext<Object> {
   @Override
   public Object invokeDynamic(
       String methodName, Object receiver, List<? extends Object> actuals) {
-    if (receiver instanceof DataBundle && methodName.startsWith("is")
-        && methodName.length() > 2) {
-      // Alias x.isFoo() to Boolean.TRUE.equals(x.foo)
-      String fieldName = Character.toLowerCase(methodName.charAt(2))
-          + methodName.substring(3);
-      return Boolean.TRUE.equals(
-          ((DataBundle) receiver).getOrDefault(fieldName, Boolean.FALSE));
-    }
-    return ErrorValue.INSTANCE;
+    return this.error(
+        "Could not invoke " + methodName + "(...) on " + receiver + " with "
+        + actuals);
   }
 
 

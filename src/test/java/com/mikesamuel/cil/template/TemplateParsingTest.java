@@ -224,4 +224,46 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "      PackageName.IdentifierDotIdentifier",
         "        Identifier.Builtin p");
   }
+
+  @Test
+  public final void testTemplateBodyIsSingleInterpolation() {
+    assertParseTree(
+        PTree.complete(NodeType.CompilationUnit),
+        ""
+        + "package p;\n"
+        // Don't generalize the interpolation to replace the body.  Instead
+        // treat the interpolation as the body.
+        + "%%template foo(a, i) : Expression { (% a[i]) }",
+
+        "TemplatePseudoRoot.CompilationUnit",
+        "  TemplateDirectives.TemplateDirectiveTemplateDirective",
+        "    TemplateDirective.Function",
+        "      TemplateHeader.Declaration",
+        "        Identifier.Builtin foo",
+        "        TemplateFormals.LocalNameComLocalName",
+        "          LocalName.Identifier",
+        "            Identifier.Builtin a",
+        "          LocalName.Identifier",
+        "            Identifier.Builtin i",
+        "        NodeTypeHint.ClnIdentifier",
+        "          Identifier.Builtin Expression",
+        "      TemplateBody.Any",
+        "        TemplateInterpolation.LpPctTemplateComprehensionNodeTypeHintRp",
+        "          TemplateComprehension.ExpressionComExpressionTemplateLoopTemplateCondition",
+        "            Expression.ConditionalExpression",
+        "              Primary.ArrayAccess",
+        "                Primary.Ambiguous",
+        "                  ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "                    ContextFreeName.Name",
+        "                      Identifier.Builtin a",
+        "                Expression.ConditionalExpression",
+        "                  Primary.Ambiguous",
+        "                    ContextFreeNames.ContextFreeNameDotContextFreeName",
+        "                      ContextFreeName.Name",
+        "                        Identifier.Builtin i",
+        "  CompilationUnit.PackageDeclarationImportDeclarationTypeDeclaration",
+        "    PackageDeclaration.Declaration",
+        "      PackageName.IdentifierDotIdentifier",
+        "        Identifier.Builtin p");
+  }
 }
