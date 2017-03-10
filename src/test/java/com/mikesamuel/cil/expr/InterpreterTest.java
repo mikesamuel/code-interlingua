@@ -204,40 +204,6 @@ public final class InterpreterTest extends TestCase {
   }
 
   @Test
-  public void testDataBundleIntegration() throws Exception {
-    if (true) {
-      // TODO: migrate this test to where it can do some good.
-      // The DataBundle bindings were moved to ...template.TemplateBundle.
-      return;
-    }
-    DataBundle b = DataBundle.fromJsonFile(
-        getName(), CharSource.wrap(
-            "{"
-            + "  \"nm\": {\n"
-            + "    \"nodeType\": \"Expression\",\n"
-            + "    \"code\": \"k.a[0].x\"\n"
-            + "  },\n"
-            + "  \"j\": 42,\n"
-            + "  \"k\": { \"a\": [{ \"x\": \"k.a[0].x\" }] }"
-            + "}"));
-    Locals<Object> locals = new Locals<>();
-    InterpreterTestContext tc = contextFor(
-        NodeType.Expression, "null", getName());
-    InterpretationContext<Object> context = new InterpretationContextImpl(
-        tc.logger, tc.loader, tc.typePool);
-    context.setThisValue(null, b);
-
-    Object nm = context.getFieldDynamic("nm", b);
-    assertTrue(nm instanceof BaseNode);
-
-    Interpreter<Object> interpreter = new Interpreter<>(context);
-
-    Completion<Object> got = interpreter.interpret((BaseNode) nm, locals);
-    assertEquals(Completion.Kind.NORMAL, got.kind);
-    assertEquals("k.a[0].x", got.value);
-  }
-
-  @Test
   public void testArrayAccess() {
     assertExprResult(
         Completion.normal(0D),

@@ -1,0 +1,8 @@
+{
+  "nm": {
+    "nodeType": "Expression",
+    "code": "k.a[0].x"
+  },
+  "j": 42,
+  "k": { "a": [{ "x": "k.a[0].x" }] }
+}

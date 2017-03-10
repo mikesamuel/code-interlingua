@@ -304,8 +304,8 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       }
 
       Truth.assertWithMessage(prefix + " logged to " + logOutputFile)
-          .that(gotFileContent)
-          .isEqualTo(expectedOutputContent);
+          .that(expectedOutputContent)
+          .isEqualTo(gotFileContent);
     }
 
     private static String canonCompilationUnit(String code)

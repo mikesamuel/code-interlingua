@@ -1,0 +1,5 @@
+class C {
+  C() {
+    super("k.a[0].x", k.a[0].x);
+  }
+}

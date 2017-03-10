@@ -1,2 +1,2 @@
-@ com.mikesamuel.cil.template.TemplateBundle$TemplateProcessingPass.postvisit
+@ com.mikesamuel.cil.template.TemplateProcessingPass.postvisit
 SEVERE: locals/C.java:15+34-35: Cannot interpolate null
