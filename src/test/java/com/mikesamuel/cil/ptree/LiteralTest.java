@@ -4,13 +4,13 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SList;
 
 import junit.framework.TestCase;
 

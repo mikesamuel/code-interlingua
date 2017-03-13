@@ -14,10 +14,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.NodeTypeTables;
 import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.TemplateDirectiveNode;
-import com.mikesamuel.cil.ast.TemplateDirectivesNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeTypeTables;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.TemplateDirectiveNode;
+import com.mikesamuel.cil.ast.j8.TemplateDirectivesNode;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Input;
@@ -130,9 +132,9 @@ public final class Templates {
             int nodeIndexBeforePush = currentNodeIndex;
             int nodeIndexAfterPush = ++nodeIndexCounter;
             currentNodeIndex = nodeIndexAfterPush;
-            NodeType nt = e.getNodeType();
+            J8NodeType nt = (J8NodeType) e.getNodeType();
             if (nonStandardAncestorDepth < 0
-                && NodeTypeTables.TEMPLATEINSTR.contains(nt)) {
+                && J8NodeTypeTables.TEMPLATEINSTR.contains(nt)) {
               nonStandardAncestorDepth = nodeAndPushIndices.size() / 2;
             }
             nodeAndPushIndices.add(currentNodeIndex);
@@ -232,7 +234,7 @@ public final class Templates {
       }
       Event esEvent0 = esEvents.get(0);
       boolean isDirective = esEvent0.getKind() == Event.Kind.PUSH
-          && esEvent0.getNodeType() == NodeType.TemplateDirective;
+          && esEvent0.getNodeType() == J8NodeType.TemplateDirective;
       if (isDirective != inDirectives) {
         rebalanced.add(isDirective ? PUSH_TEMPLATE_DIRECTIVES : POP);
         inDirectives = isDirective;
@@ -287,11 +289,11 @@ public final class Templates {
             }
             break;
           case PUSH:
-            NodeType nt = e.getNodeType();
-            if (NodeTypeTables.NONSTANDARD.contains(nt)) {
+            NodeType<?, ?> nt = e.getNodeType();
+            if (nt.isNonStandard()) {
               this.hasNonStandard = true;
             }
-            boolean removed = nt == NodeType.TemplateDirectives;
+            boolean removed = nt == J8NodeType.TemplateDirectives;
             pushRemoved.set(depth, removed);
             ++depth;
             if (removed) {
@@ -378,7 +380,7 @@ public final class Templates {
       Event event0 = events.get(0);
       Preconditions.checkState(event0.getKind() == Event.Kind.PUSH);
       DirectiveKind dk = null;
-      switch (event0.getNodeType()) {
+      switch ((J8NodeType) event0.getNodeType()) {
         case TemplateDirective:
           TemplateDirectiveNode.Variant v =
               (TemplateDirectiveNode.Variant) event0.getNodeVariant();
@@ -422,7 +424,7 @@ public final class Templates {
               // Don't step out of a template body.
               // An interpolation as the content of a template body means a
               // body that
-              if (es.e.getNodeType() == NodeType.TemplateBody) {
+              if (es.e.getNodeType() == J8NodeType.TemplateBody) {
                 nPushes = pi;
                 break;
               }
@@ -800,9 +802,9 @@ public final class Templates {
   }
 
   /**
-   * Shift all {@link NodeType#TemplateDecl} blocks to the start of the closest
-   * enclosing {@linkplain NodeVariant#isTemplateStart template start} so that
-   * every use of a template occurs after (in an in-order traversal) the
+   * Shift all {@link J8NodeType#TemplateDecl} blocks to the start of the
+   * closest enclosing {@linkplain J8NodeVariant#isTemplateStart template start}
+   * so that every use of a template occurs after (in an in-order traversal) the
    * declaration.
    */
   private static ImmutableList<Event> hoistTemplateDecls(
@@ -816,7 +818,7 @@ public final class Templates {
     for (int i = 0, n = events.size(); i < n; ++i) {
       Event e = events.get(i);
       if (e.getKind() == Event.Kind.PUSH) {
-        NodeVariant v = e.getNodeVariant();
+        NodeVariant<?, ?> v = e.getNodeVariant();
         if (v.isTemplateEnd()) {
           HoistState oldTop = stack.remove(stack.size() - 1);
           top = stack.get(stack.size() - 1);
@@ -845,7 +847,7 @@ public final class Templates {
                   Event lastRest = top.rest.get(nRest - 1);
                   if (lastRest.getKind() == Event.Kind.PUSH
                       && lastRest.getNodeType()
-                         == NodeType.TemplateDirectives) {
+                         == J8NodeType.TemplateDirectives) {
                     // Get rid of newly empty template directives node.
                     top.rest.remove(nRest - 1);
                     ++end;

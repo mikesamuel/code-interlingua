@@ -5,12 +5,13 @@ import javax.annotation.Nullable;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.TokenStrings;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.TokenStrings;
+import com.mikesamuel.cil.ast.j8.Tokens;
 import com.mikesamuel.cil.format.TokenBreak;
 import com.mikesamuel.cil.format.TokenBreaker;
 import com.mikesamuel.cil.format.java.Java8TokenClassifier.Classification;
 import com.mikesamuel.cil.parser.SList;
-import com.mikesamuel.cil.ptree.Tokens;
 
 /**
  * Determines which tokens should have spaces between them based on the need to
@@ -18,12 +19,12 @@ import com.mikesamuel.cil.ptree.Tokens;
  * might.
  */
 final class Java8TokenBreaker
-implements TokenBreaker<SList<NodeVariant>> {
+implements TokenBreaker<SList<NodeVariant<?, ?>>> {
 
   @Override
   public TokenBreak breakBetween(
-      String left,  @Nullable SList<NodeVariant> leftStack,
-      String right, @Nullable SList<NodeVariant> rightStack) {
+      String left,  @Nullable SList<NodeVariant<?, ?>> leftStack,
+      String right, @Nullable SList<NodeVariant<?, ?>> rightStack) {
     Classification lc = Java8TokenClassifier.classify(left);
     Classification rc = Java8TokenClassifier.classify(right);
 
@@ -124,11 +125,11 @@ implements TokenBreaker<SList<NodeVariant>> {
           return TokenBreak.SHOULD;
         case "<":
           if (leftStack != null) {
-            switch (leftStack.x.getNodeType()) {
-              case TypeParameters: case TypeArguments: case Diamond:
-                return TokenBreak.SHOULD_NOT;
-              default:
-                break;
+            NodeType<?, ?> nt = leftStack.x.getNodeType();
+            if (nt == J8NodeType.TypeParameters
+                || nt == J8NodeType.TypeArguments
+                || nt == J8NodeType.Diamond) {
+              return TokenBreak.SHOULD_NOT;
             }
           }
           return TokenBreak.SHOULD;
@@ -172,11 +173,10 @@ implements TokenBreaker<SList<NodeVariant>> {
           //$FALL-THROUGH$
         case ">":
           if (rightStack != null) {
-            switch (rightStack.x.getNodeType()) {
-              case TypeParameters: case TypeArguments:
-                return TokenBreak.SHOULD_NOT;
-              default:
-                break;
+            NodeType<?, ?> nt = rightStack.x.getNodeType();
+            if (nt == J8NodeType.TypeParameters
+                || nt == J8NodeType.TypeArguments) {
+              return TokenBreak.SHOULD_NOT;
             }
           }
           return TokenBreak.SHOULD;
@@ -190,22 +190,24 @@ implements TokenBreaker<SList<NodeVariant>> {
     return TokenBreak.SHOULD_NOT;
   }
 
-  private static boolean inPostfixOperatorContext(SList<NodeVariant> stack) {
+  private static boolean inPostfixOperatorContext(
+      SList<NodeVariant<?, ?>> stack) {
     if (stack == null || stack.prev == null) { return false; }
-    return stack.prev.x.getNodeType() == NodeType.PostExpression;
+    return stack.prev.x.getNodeType() == J8NodeType.PostExpression;
   }
 
-  private static boolean inPrefixOperatorContext(SList<NodeVariant> stack) {
+  private static boolean inPrefixOperatorContext(
+      SList<NodeVariant<?, ?>> stack) {
     if (stack == null) { return false; }
-    if (stack.x.getNodeType() == NodeType.PrefixOperator) { return true; }
+    if (stack.x.getNodeType() == J8NodeType.PrefixOperator) { return true; }
     return stack.prev != null
-        && stack.prev.x.getNodeType() == NodeType.PreExpression;
+        && stack.prev.x.getNodeType() == J8NodeType.PreExpression;
   }
 
   @Override
   public TokenBreak lineBetween(
-      String left,  @Nullable SList<NodeVariant> leftStack,
-      String right, @Nullable SList<NodeVariant> rightStack) {
+      String left,  @Nullable SList<NodeVariant<?, ?>> leftStack,
+      String right, @Nullable SList<NodeVariant<?, ?>> rightStack) {
 
     // Handle all the MUST cases first.
     Classification lc = Java8TokenClassifier.classify(left);
@@ -237,18 +239,17 @@ implements TokenBreaker<SList<NodeVariant>> {
           return TokenBreak.SHOULD;
         case ";":
           if (leftStack != null) {
-            switch (leftStack.x.getNodeType()) {
-              case TryWithResourcesStatement:
-              case BasicForStatement:
-                return TokenBreak.SHOULD_NOT;
-              default:
-                break;
+            NodeType<?, ?> nt = leftStack.x.getNodeType();
+            if (nt == J8NodeType.TryWithResourcesStatement
+                || nt == J8NodeType.BasicForStatement) {
+              return TokenBreak.SHOULD_NOT;
             }
           }
           return TokenBreak.SHOULD;
       }
     }
-    // http://www.oracle.com/technetwork/java/javase/documentation/codeconventions-136091.html#248
+    // http://www.oracle.com/technetwork/java/javase/documentation/
+    // codeconventions-136091.html#248
     // > When an expression will not fit on a single line, break it according to
     // > these general principles:
     // > * Break after a comma.

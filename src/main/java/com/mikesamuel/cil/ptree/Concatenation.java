@@ -1,13 +1,11 @@
 package com.mikesamuel.cil.ptree;
 
-import java.util.EnumSet;
 import java.util.List;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.IdentifierWrappers;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -103,7 +101,8 @@ class Concatenation extends PTParSer {
   public ParseResult parse(
       ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
     ParseState state = start;
-    EnumSet<NodeType> lrExclusionsTriggered = EnumSet.noneOf(NodeType.class);
+    ImmutableSet.Builder<NodeType<?, ?>> lrExclusionsTriggered =
+        ImmutableSet.builder();
     int writeBack = ParseResult.NO_WRITE_BACK_RESTRICTION;
     for (ParSerable p : ps) {
       ParSer parser = p.getParSer();
@@ -111,7 +110,7 @@ class Concatenation extends PTParSer {
       lrExclusionsTriggered.addAll(result.lrExclusionsTriggered);
       switch (result.synopsis) {
         case FAILURE:
-          return ParseResult.failure(lrExclusionsTriggered);
+          return ParseResult.failure(lrExclusionsTriggered.build());
         case SUCCESS:
           state = result.next();
           writeBack = Math.min(writeBack, result.writeBack);
@@ -120,7 +119,7 @@ class Concatenation extends PTParSer {
       throw new AssertionError(result.synopsis);
     }
     return ParseResult.success(
-        state, writeBack, Sets.immutableEnumSet(lrExclusionsTriggered));
+        state, writeBack, lrExclusionsTriggered.build());
   }
 
   @Override
@@ -162,11 +161,11 @@ class Concatenation extends PTParSer {
 
   private static boolean isIdentifierWrapper(ParSerable ps) {
     if (ps instanceof NodeType) {
-      return IdentifierWrappers.isIdentifierWrapper((NodeType) ps);
+      return ((NodeType<?, ?>) ps).isIdentifierWrapper();
     } else {
       ParSer p = ps.getParSer();
       return p instanceof Reference &&
-          IdentifierWrappers.isIdentifierWrapper(((Reference) p).getNodeType());
+          ((Reference) p).getNodeType().isIdentifierWrapper();
     }
   }
 

@@ -2,7 +2,7 @@ package com.mikesamuel.cil.ast.passes;
 
 import java.lang.reflect.Modifier;
 
-import com.mikesamuel.cil.ast.ModifierNode;
+import com.mikesamuel.cil.ast.j8.ModifierNode;
 
 final class ModifierNodes {
   static int modifierBits(ModifierNode.Variant modVariant) {

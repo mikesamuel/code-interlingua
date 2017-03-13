@@ -7,17 +7,23 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.BlockNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.PackageDeclarationNode;
-import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
-import com.mikesamuel.cil.ast.StaticImportOnDemandDeclarationNode;
-import com.mikesamuel.cil.ast.SwitchBlockNode;
-import com.mikesamuel.cil.ast.TemplateDirectivesNode;
-import com.mikesamuel.cil.ast.TypeNameNode;
+import com.mikesamuel.cil.ast.j8.BlockNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.PackageDeclarationNode;
+import com.mikesamuel.cil.ast.j8.SingleStaticImportDeclarationNode;
+import com.mikesamuel.cil.ast.j8.StaticImportOnDemandDeclarationNode;
+import com.mikesamuel.cil.ast.j8.SwitchBlockNode;
+import com.mikesamuel.cil.ast.j8.TemplateDirectivesNode;
+import com.mikesamuel.cil.ast.j8.TypeNameNode;
+import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.ExpressionNameDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
     .BlockExpressionNameResolver;
@@ -29,12 +35,6 @@ import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
-import com.mikesamuel.cil.ast.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.traits.ExpressionNameDeclaration;
-import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 
 /**
  * Associates expression name resolvers and position markers with scopes and
@@ -52,7 +52,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
   }
 
   private DeclarationPositionMarker walk(
-      BaseNode node, ExpressionNameResolver r,
+      J8BaseNode node, ExpressionNameResolver r,
       DeclarationPositionMarker m,
       Name outer) {
     ExpressionNameResolver childResolver = r;
@@ -103,7 +103,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
       currentMarker = ((BlockExpressionNameResolver) r).declare(declName);
     }
 
-    for (BaseNode child : node.getChildren()) {
+    for (J8BaseNode child : node.getChildren()) {
       currentMarker = walk(child, childResolver, currentMarker, childOuter);
     }
 
@@ -119,7 +119,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     for (FileNode fn : fileNodes) {
       ExpressionNameResolver r = resolverFor(fn);
       fn.setExpressionNameResolver(r);
-      walk((BaseNode) fn, r, DeclarationPositionMarker.LATEST, null);
+      walk((J8BaseNode) fn, r, DeclarationPositionMarker.LATEST, null);
     }
     return null;
   }
@@ -139,7 +139,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     if (pkgNode != null) {
       for (IdentifierNode ident
           : pkgNode.finder(IdentifierNode.class)
-            .exclude(NodeType.Annotation)
+            .exclude(J8NodeType.Annotation)
             .find()) {
         packageName = packageName.child(ident.getValue(), Name.Type.PACKAGE);
       }
@@ -148,7 +148,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     ImmutableList.Builder<Name> explicit = ImmutableList.builder();
     for (SingleStaticImportDeclarationNode idecl
         : cu.finder(SingleStaticImportDeclarationNode.class)
-          .exclude(NodeType.TypeDeclaration)
+          .exclude(J8NodeType.TypeDeclaration)
           .find()) {
       TypeNameNode typeName = idecl.firstChildWithType(TypeNameNode.class);
       if (typeName == null) {  // Maybe part of a template
@@ -191,7 +191,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     ImmutableList.Builder<TypeInfo> wildcards = ImmutableList.builder();
     for (StaticImportOnDemandDeclarationNode idecl
         : cu.finder(StaticImportOnDemandDeclarationNode.class)
-          .exclude(NodeType.TypeDeclaration)
+          .exclude(J8NodeType.TypeDeclaration)
           .find()) {
       TypeNameNode typeName = idecl.firstChildWithType(TypeNameNode.class);
       if (typeName == null) {  // Maybe part of a template
@@ -217,8 +217,8 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     Name ambig = null;
     for (IdentifierNode ident : tn.finder(IdentifierNode.class)
         .exclude(
-            NodeType.Annotation,
-            NodeType.TypeArgumentsOrDiamond, NodeType.TypeArguments)
+            J8NodeType.Annotation,
+            J8NodeType.TypeArgumentsOrDiamond, J8NodeType.TypeArguments)
         .find()) {
       if (ambig == null) {
         ambig = Name.root(ident.getValue(), Name.Type.AMBIGUOUS);

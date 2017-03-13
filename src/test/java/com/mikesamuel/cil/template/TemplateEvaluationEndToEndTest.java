@@ -25,7 +25,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.google.common.truth.Truth;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.Unparse;

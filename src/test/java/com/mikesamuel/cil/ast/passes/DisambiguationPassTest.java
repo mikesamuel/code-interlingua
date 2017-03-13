@@ -13,21 +13,21 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.ContextFreeNameNode;
-import com.mikesamuel.cil.ast.ContextFreeNamesNode;
 import com.mikesamuel.cil.ast.NodeI;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNamesNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.traits.ExpressionNameReference;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.NamePart;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeReference;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
-import com.mikesamuel.cil.ast.traits.ExpressionNameReference;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.NamePart;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeReference;
 import com.mikesamuel.cil.parser.SList;
 
 import junit.framework.TestCase;
@@ -48,7 +48,7 @@ public final class DisambiguationPassTest extends TestCase {
             "",
           },
         },
-        all(with(NodeType.CompilationUnit)),
+        all(with(J8NodeType.CompilationUnit)),
         false,
         null);
   }
@@ -107,7 +107,7 @@ public final class DisambiguationPassTest extends TestCase {
             "import static java.lang.System.err;",
           },
         },
-        all(with(NodeType.ImportDeclaration)),
+        all(with(J8NodeType.ImportDeclaration)),
         false,
         null);
   }
@@ -133,7 +133,7 @@ public final class DisambiguationPassTest extends TestCase {
             "  int x = Math.PI.hashCode();",
             "}"
         },
-        nth(0, with(NodeType.Expression)),
+        nth(0, with(J8NodeType.Expression)),
         false,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -163,7 +163,7 @@ public final class DisambiguationPassTest extends TestCase {
             "  int x = Math.PI.hashCode();",
             "}"
         },
-        nth(0, with(NodeType.Expression)),
+        nth(0, with(J8NodeType.Expression)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -237,7 +237,7 @@ public final class DisambiguationPassTest extends TestCase {
             "  }",
             "}"
         },
-        nth(0, with(NodeType.InstanceInitializer)),
+        nth(0, with(J8NodeType.InstanceInitializer)),
         false,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -271,7 +271,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}"
         },
 
-        nth(0, with(NodeType.FieldDeclaration)),
+        nth(0, with(J8NodeType.FieldDeclaration)),
         false,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -313,7 +313,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}"
         },
 
-        nth(0, with(NodeType.FieldDeclaration)),
+        nth(0, with(J8NodeType.FieldDeclaration)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -443,7 +443,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}",
           },
         },
-        all(with(NodeType.AdditiveExpression)),
+        all(with(J8NodeType.AdditiveExpression)),
         false,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -484,7 +484,7 @@ public final class DisambiguationPassTest extends TestCase {
               "}",
             },
           },
-          nth(0, with(NodeType.ArgumentList)),
+          nth(0, with(J8NodeType.ArgumentList)),
           longNames,
           TYPE_AND_NAME_DECORATOR);
     }
@@ -527,7 +527,7 @@ public final class DisambiguationPassTest extends TestCase {
               "}",
             },
           },
-          nth(0, with(NodeType.ArgumentList)),
+          nth(0, with(J8NodeType.ArgumentList)),
           longNames,
           TYPE_AND_NAME_DECORATOR);
     }
@@ -578,7 +578,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}",
           },
         },
-        nth(0, with(NodeType.ArgumentList)),
+        nth(0, with(J8NodeType.ArgumentList)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -638,7 +638,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}"
           },
         },
-        nth(0, with(NodeType.ClassDeclaration)),
+        nth(0, with(J8NodeType.ClassDeclaration)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -669,7 +669,7 @@ public final class DisambiguationPassTest extends TestCase {
           "  }",
           "}",
         },
-        nth(0, with(NodeType.UnqualifiedClassInstanceCreationExpression)),
+        nth(0, with(J8NodeType.UnqualifiedClassInstanceCreationExpression)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -697,7 +697,7 @@ public final class DisambiguationPassTest extends TestCase {
           "  }",
           "}",
         },
-        nth(0, with(NodeType.Primary)),
+        nth(0, with(J8NodeType.Primary)),
         true,
         TYPE_AND_NAME_DECORATOR);
   }
@@ -707,7 +707,7 @@ public final class DisambiguationPassTest extends TestCase {
       String[] input,
       NodeMatcher nodeMatcher,
       boolean useLongNames,
-      @Nullable Function<? super NodeI, ? extends String> decorator,
+      @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator,
       String... expectedErrors) {
     assertDisambiguated(
         new String[][] { want },
@@ -720,7 +720,7 @@ public final class DisambiguationPassTest extends TestCase {
       String[][] inputs,
       NodeMatcher nodeMatcher,
       boolean useLongNames,
-      @Nullable Function<? super NodeI, ? extends String> decorator,
+      @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator,
       String... expectedErrors) {
     ImmutableList<FileNode> disambiguated = PassTestHelpers.expectErrors(
         new PassTestHelpers.LoggableOperation<ImmutableList<FileNode>>() {
@@ -745,7 +745,7 @@ public final class DisambiguationPassTest extends TestCase {
 
         },
         expectedErrors);
-    ImmutableList.Builder<BaseNode> matches = ImmutableList.builder();
+    ImmutableList.Builder<J8BaseNode> matches = ImmutableList.builder();
     nodeMatcher.match(disambiguated, matches);
 
     StringBuilder wantJoined = new StringBuilder();
@@ -757,7 +757,7 @@ public final class DisambiguationPassTest extends TestCase {
     }
 
     StringBuilder got = new StringBuilder();
-    for (BaseNode match : matches.build()) {
+    for (J8BaseNode match : matches.build()) {
       if (got.length() != 0) {
         got.append("\n\n");
       }
@@ -773,21 +773,21 @@ public final class DisambiguationPassTest extends TestCase {
 
     for (FileNode fn : disambiguated) {
       checkNoContextFreeNames(
-          fn.getChildren(), SList.append(null, (BaseNode) fn));
+          fn.getChildren(), SList.append(null, (J8BaseNode) fn));
     }
   }
 
 
   private static void checkNoContextFreeNames(
-      Iterable<? extends BaseNode> nodes, SList<BaseNode> path) {
-    for (BaseNode node : nodes) {
-      SList<BaseNode> pathWithNode = SList.append(path, node);
+      Iterable<? extends J8BaseNode> nodes, SList<J8BaseNode> path) {
+    for (J8BaseNode node : nodes) {
+      SList<J8BaseNode> pathWithNode = SList.append(path, node);
       if (node instanceof ContextFreeNamesNode
           || node instanceof ContextFreeNameNode) {
         StringBuilder sb = new StringBuilder();
         sb.append(node.getSourcePosition())
             .append(" : Not disambiguated");
-        for (BaseNode pathElement : SList.reverseIterable(pathWithNode)) {
+        for (J8BaseNode pathElement : SList.reverseIterable(pathWithNode)) {
           sb.append(" : ").append(pathElement.getVariant());
         }
         fail(sb.toString());
@@ -797,20 +797,20 @@ public final class DisambiguationPassTest extends TestCase {
   }
 
 
-  static Function<BaseNode, BaseNode> withContent(String... content) {
+  static Function<J8BaseNode, J8BaseNode> withContent(String... content) {
     String delim = ", ";
     String targetTextContent = Joiner.on(delim).join(content);
-    return new Function<BaseNode, BaseNode>() {
+    return new Function<J8BaseNode, J8BaseNode>() {
 
       @Override
-      public BaseNode apply(BaseNode node) {
+      public J8BaseNode apply(J8BaseNode node) {
         String tc = node.getTextContent(delim);
         if (targetTextContent.equals(tc)) {
           return node;
         }
         if (tc.contains(targetTextContent)) {
-          for (BaseNode child : node.getChildren()) {
-            BaseNode match = apply(child);
+          for (J8BaseNode child : node.getChildren()) {
+            J8BaseNode match = apply(child);
             if (match != null) { return match; }
           }
         }
@@ -819,29 +819,29 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static Predicate<NodeI> with(NodeType nt) {
-    return new Predicate<NodeI>() {
+  static Predicate<NodeI<?, ?, ?>> with(J8NodeType nt) {
+    return new Predicate<NodeI<?, ?, ?>>() {
 
       @Override
-      public boolean apply(NodeI node) {
+      public boolean apply(NodeI<?, ?, ?> node) {
         return node.getNodeType() == nt;
       }
 
     };
   }
 
-  static Predicate<NodeI> with(NodeVariant nv) {
-    return new Predicate<NodeI>() {
+  static Predicate<NodeI<?, ?, ?>> with(J8NodeVariant nv) {
+    return new Predicate<NodeI<?, ?, ?>>() {
 
       @Override
-      public boolean apply(NodeI node) {
+      public boolean apply(NodeI<?, ?, ?> node) {
         return node.getVariant() == nv;
       }
 
     };
   }
 
-  static NodeMatcher nth(int n, Predicate<? super NodeI> p) {
+  static NodeMatcher nth(int n, Predicate<? super NodeI<?, ?, ?>> p) {
     Preconditions.checkArgument(n >= 0);
 
     return new NodeMatcher() {
@@ -849,15 +849,15 @@ public final class DisambiguationPassTest extends TestCase {
 
       @Override
       public void match(
-          List<? extends NodeI> nodes,
-          ImmutableList.Builder<BaseNode> out) {
+          List<? extends NodeI<?, ?, ?>> nodes,
+          ImmutableList.Builder<J8BaseNode> out) {
 
-        for (NodeI node : nodes) {
+        for (NodeI<?, ?, ?> node : nodes) {
           if (remaining < 0) { break; }
 
           if (p.apply(node)) {
             if (remaining == 0) {
-              out.add((BaseNode) node);
+              out.add((J8BaseNode) node);
             }
             --remaining;
           }
@@ -869,16 +869,16 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static NodeMatcher all(Predicate<? super NodeI> p) {
+  static NodeMatcher all(Predicate<? super NodeI<?, ?, ?>> p) {
     return new NodeMatcher() {
 
       @Override
       public void match(
-          List<? extends NodeI> nodes,
-          ImmutableList.Builder<BaseNode> out) {
-        for (NodeI node : nodes) {
+          List<? extends NodeI<?, ?, ?>> nodes,
+          ImmutableList.Builder<J8BaseNode> out) {
+        for (NodeI<?, ?, ?> node : nodes) {
           if (p.apply(node)) {
-            out.add((BaseNode) node);
+            out.add((J8BaseNode) node);
           }
           match(node.getChildren(), out);
         }
@@ -888,11 +888,11 @@ public final class DisambiguationPassTest extends TestCase {
   }
 
 
-  static final Function<NodeI, String> TYPE_AND_NAME_DECORATOR =
-      new Function<NodeI, String>() {
+  static final Function<NodeI<?, ?, ?>, String> TYPE_AND_NAME_DECORATOR =
+      new Function<NodeI<?, ?, ?>, String>() {
 
         @Override
-        public String apply(NodeI n) {
+        public String apply(NodeI<?, ?, ?> n) {
           Name canonName = null;
           if (n instanceof TypeDeclaration) {
             TypeInfo ti = ((TypeDeclaration) n).getDeclaredTypeInfo();
@@ -921,7 +921,7 @@ public final class DisambiguationPassTest extends TestCase {
 
   interface NodeMatcher {
     void match(
-        List<? extends NodeI> nodes,
-        ImmutableList.Builder<BaseNode> out);
+        List<? extends NodeI<?, ?, ?>> nodes,
+        ImmutableList.Builder<J8BaseNode> out);
   }
 }

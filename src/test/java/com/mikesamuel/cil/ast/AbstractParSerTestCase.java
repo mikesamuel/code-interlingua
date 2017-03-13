@@ -2,9 +2,10 @@ package com.mikesamuel.cil.ast;
 
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 import org.junit.After;
 import org.junit.Before;
@@ -19,10 +20,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.FormattedSource;
-import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSer;
@@ -30,6 +31,7 @@ import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -62,18 +64,25 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected void assertParsePasses(
-      ParSerable ps,
-      String content, Event... expected) {
-    assertParsePasses(ps, EnumSet.allOf(NodeType.class), content, expected);
-  }
-
-
-  protected void assertParsePasses(
-      ParSerable ps,
-      Set<NodeType> relevant,
+      NodeType<?, ?> nodeType,
       String content, Event... expected) {
     assertParsePasses(
-        ps, content,
+        nodeType.getGrammar(), PTree.complete(nodeType),
+        null, content, expected);
+  }
+
+  protected void assertParsePasses(
+      Grammar<?, ?> g, ParSerable ps,
+      String content, Event... expected) {
+    assertParsePasses(g, ps, null, content, expected);
+  }
+
+  protected void assertParsePasses(
+      Grammar<?, ?> g, ParSerable ps,
+      @Nullable Set<? extends NodeType<?, ?>> relevant,
+      String content, Event... expected) {
+    assertParsePasses(
+        g, ps, content,
         new Predicate<ParseState>() {
 
           @Override
@@ -99,9 +108,17 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected void assertParseTree(
-      ParSerable ps, String content, String... expectedTreeAscii) {
+      NodeType<?, ?> nt, String content,
+      String... expectedTreeAscii) {
+    assertParseTree(
+        nt.getGrammar(), PTree.complete(nt), content, expectedTreeAscii);
+  }
+
+  protected void assertParseTree(
+      Grammar<?, ?> g, ParSerable ps, String content,
+      String... expectedTreeAscii) {
     assertParsePasses(
-        ps, content,
+        g, ps, content,
         new Predicate<ParseState>() {
 
           @Override
@@ -109,7 +126,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
             ImmutableList<Event> generalized = Templates.postprocess(
                 afterParse.input,
                 SList.forwardIterable(afterParse.output));
-            BaseNode root = Trees.of(afterParse.input, generalized);
+            BaseNode<?, ?, ?> root = Trees.forGrammar(g)
+                .of(afterParse.input, generalized);
             String want = Joiner.on('\n').join(expectedTreeAscii);
             String got = root.toAsciiArt("", Functions.constant(null));
             assertEquals(want, got);
@@ -120,7 +138,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected void assertParsePasses(
-      ParSerable ps,
+      Grammar<?, ?> g, ParSerable ps,
       String content, Predicate<ParseState> check) {
     ParseState state = parseState(content);
     LeftRecursion lr = new LeftRecursion();
@@ -130,7 +148,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
       case SUCCESS:
         ParseState afterParse = result.next();
         assertTrue(check.apply(afterParse));
-        doubleCheck(parSer, afterParse, ImmutableSet.of());
+        doubleCheck(g, parSer, afterParse, ImmutableSet.of());
         return;
       case FAILURE:
         fail("`" + content + "` does not match " + ps.getParSer()
@@ -141,7 +159,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   /** SanityChecks to skip for a particular test case. */
-  enum Fuzz {
+  public enum Fuzz {
     /**
      * The variant of the root is not exactly the same as that under test.
      */
@@ -154,13 +172,14 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected void parseSanityCheck(
-      NodeVariant variant, String content, Fuzz... fuzzes) {
+      NodeVariant<?, ?> variant, String content, Fuzz... fuzzes) {
     parseSanityCheck(variant, input(content), fuzzes);
   }
 
   protected void parseSanityCheck(
-      NodeVariant variant, Input input, Fuzz... fuzzes) {
+      NodeVariant<?, ?> variant, Input input, Fuzz... fuzzes) {
     ImmutableSet<Fuzz> fuzzSet = Sets.immutableEnumSet(Arrays.asList(fuzzes));
+    Grammar<?, ?> g = variant.getNodeType().getGrammar();
 
     StringBuilder allTokenText = new StringBuilder();
     ParseState start = new ParseState(input);
@@ -187,7 +206,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
     }
     LeftRecursion lr = new LeftRecursion();
 
-    NodeType startNodeType = variant.getNodeType();
+    NodeType<?, ?> startNodeType = variant.getNodeType();
 
     ParSer parSer = PTree.complete(startNodeType).getParSer();
     ParseResult result = parSer.parse(start, lr, parseErr);
@@ -198,7 +217,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
       case SUCCESS:
         StringBuilder tokensOnOutput = new StringBuilder();
         ParseState afterParse = result.next();
-        List<NodeVariant> firstPushVariants = Lists.newArrayList();
+        List<NodeVariant<?, ?>> firstPushVariants = Lists.newArrayList();
         boolean sawNonPush = false;
         // Check that pops and pushes match up so that the tree is well-formed.
         int stackDepth = 0;
@@ -241,12 +260,14 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
         // Trees.of will throw an IllegalArgumentException if its
         // well-formedness checks fail.
-        BaseNode node = Trees.of(start.input, afterParse.output);
+        BaseNode<?, ?, ?> node = Trees.forGrammar(g)
+            .of(start.input, afterParse.output);
 
         if (firstPushVariants.isEmpty()) {
           fail("Variant never pushed");
         } else if (!fuzzSet.contains(Fuzz.SAME_VARIANT)) {
-          assertEquals(inputContent.toString(), variant, firstPushVariants.get(0));
+          assertEquals(
+              inputContent.toString(), variant, firstPushVariants.get(0));
           if (!variant.isAnon()) {
             assertEquals(variant, node.getVariant());
           }
@@ -254,7 +275,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
         assertEquals(
             inputContent.toString(),
             allTokenText.toString(), tokensOnOutput.toString());
-        doubleCheck(parSer, afterParse, fuzzSet);
+        doubleCheck(g, parSer, afterParse, fuzzSet);
         return;
       case FAILURE:
         fail(
@@ -266,7 +287,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected static ImmutableList<Event> filterEvents(
-      Set<? super NodeType> relevant,
+      @Nullable Set<? extends NodeType<?, ?>> relevant,
       Iterable<? extends Event> events) {
     int depth = 0;
     BitSet included = new BitSet();  // Per depth, whether to include the pop
@@ -290,9 +311,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
           }
           break;
         case PUSH:
-          NodeVariant pushVariant = e.getNodeVariant();
+          NodeVariant<?, ?> pushVariant = e.getNodeVariant();
           boolean pushRelevant = !pushVariant.isAnon()
-              && relevant.contains(pushVariant.getNodeType());
+              && (relevant == null
+                  || relevant.contains(pushVariant.getNodeType()));
           included.set(depth, pushRelevant);
           if (pushRelevant) {
             b.add(e);
@@ -309,8 +331,10 @@ public abstract class AbstractParSerTestCase extends TestCase {
   private static final boolean DEBUG_DOUBLE_CHECK = false;
 
   protected void doubleCheck(
-      ParSer parSer, ParseState afterParse, ImmutableSet<Fuzz> fuzzSet) {
-    BaseNode root = Trees.of(afterParse.input, afterParse.output);
+      Grammar<?, ?> g, ParSer parSer, ParseState afterParse,
+      ImmutableSet<Fuzz> fuzzSet) {
+    BaseNode<?, ?, ?> root = Trees.forGrammar(g)
+        .of(afterParse.input, afterParse.output);
     if (DEBUG_DOUBLE_CHECK) {
       System.err.println("root=" + root);
     }
@@ -323,9 +347,9 @@ public abstract class AbstractParSerTestCase extends TestCase {
     }
 
     ParSer unparser = parSer;
-    if (root.getNodeType() == NodeType.TemplatePseudoRoot) {
+    if (root.getNodeType() == J8NodeType.TemplatePseudoRoot) {
       // Pseudo roots are synthesized by the , so we can't use the
-      unparser = PTree.complete(NodeType.TemplatePseudoRoot).getParSer();
+      unparser = PTree.complete(J8NodeType.TemplatePseudoRoot).getParSer();
       // TODO: We should really confirm that parSer is complete(CompilationUnit)
     }
 
@@ -390,8 +414,8 @@ public abstract class AbstractParSerTestCase extends TestCase {
           }
         }
 
-        BaseNode reparsedRoot = Trees.of(
-            reparseState.input, reparseState.output);
+        BaseNode<?, ?, ?> reparsedRoot = Trees.forGrammar(g)
+            .of(reparseState.input, reparseState.output);
         if (!root.equals(reparsedRoot)) {
           assertEquals(root.toString(), reparsedRoot.toString());
           assertEquals(root, reparsedRoot);

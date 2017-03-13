@@ -5,7 +5,7 @@ import java.io.IOException;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharSource;
-import com.mikesamuel.cil.ast.NodeTypeTables;
+import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.event.Event;
 
 /**
@@ -14,7 +14,7 @@ import com.mikesamuel.cil.event.Event;
 public abstract class Input {
   /**
    * True iff the input may contain
-   * {@link NodeTypeTables#NONSTANDARD non-standard} productions.
+   * {@link NodeType#isNonStandard non-standard} productions.
    */
   public final boolean allowNonStandardProductions;
 
@@ -196,7 +196,7 @@ public abstract class Input {
     }
 
     /**
-     * Calling with true enables {@link NodeTypeTables#NONSTANDARD non-standard}
+     * Calling with true enables {@link NodeType#isNonStandard() non-standard}
      * productions.
      */
     public Builder allowNonStandardProductions(boolean allow) {

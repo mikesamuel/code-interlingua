@@ -12,17 +12,20 @@ import com.mikesamuel.cil.parser.SourcePosition;
 /**
  * Base interface for nodes and node traits.
  */
-public interface NodeI {
+public interface NodeI<
+    BASE_NODE extends BaseNode<BASE_NODE, NODE_TYPE, NODE_VARIANT>,
+    NODE_TYPE extends Enum<NODE_TYPE> & NodeType<BASE_NODE, NODE_TYPE>,
+    NODE_VARIANT extends NodeVariant<BASE_NODE, NODE_TYPE>> {
 
   /**
    * Copies metadata from the source node.
    */
-  void copyMetadataFrom(BaseNode node);
+  void copyMetadataFrom(BASE_NODE node);
 
   /**
    * The variant of the node.
    */
-  NodeVariant getVariant();
+  NODE_VARIANT getVariant();
 
   /**
    * The source position of the node if known.
@@ -37,20 +40,20 @@ public interface NodeI {
   /**
    * The type of node.
    */
-  default NodeType getNodeType() {
+  default NODE_TYPE getNodeType() {
     return getVariant().getNodeType();
   }
 
   /**
    * Immutable list of children of this node.  Empty if a leaf.
    */
-  List<BaseNode> getChildren();
+  List<? extends BASE_NODE> getChildren();
 
   /** Like {@code getChildren().size()} but doesn't require wrapping. */
   int getNChildren();
 
   /** Like {@code getChildren().get(i)} but doesn't require wrapping. */
-  BaseNode getChild(int i);
+  BASE_NODE getChild(int i);
 
   /**
    * The value if any.  {@code null} if an inner node.
@@ -60,11 +63,11 @@ public interface NodeI {
 
 
   /** The first child with the given type or null. */
-  public default @Nullable BaseNode firstChildWithType(NodeType nt) {
+  public @Nullable default BASE_NODE firstChildWithType(NODE_TYPE nt) {
     for (int i = 0, n = getNChildren(); i < n; ++i) {
-      BaseNode child = getChild(i);
+      BaseNode<?, ?, ?> child = getChild(i);
       if (child.getNodeType() == nt) {
-        return child;
+        return nt.getNodeBaseType().cast(child);
       }
     }
     return null;
@@ -74,7 +77,7 @@ public interface NodeI {
   public default @Nullable <T>
   T firstChildWithType(Class<? extends T> cl) {
     for (int i = 0, n = getNChildren(); i < n; ++i) {
-      BaseNode child = getChild(i);
+      BaseNode<?, ?, ?> child = getChild(i);
       if (cl.isInstance(child)) {
         return cl.cast(child);
       }
@@ -102,7 +105,7 @@ public interface NodeI {
       sb.append(" `").append(literalValue).append('`');
     }
     for (int i = 0, n = getNChildren(); i < n; ++i) {
-      BaseNode child = getChild(i);
+      BaseNode<?, ?, ?> child = getChild(i);
       sb.append(' ');
       child.appendToStringBuilder(sb);
     }
@@ -121,7 +124,7 @@ public interface NodeI {
    */
   public default String toAsciiArt(
       String prefix,
-      @Nullable Function<? super NodeI, ? extends String> decorator) {
+      @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator) {
     StringBuilder out = new StringBuilder();
     StringBuilder indentation = new StringBuilder();
     indentation.append(prefix);
@@ -137,17 +140,17 @@ public interface NodeI {
   }
 
   /** A clone that has the same children. */
-  NodeI shallowClone();
+  BASE_NODE shallowClone();
 
   /** A clone whose children are deep clones of this node's children. */
-  NodeI deepClone();
+  BASE_NODE deepClone();
 
 }
 
 final class NodeIHelpers {
 
   static void appendTextContent(
-      NodeI node, StringBuilder sb, String sep) {
+      NodeI<?, ?, ?> node, StringBuilder sb, String sep) {
     String literalValue = node.getValue();
     if (!Strings.isNullOrEmpty(literalValue)) {
       if (sep != null && sb.length() != 0) {
@@ -162,8 +165,8 @@ final class NodeIHelpers {
   }
 
   static void appendAsciiArt(
-      NodeI node, StringBuilder prefix, StringBuilder out,
-      @Nullable Function<? super NodeI, ? extends String> decorator) {
+      NodeI<?, ?, ?> node, StringBuilder prefix, StringBuilder out,
+      @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator) {
     out.append(prefix);
     appendNodeHeader(node, out);
     String decoration = decorator != null ? decorator.apply(node) : null;
@@ -173,14 +176,14 @@ final class NodeIHelpers {
     int prefixLength = prefix.length();
     prefix.append("  ");
     for (int i = 0, n = node.getNChildren(); i < n; ++i) {
-      BaseNode child = node.getChild(i);
+      BaseNode<?, ?, ?> child = node.getChild(i);
       out.append('\n');
       appendAsciiArt(child, prefix, out, decorator);
     }
     prefix.setLength(prefixLength);
   }
 
-  private static void appendNodeHeader(NodeI node, StringBuilder out) {
+  private static void appendNodeHeader(NodeI<?, ?, ?> node, StringBuilder out) {
     out.append(node.getVariant());
     String literalValue = node.getValue();
     if (literalValue != null) {

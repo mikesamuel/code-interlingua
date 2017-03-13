@@ -9,16 +9,16 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.ClassBodyNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.PackageDeclarationNode;
-import com.mikesamuel.cil.ast.SimpleTypeNameNode;
+import com.mikesamuel.cil.ast.j8.ClassBodyNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.PackageDeclarationNode;
+import com.mikesamuel.cil.ast.j8.SimpleTypeNameNode;
+import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.Name;
-import com.mikesamuel.cil.ast.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeScope;
 
 /**
  * Fires for each class declaration.
@@ -44,7 +44,7 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       TypeScope s, TypeDeclaration d, Name name, boolean isAnonymous);
 
   private final void findClasses(
-      @Nullable Name outer, @Nullable TypeScope s, BaseNode n) {
+      @Nullable Name outer, @Nullable TypeScope s, J8BaseNode n) {
     TypeScope scope;
     if (n instanceof TypeScope) {
       scope = (TypeScope) n;
@@ -53,7 +53,7 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       scope = s;
     }
 
-    NodeType nt = n.getVariant().getNodeType();
+    J8NodeType nt = n.getVariant().getNodeType();
     Name childOuter = outer;
 
     if (n instanceof CallableDeclaration) {
@@ -73,8 +73,8 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       case PackageDeclaration:
         PackageDeclarationNode pnode = (PackageDeclarationNode) n;
         Name declaredPackage = Name.DEFAULT_PACKAGE;
-        for (BaseNode ident
-             : pnode.firstChildWithType(NodeType.PackageName).getChildren()) {
+        for (J8BaseNode ident
+             : pnode.firstChildWithType(J8NodeType.PackageName).getChildren()) {
           declaredPackage = declaredPackage.child(
               ident.getValue(), Name.Type.PACKAGE);
         }
@@ -82,8 +82,8 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
         break;
       case TypeParameter:
         Name typeParameterName = outer.child(
-            n.firstChildWithType(NodeType.SimpleTypeName)
-             .firstChildWithType(NodeType.Identifier).getValue(),
+            n.firstChildWithType(J8NodeType.SimpleTypeName)
+             .firstChildWithType(J8NodeType.Identifier).getValue(),
             Name.Type.TYPE_PARAMETER);
         handleTypeDeclaration(s, (TypeDeclaration) n, typeParameterName, false);
         break;
@@ -92,10 +92,10 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       case NormalInterfaceDeclaration:
       case AnnotationTypeDeclaration: {
         SimpleTypeNameNode nameNode = (SimpleTypeNameNode)
-            n.firstChildWithType(NodeType.SimpleTypeName);
+            n.firstChildWithType(J8NodeType.SimpleTypeName);
         Name declaredClassName = (outer != null ? outer : pkg)
             .child(
-                nameNode.firstChildWithType(NodeType.Identifier)
+                nameNode.firstChildWithType(J8NodeType.Identifier)
                 .getValue(),
                 Name.Type.CLASS);
         handleTypeDeclaration(s, (TypeDeclaration) n, declaredClassName, false);
@@ -104,9 +104,9 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       }
       case EnumConstant:
       case UnqualifiedClassInstanceCreationExpression: {
-        List<BaseNode> children = n.getChildren();
+        List<J8BaseNode> children = n.getChildren();
         int nChildren = children.size();
-        BaseNode last = children.get(nChildren - 1);
+        J8BaseNode last = children.get(nChildren - 1);
         Name outerClass = (outer != null ? outer : pkg);
         if (last instanceof ClassBodyNode) {
           // It is an anonymous class.
@@ -121,7 +121,7 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
           handleTypeDeclaration(
               s, (TypeDeclaration) n, anonymousClassName, true);
           // Visit the parameters without the class on the stack.
-          for (BaseNode child : children.subList(0, nChildren - 1)) {
+          for (J8BaseNode child : children.subList(0, nChildren - 1)) {
             findClasses(outer, scope, child);
           }
           findClasses(anonymousClassName, scope, last);
@@ -132,7 +132,7 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
       default:
         break;
     }
-    for (BaseNode child : n.getChildren()) {
+    for (J8BaseNode child : n.getChildren()) {
       findClasses(childOuter, scope, child);
     }
   }
@@ -156,7 +156,7 @@ abstract class AbstractTypeDeclarationPass<T> extends AbstractPass<T> {
   public T run(Iterable<? extends FileNode> fileNodes) {
     for (FileNode node : fileNodes) {
       this.pkg = Name.DEFAULT_PACKAGE;
-      findClasses(null, null, (BaseNode) node);
+      findClasses(null, null, (J8BaseNode) node);
     }
     return getResult();
   }

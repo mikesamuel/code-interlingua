@@ -19,12 +19,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.AssignmentNode;
-import com.mikesamuel.cil.ast.AssignmentOperatorNode;
-import com.mikesamuel.cil.ast.FloatingPointTypeNode;
-import com.mikesamuel.cil.ast.IntegralTypeNode;
-import com.mikesamuel.cil.ast.NumericTypeNode;
-import com.mikesamuel.cil.ast.PrimitiveTypeNode;
+import com.mikesamuel.cil.ast.j8.AssignmentNode;
+import com.mikesamuel.cil.ast.j8.AssignmentOperatorNode;
+import com.mikesamuel.cil.ast.j8.FloatingPointTypeNode;
+import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
+import com.mikesamuel.cil.ast.j8.NumericTypeNode;
+import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.parser.SourcePosition;
@@ -532,7 +532,7 @@ public abstract class StaticType {
 
     private static final boolean DEBUG_LUB = false;
 
-    /** https://docs.oracle.com/javase/specs/jls/se8/html/jls-4.html#jls-4.10.4 */
+    /** docs.oracle.com/javase/specs/jls/se8/html/jls-4.html#jls-4.10.4 */
     public ReferenceType leastUpperBound(
         Iterable<? extends ReferenceType> typesIterable) {
       return leastUpperBound(typesIterable, Sets.newLinkedHashSet());

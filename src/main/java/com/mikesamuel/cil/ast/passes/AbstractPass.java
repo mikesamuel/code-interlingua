@@ -7,7 +7,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.mikesamuel.cil.ast.NodeI;
-import com.mikesamuel.cil.ast.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.util.LogUtils;
 
 /** A compiler pass. */
@@ -20,11 +20,11 @@ public abstract class AbstractPass<T> {
     this.logger = logger;
   }
 
-  protected void error(@Nullable NodeI node, String message) {
+  protected void error(@Nullable NodeI<?, ?, ?> node, String message) {
     LogUtils.log(logger, errorLevel, node, message, null);
   }
 
-  protected void warn(@Nullable NodeI node, String message) {
+  protected void warn(@Nullable NodeI<?, ?, ?> node, String message) {
     LogUtils.log(logger, Level.WARNING, node, message, null);
   }
 

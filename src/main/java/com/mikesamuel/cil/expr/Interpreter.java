@@ -11,55 +11,59 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.AdditiveExpressionNode;
-import com.mikesamuel.cil.ast.AdditiveOperatorNode;
-import com.mikesamuel.cil.ast.ArgumentListNode;
-import com.mikesamuel.cil.ast.ArrayCreationExpressionNode;
-import com.mikesamuel.cil.ast.ArrayInitializerNode;
-import com.mikesamuel.cil.ast.AssignmentNode;
-import com.mikesamuel.cil.ast.AssignmentOperatorNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.BlockNode;
-import com.mikesamuel.cil.ast.BlockStatementsNode;
-import com.mikesamuel.cil.ast.BooleanLiteralNode;
-import com.mikesamuel.cil.ast.ContextFreeNameNode;
-import com.mikesamuel.cil.ast.DimExprNode;
-import com.mikesamuel.cil.ast.DimExprsNode;
-import com.mikesamuel.cil.ast.EnhancedForStatementNode;
-import com.mikesamuel.cil.ast.EqualityExpressionNode;
-import com.mikesamuel.cil.ast.EqualityOperatorNode;
-import com.mikesamuel.cil.ast.ExpressionAtomNode;
-import com.mikesamuel.cil.ast.ExpressionNode;
-import com.mikesamuel.cil.ast.FieldNameNode;
-import com.mikesamuel.cil.ast.FinallyNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.IncrDecrOperatorNode;
-import com.mikesamuel.cil.ast.LabelNode;
-import com.mikesamuel.cil.ast.LeftHandSideNode;
-import com.mikesamuel.cil.ast.LocalNameNode;
-import com.mikesamuel.cil.ast.LocalVariableDeclarationNode;
-import com.mikesamuel.cil.ast.MethodNameNode;
-import com.mikesamuel.cil.ast.MultiplicativeExpressionNode;
-import com.mikesamuel.cil.ast.MultiplicativeOperatorNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.PrefixOperatorNode;
-import com.mikesamuel.cil.ast.PrimaryNode;
-import com.mikesamuel.cil.ast.RelationalExpressionNode;
-import com.mikesamuel.cil.ast.RelationalOperatorNode;
-import com.mikesamuel.cil.ast.ResourceNode;
-import com.mikesamuel.cil.ast.ResourceSpecificationNode;
-import com.mikesamuel.cil.ast.StatementNode;
-import com.mikesamuel.cil.ast.SwitchBlockNode;
-import com.mikesamuel.cil.ast.SwitchBlockStatementGroupNode;
-import com.mikesamuel.cil.ast.SwitchLabelNode;
-import com.mikesamuel.cil.ast.SwitchLabelsNode;
-import com.mikesamuel.cil.ast.UnannTypeNode;
-import com.mikesamuel.cil.ast.UnaryExpressionNode;
-import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorNode;
-import com.mikesamuel.cil.ast.VariableInitializerListNode;
-import com.mikesamuel.cil.ast.VariableInitializerNode;
+import com.mikesamuel.cil.ast.NodeI;
+import com.mikesamuel.cil.ast.j8.AdditiveExpressionNode;
+import com.mikesamuel.cil.ast.j8.AdditiveOperatorNode;
+import com.mikesamuel.cil.ast.j8.ArgumentListNode;
+import com.mikesamuel.cil.ast.j8.ArrayCreationExpressionNode;
+import com.mikesamuel.cil.ast.j8.ArrayInitializerNode;
+import com.mikesamuel.cil.ast.j8.AssignmentNode;
+import com.mikesamuel.cil.ast.j8.AssignmentOperatorNode;
+import com.mikesamuel.cil.ast.j8.BlockNode;
+import com.mikesamuel.cil.ast.j8.BlockStatementsNode;
+import com.mikesamuel.cil.ast.j8.BooleanLiteralNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.j8.DimExprNode;
+import com.mikesamuel.cil.ast.j8.DimExprsNode;
+import com.mikesamuel.cil.ast.j8.EnhancedForStatementNode;
+import com.mikesamuel.cil.ast.j8.EqualityExpressionNode;
+import com.mikesamuel.cil.ast.j8.EqualityOperatorNode;
+import com.mikesamuel.cil.ast.j8.ExpressionAtomNode;
+import com.mikesamuel.cil.ast.j8.ExpressionNode;
+import com.mikesamuel.cil.ast.j8.FieldNameNode;
+import com.mikesamuel.cil.ast.j8.FinallyNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.IncrDecrOperatorNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.LabelNode;
+import com.mikesamuel.cil.ast.j8.LeftHandSideNode;
+import com.mikesamuel.cil.ast.j8.LocalNameNode;
+import com.mikesamuel.cil.ast.j8.LocalVariableDeclarationNode;
+import com.mikesamuel.cil.ast.j8.MethodNameNode;
+import com.mikesamuel.cil.ast.j8.MultiplicativeExpressionNode;
+import com.mikesamuel.cil.ast.j8.MultiplicativeOperatorNode;
+import com.mikesamuel.cil.ast.j8.PrefixOperatorNode;
+import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.RelationalExpressionNode;
+import com.mikesamuel.cil.ast.j8.RelationalOperatorNode;
+import com.mikesamuel.cil.ast.j8.ResourceNode;
+import com.mikesamuel.cil.ast.j8.ResourceSpecificationNode;
+import com.mikesamuel.cil.ast.j8.StatementNode;
+import com.mikesamuel.cil.ast.j8.SwitchBlockNode;
+import com.mikesamuel.cil.ast.j8.SwitchBlockStatementGroupNode;
+import com.mikesamuel.cil.ast.j8.SwitchLabelNode;
+import com.mikesamuel.cil.ast.j8.SwitchLabelsNode;
+import com.mikesamuel.cil.ast.j8.Tokens;
+import com.mikesamuel.cil.ast.j8.UnannTypeNode;
+import com.mikesamuel.cil.ast.j8.UnaryExpressionNode;
+import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorNode;
+import com.mikesamuel.cil.ast.j8.VariableInitializerListNode;
+import com.mikesamuel.cil.ast.j8.VariableInitializerNode;
+import com.mikesamuel.cil.ast.j8.traits.Typed;
+import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -72,10 +76,7 @@ import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
-import com.mikesamuel.cil.ast.traits.Typed;
-import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.SourcePosition;
-import com.mikesamuel.cil.ptree.Tokens;
 import com.mikesamuel.cil.util.LogUtils;
 import com.mikesamuel.cil.util.TriState;
 
@@ -104,22 +105,23 @@ public final class Interpreter<VALUE> {
   }
 
   protected final void log(
-      Level level, @Nullable BaseNode node, String message, Throwable cause) {
+      Level level, @Nullable NodeI<?, ?, ?> node, String message,
+      Throwable cause) {
     SourcePosition pos = node != null ? node.getSourcePosition() : null;
     if (pos == null) { pos = currentSourcePosition; }
     LogUtils.log(context.getLogger(), level, pos, message, cause);
   }
 
-  protected final void error(@Nullable BaseNode node, String message) {
+  protected final void error(@Nullable NodeI<?, ?, ?> node, String message) {
     log(Level.SEVERE, node, message, null);
   }
 
-  protected final void warn(@Nullable BaseNode node, String message) {
+  protected final void warn(@Nullable NodeI<?, ?, ?> node, String message) {
     log(Level.WARNING, node, message, null);
   }
 
   /** Interprets the given AST fragment. */
-  public final Completion<VALUE> interpret(BaseNode node) {
+  public final Completion<VALUE> interpret(J8BaseNode node) {
     return interpret(node, new Locals<>());
   }
 
@@ -129,7 +131,7 @@ public final class Interpreter<VALUE> {
    * @param locals used to resolve free variables.
    */
   public final Completion<VALUE> interpret(
-      BaseNode node, Locals<VALUE> locals) {
+      J8BaseNode node, Locals<VALUE> locals) {
     Supplier<SourcePosition> oldSourcePositionSupplier =
         context.getSourcePositionSupplier();
 
@@ -148,9 +150,9 @@ public final class Interpreter<VALUE> {
     return result;
   }
 
-  private static final ImmutableSet<NodeType> NONSPECIFIC_DELEGATES =
+  private static final ImmutableSet<J8NodeType> NONSPECIFIC_DELEGATES =
       Sets.immutableEnumSet(
-          NodeType.FieldName, NodeType.TypeName, NodeType.LocalName);
+          J8NodeType.FieldName, J8NodeType.TypeName, J8NodeType.LocalName);
 
   /**
    * @param parentLabel the label of the containing block so that interpretation
@@ -158,14 +160,14 @@ public final class Interpreter<VALUE> {
    */
   @SuppressWarnings({ "synthetic-access" })
   protected final Completion<VALUE> interpret(
-      BaseNode nodei, Locals<VALUE> locals, @Nullable String parentLabel) {
+      J8BaseNode nodei, Locals<VALUE> locals, @Nullable String parentLabel) {
     // Handle delegates by recursing
-    BaseNode node = nodei;
+    J8BaseNode node = nodei;
     if (node == null) {
       return errorCompletion;
     }
     while (true) {
-      NodeType delegate = node.getVariant().getDelegate();
+      J8NodeType delegate = node.getVariant().getDelegate();
       if (delegate != null && !NONSPECIFIC_DELEGATES.contains(delegate)
           && node.getNChildren() == 1) {
         node = node.getChild(0);
@@ -179,7 +181,7 @@ public final class Interpreter<VALUE> {
       this.currentSourcePosition = pos;
     }
 
-    NodeType nodeType = node.getNodeType();
+    J8NodeType nodeType = node.getNodeType();
     switch (nodeType) {
       // Here's a long list of all the node types that are not core parts of
       // expression or statement though they may contribute information to them.
@@ -362,7 +364,7 @@ public final class Interpreter<VALUE> {
               case Dsh:
                 return context.primitiveSubtraction(left, right);
               case Pls:
-                BaseNode ln = e.getChild(0), rn = e.getChild(1);
+                J8BaseNode ln = e.getChild(0), rn = e.getChild(1);
                 if (ambiguousPlusShouldConcatenate(ln, left, rn, right)) {
                   return context.stringConcatenation(left, right);
                 } else {
@@ -375,9 +377,9 @@ public final class Interpreter<VALUE> {
         }.apply(e, AdditiveOperatorNode.class, locals);
       }
       case AndExpression:
-        return new BinaryOp<BaseNode>() {
+        return new BinaryOp<J8BaseNode>() {
           @Override
-          VALUE apply(VALUE left, BaseNode op, VALUE right) {
+          VALUE apply(VALUE left, J8BaseNode op, VALUE right) {
             return context.primitiveAnd(left, right);
           }
         }.apply(node, null, locals);
@@ -392,7 +394,7 @@ public final class Interpreter<VALUE> {
                   DimExprsNode.class);
               ImmutableList<DimExprNode> dimExprs = dimExprsNode
                   .finder(DimExprNode.class)
-                  .exclude(NodeType.Annotation, NodeType.Expression)
+                  .exclude(J8NodeType.Annotation, J8NodeType.Expression)
                   .find();
               int n = dimExprs.size();
               int[] dims = new int[n];
@@ -467,7 +469,7 @@ public final class Interpreter<VALUE> {
         LeftHandSideNode lhs = e.firstChildWithType(LeftHandSideNode.class);
         AssignmentOperatorNode op = e.firstChildWithType(
             AssignmentOperatorNode.class);
-        BaseNode rhs = rightOperand(e);
+        J8BaseNode rhs = rightOperand(e);
         if (lhs == null || op == null || rhs == null) {
           error(e, "Malformed assignment");
           return errorCompletion;
@@ -491,12 +493,12 @@ public final class Interpreter<VALUE> {
 
       }
       case BasicForStatement: {
-        BaseNode forInit = null;
-        BaseNode expression = null;
-        BaseNode forUpdate = null;
-        BaseNode statement = null;
+        J8BaseNode forInit = null;
+        J8BaseNode expression = null;
+        J8BaseNode forUpdate = null;
+        J8BaseNode statement = null;
         for (int i = 0, n = node.getNChildren(); i < n; ++i) {
-          BaseNode child = node.getChild(i);
+          J8BaseNode child = node.getChild(i);
           switch (child.getNodeType()) {
             case ForInit: forInit = child; break;
             case Expression: expression = child; break;
@@ -537,7 +539,7 @@ public final class Interpreter<VALUE> {
         return nullCompletion;
       }
       case BlockTypeScope: {
-        BaseNode stmts = node.firstChildWithType(BlockStatementsNode.class);
+        J8BaseNode stmts = node.firstChildWithType(BlockStatementsNode.class);
         if (stmts == null) { return nullCompletion; }
         return interpret(stmts, locals, parentLabel);
       }
@@ -560,7 +562,7 @@ public final class Interpreter<VALUE> {
           }
           label = ident.getValue();
         }
-        return NodeType.BreakStatement == node.getNodeType()
+        return J8NodeType.BreakStatement == node.getNodeType()
             ? Completion.breakTo(label)
             : Completion.continueTo(label);
       }
@@ -572,7 +574,7 @@ public final class Interpreter<VALUE> {
           error(node, "Malformed cast");
           return errorCompletion;
         }
-        BaseNode cast = node.getChild(0);
+        J8BaseNode cast = node.getChild(0);
         Completion<VALUE> operandResult = interpret(
             node.getChild(1), locals, null);
         Optional<WholeType> targetTypeOpt = cast.finder(WholeType.class)
@@ -604,12 +606,13 @@ public final class Interpreter<VALUE> {
         break;
       case ConditionalAndExpression:
       case ConditionalOrExpression: {
-        BaseNode leftOperand = leftOperand(node);
+        J8BaseNode leftOperand = leftOperand(node);
         Completion<VALUE> leftResult = interpret(leftOperand, locals, null);
         if (!context.completedNormallyWithoutError(leftResult)) {
           return leftResult;
         }
-        boolean isAnd = node.getNodeType() == NodeType.ConditionalAndExpression;
+        boolean isAnd =
+            node.getNodeType() == J8NodeType.ConditionalAndExpression;
         // Short circuit as appropriate.
         switch (context.toBoolean(leftResult.value)) {
           case FALSE:
@@ -622,7 +625,7 @@ public final class Interpreter<VALUE> {
             if (!isAnd) { return leftResult; }
             break;
         }
-        BaseNode rightOperand = rightOperand(node);
+        J8BaseNode rightOperand = rightOperand(node);
         Completion<VALUE> rightResult = interpret(rightOperand, locals, null);
         if (!context.completedNormallyWithoutError(rightResult)) {
           return rightResult;
@@ -639,7 +642,7 @@ public final class Interpreter<VALUE> {
       case IfStatement: {
         int nChildren = node.getNChildren();
         if (nChildren != 2 && nChildren != 3) { return errorCompletion; }
-        BaseNode cond = node.getChild(0);
+        J8BaseNode cond = node.getChild(0);
         Completion<VALUE> condResult = interpret(cond, locals, null);
         if (!context.completedNormallyWithoutError(condResult)) {
           error(cond, "Bad condition result " + condResult.value);
@@ -660,7 +663,7 @@ public final class Interpreter<VALUE> {
       }
       case ContextFreeNames: {
         Completion<VALUE> result = null;
-        for (BaseNode child : node.getChildren()) {
+        for (J8BaseNode child : node.getChildren()) {
           if (child instanceof ContextFreeNameNode) {
             IdentifierNode identNode = child.firstChildWithType(
                 IdentifierNode.class);
@@ -709,8 +712,8 @@ public final class Interpreter<VALUE> {
           error(node, "Malformed do loop " + node);
           return errorCompletion;
         }
-        BaseNode body = node.getChild(0);
-        BaseNode expression = node.getChild(1);
+        J8BaseNode body = node.getChild(0);
+        J8BaseNode expression = node.getChild(1);
         Completion<VALUE> firstTimeThroughBody = interpret(body, locals, null);
         switch (firstTimeThroughBody.kind) {
           case BREAK:
@@ -741,7 +744,8 @@ public final class Interpreter<VALUE> {
         WholeType elementTypeNode = s.firstChildWithType(WholeType.class);
         VariableDeclaratorIdNode decl = s.firstChildWithType(
             VariableDeclaratorIdNode.class);
-        ExpressionNode sequenceNode = s.firstChildWithType(ExpressionNode.class);
+        ExpressionNode sequenceNode = s.firstChildWithType(
+            ExpressionNode.class);
         StatementNode body = s.firstChildWithType(StatementNode.class);
         if (elementTypeNode == null || decl == null || sequenceNode == null
             || body == null) {
@@ -794,7 +798,7 @@ public final class Interpreter<VALUE> {
           TriState isPrimitiveComparison;
 
           @Override
-          void previewOperands(BaseNode left, BaseNode right) {
+          void previewOperands(J8BaseNode left, J8BaseNode right) {
             isPrimitiveComparison = TriState.OTHER;
             // Do primitive comparison if either is primitive.
             StaticType ltype = ((Typed) left).getStaticType();
@@ -844,9 +848,9 @@ public final class Interpreter<VALUE> {
         }.apply(e, EqualityOperatorNode.class, locals);
       }
       case ExclusiveOrExpression:
-        return new BinaryOp<BaseNode>() {
+        return new BinaryOp<J8BaseNode>() {
           @Override
-          VALUE apply(VALUE left, BaseNode op, VALUE right) {
+          VALUE apply(VALUE left, J8BaseNode op, VALUE right) {
             return context.primitiveXor(left, right);
           }
         }.apply(node, null, locals);
@@ -915,21 +919,21 @@ public final class Interpreter<VALUE> {
             return normal(context.from(
                 Tokens.decodeLong(text.substring(0, textLength - 1))));
           default:
-            return nodeType == NodeType.IntegerLiteral
+            return nodeType == J8NodeType.IntegerLiteral
                 ? normal(context.from(Tokens.decodeInt(text)))
                 : normal(context.from(Tokens.decodeDouble(text)));
         }
       }
       case InclusiveOrExpression:
-        return new BinaryOp<BaseNode>() {
+        return new BinaryOp<J8BaseNode>() {
           @Override
-          VALUE apply(VALUE left, BaseNode op, VALUE right) {
+          VALUE apply(VALUE left, J8BaseNode op, VALUE right) {
             return context.primitiveOr(left, right);
           }
         }.apply(node, null, locals);
       case LabeledStatement: {
         LabelNode labelNode = node.firstChildWithType(LabelNode.class);
-        BaseNode stmt = node.firstChildWithType(StatementNode.class);
+        J8BaseNode stmt = node.firstChildWithType(StatementNode.class);
         if (stmt != null
             && ((StatementNode) stmt).getVariant()
                 == StatementNode.Variant.Block) {
@@ -964,7 +968,7 @@ public final class Interpreter<VALUE> {
         Function<VALUE, VALUE> coercion = context.coercion(type);
         for (VariableDeclaratorNode decl
             : node.finder(VariableDeclaratorNode.class)
-                  .exclude(NodeType.VariableInitializer)
+                  .exclude(J8NodeType.VariableInitializer)
                   .find()) {
           VariableDeclaratorIdNode varid = decl.firstChildWithType(
               VariableDeclaratorIdNode.class);
@@ -1013,7 +1017,7 @@ public final class Interpreter<VALUE> {
         return nullCompletion;
       case PostExpression:
       case PreExpression: {
-        boolean isPost = node.getNodeType() == NodeType.PostExpression;
+        boolean isPost = node.getNodeType() == J8NodeType.PostExpression;
         LeftHandSideNode lhs = node.firstChildWithType(LeftHandSideNode.class);
         IncrDecrOperatorNode opNode = node.firstChildWithType(
             IncrDecrOperatorNode.class);
@@ -1059,7 +1063,7 @@ public final class Interpreter<VALUE> {
             // TODO
             break;
           case MethodInvocation: {
-            BaseNode objNode = e.getChild(0);
+            J8BaseNode objNode = e.getChild(0);
             return invokeMethod(Optional.of(objNode), e, locals);
           }
           case MethodReference:
@@ -1122,7 +1126,7 @@ public final class Interpreter<VALUE> {
       case StatementExpressionList: {
         int n = node.getNChildren();
         for (int i = 0; i < n; ++i) {
-          BaseNode stmt = node.getChild(i);
+          J8BaseNode stmt = node.getChild(i);
           Completion<VALUE> result = interpret(stmt, locals, null);
           if (!context.completedNormallyWithoutError(result)) {
             return result;
@@ -1147,7 +1151,7 @@ public final class Interpreter<VALUE> {
       }
       case SwitchLabel:
         return interpret(
-            node.firstChildWithType(NodeType.CaseValue), locals, null);
+            node.firstChildWithType(J8NodeType.CaseValue), locals, null);
       case SwitchStatement: {
         ExpressionNode expr = node.firstChildWithType(ExpressionNode.class);
         SwitchBlockNode body = node.firstChildWithType(SwitchBlockNode.class);
@@ -1191,7 +1195,7 @@ public final class Interpreter<VALUE> {
         int matchIndex = -1;
         search:
         for (int i = 0, n = body.getNChildren(); i < n; ++i) {
-          BaseNode child = body.getChild(i);
+          J8BaseNode child = body.getChild(i);
           if (child instanceof SwitchBlockStatementGroupNode) {
             SwitchBlockStatementGroupNode group =
                 (SwitchBlockStatementGroupNode) child;
@@ -1201,7 +1205,7 @@ public final class Interpreter<VALUE> {
               error(node, "Malformed case group");
               return errorCompletion;
             }
-            for (BaseNode labelsChild : labels.getChildren()) {
+            for (J8BaseNode labelsChild : labels.getChildren()) {
               boolean matchFound = false, matchMore = true;
               if (labelsChild instanceof SwitchLabelNode) {
                 SwitchLabelNode label = (SwitchLabelNode) labelsChild;
@@ -1248,7 +1252,7 @@ public final class Interpreter<VALUE> {
         if (matchIndex >= 0) {
           block_execution_loop:
           for (int i = matchIndex, n = body.getNChildren(); i < n; ++i) {
-            BaseNode child = body.getChild(i);
+            J8BaseNode child = body.getChild(i);
             if (child instanceof SwitchBlockStatementGroupNode) {
               BlockStatementsNode stmts = child.firstChildWithType(
                   BlockStatementsNode.class);
@@ -1419,7 +1423,7 @@ public final class Interpreter<VALUE> {
               error(node, "missing prefix operator");
               return errorCompletion;
             }
-            BaseNode operand = rightOperand(node);
+            J8BaseNode operand = rightOperand(node);
             Completion<VALUE> operandResult = interpret(operand, locals, null);
             if (!context.completedNormallyWithoutError(operandResult)) {
               return operandResult;
@@ -1471,7 +1475,7 @@ public final class Interpreter<VALUE> {
             ArgumentListNode.class);
         List<VALUE> actualValues = Lists.newArrayList();
         if (actuals != null) {
-          for (BaseNode child : actuals.getChildren()) {
+          for (J8BaseNode child : actuals.getChildren()) {
             Completion<VALUE> actualResult = interpret(child, locals, null);
             if (context.completedNormallyWithoutError(actualResult)) {
               actualValues.add(actualResult.value);
@@ -1488,8 +1492,8 @@ public final class Interpreter<VALUE> {
           error(node, "Malformed do loop " + node);
           return errorCompletion;
         }
-        BaseNode expression = node.getChild(0);
-        BaseNode body = node.getChild(1);
+        J8BaseNode expression = node.getChild(0);
+        J8BaseNode body = node.getChild(1);
         return interpretLoop(
             null, expression, null, body, locals, parentLabel);
       }
@@ -1510,7 +1514,7 @@ public final class Interpreter<VALUE> {
    * @return the null completion on normal exit.
    */
   public Completion<VALUE> forEach(
-      BaseNode sequenceNode, String parentLabel,
+      J8BaseNode sequenceNode, String parentLabel,
       VALUE sequenceValue, Function<VALUE, Completion<VALUE>> elementToResult,
       StaticType sequenceType) {
 
@@ -1645,7 +1649,7 @@ public final class Interpreter<VALUE> {
   }
 
   private Completion<VALUE> invokeMethod(
-      Optional<BaseNode> objNodeOpt, BaseNode call, Locals<VALUE> locals) {
+      Optional<J8BaseNode> objNodeOpt, J8BaseNode call, Locals<VALUE> locals) {
     MethodNameNode name = call.firstChildWithType(MethodNameNode.class);
     if (name == null) {
       error(call, "Call missing method name");
@@ -1715,7 +1719,7 @@ public final class Interpreter<VALUE> {
 
     List<VALUE> actualValues = Lists.newArrayList();
     if (actuals != null) {
-      for (BaseNode child : actuals.getChildren()) {
+      for (J8BaseNode child : actuals.getChildren()) {
         Completion<VALUE> actualResult = interpret(child, locals, null);
         if (context.completedNormallyWithoutError(actualResult)) {
           actualValues.add(actualResult.value);
@@ -1740,8 +1744,8 @@ public final class Interpreter<VALUE> {
   }
 
   private Completion<VALUE> interpretLoop(
-      BaseNode forInit, BaseNode expression, BaseNode forUpdate,
-      BaseNode statement,
+      J8BaseNode forInit, J8BaseNode expression, J8BaseNode forUpdate,
+      J8BaseNode statement,
       Locals<VALUE> locals, String parentLabel) {
     if (forInit != null) {
       Completion<VALUE> result = interpret(forInit, locals, null);
@@ -1809,19 +1813,19 @@ public final class Interpreter<VALUE> {
     return arr;
   }
 
-  private static BaseNode leftOperand(BaseNode node) {
+  private static J8BaseNode leftOperand(J8BaseNode node) {
     int nChildren = node.getNChildren();
     return nChildren == 0 ? null : node.getChild(0);
   }
 
-  private static BaseNode rightOperand(BaseNode node) {
+  private static J8BaseNode rightOperand(J8BaseNode node) {
     int nChildren = node.getNChildren();
     return nChildren == 0 ? null : node.getChild(nChildren - 1);
   }
 
   private StaticType stringType;
   final boolean ambiguousPlusShouldConcatenate(
-      BaseNode lhs, VALUE a, BaseNode rhs, VALUE b) {
+      J8BaseNode lhs, VALUE a, J8BaseNode rhs, VALUE b) {
     if (stringType == null) {
       stringType = context.getTypePool().type(
           JavaLang.JAVA_LANG_STRING, null, context.getLogger());
@@ -1863,8 +1867,8 @@ public final class Interpreter<VALUE> {
     return false;
   }
 
-  private static StaticType typeOf(BaseNode node) {
-    BaseNode n = node;
+  private static StaticType typeOf(J8BaseNode node) {
+    J8BaseNode n = node;
     while (true) {
       if (n instanceof Typed) {
         return ((Typed) n).getStaticType();
@@ -1886,7 +1890,7 @@ public final class Interpreter<VALUE> {
     T fieldAccess(String name, VALUE container);
     T local(Name localName, Locals<VALUE> locals);
 
-    T error(BaseNode node);
+    T error(J8BaseNode node);
     T error(Completion<VALUE> c);
   }
 
@@ -1982,7 +1986,7 @@ public final class Interpreter<VALUE> {
     }
 
     @Override
-    public Completion<VALUE> error(BaseNode node) {
+    public Completion<VALUE> error(J8BaseNode node) {
       return errorCompletion;
     }
 
@@ -2032,7 +2036,7 @@ public final class Interpreter<VALUE> {
     }
 
     @Override
-    public Completion<VALUE> error(BaseNode node) {
+    public Completion<VALUE> error(J8BaseNode node) {
       return errorCompletion;
     }
 
@@ -2047,7 +2051,7 @@ public final class Interpreter<VALUE> {
       LeftHandSideNode lhs, Locals<VALUE> locals,
       LeftHandSideHandler<VALUE, T> handler) {
     if (lhs != null && lhs.getNChildren() == 1) {
-      BaseNode child = lhs.getChild(0);
+      J8BaseNode child = lhs.getChild(0);
       if (child instanceof PrimaryNode) {
         return withLeftHandSide((PrimaryNode) child, locals, handler);
       } else if (child instanceof ExpressionAtomNode) {
@@ -2089,7 +2093,7 @@ public final class Interpreter<VALUE> {
       }
       case FieldAccess: {
         if (e.getNChildren() != 2) { break; }
-        BaseNode objNode = leftOperand(e);
+        J8BaseNode objNode = leftOperand(e);
         StaticType objType = objNode instanceof Typed
             ? ((Typed) objNode).getStaticType()
             : null;
@@ -2200,19 +2204,19 @@ public final class Interpreter<VALUE> {
     return handler.error(e);
   }
 
-  abstract class BinaryOp<OP extends BaseNode> {
+  abstract class BinaryOp<OP extends J8BaseNode> {
     abstract VALUE apply(VALUE left, OP op, VALUE right);
 
     /**
      * @param left the left operand.
      * @param right the right operand.
      */
-    void previewOperands(BaseNode left, BaseNode right) {
+    void previewOperands(J8BaseNode left, J8BaseNode right) {
       // By default, does nothing.
     }
 
     Completion<VALUE> apply(
-        BaseNode operation, @Nullable Class<OP> operatorType,
+        J8BaseNode operation, @Nullable Class<OP> operatorType,
         Locals<VALUE> locals) {
       int nChildrenRequired = operatorType == null ? 2 : 3;
       if (operation.getNChildren() != nChildrenRequired) {
@@ -2220,13 +2224,13 @@ public final class Interpreter<VALUE> {
         return errorCompletion;
       }
 
-      BaseNode left = operation.getChild(0);
-      BaseNode right = operation.getChild(nChildrenRequired - 1);
+      J8BaseNode left = operation.getChild(0);
+      J8BaseNode right = operation.getChild(nChildrenRequired - 1);
       previewOperands(left, right);
 
       OP op = null;
       if (operatorType != null) {
-        BaseNode opNode = operation.getChild(1);
+        J8BaseNode opNode = operation.getChild(1);
         if (!(operatorType.isInstance(opNode))) {
           error(opNode, "Wrong operator " + opNode);
           return errorCompletion;
@@ -2271,7 +2275,7 @@ public final class Interpreter<VALUE> {
   }
 
   final LazyBinaryOp binaryOpFor(
-      BaseNode lhs, AssignmentOperatorNode.Variant v, BaseNode rhs) {
+      J8BaseNode lhs, AssignmentOperatorNode.Variant v, J8BaseNode rhs) {
     // TODO: can this switch become a static immutableEnumMap?
     switch (v) {
       case AmpEq:

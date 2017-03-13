@@ -4,16 +4,16 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
-import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.format.java.Java8Formatters;
-import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Unparse;
 import com.mikesamuel.cil.ptree.PTree;
 
@@ -73,7 +73,7 @@ public final class CStyleGrossStructurerTest extends TestCase {
         + "  12, 13, 14, 15,\n"
         + "}",
         "{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, }",
-       NodeType.ArrayInitializer);
+       J8NodeType.ArrayInitializer);
   }
 
   @Test
@@ -90,7 +90,7 @@ public final class CStyleGrossStructurerTest extends TestCase {
             + "foo();"
             + "\n"
             + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa();",
-        NodeType.BlockStatements);
+        J8NodeType.BlockStatements);
   }
 
   @Test
@@ -121,12 +121,12 @@ public final class CStyleGrossStructurerTest extends TestCase {
 
   private void assertReformattedJava(String canon)
   throws Exception {
-    assertReformattedJava(canon, canon, NodeType.CompilationUnit);
+    assertReformattedJava(canon, canon, J8NodeType.CompilationUnit);
   }
 
   private void assertReformattedJava(String want, String input)
   throws Exception {
-    assertReformattedJava(want, input, NodeType.CompilationUnit);
+    assertReformattedJava(want, input, J8NodeType.CompilationUnit);
   }
 
   private void assertReformattedJava(String want, String input, ParSerable ps)
@@ -137,7 +137,7 @@ public final class CStyleGrossStructurerTest extends TestCase {
         ParseErrorReceiver.DEV_NULL);
     switch (result.synopsis) {
       case SUCCESS:
-        Formatter<SList<NodeVariant>> formatter =
+        Formatter<SList<NodeVariant<?, ?>>> formatter =
            Java8Formatters.createFormatter();
         formatter.setSoftColumnLimit(40);
         Unparse.Verified v = Unparse.verify(SList.forwardIterable(
@@ -151,7 +151,7 @@ public final class CStyleGrossStructurerTest extends TestCase {
   }
 
   private static void assertFormattedJava(String want, String... tokens) {
-    Formatter<SList<NodeVariant>> formatter =
+    Formatter<SList<NodeVariant<?, ?>>> formatter =
         Java8Formatters.createFormatter();
      formatter.setSoftColumnLimit(40);
      for (String token : tokens) {

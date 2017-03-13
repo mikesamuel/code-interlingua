@@ -5,16 +5,16 @@ import java.util.logging.Logger;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseInnerNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.ExpressionNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.StatementNode;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.ExpressionNode;
+import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.StatementNode;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
-import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
@@ -110,20 +110,20 @@ public final class CommonPassRunner {
     return (StatementNode) wrapProcessThenUnwrap(e);
   }
 
-  private BaseNode wrapProcessThenUnwrap(BaseNode n) {
+  private J8BaseNode wrapProcessThenUnwrap(J8BaseNode n) {
     CompilationUnitNode cu = createEnvelope();
     boolean replaced = replaceFirst(cu, n);
     Preconditions.checkState(replaced);
-    BaseNode after = (BaseNode) run(cu);
+    J8BaseNode after = (J8BaseNode) run(cu);
     return after.finder(n.getClass()).exclude(n.getClass())
         .findOne().get();
   }
 
-  private static boolean replaceFirst(BaseNode container, BaseNode target) {
-    if (container instanceof BaseInnerNode) {
-      BaseInnerNode icontainer = (BaseInnerNode) container;
+  private static boolean replaceFirst(J8BaseNode container, J8BaseNode target) {
+    if (container instanceof J8BaseInnerNode) {
+      J8BaseInnerNode icontainer = (J8BaseInnerNode) container;
       for (int i = 0, n = icontainer.getNChildren(); i < n; ++i) {
-        BaseNode child = icontainer.getChild(i);
+        J8BaseNode child = icontainer.getChild(i);
         if (child.getNodeType() == target.getNodeType()) {
           icontainer.replace(i, target);
           return true;
@@ -182,7 +182,7 @@ public final class CommonPassRunner {
         .code("class C { {;} Object o = null; }")
         .source(CommonPassRunner.class.getName())
         .build();
-    ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
+    ParseResult result = PTree.complete(J8NodeType.CompilationUnit).getParSer()
         .parse(
             new ParseState(input), new LeftRecursion(),
             ParseErrorReceiver.DEV_NULL);
@@ -190,7 +190,9 @@ public final class CommonPassRunner {
         ParseResult.Synopsis.SUCCESS == result.synopsis,
         input.content());
     ParseState afterParse = result.next();
-    return (CompilationUnitNode) Trees.of(input, afterParse.output);
+    return (CompilationUnitNode)
+        Trees.forGrammar(J8NodeType.GRAMMAR)
+        .of(input, afterParse.output);
   }
 
   /**

@@ -15,9 +15,9 @@ import org.json.JSONTokener;
 
 import com.google.common.collect.Maps;
 import com.google.common.io.CharSource;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.expr.InterpretationContext;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -98,7 +98,7 @@ public final class DataBundle {
       // Recognize
       //   { "nodeType": "Foo", "code": "..." }
       // and parse "..." using NodeType.Foo to get a FooNode AST.
-      NodeType nodeType = obj.getEnum(NodeType.class, "nodeType");
+      J8NodeType nodeType = obj.getEnum(J8NodeType.class, "nodeType");
       Input inp = Input.builder()
           .source(source)
           .code(obj.getString("code"))
@@ -113,7 +113,9 @@ public final class DataBundle {
               source + " reached via " + SList.forwardIterable(keyChain));
         case SUCCESS:
           ParseState afterParse = r.next();
-          BaseNode parsed = Trees.of(inp, afterParse.output);
+          J8BaseNode parsed = Trees
+              .forGrammar(J8NodeType.CompilationUnit.getGrammar())
+              .of(inp, afterParse.output);
           return parsed;
       }
       throw new AssertionError(r.synopsis);

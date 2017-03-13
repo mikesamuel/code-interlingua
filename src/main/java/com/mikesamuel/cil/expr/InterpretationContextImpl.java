@@ -867,7 +867,8 @@ implements InterpretationContext<Object> {
                  | NullPointerException ex) {
           // return error below
         } catch (InvocationTargetException ex) {
-          log(Level.SEVERE, "Failure in static method", ex.getTargetException());
+          log(Level.SEVERE, "Failure in static method",
+              ex.getTargetException());
         }
       }
     }

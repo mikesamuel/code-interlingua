@@ -7,10 +7,10 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseInnerNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.parser.SList;
 
 /**
@@ -52,9 +52,10 @@ extends AbstractPass<ImmutableList<FileNode>> {
      * A status that specifies that the current node should be replaced with
      * the given ones in order.
      */
-    public static ProcessingStatus replace(BaseNode node, BaseNode... rest) {
+    public static ProcessingStatus replace(
+        J8BaseNode node, J8BaseNode... rest) {
       return replace(
-          ImmutableList.<BaseNode>builder().add(node).add(rest).build());
+          ImmutableList.<J8BaseNode>builder().add(node).add(rest).build());
     }
 
     /**
@@ -62,21 +63,21 @@ extends AbstractPass<ImmutableList<FileNode>> {
      * the given ones in order.
      */
     public static ProcessingStatus replace(
-        Iterable<? extends BaseNode> replacements) {
+        Iterable<? extends J8BaseNode> replacements) {
       return new ProcessingStatus(
           Mutation.REPLACE, ImmutableList.copyOf(replacements));
     }
 
     final Mutation mut;
     /** The set of replacements. */
-    public final ImmutableList<BaseNode> replacements;
+    public final ImmutableList<J8BaseNode> replacements;
 
     private ProcessingStatus(Mutation mut) {
       this(mut, ImmutableList.of());
     }
 
     private ProcessingStatus(
-        Mutation mut, ImmutableList<BaseNode> replacements) {
+        Mutation mut, ImmutableList<J8BaseNode> replacements) {
       this.mut = mut;
       this.replacements = replacements;
     }
@@ -117,7 +118,7 @@ extends AbstractPass<ImmutableList<FileNode>> {
    */
   @SuppressWarnings("static-method")  // may be overridden
   protected ProcessingStatus previsit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     return ProcessingStatus.CONTINUE;
   }
 
@@ -142,16 +143,16 @@ extends AbstractPass<ImmutableList<FileNode>> {
    */
   @SuppressWarnings("static-method")  // may be overridden
   protected ProcessingStatus postvisit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     return ProcessingStatus.CONTINUE;
   }
 
   protected final ProcessingStatus visit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     ProcessingStatus status = previsit(node, pathFromRoot);
     if (status == ProcessingStatus.CONTINUE) {
-      if (node instanceof BaseInnerNode) {
-        visitChildren((BaseInnerNode) node, pathFromRoot);
+      if (node instanceof J8BaseInnerNode) {
+        visitChildren((J8BaseInnerNode) node, pathFromRoot);
       }
       status = postvisit(node, pathFromRoot);
     }
@@ -164,24 +165,24 @@ extends AbstractPass<ImmutableList<FileNode>> {
   }
 
   protected final void visitChildren(
-      BaseInnerNode node, @Nullable SList<Parent> pathFromRoot) {
-    List<BaseNode> children = ImmutableList.copyOf(node.getChildren());
+      J8BaseInnerNode node, @Nullable SList<Parent> pathFromRoot) {
+    List<J8BaseNode> children = ImmutableList.copyOf(node.getChildren());
     int j = 0;
     for (int i = 0, n = children.size(); i < n; ++i, ++j) {
-      BaseNode child = children.get(i);
+      J8BaseNode child = children.get(i);
       ProcessingStatus childStatus = visit(
           child, SList.append(pathFromRoot, makeParent(j, node)));
 
       Preconditions.checkState(childStatus.mut == Mutation.REPLACE);
       Preconditions.checkState(node.getChild(j) == child);
 
-      ImmutableList<BaseNode> replacements = childStatus.replacements;
+      ImmutableList<J8BaseNode> replacements = childStatus.replacements;
       if (replacements.isEmpty()) {
         node.remove(j);
         --j;
       } else {
         node.replace(j, replacements.get(0));
-        for (BaseNode extraReplacement
+        for (J8BaseNode extraReplacement
              : replacements.subList(1, replacements.size())) {
           node.add(++j, extraReplacement);
         }
@@ -194,9 +195,9 @@ extends AbstractPass<ImmutableList<FileNode>> {
   public ImmutableList<FileNode> run(Iterable<? extends FileNode> fileNodes) {
     ImmutableList.Builder<FileNode> b = ImmutableList.builder();
     for (FileNode fileNode : fileNodes) {
-      ProcessingStatus status = visit((BaseNode) fileNode, null);
+      ProcessingStatus status = visit((J8BaseNode) fileNode, null);
       Preconditions.checkState(status.mut == Mutation.REPLACE);
-      for (BaseNode replacement : status.replacements) {
+      for (J8BaseNode replacement : status.replacements) {
         b.add((FileNode) replacement);
       }
     }
@@ -204,7 +205,7 @@ extends AbstractPass<ImmutableList<FileNode>> {
   }
 
   @SuppressWarnings("static-method")
-  protected Parent makeParent(int indexInParent, BaseInnerNode parent) {
+  protected Parent makeParent(int indexInParent, J8BaseInnerNode parent) {
     return new Parent(indexInParent, parent);
   }
 
@@ -216,9 +217,9 @@ extends AbstractPass<ImmutableList<FileNode>> {
     /** Index in parent's child list of the current node. */
     public final int indexInParent;
     /** The parent of the current node. */
-    public final BaseInnerNode parent;
+    public final J8BaseInnerNode parent;
 
-    Parent(int indexInParent, BaseInnerNode parent) {
+    Parent(int indexInParent, J8BaseInnerNode parent) {
       this.indexInParent = indexInParent;
       this.parent = parent;
     }

@@ -23,30 +23,30 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
-import com.google.common.collect.ImmutableList.Builder;
-import com.mikesamuel.cil.ast.BaseInnerNode;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.ExpressionNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.NodeTypeHintNode;
-import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
-import com.mikesamuel.cil.ast.TemplateBodyNode;
-import com.mikesamuel.cil.ast.TemplateComprehensionNode;
-import com.mikesamuel.cil.ast.TemplateConditionNode;
-import com.mikesamuel.cil.ast.TemplateDirectiveNode;
-import com.mikesamuel.cil.ast.TemplateDirectivesNode;
-import com.mikesamuel.cil.ast.TemplateFormalsNode;
-import com.mikesamuel.cil.ast.TemplateHeaderNode;
-import com.mikesamuel.cil.ast.TemplateInterpolationNode;
-import com.mikesamuel.cil.ast.TemplateLocalNode;
-import com.mikesamuel.cil.ast.TemplateLoopNode;
-import com.mikesamuel.cil.ast.TemplatePseudoRootNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorNode;
-import com.mikesamuel.cil.ast.VariableInitializerNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.ExpressionNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.NodeTypeHintNode;
+import com.mikesamuel.cil.ast.j8.SingleStaticImportDeclarationNode;
+import com.mikesamuel.cil.ast.j8.TemplateBodyNode;
+import com.mikesamuel.cil.ast.j8.TemplateComprehensionNode;
+import com.mikesamuel.cil.ast.j8.TemplateConditionNode;
+import com.mikesamuel.cil.ast.j8.TemplateDirectiveNode;
+import com.mikesamuel.cil.ast.j8.TemplateDirectivesNode;
+import com.mikesamuel.cil.ast.j8.TemplateFormalsNode;
+import com.mikesamuel.cil.ast.j8.TemplateHeaderNode;
+import com.mikesamuel.cil.ast.j8.TemplateInterpolationNode;
+import com.mikesamuel.cil.ast.j8.TemplateLocalNode;
+import com.mikesamuel.cil.ast.j8.TemplateLoopNode;
+import com.mikesamuel.cil.ast.j8.TemplatePseudoRootNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorNode;
+import com.mikesamuel.cil.ast.j8.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
@@ -56,7 +56,6 @@ import com.mikesamuel.cil.expr.InterpretationContext;
 import com.mikesamuel.cil.expr.InterpretationContextImpl;
 import com.mikesamuel.cil.expr.Interpreter;
 import com.mikesamuel.cil.expr.Locals;
-import com.mikesamuel.cil.expr.NodeCoercion;
 import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.SList;
@@ -167,14 +166,14 @@ extends AbstractRewritingPass {
             }
             Preconditions.checkState(computedResult);
 
-            Optional<NodeType> nodeTypeHint = Optional.absent();
+            Optional<J8NodeType> nodeTypeHint = Optional.absent();
             if (fnInfo.nodeTypeHint != null) {
               Optional<IdentifierNode> nodeTypeHintIdent = fnInfo.nodeTypeHint
                   .finder(IdentifierNode.class).allowNonStandard(true)
                   .findOne();
               if (nodeTypeHintIdent.isPresent()) {
                 try {
-                  nodeTypeHint = Optional.of(NodeType.valueOf(
+                  nodeTypeHint = Optional.of(J8NodeType.valueOf(
                       nodeTypeHintIdent.get().getValue()));
                 } catch (@SuppressWarnings("unused")
                          IllegalArgumentException ex) {
@@ -212,7 +211,7 @@ extends AbstractRewritingPass {
 
   public TemplateProcessingPass(
       Logger logger, TypePool typePool, ClassLoader loader, DataBundle input,
-      Builder<CompilationUnitNode> out) {
+      ImmutableList.Builder<CompilationUnitNode> out) {
     super(logger);
 
     this.context = new TemplateBundleInterpretationContext(
@@ -236,9 +235,9 @@ extends AbstractRewritingPass {
     }
   }
 
-  private final Multimap<BaseNode, Interpolation> parentToInterpolations
+  private final Multimap<J8BaseNode, Interpolation> parentToInterpolations
     = Multimaps.newMultimap(
-        new IdentityHashMap<BaseNode, Collection<Interpolation>>(),
+        new IdentityHashMap<J8BaseNode, Collection<Interpolation>>(),
         new Supplier<List<Interpolation>>() {
 
           @Override
@@ -263,7 +262,7 @@ extends AbstractRewritingPass {
 
   @Override
   protected ProcessingStatus previsit(
-      BaseNode node,
+      J8BaseNode node,
       @Nullable SList<AbstractRewritingPass.Parent> pathFromRoot) {
     if (node.getVariant().isTemplateEnd()) {
       this.templateScopes.remove(templateScopes.size() - 1);
@@ -271,7 +270,7 @@ extends AbstractRewritingPass {
     TemplateScope templateScope = templateScopes.getLast();
     // If we have elided something, e.g. due to %%if(false), we still need to
     // descend into TemplateDirectives so we can find the end of scope above.
-    if (node.getNodeType() != NodeType.TemplateDirectives
+    if (node.getNodeType() != J8NodeType.TemplateDirectives
         && templateScope.elide) {
       return ProcessingStatus.REMOVE;
     }
@@ -310,12 +309,12 @@ extends AbstractRewritingPass {
           case BlockStart: {
             // Pre-declare locals so that uses in initializers don't escape to
             // outer scope.
-            for (BaseNode child : d.getChildren()) {
+            for (J8BaseNode child : d.getChildren()) {
               if (child instanceof TemplateLocalNode) {
                 TemplateLocalNode local = (TemplateLocalNode) child;
                 Optional<IdentifierNode> ident = local
                     .finder(IdentifierNode.class)
-                    .exclude(NodeType.VariableInitializer)
+                    .exclude(J8NodeType.VariableInitializer)
                     .findOne();
                 if (ident.isPresent()) {
                   templateScope.locals.declare(
@@ -360,7 +359,7 @@ extends AbstractRewritingPass {
    *
    * @return true to abort further processing due to an error.
    */
-  private boolean finishInterpolation(BaseNode node) {
+  private boolean finishInterpolation(J8BaseNode node) {
     if (parentToInterpolations.containsKey(node)) {
       int pos = 0;
       int n = node.getNChildren();
@@ -398,19 +397,19 @@ extends AbstractRewritingPass {
       } else {
         ForceFitState.PartialFit bestFit = Iterables.getFirst(
             after.fits, null);
-        Iterator<BaseNode> insertions =
+        Iterator<BaseNode<?, ?, ?>> insertions =
             SList.forwardIterable(bestFit.resolutions).iterator();
 
-        ImmutableList.Builder<BaseNode> fixed = ImmutableList.builder();
+        ImmutableList.Builder<J8BaseNode> fixed = ImmutableList.builder();
         for (ForceFitState.FitPart part : after.parts) {
           if (part instanceof ForceFitState.FixedNode) {
-            fixed.add(((ForceFitState.FixedNode) part).child);
+            fixed.add((J8BaseNode) ((ForceFitState.FixedNode) part).child);
           } else {
-            fixed.add(insertions.next());
+            fixed.add((J8BaseNode) insertions.next());
           }
         }
         Preconditions.checkState(!insertions.hasNext());
-        ((BaseInnerNode) node).replaceChildren(fixed.build());
+        ((J8BaseInnerNode) node).replaceChildren(fixed.build());
       }
     }
     return false;
@@ -418,7 +417,7 @@ extends AbstractRewritingPass {
 
   @Override
   protected ProcessingStatus postvisit(
-      BaseNode node,
+      J8BaseNode node,
       @Nullable SList<AbstractRewritingPass.Parent> pathFromRoot) {
     // After we've processed all the children, we should have all the
     // interpolation results, and so are ready to do replacements.
@@ -493,7 +492,7 @@ extends AbstractRewritingPass {
             }
             TemplatePseudoRootNode bodyOfDirective = getBodyOfDirective(
                 pathFromRoot);
-            ImmutableList.Builder<BaseNode> replacements =
+            ImmutableList.Builder<J8BaseNode> replacements =
                 ImmutableList.builder();
             this.templateScopes.add(new TemplateScope(loopLocals));
             interpreter.forEach(seriesExprNode, null, seriesResult.value,
@@ -534,14 +533,14 @@ extends AbstractRewritingPass {
           return ProcessingStatus.BREAK;
         }
 
-        Optional<NodeType> typeHint;
+        Optional<J8NodeType> typeHint;
         if (typeHintNode != null) {
           IdentifierNode hintIdent = typeHintNode.firstChildWithType(
               IdentifierNode.class);
-          NodeType typeHintNodeType = null;
+          J8NodeType typeHintNodeType = null;
           if (hintIdent != null) {
             try {
-              typeHintNodeType = NodeType.valueOf(hintIdent.getValue());
+              typeHintNodeType = J8NodeType.valueOf(hintIdent.getValue());
             } catch (@SuppressWarnings("unused")
                      IllegalArgumentException ex) {
               // Check for nullity below.
@@ -563,7 +562,7 @@ extends AbstractRewritingPass {
         {
           ImmutableList.Builder<ExpressionNode> b = ImmutableList.builder();
           for (int i = 0, n = comprehension.getNChildren(); i < n; ++i) {
-            BaseNode child = comprehension.getChild(i);
+            J8BaseNode child = comprehension.getChild(i);
             if (child instanceof ExpressionNode) {
               b.add((ExpressionNode) child);
             } else if (child instanceof TemplateLoopNode) {
@@ -729,9 +728,9 @@ extends AbstractRewritingPass {
         // When a TemplateDirective has output we need to extract its output
         // out of the directives node.
         TemplateDirectivesNode ds = (TemplateDirectivesNode) node;
-        ImmutableList.Builder<BaseNode> b = ImmutableList.builder();
+        ImmutableList.Builder<J8BaseNode> b = ImmutableList.builder();
         for (int i = 0; i < ds.getNChildren();) {
-          BaseNode child = ds.getChild(i);
+          J8BaseNode child = ds.getChild(i);
           if (child instanceof TemplateDirectiveNode) {
             ++i;
           } else {
@@ -771,9 +770,9 @@ extends AbstractRewritingPass {
   }
 
   static Object coerceEagerly(
-      Object exprResult, Optional<NodeType> nodeTypeHint) {
+      Object exprResult, Optional<J8NodeType> nodeTypeHint) {
     if (!nodeTypeHint.isPresent()) { return exprResult; }
-    NodeType nt = nodeTypeHint.get();
+    J8NodeType nt = nodeTypeHint.get();
     Object coerced;
     if (exprResult instanceof Iterable<?>) {
       Iterable<?> uncoerced = (Iterable<?>) exprResult;
@@ -784,13 +783,14 @@ extends AbstractRewritingPass {
       // If not all coerced successfully, then try to force fit to a node of the
       // given type.
       for (Object o : allCoerced) {
-        if (!(o instanceof BaseNode) || ((BaseNode) o).getNodeType() != nt) {
+        if (!(o instanceof J8BaseNode)
+            || ((J8BaseNode) o).getNodeType() != nt) {
           // TODO: Limit this to node types that have a single non-intermediate
           // variant to avoid ambiguity, and look through intermediates.
           // TODO: Move this into Intermediates and memoize
-          for (Enum<? extends NodeVariant> variantEnum :
+          for (Enum<? extends J8NodeVariant> variantEnum :
                    nt.getVariantType().getEnumConstants()) {
-            NodeVariant variant = (NodeVariant) variantEnum;
+            J8NodeVariant variant = (J8NodeVariant) variantEnum;
             ParSer fitter = PTree.complete(variant).getParSer();
             ForceFitState unfit = new ForceFitState(Iterables.transform(
                 uncoerced,
@@ -804,26 +804,31 @@ extends AbstractRewritingPass {
                 }));
             ForceFitState fit = fitter.forceFit(unfit);
             if (!fit.fits.isEmpty()) {
-              coerced = variant.buildNode(SList.forwardIterable(
-                  Iterables.getFirst(fit.fits, null).resolutions));
+              ImmutableList.Builder<J8BaseNode> children =
+                  ImmutableList.builder();
+              for (BaseNode<?, ?, ?> child : SList.forwardIterable(
+                       Iterables.getFirst(fit.fits, null).resolutions)) {
+                children.add((J8BaseNode) child);
+              }
+              coerced = variant.buildNode(children.build());
             }
           }
           break;
         }
       }
     } else {
-      coerced = NodeCoercion.tryToCoerce(exprResult, nt);
+      coerced = J8NodeType.GRAMMAR.tryToCoerce(exprResult, nt);
     }
     return coerced;
   }
 
   private static void coerceAllEagerly(
-      Iterable<?> ls, NodeType nt, ImmutableList.Builder<Object> out) {
+      Iterable<?> ls, J8NodeType nt, ImmutableList.Builder<Object> out) {
     for (Object element : ls) {
       if (element instanceof Iterable) {
         coerceAllEagerly((Iterable<?>) element, nt, out);
       } else {
-        Object coerced = NodeCoercion.tryToCoerce(element, nt);
+        Object coerced = J8NodeType.GRAMMAR.tryToCoerce(element, nt);
         if (coerced != null) {
           out.add(coerced);
         }
@@ -834,7 +839,7 @@ extends AbstractRewritingPass {
 
   static TemplatePseudoRootNode getBodyOfDirective(
       SList<AbstractRewritingPass.Parent> pathFromRootToStart) {
-    ImmutableList.Builder<BaseNode> body = ImmutableList.builder();
+    ImmutableList.Builder<J8BaseNode> body = ImmutableList.builder();
 
     // Each TemplateDirective occurs inside a TemplateDirective.
 
@@ -872,10 +877,10 @@ extends AbstractRewritingPass {
 
     // Next, add whole siblings of the containing TemplateDirectivesNode.
     SList<AbstractRewritingPass.Parent> grandparent = pathFromRootToStart.prev;
-    BaseNode container = grandparent.x.parent;
+    J8BaseNode container = grandparent.x.parent;
     for (int i = grandparent.x.indexInParent + 1, n = container.getNChildren();
         i < n; ++i) {
-      BaseNode directivesSibling = container.getChild(i);
+      J8BaseNode directivesSibling = container.getChild(i);
       if (directivesSibling instanceof TemplateDirectivesNode) {
         // Scan the children looking for the end and adding whole siblings to
         // the body.

@@ -5,8 +5,8 @@ import javax.annotation.Nullable;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.ParSerable;
+import com.mikesamuel.cil.parser.SList;
 
 /**
  * Base type for an enum of variants of a node type.
@@ -15,13 +15,16 @@ import com.mikesamuel.cil.parser.ParSerable;
  * instead of using a first-class OR operator, each production has a number of
  * variants.
  */
-public interface NodeVariant extends ParSerable {
+public interface NodeVariant<
+    BASE_NODE extends BaseNode<BASE_NODE, NODE_TYPE, ?>,
+    NODE_TYPE extends Enum<NODE_TYPE> & NodeType<BASE_NODE, NODE_TYPE>>
+extends ParSerable {
   /** Such that <code>
    * {@link #getNodeType()}.{@link NodeType#getVariantType() getVariantType()}
    * .isInstance(this)
    * </code>
    */
-  NodeType getNodeType();
+  NODE_TYPE getNodeType();
 
   /** @see {Enum#name()}. */
   String name();
@@ -34,10 +37,8 @@ public interface NodeVariant extends ParSerable {
    * @throws IllegalArgumentException if trying to build an inner node with a
    *     leaf value.
    */
-  default BaseLeafNode buildNode(String value) {
-    // TODO: maybe have two variants of NodeVariant for leaf/inner
-    throw new IllegalArgumentException(this + " is an inner node type");
-  }
+  LeafNode<BASE_NODE, NODE_TYPE, ?> buildNode(String value);
+  // TODO: maybe have two variants of NodeVariant for leaf/inner
 
   /**
    * Produces a new node with this variant.
@@ -47,10 +48,9 @@ public interface NodeVariant extends ParSerable {
    * @throws IllegalArgumentException if trying to build an inner node with a
    *     leaf value.
    */
-  default BaseInnerNode buildNode(Iterable<? extends BaseNode> children) {
-    // TODO: maybe have two variants of NodeVariant for leaf/inner
-    throw new IllegalArgumentException(this + " is a leaf node type");
-  }
+  InnerNode<BASE_NODE, NODE_TYPE, ?> buildNode(
+      Iterable<? extends BASE_NODE> children);
+  // TODO: maybe have two variants of NodeVariant for leaf/inner
 
   /**
    * True iff the variant is anonymous meaning that the tree builder should
@@ -78,7 +78,7 @@ public interface NodeVariant extends ParSerable {
    * For {@literal @intermediate} nodes, the sole non-terminal that can be
    * contained.
    */
-  default @Nullable NodeType getDelegate() {
+  default @Nullable NODE_TYPE getDelegate() {
     return null;
   }
 

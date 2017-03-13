@@ -18,31 +18,30 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.common.io.CharSource;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.ExpressionNode;
-import com.mikesamuel.cil.ast.FieldDeclarationNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.MethodBodyNode;
-import com.mikesamuel.cil.ast.MethodDeclarationNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.StatementNode;
 import com.mikesamuel.cil.ast.Trees;
-import com.mikesamuel.cil.ast.UnannTypeNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorNode;
-import com.mikesamuel.cil.ast.VariableInitializerNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.ExpressionNode;
+import com.mikesamuel.cil.ast.j8.FieldDeclarationNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.MethodBodyNode;
+import com.mikesamuel.cil.ast.j8.MethodDeclarationNode;
+import com.mikesamuel.cil.ast.j8.StatementNode;
+import com.mikesamuel.cil.ast.j8.UnannTypeNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorNode;
+import com.mikesamuel.cil.ast.j8.VariableInitializerNode;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
-import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
-import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ClassOrInterfaceType;
+import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
+import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.CommonPassRunner;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -52,7 +51,6 @@ import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.ptree.PTree;
-import com.mikesamuel.cil.template.DataBundle;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import junit.framework.TestCase;
@@ -63,13 +61,13 @@ public final class InterpreterTest extends TestCase {
   // TODO: Make this run log clean.
 
   static final class InterpreterTestContext {
-    final BaseNode root;
+    final J8BaseNode root;
     final Logger logger;
     final ClassLoader loader;
     final TypePool typePool;
 
     InterpreterTestContext(
-        BaseNode root, Logger logger,
+        J8BaseNode root, Logger logger,
         ClassLoader loader, TypePool typePool) {
       this.root = root;
       this.logger = logger;
@@ -79,7 +77,7 @@ public final class InterpreterTest extends TestCase {
   }
 
   private InterpreterTestContext contextFor(
-      NodeType nodeType, String code, String source) {
+      J8NodeType nodeType, String code, String source) {
     Logger logger = Logger.getAnonymousLogger();
 
     Input inp = Input.builder().code(code).source(source).build();
@@ -90,7 +88,9 @@ public final class InterpreterTest extends TestCase {
         inp.content().toString(),
         ParseResult.Synopsis.SUCCESS, result.synopsis);
     ParseState afterParse = result.next();
-    BaseNode root = Trees.of(inp, afterParse.output);
+    J8BaseNode root = Trees
+        .forGrammar(J8NodeType.CompilationUnit.getGrammar())
+        .of(inp, afterParse.output);
 
     ClassLoader loader = getClass().getClassLoader();
     if (loader == null) { loader = ClassLoader.getSystemClassLoader(); }
@@ -104,7 +104,7 @@ public final class InterpreterTest extends TestCase {
         break;
       case CompilationUnit:
       case TemplatePseudoRoot:
-        root = (BaseNode) passes.run((CompilationUnitNode) root);
+        root = (J8BaseNode) passes.run((CompilationUnitNode) root);
         break;
       case Statement:
         root = passes.run((StatementNode) root);
@@ -123,17 +123,17 @@ public final class InterpreterTest extends TestCase {
 
   private void assertExprResult(
       Completion<Object> want, String expr, Object... typesIdentsAndValues) {
-    assertResult(want, NodeType.Expression, expr, typesIdentsAndValues);
+    assertResult(want, J8NodeType.Expression, expr, typesIdentsAndValues);
   }
 
   private void assertResult(
-      Completion<Object> want, NodeType nodeType, String code,
+      Completion<Object> want, J8NodeType nodeType, String code,
       Object... typesIdentsAndValues) {
     InterpreterTestContext tc = contextFor(nodeType, code, getName());
     InterpretationContext<Object> ctx = new InterpretationContextImpl(
         tc.logger, tc.loader, tc.typePool);
 
-    BaseNode root = tc.root;
+    J8BaseNode root = tc.root;
 
     Locals<Object> locals = new Locals<>();
     for (int i = 0, n = typesIdentsAndValues.length; i < n; i += 3) {
@@ -238,7 +238,7 @@ public final class InterpreterTest extends TestCase {
     String path = pathTo("/expr/TestExpressions.java");
 
     InterpreterTestContext tc = contextFor(
-        NodeType.CompilationUnit,
+        J8NodeType.CompilationUnit,
         Files.toString(new File(path), Charsets.UTF_8),
         TestExpressions.class.getSimpleName() + ".java");
     Locals<Object> locals = new Locals<>();
@@ -448,7 +448,7 @@ public final class InterpreterTest extends TestCase {
     String path = pathTo("/expr/TestStatements.java");
 
     InterpreterTestContext tc = contextFor(
-        NodeType.CompilationUnit,
+        J8NodeType.CompilationUnit,
         Files.toString(new File(path), Charsets.UTF_8),
         TestStatements.class.getSimpleName() + ".java");
     Locals<Object> locals = new Locals<>();
@@ -476,7 +476,7 @@ public final class InterpreterTest extends TestCase {
     // Find the f(String) method.
     MethodDeclarationNode decl = tc.root
         .finder(MethodDeclarationNode.class)
-        .exclude(NodeType.MethodBody)
+        .exclude(J8NodeType.MethodBody)
         .find()
         .get(0);
     MethodBodyNode body = decl.firstChildWithType(MethodBodyNode.class);

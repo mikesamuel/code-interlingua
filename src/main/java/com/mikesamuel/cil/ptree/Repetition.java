@@ -57,7 +57,7 @@ final class Repetition extends PTParSer {
       ParseState start, LeftRecursion lr, ParseErrorReceiver err) {
     ParseState state = start;
     ParSer parser = p.getParSer();
-    ImmutableSet<NodeType> lrExclusionsTriggered = ImmutableSet.of();
+    ImmutableSet<NodeType<?, ?>> lrExclusionsTriggered = ImmutableSet.of();
     int writeBack = ParseResult.NO_WRITE_BACK_RESTRICTION;
     while (true) {
       ParseResult result = parser.parse(state, lr, err);

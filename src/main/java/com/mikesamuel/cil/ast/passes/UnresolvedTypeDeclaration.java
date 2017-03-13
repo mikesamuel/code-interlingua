@@ -1,8 +1,8 @@
 package com.mikesamuel.cil.ast.passes;
 
 import com.google.common.base.Preconditions;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeScope;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 
 final class UnresolvedTypeDeclaration {
   Stage stage = Stage.UNRESOLVED;

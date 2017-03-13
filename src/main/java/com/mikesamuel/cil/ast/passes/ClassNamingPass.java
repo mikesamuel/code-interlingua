@@ -11,24 +11,27 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.ClassBodyDeclarationNode;
-import com.mikesamuel.cil.ast.ClassBodyNode;
-import com.mikesamuel.cil.ast.ConstructorBodyNode;
-import com.mikesamuel.cil.ast.ConstructorDeclarationNode;
-import com.mikesamuel.cil.ast.ConstructorDeclaratorNode;
-import com.mikesamuel.cil.ast.EnumConstantNameNode;
-import com.mikesamuel.cil.ast.EnumConstantNode;
-import com.mikesamuel.cil.ast.EnumDeclarationNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.MethodHeaderNode;
-import com.mikesamuel.cil.ast.ModifierNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.NormalClassDeclarationNode;
-import com.mikesamuel.cil.ast.SimpleTypeNameNode;
-import com.mikesamuel.cil.ast.TypeParameterNode;
-import com.mikesamuel.cil.ast.TypeParametersNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
+import com.mikesamuel.cil.ast.j8.ClassBodyNode;
+import com.mikesamuel.cil.ast.j8.ConstructorBodyNode;
+import com.mikesamuel.cil.ast.j8.ConstructorDeclarationNode;
+import com.mikesamuel.cil.ast.j8.ConstructorDeclaratorNode;
+import com.mikesamuel.cil.ast.j8.EnumConstantNameNode;
+import com.mikesamuel.cil.ast.j8.EnumConstantNode;
+import com.mikesamuel.cil.ast.j8.EnumDeclarationNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.MethodHeaderNode;
+import com.mikesamuel.cil.ast.j8.ModifierNode;
+import com.mikesamuel.cil.ast.j8.NormalClassDeclarationNode;
+import com.mikesamuel.cil.ast.j8.SimpleTypeNameNode;
+import com.mikesamuel.cil.ast.j8.TypeParameterNode;
+import com.mikesamuel.cil.ast.j8.TypeParametersNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -36,9 +39,6 @@ import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
-import com.mikesamuel.cil.ast.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -61,7 +61,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
     if (dupe == null) {
       declaredTypes.put(name, decl);
     } else {
-      SourcePosition opos = ((BaseNode) dupe.decl).getSourcePosition();
+      SourcePosition opos = ((J8BaseNode) dupe.decl).getSourcePosition();
       error(
           d,
           "Duplicate definition for " + name
@@ -75,7 +75,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
     if (d instanceof NormalClassDeclarationNode) {
       ClassBodyNode body = d.firstChildWithType(ClassBodyNode.class);
       boolean hasConstructor = false;
-      for (BaseNode child : body.getChildren()) {
+      for (J8BaseNode child : body.getChildren()) {
         if (child instanceof ClassBodyDeclarationNode
             && child.firstChildWithType(ConstructorDeclarationNode.class)
                != null) {
@@ -116,11 +116,11 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
   private ImmutableList<MemberInfo> findMembers(
       Name declaringClass, TypeDeclaration declaration) {
-    BaseNode body = declaration.getChild(declaration.getNChildren() - 1);
+    J8BaseNode body = declaration.getChild(declaration.getNChildren() - 1);
 
     ImmutableList.Builder<MemberInfo> b = ImmutableList.builder();
 
-    for (BaseNode bodyElement : body.getChildren()) {
+    for (J8BaseNode bodyElement : body.getChildren()) {
       processMembers(declaringClass, declaration, bodyElement, b);
     }
 
@@ -158,9 +158,9 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
   }
 
   private static void processMembers(
-      Name declaringClass, TypeDeclaration declaration, BaseNode bodyElement,
+      Name declaringClass, TypeDeclaration declaration, J8BaseNode bodyElement,
       ImmutableList.Builder<MemberInfo> b) {
-    NodeType nt = bodyElement.getNodeType();
+    J8NodeType nt = bodyElement.getNodeType();
     switch (nt) {
       case ConstructorDeclaration:
       case MethodDeclaration:
@@ -169,16 +169,16 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       case StaticInitializer: {
         CallableDeclaration cd = (CallableDeclaration) bodyElement;
         int mods = 0;
-        if (nt == NodeType.StaticInitializer) {
+        if (nt == J8NodeType.StaticInitializer) {
           mods |= Modifier.STATIC | Modifier.PRIVATE;
-        } else if (nt == NodeType.InstanceInitializer) {
+        } else if (nt == J8NodeType.InstanceInitializer) {
           mods |= Modifier.PRIVATE;
-        } else if (nt == NodeType.ConstructorDeclaration
+        } else if (nt == J8NodeType.ConstructorDeclaration
                    && declaration instanceof EnumDeclarationNode) {
           mods |= Modifier.PRIVATE;
         }
         TypeParametersNode typeParameters = null;
-        for (BaseNode child : bodyElement.getChildren()) {
+        for (J8BaseNode child : bodyElement.getChildren()) {
           if (child instanceof ModifierNode) {
             mods |= ModifierNodes.modifierBits(
                 ((ModifierNode) child).getVariant());
@@ -193,7 +193,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         if (typeParameters != null) {
           for (TypeParameterNode param
               : typeParameters.finder(TypeParameterNode.class)
-                .exclude(NodeType.TypeBound, NodeType.Annotation)
+                .exclude(J8NodeType.TypeBound, J8NodeType.Annotation)
                 .find()) {
             typeParametersList.add(
                 param.getDeclaredTypeInfo().canonName);
@@ -209,7 +209,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       case FieldDeclaration:
       case ConstantDeclaration: {
         int mods = 0;
-        for (BaseNode child : bodyElement.getChildren()) {
+        for (J8BaseNode child : bodyElement.getChildren()) {
           if (child instanceof ModifierNode) {
             mods |= ModifierNodes.modifierBits(
                 ((ModifierNode) child).getVariant());
@@ -218,11 +218,11 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         for (VariableDeclaratorIdNode declId
              : bodyElement.finder(VariableDeclaratorIdNode.class)
                   .exclude(
-                     NodeType.Type, NodeType.Modifier,
-                     NodeType.VariableInitializer)
+                     J8NodeType.Type, J8NodeType.Modifier,
+                     J8NodeType.VariableInitializer)
                   .find()) {
           IdentifierNode id =
-              (IdentifierNode) declId.firstChildWithType(NodeType.Identifier);
+              (IdentifierNode) declId.firstChildWithType(J8NodeType.Identifier);
           if (id != null) {
             Name name = declaringClass.child(id.getValue(), Name.Type.FIELD);
             declId.setDeclaredExpressionName(name);
@@ -254,7 +254,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       case EnumBodyDeclarations:
       case EnumConstantList:
       case InterfaceMemberDeclaration:
-        for (BaseNode child : bodyElement.getChildren()) {
+        for (J8BaseNode child : bodyElement.getChildren()) {
           processMembers(declaringClass, declaration, child, b);
         }
         break;

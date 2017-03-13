@@ -3,16 +3,16 @@ package com.mikesamuel.cil.ptree;
 import java.util.BitSet;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.j8.ContextFreeNameNode;
 import com.mikesamuel.cil.event.Debug;
 import com.mikesamuel.cil.event.Event;
-import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SList;
 
 final class MagicDotIdentifierHandler extends Concatenation {
 
@@ -69,7 +69,7 @@ final class MagicDotIdentifierHandler extends Concatenation {
         case PUSH:
           // We allow things to go negative.
           --popDepth;
-          NodeVariant pushVariant = e.getNodeVariant();
+          NodeVariant<?, ?> pushVariant = e.getNodeVariant();
           if (pushVariant == ContextFreeNameNode.Variant.Name) {
             int popIndex = popDepth >= 0 ? popDepth * 2 : (~popDepth * 2) + 1;
             if (!textAfterPop.get(popIndex)) {

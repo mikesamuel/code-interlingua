@@ -18,10 +18,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeI;
-import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.ast.Trees.Decorator;
-import com.mikesamuel.cil.ast.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.parser.Input;
@@ -68,14 +68,17 @@ public final class PassTestHelpers {
         inputBuilder.source(lines[0]);
       }
       Input inp = inputBuilder.build();
-      ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
+      ParseResult result =
+          PTree.complete(J8NodeType.CompilationUnit).getParSer()
           .parse(new ParseState(inp), new LeftRecursion(),
               ParseErrorReceiver.DEV_NULL);
       if (ParseResult.Synopsis.SUCCESS != result.synopsis) {
         return Optional.absent();
       }
       ParseState afterParse = result.next();
-      b.add((FileNode) Trees.of(inp, afterParse.output));
+      b.add((FileNode)
+          Trees.forGrammar(J8NodeType.GRAMMAR)
+          .of(inp, afterParse.output));
     }
     return Optional.of(b.build());
   }
@@ -212,12 +215,12 @@ public final class PassTestHelpers {
    * Serialize the given nodes and decorate with the given decorator.
    */
   public static String serializeNodes(
-      Iterable<? extends NodeI> nodes, @Nullable Decorator decorator)
+      Iterable<? extends NodeI<?, ?, ?>> nodes, @Nullable Decorator decorator)
   throws UnparseVerificationException {
     StringBuilder sb = new StringBuilder();
-    for (NodeI node : nodes) {
+    for (NodeI<?, ?, ?> node : nodes) {
       Iterable<Event> skeleton = SList.forwardIterable(
-          Trees.startUnparse(null, (BaseNode) node, decorator));
+          Trees.startUnparse(null, (BaseNode<?, ?, ?>) node, decorator));
       Optional<SerialState> serialized =
           node.getNodeType().getParSer().unparse(
           new SerialState(skeleton),

@@ -52,7 +52,8 @@ public final class SList<T> {
   }
 
   /** Iterates from farthest back to the current. */
-  public static <T> Iterable<T> forwardIterable(@Nullable SList<? extends T> c) {
+  public static <T> Iterable<T> forwardIterable(
+      @Nullable SList<? extends T> c) {
     ImmutableList.Builder<T> b = ImmutableList.builder();
     for (SList<? extends T> ch = c; ch != null; ch = ch.prev) {
       b.add(ch.x);

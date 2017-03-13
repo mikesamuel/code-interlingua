@@ -7,12 +7,12 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.TypeArgumentNode;
-import com.mikesamuel.cil.ast.WildcardBoundsNode;
-import com.mikesamuel.cil.ast.WildcardNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
+import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
+import com.mikesamuel.cil.ast.j8.WildcardNode;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
@@ -35,7 +35,7 @@ final class AmbiguousNames {
   }
 
   static TypeSpecification typeSpecificationOf(
-      BaseNode nameNode, TypeNameResolver canonResolver, Logger logger) {
+      J8BaseNode nameNode, TypeNameResolver canonResolver, Logger logger) {
     SourcePosition pos = nameNode.getSourcePosition();
 
     // TODO: obviate the distinction between diamonds and arguments by rewriting
@@ -63,9 +63,9 @@ final class AmbiguousNames {
     for (TypeArgumentNode arg :
          nameNode.finder(TypeArgumentNode.class)
              .exclude(
-                 NodeType.Annotation,
+                 J8NodeType.Annotation,
                  // Don't recurse in the finder.  Recurse via this method.
-                 NodeType.TypeArgument)
+                 J8NodeType.TypeArgument)
              .find()) {
       bindings.add(typeBindingOf(arg, canonResolver, logger));
     }
@@ -115,14 +115,14 @@ final class AmbiguousNames {
     return new TypeBinding(variance, argSpec);
   }
 
-  static @Nullable Name ambiguousNameOf(BaseNode nameNode) {
+  static @Nullable Name ambiguousNameOf(J8BaseNode nameNode) {
     Name name = null;
     for (IdentifierNode ident :
          nameNode.finder(IdentifierNode.class)
              .exclude(
-                 NodeType.Annotation,
-                 NodeType.TypeArgumentList,
-                 NodeType.TypeParameters)
+                 J8NodeType.Annotation,
+                 J8NodeType.TypeArgumentList,
+                 J8NodeType.TypeParameters)
              .find()) {
       Name.Type type = ident.getNamePartType();
       if (type == null) {

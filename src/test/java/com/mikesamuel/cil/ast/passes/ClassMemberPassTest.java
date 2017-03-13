@@ -5,15 +5,15 @@ import java.util.logging.Logger;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.Java8Comments;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.Java8Comments;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.MemberDeclaration;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.PassRunner;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.MemberDeclaration;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
 import junit.framework.TestCase;
@@ -102,7 +102,7 @@ public final class ClassMemberPassTest extends TestCase {
   private static final Decorator DECORATOR = new Decorator() {
 
     @Override
-    public String decorate(BaseNode node) {
+    public String decorate(NodeI<?, ?, ?> node) {
       if (node instanceof MemberDeclaration) {
         MemberDeclaration md = (MemberDeclaration) node;
         MemberInfo mi = md.getMemberInfo();

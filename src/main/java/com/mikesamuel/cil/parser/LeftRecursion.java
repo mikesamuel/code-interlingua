@@ -1,6 +1,7 @@
 package com.mikesamuel.cil.parser;
 
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
@@ -18,14 +19,14 @@ public final class LeftRecursion {
    * The productions on the stack and the input cursor indices at which they
    * were entered with greater indices earlier in the list.
    */
-  private final EnumMap<NodeType, SList<PositionAndStage>> onStack =
-      new EnumMap<>(NodeType.class);
-  private SList<NodeVariant> variantStack;
+  private final Map<NodeType<?, ?>, SList<PositionAndStage>> onStack =
+      new LinkedHashMap<>();
+  private SList<NodeVariant<?, ?>> variantStack;
 
   /**
    * True if there is a variant with the given node type on the stack.
    */
-  public Stage stageForProductionAt(NodeType nodeType, int index) {
+  public Stage stageForProductionAt(NodeType<?, ?> nodeType, int index) {
     SList<PositionAndStage> sps = onStack.get(nodeType);
     for (SList<PositionAndStage> c = sps ; c != null; c = c.prev) {
       if (c.x.index == index) {
@@ -39,12 +40,14 @@ public final class LeftRecursion {
   /**
    * The variant from the most recent entry of the given production.
    */
-  public Optional<ImmutableList<NodeVariant>> getStackFrom(NodeType nodeType) {
-    SList<NodeVariant> stackFrom = null;
-    for (SList<NodeVariant> c = variantStack; c != null; c = c.prev) {
+  public Optional<ImmutableList<NodeVariant<?, ?>>> getStackFrom(
+      NodeType<?, ?> nodeType) {
+    SList<NodeVariant<?, ?>> stackFrom = null;
+    for (SList<NodeVariant<?, ?>> c = variantStack; c != null; c = c.prev) {
       stackFrom = SList.append(stackFrom, c.x);
       if (c.x.getNodeType() == nodeType) {
-        return Optional.of(ImmutableList.copyOf(SList.reverseIterable(stackFrom)));
+        return Optional.of(ImmutableList.copyOf(
+            SList.reverseIterable(stackFrom)));
       }
     }
     return Optional.absent();
@@ -58,12 +61,12 @@ public final class LeftRecursion {
    * @see #getStackFrom
    */
   public VariantScope enter(
-      final NodeVariant variant,
+      final NodeVariant<?, ?> variant,
       final int index,
       final Stage stage) {
     Preconditions.checkArgument(stage != Stage.NOT_ON_STACK, stage);
 
-    final NodeType nodeType = variant.getNodeType();
+    final NodeType<?, ?> nodeType = variant.getNodeType();
 
     final PositionAndStage ps = new PositionAndStage(index, stage);
     {

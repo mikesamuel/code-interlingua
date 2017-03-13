@@ -9,14 +9,14 @@ import org.junit.Test;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.Java8Comments;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.Java8Comments;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
 import junit.framework.TestCase;
@@ -27,7 +27,7 @@ public class DeclarationPassTest extends TestCase {
   private static final Decorator DECORATOR = new Decorator() {
 
     @Override
-    public String decorate(BaseNode node) {
+    public String decorate(NodeI<?, ?, ?> node) {
       if (node instanceof TypeDeclaration) {
         TypeDeclaration td = (TypeDeclaration) node;
         TypeInfo ti = td.getDeclaredTypeInfo();

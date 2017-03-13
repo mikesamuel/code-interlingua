@@ -20,19 +20,22 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
-import com.mikesamuel.cil.ast.AdditionalBoundNode;
-import com.mikesamuel.cil.ast.AnnotationNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.Chapter;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.InterfaceTypeListNode;
-import com.mikesamuel.cil.ast.InterfaceTypeNode;
-import com.mikesamuel.cil.ast.ModifierNode;
-import com.mikesamuel.cil.ast.TemplatePseudoRootNode;
-import com.mikesamuel.cil.ast.TypeArgumentNode;
-import com.mikesamuel.cil.ast.TypeVariableNode;
+import com.mikesamuel.cil.ast.j8.AdditionalBoundNode;
+import com.mikesamuel.cil.ast.j8.AnnotationNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.InterfaceTypeListNode;
+import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8Chapter;
+import com.mikesamuel.cil.ast.j8.ModifierNode;
+import com.mikesamuel.cil.ast.j8.TemplatePseudoRootNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
+import com.mikesamuel.cil.ast.j8.TypeVariableNode;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
@@ -40,9 +43,6 @@ import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeScope;
 
 /**
  * Looks at all type declarations disambiguates names in {@code extends} and
@@ -188,8 +188,8 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       }
       if (DEBUG) {
         System.err.println(
-            "Resolving scope " + ((BaseNode) scope).getSourcePosition() + " : "
-            + scope.getClass().getSimpleName());
+            "Resolving scope " + ((J8BaseNode) scope).getSourcePosition()
+            + " : " + scope.getClass().getSimpleName());
       }
 
       if (scope instanceof CompilationUnitNode) {
@@ -271,7 +271,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       Preconditions.checkState(dupe == null);
       if (DEBUG) {
         System.err.println(
-            "Resolved scope " + ((BaseNode) scope).getSourcePosition() + " : "
+            "Resolved scope " + ((J8BaseNode) scope).getSourcePosition() + " : "
             + scope.getClass().getSimpleName());
       }
       scope.setTypeNameResolver(resolver);
@@ -315,8 +315,8 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       TypeNameResolver nameResolver = resolverForScope(d.scope, loop);
 
       TypeDeclaration decl = d.decl;
-      BaseNode node = (BaseNode) decl;
-      List<BaseNode> children = node.getChildren();
+      J8BaseNode node = (J8BaseNode) decl;
+      List<J8BaseNode> children = node.getChildren();
       // Collect the declared type after resolving its super-types.
       Name typeName = decl.getDeclaredTypeInfo().canonName;
 
@@ -325,7 +325,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       ImmutableList.Builder<TypeSpecification> interfaceNames =
           ImmutableList.builder();
       int modifiers = 0;
-      for (BaseNode child : children) {
+      for (J8BaseNode child : children) {
         switch (child.getNodeType()) {
           case JavaDocComment:
             break;
@@ -347,7 +347,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
             break;
           }
           case TypeBound:
-            for (BaseNode grandChild : child.getChildren()) {
+            for (J8BaseNode grandChild : child.getChildren()) {
               if (grandChild instanceof ClassOrInterfaceTypeNode
                   || grandChild instanceof TypeVariableNode) {
                 superTypeSpec = AmbiguousNames.typeSpecificationOf(
@@ -363,7 +363,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           case ExtendsInterfaces:
             InterfaceTypeListNode interfacesNode =
                 (InterfaceTypeListNode) child.getChildren().get(0);
-            for (BaseNode interfacesChild : interfacesNode.getChildren()) {
+            for (J8BaseNode interfacesChild : interfacesNode.getChildren()) {
               InterfaceTypeNode interfaceType =
                   (InterfaceTypeNode) interfacesChild;
               TypeSpecification typeSpec = AmbiguousNames.typeSpecificationOf(
@@ -447,7 +447,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       return wildcardImports.build();
     }
 
-    void collectImports(BaseNode node) {
+    void collectImports(J8BaseNode node) {
       switch (node.getVariant().getNodeType()) {
         case PackageDeclaration:
           this.currentPackage = toName(node, Name.Type.PACKAGE);
@@ -493,8 +493,8 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           }
           break;
         default:
-          for (BaseNode child : node.getChildren()) {
-            if (child.getNodeType().getChapter() == Chapter.Package) {
+          for (J8BaseNode child : node.getChildren()) {
+            if (child.getNodeType().getChapter() == J8Chapter.Package) {
               collectImports(child);
             }
           }
@@ -503,7 +503,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     }
   }
 
-  static Name toName(BaseNode node, Name.Type type) {
+  static Name toName(J8BaseNode node, Name.Type type) {
     List<String> identifiers = new ArrayList<>();
     findIdentifiers(node, identifiers);
     Name nm = null;
@@ -520,14 +520,14 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     return nm;
   }
 
-  static void findIdentifiers(BaseNode node, List<? super String> out) {
+  static void findIdentifiers(J8BaseNode node, List<? super String> out) {
     if (node instanceof TypeArgumentNode || node instanceof AnnotationNode) {
       return;
     }
     if (node instanceof IdentifierNode) {
       out.add(node.getValue());
     } else {
-      for (BaseNode child : node.getChildren()) {
+      for (J8BaseNode child : node.getChildren()) {
         findIdentifiers(child, out);
       }
     }

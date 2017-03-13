@@ -10,20 +10,20 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.AnnotationNode;
-import com.mikesamuel.cil.ast.ArrayTypeNode;
-import com.mikesamuel.cil.ast.BaseInnerNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.BlockStatementNode;
-import com.mikesamuel.cil.ast.DimNode;
-import com.mikesamuel.cil.ast.DimsNode;
-import com.mikesamuel.cil.ast.LocalVariableDeclarationStatementNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.NodeTypeTables;
-import com.mikesamuel.cil.ast.ReferenceTypeNode;
-import com.mikesamuel.cil.ast.TypeNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorListNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorNode;
+import com.mikesamuel.cil.ast.j8.AnnotationNode;
+import com.mikesamuel.cil.ast.j8.ArrayTypeNode;
+import com.mikesamuel.cil.ast.j8.BlockStatementNode;
+import com.mikesamuel.cil.ast.j8.DimNode;
+import com.mikesamuel.cil.ast.j8.DimsNode;
+import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeTypeTables;
+import com.mikesamuel.cil.ast.j8.LocalVariableDeclarationStatementNode;
+import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
+import com.mikesamuel.cil.ast.j8.TypeNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorListNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorNode;
 import com.mikesamuel.cil.parser.SList;
 
 /**
@@ -45,8 +45,8 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   private static int countDims(@Nullable DimsNode dims) {
     int n = 0;
     if (dims != null) {
-      for (BaseNode child : dims.getChildren()) {
-        if (child.getNodeType() == NodeType.Dim) {
+      for (J8BaseNode child : dims.getChildren()) {
+        if (child.getNodeType() == J8NodeType.Dim) {
           ++n;
         }
       }
@@ -56,19 +56,19 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
   @Override
   protected ProcessingStatus postvisit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     if (!COMMON_ANCESTOR.contains(node.getNodeType())) {
       return ProcessingStatus.CONTINUE;
     }
-    ImmutableList<? extends BaseNode> declList = splitDecls(node);
-    ImmutableList.Builder<BaseNode> replacements = ImmutableList.builder();
+    ImmutableList<? extends J8BaseNode> declList = splitDecls(node);
+    ImmutableList.Builder<J8BaseNode> replacements = ImmutableList.builder();
     boolean foundOne = false;
-    for (BaseNode decl : declList) {
+    for (J8BaseNode decl : declList) {
       DimsNode dims = getDims(decl);
       if (dims != null) {
-        BaseNode type = getType(decl);
+        J8BaseNode type = getType(decl);
         if (type != null) {
-          BaseNode replacement = removeDimsAndAddDimsToType(decl, dims, type);
+          J8BaseNode replacement = removeDimsAndAddDimsToType(decl, dims, type);
           replacements.add(replacement);
           foundOne = true;
           continue;
@@ -92,80 +92,82 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
    * ancestor might be cloned, so we use the closest common ancestor that
    * appears in a {...} repetition.
    */
-  private static final ImmutableSet<NodeType> COMMON_ANCESTOR =
+  private static final ImmutableSet<J8NodeType> COMMON_ANCESTOR =
       Sets.immutableEnumSet(
-          NodeType.AnnotationTypeElementDeclaration,
-          NodeType.BlockStatement,
-          NodeType.CatchFormalParameter,
-          NodeType.ClassBodyDeclaration,
-          NodeType.EnhancedForStatement,
-          NodeType.FormalParameter,
-          NodeType.InterfaceMemberDeclaration,
-          NodeType.LastFormalParameter,
-          NodeType.MethodHeader,
-          NodeType.Resource
+          J8NodeType.AnnotationTypeElementDeclaration,
+          J8NodeType.BlockStatement,
+          J8NodeType.CatchFormalParameter,
+          J8NodeType.ClassBodyDeclaration,
+          J8NodeType.EnhancedForStatement,
+          J8NodeType.FormalParameter,
+          J8NodeType.InterfaceMemberDeclaration,
+          J8NodeType.LastFormalParameter,
+          J8NodeType.MethodHeader,
+          J8NodeType.Resource
           );
 
   /**
    * Any nodes on the path from a common ancestor to its Dims.
    */
-  private static final ImmutableSet<NodeType> BETWEEN_COMMON_ANCESTOR_AND_DIMS =
+  private static final
+  ImmutableSet<J8NodeType> BETWEEN_COMMON_ANCESTOR_AND_DIMS =
       Sets.immutableEnumSet(
           // From ClassBodyDeclaration
-          NodeType.ClassMemberDeclaration,
-          NodeType.FieldDeclaration,
+          J8NodeType.ClassMemberDeclaration,
+          J8NodeType.FieldDeclaration,
 
           // From InterfaceMemberDeclaration
-          NodeType.ConstantDeclaration,
+          J8NodeType.ConstantDeclaration,
 
           // From BlockStatement
-          NodeType.LocalVariableDeclarationStatement,
-          NodeType.LocalVariableDeclaration,
-          NodeType.Statement,
-          NodeType.ForStatement,
-          NodeType.BasicForStatement,
-          NodeType.ForInit,
+          J8NodeType.LocalVariableDeclarationStatement,
+          J8NodeType.LocalVariableDeclaration,
+          J8NodeType.Statement,
+          J8NodeType.ForStatement,
+          J8NodeType.BasicForStatement,
+          J8NodeType.ForInit,
 
-          NodeType.VariableDeclarator,
-          NodeType.VariableDeclaratorId,
-          NodeType.VariableDeclaratorList,
-          NodeType.AnnotationTypeElementDeclaration,
-          NodeType.MethodHeader,
-          NodeType.MethodDeclarator);
+          J8NodeType.VariableDeclarator,
+          J8NodeType.VariableDeclaratorId,
+          J8NodeType.VariableDeclaratorList,
+          J8NodeType.AnnotationTypeElementDeclaration,
+          J8NodeType.MethodHeader,
+          J8NodeType.MethodDeclarator);
 
   /**
    * Any nodes on the path from a common ancestor to its type.
    */
-  private static final ImmutableSet<NodeType> BETWEEN_COMMON_ANCESTOR_AND_TYPE =
+  private static final
+  ImmutableSet<J8NodeType> BETWEEN_COMMON_ANCESTOR_AND_TYPE =
       Sets.immutableEnumSet(
           // From ClassBodyDeclaration
-          NodeType.ClassMemberDeclaration,
-          NodeType.FieldDeclaration,
+          J8NodeType.ClassMemberDeclaration,
+          J8NodeType.FieldDeclaration,
 
           // From InterfaceMemberDeclaration
-          NodeType.ConstantDeclaration,
+          J8NodeType.ConstantDeclaration,
 
           // From BlockStatement
-          NodeType.LocalVariableDeclarationStatement,
-          NodeType.LocalVariableDeclaration,
-          NodeType.Statement,
-          NodeType.ForStatement,
-          NodeType.BasicForStatement,
-          NodeType.ForInit,
+          J8NodeType.LocalVariableDeclarationStatement,
+          J8NodeType.LocalVariableDeclaration,
+          J8NodeType.Statement,
+          J8NodeType.ForStatement,
+          J8NodeType.BasicForStatement,
+          J8NodeType.ForInit,
 
           // From others
-          NodeType.MethodHeader,
-          NodeType.Result,
-          NodeType.UnannType);
+          J8NodeType.MethodHeader,
+          J8NodeType.Result,
+          J8NodeType.UnannType);
 
-  private static final ImmutableSet<NodeType> TYPE_NODE_TYPES =
-      Sets.immutableEnumSet(NodeType.Type, NodeType.ReferenceType);
+  private static final ImmutableSet<J8NodeType> TYPE_NODE_TYPES =
+      Sets.immutableEnumSet(J8NodeType.Type, J8NodeType.ReferenceType);
 
-  private static final ImmutableSet<NodeType> DIMS_NODE_TYPES =
-      Sets.immutableEnumSet(NodeType.Dims);
+  private static final ImmutableSet<J8NodeType> DIMS_NODE_TYPES =
+      Sets.immutableEnumSet(J8NodeType.Dims);
 
-  private static final ImmutableSet<NodeType> VAR_DECL_LIST_NODE_TYPES =
-      Sets.immutableEnumSet(NodeType.VariableDeclaratorList);
+  private static final ImmutableSet<J8NodeType> VAR_DECL_LIST_NODE_TYPES =
+      Sets.immutableEnumSet(J8NodeType.VariableDeclaratorList);
 
   /**
    * When splitting a VariableDeclaratorList, we can't duplicate some structures
@@ -177,19 +179,19 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
    * Instead, for all but the last, we drop these node types from the
    * duplication, leaving a vanilla {@link VariableDeclarationStatementNode}.
    */
-  private static final ImmutableSet<NodeType> NO_REWRAP_SPLIT =
+  private static final ImmutableSet<J8NodeType> NO_REWRAP_SPLIT =
       Sets.immutableEnumSet(
-          NodeType.ForInit, NodeType.BasicForStatement,
-          NodeType.ForStatement, NodeType.Statement
+          J8NodeType.ForInit, J8NodeType.BasicForStatement,
+          J8NodeType.ForStatement, J8NodeType.Statement
           );
 
   static <T> T processAlongPath(
-      BaseNode node, ImmutableSet<NodeType> between,
-      ImmutableSet<NodeType> target, FindOp<T> op) {
-    List<BaseNode> children = node.getChildren();
+      J8BaseNode node, ImmutableSet<J8NodeType> between,
+      ImmutableSet<J8NodeType> target, FindOp<T> op) {
+    List<J8BaseNode> children = node.getChildren();
     for (int i = 0, n = children.size(); i < n; ++i) {
-      BaseNode child = children.get(i);
-      NodeType nt = child.getNodeType();
+      J8BaseNode child = children.get(i);
+      J8NodeType nt = child.getNodeType();
       if (target.contains(nt)) {
         T result = op.found(child);
         return op.intermediate(node, i, child, result);
@@ -202,15 +204,15 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
     return null;
   }
 
-  static ImmutableList<? extends BaseNode> splitDecls(BaseNode start) {
-    ImmutableList<BaseNode> ls = processAlongPath(
+  static ImmutableList<? extends J8BaseNode> splitDecls(J8BaseNode start) {
+    ImmutableList<J8BaseNode> ls = processAlongPath(
         start, BETWEEN_COMMON_ANCESTOR_AND_DIMS, VAR_DECL_LIST_NODE_TYPES,
-        new FindOp<ImmutableList<BaseNode>>() {
+        new FindOp<ImmutableList<J8BaseNode>>() {
 
           @SuppressWarnings("synthetic-access")
           @Override
-          public ImmutableList<BaseNode> found(BaseNode node) {
-            ImmutableList.Builder<BaseNode> split = null;
+          public ImmutableList<J8BaseNode> found(J8BaseNode node) {
+            ImmutableList.Builder<J8BaseNode> split = null;
 
             VariableDeclaratorListNode declList =
                 (VariableDeclaratorListNode) node;
@@ -221,7 +223,7 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
               if (i == n) {
                 needToAdd = split != null;
               } else {
-                BaseNode child = declList.getChild(i);
+                J8BaseNode child = declList.getChild(i);
                 if (child instanceof VariableDeclaratorNode) {
                   DimsNode dims = getDims(child);
                   int childDimCount = countDims(dims);
@@ -239,7 +241,7 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
                     declList.getVariant().buildNode(ImmutableList.of());
                 lsCopy.copyMetadataFrom(declList);
                 for (int j = lastSplitIndex; j < i; ++j) {
-                  BaseNode splitChild = declList.getChild(j);
+                  J8BaseNode splitChild = declList.getChild(j);
                   if (j != lastSplitIndex) {
                     // Remove redundant DimsNodes since later passes assume
                     // that there is a 1:1 relationship between DimsNodes
@@ -257,26 +259,26 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
 
           @SuppressWarnings("synthetic-access")
           @Override
-          public ImmutableList<BaseNode> intermediate(
-              BaseNode node, int indexOfChild, BaseNode child,
-              ImmutableList<BaseNode> splitChildren) {
+          public ImmutableList<J8BaseNode> intermediate(
+              J8BaseNode node, int indexOfChild, J8BaseNode child,
+              ImmutableList<J8BaseNode> splitChildren) {
             if (splitChildren == null) {
               return null;
             }
-            ImmutableList.Builder<BaseNode> splitNodes =
+            ImmutableList.Builder<J8BaseNode> splitNodes =
                 ImmutableList.builder();
             for (int i = 0, n = splitChildren.size(); i < n; ++i) {
-              BaseNode splitChild = splitChildren.get(i);
+              J8BaseNode splitChild = splitChildren.get(i);
 
-              BaseNode wrappedChild;
+              J8BaseNode wrappedChild;
               // We hack around local variable declarations in for statements.
               if (NO_REWRAP_SPLIT.contains(node.getNodeType())
                   && i + 1 < n) {
                 wrappedChild = splitChild;
               } else {
-                if (node.getNodeType() == NodeType.BlockStatement
+                if (node.getNodeType() == J8NodeType.BlockStatement
                     && splitChild.getNodeType()
-                       == NodeType.LocalVariableDeclaration) {
+                       == J8NodeType.LocalVariableDeclaration) {
                   wrappedChild = BlockStatementNode.Variant
                       .LocalVariableDeclarationStatement
                       .buildNode(node.getChildren());
@@ -287,9 +289,9 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
                       .Variant.LocalVariableDeclarationSem.buildNode(
                           ImmutableList.of(splitChild));
                 } else {
-                  wrappedChild = ((BaseInnerNode) node).shallowClone();
+                  wrappedChild = ((J8BaseInnerNode) node).shallowClone();
                 }
-                ((BaseInnerNode) wrappedChild).replace(
+                ((J8BaseInnerNode) wrappedChild).replace(
                     indexOfChild, splitChild);
               }
               splitNodes.add(wrappedChild);
@@ -304,21 +306,21 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
     return ls;
   }
 
-  static <T extends BaseNode> T find(
-      BaseNode start, ImmutableSet<NodeType> between,
-      ImmutableSet<NodeType> target, Class<T> cl) {
+  static <T extends J8BaseNode> T find(
+      J8BaseNode start, ImmutableSet<J8NodeType> between,
+      ImmutableSet<J8NodeType> target, Class<T> cl) {
     return processAlongPath(
         start, between, target,
         new FindOp<T>() {
 
           @Override
-          public T found(BaseNode node) {
+          public T found(J8BaseNode node) {
             return cl.cast(node);
           }
 
           @Override
           public T intermediate(
-              BaseNode node, int indexOfChild, BaseNode child, T x) {
+              J8BaseNode node, int indexOfChild, J8BaseNode child, T x) {
             return x;
           }
 
@@ -326,45 +328,45 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
   }
 
   interface FindOp<T> {
-    T found(BaseNode node);
+    T found(J8BaseNode node);
 
-    T intermediate(BaseNode node, int indexOfChild, BaseNode child, T x);
+    T intermediate(J8BaseNode node, int indexOfChild, J8BaseNode child, T x);
   }
 
-  private static DimsNode getDims(BaseNode node) {
+  private static DimsNode getDims(J8BaseNode node) {
     return find(
         node, BETWEEN_COMMON_ANCESTOR_AND_DIMS, DIMS_NODE_TYPES,
         DimsNode.class);
   }
 
-  private static BaseNode getType(BaseNode node) {
+  private static J8BaseNode getType(J8BaseNode node) {
     return find(
         node, BETWEEN_COMMON_ANCESTOR_AND_TYPE, TYPE_NODE_TYPES,
-        BaseNode.class);
+        J8BaseNode.class);
   }
 
-  private static BaseNode removeDimsAndAddDimsToType(
-      BaseNode start, DimsNode dims, BaseNode type) {
+  private static J8BaseNode removeDimsAndAddDimsToType(
+      J8BaseNode start, DimsNode dims, J8BaseNode type) {
     Preconditions.checkNotNull(dims);
     Preconditions.checkNotNull(type);
     // First, replace
-    BaseNode withFixedType = processAlongPath(
+    J8BaseNode withFixedType = processAlongPath(
         start,
         BETWEEN_COMMON_ANCESTOR_AND_TYPE, TYPE_NODE_TYPES,
-        new FindOp<BaseNode>() {
+        new FindOp<J8BaseNode>() {
 
           @Override
-          public TypeNode found(BaseNode node) {
+          public TypeNode found(J8BaseNode node) {
             TypeNode typeNode = (TypeNode) node;
             // There could be template nodes on this too.
-            List<BaseNode> annotationsEtc = Lists.newArrayList();
-            for (BaseNode child : dims.getChildren()) {
+            List<J8BaseNode> annotationsEtc = Lists.newArrayList();
+            for (J8BaseNode child : dims.getChildren()) {
               if (child instanceof DimNode) {
                 ArrayTypeNode newArrayType =
                     ArrayTypeNode.Variant.TypeAnnotationDim.buildNode(
                         ImmutableList.of(typeNode));
 
-                for (BaseNode annotationEtc : annotationsEtc) {
+                for (J8BaseNode annotationEtc : annotationsEtc) {
                   newArrayType.add(annotationEtc);
                 }
                 annotationsEtc.clear();
@@ -378,7 +380,7 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
               } else {
                 Preconditions.checkState(
                     child instanceof AnnotationNode
-                    || NodeTypeTables.NONSTANDARD.contains(
+                    || J8NodeTypeTables.NONSTANDARD.contains(
                         child.getNodeType()));
                 annotationsEtc.add(child);
               }
@@ -387,14 +389,14 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           }
 
           @Override
-          public BaseNode intermediate(
-              BaseNode node, int indexOfChild, BaseNode child,
-              BaseNode newChild) {
+          public J8BaseNode intermediate(
+              J8BaseNode node, int indexOfChild, J8BaseNode child,
+              J8BaseNode newChild) {
             Preconditions.checkState(
                 child.getNodeType() == newChild.getNodeType(),
                 "%s != %s",
                 child, newChild);
-            BaseInnerNode copy = ((BaseInnerNode) node).shallowClone();
+            J8BaseInnerNode copy = ((J8BaseInnerNode) node).shallowClone();
             copy.replace(indexOfChild, newChild);
             return copy;
           }
@@ -404,22 +406,22 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
     return removeDims(withFixedType);
   }
 
-  private static BaseNode removeDims(BaseNode start) {
+  private static J8BaseNode removeDims(J8BaseNode start) {
     return processAlongPath(
         start,
         BETWEEN_COMMON_ANCESTOR_AND_DIMS, DIMS_NODE_TYPES,
-        new FindOp<BaseNode>() {
+        new FindOp<J8BaseNode>() {
 
           @Override
-          public BaseNode found(BaseNode node) {
+          public J8BaseNode found(J8BaseNode node) {
             return null;
           }
 
           @Override
-          public BaseNode intermediate(
-              BaseNode node, int indexOfChild, BaseNode child,
-              @Nullable BaseNode newChild) {
-            BaseInnerNode copy = (BaseInnerNode) node.shallowClone();
+          public J8BaseNode intermediate(
+              J8BaseNode node, int indexOfChild, J8BaseNode child,
+              @Nullable J8BaseNode newChild) {
+            J8BaseInnerNode copy = (J8BaseInnerNode) node.shallowClone();
             if (newChild == null) {
               copy.remove(indexOfChild);
             } else {

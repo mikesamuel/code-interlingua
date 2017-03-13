@@ -2,8 +2,9 @@ package com.mikesamuel.cil.ptree;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.parser.ParSer;
+import com.mikesamuel.cil.parser.ParSerable;
 
 /**
  * ParSers that work based on a JLS style grammar.
@@ -37,7 +38,7 @@ public final class PTree {
   /**
    * A parSer that tries each variant in turn.
    */
-  public static ParSerable nodeWrapper(NodeType nodeType) {
+  public static ParSerable nodeWrapper(NodeType<?, ?> nodeType) {
     return new Reference(nodeType);
   }
 
@@ -57,6 +58,14 @@ public final class PTree {
   public static ParSerable complete(ParSerable p) {
     if (p instanceof Completer) { return p; }
     return new Completer(p);
+  }
+
+  /**
+   * @param pattern a regex string to match.
+   * @param diagnostic string for error messages.
+   */
+  public static ParSer patternMatch(String pattern, String diagnostic) {
+    return new PatternMatch(pattern, diagnostic);
   }
 
   /**

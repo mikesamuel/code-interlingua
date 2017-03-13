@@ -10,41 +10,71 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
- * A node in a Java AST.
+ * A node in an AST.
+ * <p>
+ * This class is a bit over-parameterized, but this should only affect common
+ * parsing and tree-building infrastructure.
+ * Each language has its own base node type that overrides this class and
+ * binds these parameters.
+ *
+ * @param <BASE_NODE> The language-specific base node type which is a super-type
+ *     of every node in an AST for that language.
+ * @param <NODE_TYPE> The node type enum for the language.  Enums tag each
+ *     node.
+ * @param <NODE_VARIANT> The node variant super-interface for the language.
+ *     Each node type corresponds to a concrete subclass of BASE_NODE and
+ *     each of those has an inner enum that specifies the variant of the node
+ *     type.
+ *     <p>
+ *     The variant is significant because the
+ *     {@link com.mikesamuel.cil.ptree core grammar operators} do not
+ *     include an alternation ({@code |} or {@code /}) operator except for those
+ *     implicit in the optional ({@code [...]}) operator.
+ *     Instead, grammars are specified in disjunction of concatenation form.
  */
-public abstract class BaseNode implements NodeI {
-  private NodeVariant variant;
+public abstract class BaseNode<
+    BASE_NODE extends BaseNode<BASE_NODE, NODE_TYPE, NODE_VARIANT>,
+    NODE_TYPE extends Enum<NODE_TYPE> & NodeType<BASE_NODE, NODE_TYPE>,
+    NODE_VARIANT extends NodeVariant<BASE_NODE, NODE_TYPE>>
+implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
+  private NODE_VARIANT variant;
   private @Nullable SourcePosition sourcePosition;
 
-  BaseNode(NodeVariant variant) {
+  protected BaseNode(NODE_VARIANT variant) {
     setVariant(variant);
   }
 
 
   /** The particular variant within the production. */
   @Override
-  public NodeVariant getVariant() {
+  public NODE_VARIANT getVariant() {
     return variant;
   }
 
   /**
    * Sets the node variant.
    */
-  public void setVariant(NodeVariant newVariant) {
-    NodeType type = newVariant.getNodeType();
+  public void setVariant(NODE_VARIANT newVariant) {
+    NODE_TYPE type = newVariant.getNodeType();
     Preconditions.checkArgument(type.getNodeBaseType().isInstance(this));
     this.variant = Preconditions.checkNotNull(newVariant);
   }
 
   /** The production's node type. */
   @Override
-  public final NodeType getNodeType() {
+  public final NODE_TYPE getNodeType() {
     return getVariant().getNodeType();
   }
+
+  @Override
+  public abstract List<BASE_NODE> getChildren();
+
+  @Override
+  public abstract BASE_NODE getChild(int i);
 
   /** The source position.  Non-normative. */
   @Override
@@ -62,17 +92,20 @@ public abstract class BaseNode implements NodeI {
 
   /** Copies all parse and trait metadata from the given node. */
   @Override
-  public void copyMetadataFrom(BaseNode source) {
+  public void copyMetadataFrom(BASE_NODE source) {
     SourcePosition pos = source.getSourcePosition();
     if (pos != null) {
       setSourcePosition(pos);
     }
   }
 
-  protected static <T extends BaseNode> T deepCopyChildren(T node) {
+  protected static
+  <BASE_NODE extends BaseNode<BASE_NODE, ?, ?>, T extends BASE_NODE>
+  T deepCopyChildren(T node) {
     int n = node.getNChildren();
-    if (node instanceof BaseInnerNode) {
-      BaseInnerNode inode = (BaseInnerNode) node;
+    if (node instanceof InnerNode<?, ?, ?>) {
+      @SuppressWarnings("unchecked")  // By convention.
+      InnerNode<BASE_NODE, ?, ?> inode = (InnerNode<BASE_NODE, ?, ?>) node;
       for (int i = 0; i < n; ++i) {
         inode.replace(i, inode.getChild(i).deepClone());
       }
@@ -83,10 +116,10 @@ public abstract class BaseNode implements NodeI {
   }
 
   @Override
-  public abstract BaseNode deepClone();
+  public abstract BASE_NODE deepClone();
 
   @Override
-  public abstract BaseNode shallowClone();
+  public abstract BASE_NODE shallowClone();
 
 
   @Override
@@ -98,7 +131,7 @@ public abstract class BaseNode implements NodeI {
 
   @Override
   public final int hashCode() {
-    List<BaseNode> children = getChildren();
+    List<BASE_NODE> children = getChildren();
     String literalValue = getValue();
 
     final int prime = 31;
@@ -123,7 +156,7 @@ public abstract class BaseNode implements NodeI {
     if (getClass() != obj.getClass()) {
       return false;
     }
-    BaseNode other = (BaseNode) obj;
+    BaseNode<?, ?, ?> other = (BaseNode<?, ?, ?>) obj;
     if (!variant.equals(other.variant)) {
       return false;
     }
@@ -138,8 +171,8 @@ public abstract class BaseNode implements NodeI {
         return false;
       }
     }
-    List<BaseNode> thisChildren = getChildren();
-    List<BaseNode> otherChildren = other.getChildren();
+    List<? extends BaseNode<?, ?, ?>> thisChildren = getChildren();
+    List<? extends BaseNode<?, ?, ?>> otherChildren = other.getChildren();
     if (!thisChildren.equals(otherChildren)) {
       return false;
     }
@@ -159,13 +192,13 @@ public abstract class BaseNode implements NodeI {
 
   /** Searches the subtree rooted at {@code BaseNode.this}. */
   public static final class Finder<T> {
-    private final BaseNode root;
+    private final BaseNode<?, ?, ?> root;
     private final Class<? extends T> matchType;
-    private Predicate<? super BaseNode> match;
-    private Predicate<? super BaseNode> doNotEnter;
+    private Predicate<? super BaseNode<?, ?, ?>> match;
+    private Predicate<? super BaseNode<?, ?, ?>> doNotEnter;
     private boolean allowNonStandard = false;
 
-    private Finder(BaseNode root, Class<? extends T> matchType) {
+    private Finder(BaseNode<?, ?, ?> root, Class<? extends T> matchType) {
       this.root = root;
       this.matchType = matchType;
       match = Predicates.instanceOf(matchType);
@@ -177,7 +210,7 @@ public abstract class BaseNode implements NodeI {
      *
      * @return {@code this} to enable chaining.
      */
-    public Finder<T> match(NodeType nt, NodeType... nts) {
+    public Finder<T> match(NodeType<?, ?> nt, NodeType<?, ?>... nts) {
       match = Predicates.and(match, new HasNodeTypeIn(nt, nts));
       return this;
     }
@@ -188,7 +221,7 @@ public abstract class BaseNode implements NodeI {
      *
      * @return {@code this} to enable chaining.
      */
-    public Finder<T> exclude(NodeType nt, NodeType... nts) {
+    public Finder<T> exclude(NodeType<?, ?> nt, NodeType<?, ?>... nts) {
       doNotEnter = Predicates.or(doNotEnter, new HasNodeTypeIn(nt, nts));
       return this;
     }
@@ -199,14 +232,14 @@ public abstract class BaseNode implements NodeI {
      *
      * @return {@code this} to enable chaining.
      */
-    public Finder<T> exclude(Class<? extends NodeI> cl) {
+    public Finder<T> exclude(Class<? extends NodeI<?, ?, ?>> cl) {
       doNotEnter = Predicates.or(doNotEnter, Predicates.instanceOf(cl));
       return this;
     }
 
     /**
      * Sets whether the finder will recurse into
-     * {@linkplain NodeTypeTables#NONSTANDARD nonstandard} productions.
+     * {@linkplain NodeType#isNonStandard nonstandard} productions.
      * Defaults to false.
      */
     public Finder<T> allowNonStandard(boolean b) {
@@ -239,30 +272,34 @@ public abstract class BaseNode implements NodeI {
       return Optional.absent();
     }
 
-    private void find(BaseNode node, ImmutableList.Builder<T> results) {
+    private void find(
+        BaseNode<?, ?, ?> node, ImmutableList.Builder<T> results) {
       if (match.apply(node)) {
         results.add(Preconditions.checkNotNull(matchType.cast(node)));
       }
       if (!doNotEnter.apply(node)
-          && (allowNonStandard
-              || !NodeTypeTables.NONSTANDARD.contains(node.getNodeType()))) {
+          && (allowNonStandard || !node.getNodeType().isNonStandard())) {
         for (int i = 0, n = node.getNChildren(); i < n; ++i) {
-          BaseNode child = node.getChild(i);
+          BaseNode<?, ?, ?> child = node.getChild(i);
           find(child, results);
         }
       }
     }
   }
 
-  private static final class HasNodeTypeIn implements Predicate<BaseNode> {
-    final Set<NodeType> nodeTypes;
+  private static final class HasNodeTypeIn
+  implements Predicate<BaseNode<?, ?, ?>> {
+    private final Set<NodeType<?, ?>> nodeTypes;
 
-    HasNodeTypeIn(NodeType nt, NodeType... nts) {
-      this.nodeTypes = Sets.immutableEnumSet(nt, nts);
+    HasNodeTypeIn(NodeType<?, ?> nt, NodeType<?, ?>... nts) {
+      this.nodeTypes = ImmutableSet.<NodeType<?, ?>>builder()
+          .add(nt)
+          .add(nts)
+          .build();
     }
 
     @Override
-    public boolean apply(BaseNode node) {
+    public boolean apply(BaseNode<?, ?, ?> node) {
       return node != null && nodeTypes.contains(node.getNodeType());
     }
   }

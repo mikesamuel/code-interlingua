@@ -8,22 +8,22 @@ import static com.mikesamuel.cil.event.Event.token;
 import org.junit.Test;
 
 import com.mikesamuel.cil.ast.AbstractParSerTestCase;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
-import com.mikesamuel.cil.ast.ContextFreeNameNode;
-import com.mikesamuel.cil.ast.ContextFreeNamesNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.MethodInvocationNode;
-import com.mikesamuel.cil.ast.MethodNameNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.PackageDeclarationNode;
-import com.mikesamuel.cil.ast.PackageNameNode;
-import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
-import com.mikesamuel.cil.ast.PrimaryNode;
-import com.mikesamuel.cil.ast.ReferenceTypeNode;
-import com.mikesamuel.cil.ast.TypeArgumentListNode;
-import com.mikesamuel.cil.ast.TypeArgumentNode;
-import com.mikesamuel.cil.ast.TypeArgumentsNode;
-import com.mikesamuel.cil.ast.TypeImportOnDemandDeclarationNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNamesNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.MethodInvocationNode;
+import com.mikesamuel.cil.ast.j8.MethodNameNode;
+import com.mikesamuel.cil.ast.j8.PackageDeclarationNode;
+import com.mikesamuel.cil.ast.j8.PackageNameNode;
+import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
+import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentListNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
+import com.mikesamuel.cil.ast.j8.TypeImportOnDemandDeclarationNode;
 
 @SuppressWarnings("javadoc")
 public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
@@ -31,7 +31,7 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
   @Test
   public void testSingleStaticImport() {
     assertParsePasses(
-        NodeType.TypeImportOnDemandDeclaration,
+        J8NodeType.TypeImportOnDemandDeclaration,
         "import com.example.Foo.bar.*;",
         /**/push(TypeImportOnDemandDeclarationNode.Variant
                 .ImportPackageOrTypeNameDotStrSem),
@@ -73,7 +73,7 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
   @Test
   public void testPackageDeclaration() {
     assertParsePasses(
-        NodeType.PackageDeclaration,
+        J8NodeType.PackageDeclaration,
         "package com.foo.bar;",
         /**/push(PackageDeclarationNode.Variant.Declaration),
         /*..*/token("package", -1),
@@ -98,7 +98,7 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
   @Test
   public void testMethodInvocation() {
     assertParsePasses(
-        NodeType.MethodInvocation,
+        J8NodeType.MethodInvocation,
         "Foo.f1.f2.method_name()",
         /**/push(MethodInvocationNode.Variant.ExplicitCallee),
         /*..*/push(PrimaryNode.Variant.MethodInvocation),
@@ -139,7 +139,7 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
   @Test
   public void testMethodInvocationWithTypeParameter() {
     assertParsePasses(
-        NodeType.MethodInvocation,
+        J8NodeType.MethodInvocation,
         "Foo.f1.f2.<T>method_name()",
         /**/push(MethodInvocationNode.Variant.ExplicitCallee),
         /*..*/push(PrimaryNode.Variant.MethodInvocation),
@@ -201,7 +201,7 @@ public class MagicDotIdentifierHandlerTest extends AbstractParSerTestCase {
   public void testTypeArgument() {
     // TODO: Are we missing anything here?
     assertParsePasses(
-        NodeType.ReferenceType,
+        J8NodeType.ReferenceType,
         "java.lang.Object",
         /**/push(ReferenceTypeNode.Variant.ClassOrInterfaceType),
         /*..*/push(ClassOrInterfaceTypeNode.Variant.ContextFreeNames),

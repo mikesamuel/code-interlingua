@@ -3,7 +3,6 @@ package com.mikesamuel.cil.ast.meta;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
-import com.mikesamuel.cil.ast.traits.CallableDeclaration;
 
 /**
  * A name that can represent anything referred to by a name production.
@@ -29,7 +28,7 @@ public final class Name {
    * particular variant.  Until the class member pass runs, we can't use
    * method descriptors.
    * <p>
-   * See {@link CallableDeclaration#getMethodVariant caveat}.
+   * See {@link com.mikesamuel.cil.ast.j8.traits.CallableDeclaration#getMethodVariant caveat}.
    */
   public final @Nullable int variant;
   /** The type of thing to which identifier refers. */
@@ -158,7 +157,8 @@ public final class Name {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((identifier == null) ? 0 : identifier.hashCode());
+    result = prime * result
+           + ((identifier == null) ? 0 : identifier.hashCode());
     result = prime * result + variant;
     result = prime * result + ((parent == null) ? 0 : parent.hashCode());
     result = prime * result + ((type == null) ? 0 : type.hashCode());

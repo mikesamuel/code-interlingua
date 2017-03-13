@@ -47,7 +47,7 @@ public abstract class Event {
   /**
    * An event fired on entering a node before visiting its content or children.
    */
-  public static Push push(NodeVariant v) {
+  public static Push push(NodeVariant<?, ?> v) {
     return new Push(v);
   }
 
@@ -63,7 +63,7 @@ public abstract class Event {
    * An event that happens when we leave a node after visiting its content and
    * children.
    */
-  public static Pop pop(NodeVariant variant) {
+  public static Pop pop(NodeVariant<?, ?> variant) {
     return new Pop(Optional.of(variant));
   }
 
@@ -112,7 +112,8 @@ public abstract class Event {
    * An ephemeral event that indicates that the corresponding preceding
    * {@link #leftRecursionSuffixStart} is finished.
    */
-  public static LREnd leftRecursionSuffixEnd(NodeType nodeType, int index) {
+  public static LREnd leftRecursionSuffixEnd(
+      NodeType<?, ?> nodeType, int index) {
     return new LREnd(nodeType, index);
   }
 
@@ -169,12 +170,12 @@ public abstract class Event {
   }
 
   /** For {@link Kind#PUSH} */
-  public NodeVariant getNodeVariant() {
+  public NodeVariant<?, ?> getNodeVariant() {
     throw new UnsupportedOperationException(getKind().name());
   }
 
   /** For {@link Kind#PUSH} and {@link Kind#LR_END} */
-  public NodeType getNodeType() {
+  public NodeType<?, ?> getNodeType() {
     throw new UnsupportedOperationException(getKind().name());
   }
 
@@ -192,9 +193,9 @@ public abstract class Event {
      * The variant popped if known.
      * This is non-normative, but useful for debugging.
      */
-    public final Optional<NodeVariant> variant;
+    public final Optional<NodeVariant<?, ?>> variant;
 
-    Pop(Optional<NodeVariant> variant) {
+    Pop(Optional<NodeVariant<?, ?>> variant) {
       this.variant = variant;
     }
 
@@ -226,9 +227,9 @@ public abstract class Event {
    */
   static final class Push extends Event {
     /** Variant of the node entered. */
-    public final NodeVariant variant;
+    public final NodeVariant<?, ?> variant;
 
-    Push(NodeVariant variant) {
+    Push(NodeVariant<?, ?> variant) {
       this.variant = variant;
     }
 
@@ -238,12 +239,12 @@ public abstract class Event {
     }
 
     @Override
-    public NodeVariant getNodeVariant() {
+    public NodeVariant<?, ?> getNodeVariant() {
       return variant;
     }
 
     @Override
-    public NodeType getNodeType() {
+    public NodeType<?, ?> getNodeType() {
       return variant.getNodeType();
     }
 
@@ -509,13 +510,13 @@ public abstract class Event {
     /**
      * The production that was reached left-recursively.
      */
-    public final NodeType nodeType;
+    public final NodeType<?, ?> nodeType;
     /**
      * The index at which the growing started.
      */
     public final int index;
 
-    LREnd(NodeType nodeType, int index) {
+    LREnd(NodeType<?, ?> nodeType, int index) {
       this.nodeType = nodeType;
       this.index = index;
     }
@@ -526,7 +527,7 @@ public abstract class Event {
     }
 
     @Override
-    public NodeType getNodeType() {
+    public NodeType<?, ?> getNodeType() {
       return nodeType;
     }
 

@@ -81,7 +81,9 @@ public final class ParseState {
   }
 
   /**
-   * True iff there is a token at the current parse position with the given text.
+   * True iff there is a token at the current parse position with the given
+   * text.
+   * <p>
    * Since this parser is scannerless, this will return true if the given text
    * is a prefix of the next token unless a merge guard is provided.
    *

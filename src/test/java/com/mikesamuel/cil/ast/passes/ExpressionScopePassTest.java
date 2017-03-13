@@ -5,16 +5,17 @@ import java.util.logging.Logger;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.Java8Comments;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.Java8Comments;
+import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
-import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
+import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
+       .DeclarationPositionMarker;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.PassRunner;
-import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -25,7 +26,7 @@ public final class ExpressionScopePassTest extends TestCase {
 
   private static final Decorator DECORATOR = new Decorator() {
     @Override
-    public String decorate(BaseNode node) {
+    public String decorate(NodeI<?, ?, ?> node) {
       DeclarationPositionMarker m = null;
       if (node instanceof LimitedScopeElement) {
         m = ((LimitedScopeElement) node).getDeclarationPositionMarker();

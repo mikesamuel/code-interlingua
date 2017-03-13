@@ -7,7 +7,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.mikesamuel.cil.ptree.Tokens;
+import com.mikesamuel.cil.ast.j8.Tokens;
 
 /**
  * A gross structure handler that is suitable for C-like languages whose

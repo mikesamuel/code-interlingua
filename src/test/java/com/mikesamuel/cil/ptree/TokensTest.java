@@ -6,7 +6,8 @@ import java.util.regex.Pattern;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.TokenStrings;
+import com.mikesamuel.cil.ast.j8.TokenStrings;
+import com.mikesamuel.cil.ast.j8.Tokens;
 
 import junit.framework.TestCase;
 
@@ -15,17 +16,18 @@ public final class TokensTest extends TestCase {
 
   @Test
   public static void testIntegerLiteral() {
-    assertTrue(Tokens.INTEGER_LITERAL.p.matcher("1").matches());
-    assertTrue(Tokens.INTEGER_LITERAL.p.matcher("01").matches());
-    assertTrue(Tokens.INTEGER_LITERAL.p.matcher("0x1").matches());
-    assertTrue(Tokens.INTEGER_LITERAL.p.matcher("0b1").matches());
-    assertTrue(Tokens.INTEGER_LITERAL.p.matcher("123L").matches());
-    assertTrue(Tokens.INTEGER_LITERAL.p.matcher("0xA0").matches());
+    Pattern p = ((PatternMatch) Tokens.INTEGER_LITERAL).p;
+    assertTrue(p.matcher("1").matches());
+    assertTrue(p.matcher("01").matches());
+    assertTrue(p.matcher("0x1").matches());
+    assertTrue(p.matcher("0b1").matches());
+    assertTrue(p.matcher("123L").matches());
+    assertTrue(p.matcher("0xA0").matches());
   }
 
   @Test
   public static void testFloatLiteral() {
-    Pattern p = Tokens.FLOATING_POINT_LITERAL.p;
+    Pattern p = ((PatternMatch) Tokens.FLOATING_POINT_LITERAL).p;
     assertTrue(p.matcher("1.0").matches());
     assertTrue(p.matcher(".5").matches());
     assertTrue(p.matcher("1.05").matches());
@@ -36,7 +38,7 @@ public final class TokensTest extends TestCase {
 
   @Test
   public static void testStringLiteral() {
-    Pattern p = Tokens.STRING_LITERAL.p;
+    Pattern p = ((PatternMatch) Tokens.STRING_LITERAL).p;
     Matcher mTwo = p.matcher("\"foo\" + \"bar\"");
     assertTrue(mTwo.find());
     assertEquals("\"foo\"", mTwo.group());
@@ -71,16 +73,16 @@ public final class TokensTest extends TestCase {
 
   @Test
   public static void testIdentifier() {
-    assertTrue(
-        Tokens.IDENTIFIER.p.matcher("donut").matches());
+    Pattern p = ((PatternMatch) Tokens.IDENTIFIER).p;
+    assertTrue(p.matcher("donut").matches());
   }
 
   @Test
   public static void testIdentiiferKeywordAmbiguity() {
-    Pattern ident = Tokens.IDENTIFIER.p;
+    Pattern p = ((PatternMatch) Tokens.IDENTIFIER).p;
     for (String word : TokenStrings.RESERVED) {
-      assertFalse(word, ident.matcher(word).matches());
-      assertTrue(word, ident.matcher(word + "z").matches());
+      assertFalse(word, p.matcher(word).matches());
+      assertTrue(word, p.matcher(word + "z").matches());
     }
   }
 

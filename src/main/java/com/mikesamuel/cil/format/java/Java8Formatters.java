@@ -20,7 +20,7 @@ public final class Java8Formatters {
   /**
    * A formatter for Java 8.
    */
-  public static Formatter<SList<NodeVariant>> createFormatter() {
+  public static Formatter<SList<NodeVariant<?, ?>>> createFormatter() {
     return new Formatter<>(new CStyleGrossStructurer<>(
         new Java8TokenBreaker()));
   }

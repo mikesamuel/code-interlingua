@@ -8,34 +8,40 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.mikesamuel.cil.ast.ArrayTypeNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
-import com.mikesamuel.cil.ast.ClassTypeNode;
-import com.mikesamuel.cil.ast.ConstantDeclarationNode;
-import com.mikesamuel.cil.ast.EnumConstantNameNode;
-import com.mikesamuel.cil.ast.EnumConstantNode;
-import com.mikesamuel.cil.ast.FieldDeclarationNode;
-import com.mikesamuel.cil.ast.FloatingPointTypeNode;
-import com.mikesamuel.cil.ast.FormalParameterListNode;
-import com.mikesamuel.cil.ast.FormalParameterNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.IntegralTypeNode;
-import com.mikesamuel.cil.ast.InterfaceTypeNode;
-import com.mikesamuel.cil.ast.LastFormalParameterNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.NodeVariant;
-import com.mikesamuel.cil.ast.NumericTypeNode;
-import com.mikesamuel.cil.ast.PrimaryNode;
-import com.mikesamuel.cil.ast.PrimitiveTypeNode;
-import com.mikesamuel.cil.ast.ReferenceTypeNode;
-import com.mikesamuel.cil.ast.ResultNode;
-import com.mikesamuel.cil.ast.TypeArgumentsNode;
-import com.mikesamuel.cil.ast.TypeNode;
-import com.mikesamuel.cil.ast.TypeVariableNode;
-import com.mikesamuel.cil.ast.UnannTypeNode;
-import com.mikesamuel.cil.ast.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.ArrayTypeNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeToInstantiateNode;
+import com.mikesamuel.cil.ast.j8.ClassTypeNode;
+import com.mikesamuel.cil.ast.j8.ConstantDeclarationNode;
+import com.mikesamuel.cil.ast.j8.EnumConstantNameNode;
+import com.mikesamuel.cil.ast.j8.EnumConstantNode;
+import com.mikesamuel.cil.ast.j8.FieldDeclarationNode;
+import com.mikesamuel.cil.ast.j8.FloatingPointTypeNode;
+import com.mikesamuel.cil.ast.j8.FormalParameterListNode;
+import com.mikesamuel.cil.ast.j8.FormalParameterNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
+import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
+import com.mikesamuel.cil.ast.j8.NumericTypeNode;
+import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
+import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
+import com.mikesamuel.cil.ast.j8.ResultNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
+import com.mikesamuel.cil.ast.j8.TypeNode;
+import com.mikesamuel.cil.ast.j8.TypeVariableNode;
+import com.mikesamuel.cil.ast.j8.UnannTypeNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
+import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.MemberDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.traits.TypeScope;
+import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
@@ -45,12 +51,6 @@ import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
-import com.mikesamuel.cil.ast.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.MemberDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.traits.TypeScope;
-import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.SList;
 
 /**
@@ -67,8 +67,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
   }
 
   void run(
-      BaseNode node, @Nullable TypeInfo typeInfo, TypeNameResolver nr,
-      @Nullable SList<NodeVariant> ancestors) {
+      J8BaseNode node, @Nullable TypeInfo typeInfo, TypeNameResolver nr,
+      @Nullable SList<J8NodeVariant> ancestors) {
     TypeNameResolver childResolver = nr;
     TypeInfo childTypeInfo = typeInfo;
     if (node instanceof TypeScope) {
@@ -100,9 +100,9 @@ final class ClassMemberPass extends AbstractPass<Void> {
     }
 
     // Compute whole types for method results and field types.
-    SList<NodeVariant> ancestorsAndNode = SList.append(
+    SList<J8NodeVariant> ancestorsAndNode = SList.append(
         ancestors, node.getVariant());
-    for (BaseNode child : node.getChildren()) {
+    for (J8BaseNode child : node.getChildren()) {
       run(child, childTypeInfo, childResolver, ancestorsAndNode);
     }
 
@@ -130,7 +130,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
         FormalParameterListNode paramList = null;
         for (FormalParameterListNode ps
             : node.finder(FormalParameterListNode.class)
-            .exclude(NodeType.MethodBody, NodeType.ConstructorBody)
+            .exclude(J8NodeType.MethodBody, J8NodeType.ConstructorBody)
                .find()) {
           Preconditions.checkState(paramList == null);
           paramList = ps;
@@ -146,17 +146,17 @@ final class ClassMemberPass extends AbstractPass<Void> {
           descriptor.append("()");
         } else {
           descriptor.append('(');
-          for (BaseNode formal
+          for (J8BaseNode formal
               : Iterables.concat(
                   node.finder(FormalParameterNode.class)
                   .exclude(
-                      NodeType.MethodBody,
-                      NodeType.ConstructorBody, NodeType.BlockStatements)
+                      J8NodeType.MethodBody,
+                      J8NodeType.ConstructorBody, J8NodeType.BlockStatements)
                   .find(),
                   node.finder(LastFormalParameterNode.class)
                   .exclude(
-                      NodeType.MethodBody,
-                      NodeType.ConstructorBody, NodeType.BlockStatements)
+                      J8NodeType.MethodBody,
+                      J8NodeType.ConstructorBody, J8NodeType.BlockStatements)
                   .find())) {
             boolean isVariadic = false;
             if (formal instanceof LastFormalParameterNode) {
@@ -214,7 +214,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
             || node instanceof ConstantDeclarationNode) {
       for (VariableDeclaratorIdNode var
            : node.finder(VariableDeclaratorIdNode.class)
-           .exclude(NodeType.VariableInitializer)
+           .exclude(J8NodeType.VariableInitializer)
            .find()) {
         IdentifierNode ident = var.firstChildWithType(IdentifierNode.class);
         if (ident != null) {
@@ -253,16 +253,16 @@ final class ClassMemberPass extends AbstractPass<Void> {
 
   }
 
-  private WholeType findWholeType(BaseNode node) {
+  private WholeType findWholeType(J8BaseNode node) {
     WholeType wholeType = null;
     for (WholeType t
         : node.finder(WholeType.class)
-        .exclude(NodeType.Throws, NodeType.TypeParameters,
-            NodeType.MethodBody, NodeType.ConstructorBody,
-            NodeType.BlockStatements,
-            NodeType.VariableInitializer,
-            NodeType.FormalParameterList, NodeType.Result,
-            NodeType.Type)
+        .exclude(J8NodeType.Throws, J8NodeType.TypeParameters,
+            J8NodeType.MethodBody, J8NodeType.ConstructorBody,
+            J8NodeType.BlockStatements,
+            J8NodeType.VariableInitializer,
+            J8NodeType.FormalParameterList, J8NodeType.Result,
+            J8NodeType.Type)
         .find()) {
       if (wholeType != null) {
         error(
@@ -285,8 +285,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
     return null;
   }
 
-  StaticType processStaticType(BaseNode node, TypeNameResolver r) {
-    Class<? extends BaseNode> delegateType = null;
+  StaticType processStaticType(J8BaseNode node, TypeNameResolver r) {
+    Class<? extends J8BaseNode> delegateType = null;
     StaticType t = null;
     switch (node.getNodeType()) {
       case Result: {
@@ -372,7 +372,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
           for (WholeType argType : args.finder(WholeType.class)
               .exclude(WholeType.class)
               .find()) {
-            processStaticType((BaseNode) argType, r);
+            processStaticType((J8BaseNode) argType, r);
           }
         }
         break;
@@ -471,7 +471,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
         break;
     }
     if (delegateType != null) {
-      BaseNode delegate = node.firstChildWithType(delegateType);
+      J8BaseNode delegate = node.firstChildWithType(delegateType);
       if (delegate != null) {
         t = processStaticType(delegate, r);
       } else {
@@ -492,7 +492,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
   @Override
   public Void run(Iterable<? extends FileNode> fileNodes) {
     for (FileNode fileNode : fileNodes) {
-      run((BaseNode) fileNode, null, null, null);
+      run((J8BaseNode) fileNode, null, null, null);
     }
     return null;
   }

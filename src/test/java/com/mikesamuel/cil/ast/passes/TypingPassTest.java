@@ -10,31 +10,31 @@ import org.junit.Test;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CastExpressionNode;
-import com.mikesamuel.cil.ast.CastNode;
-import com.mikesamuel.cil.ast.ClassLiteralNode;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
-import com.mikesamuel.cil.ast.ConditionalExpressionNode;
-import com.mikesamuel.cil.ast.ExpressionNode;
-import com.mikesamuel.cil.ast.Java8Comments;
 import com.mikesamuel.cil.ast.NodeI;
-import com.mikesamuel.cil.ast.PrimaryNode;
-import com.mikesamuel.cil.ast.StatementExpressionNode;
 import com.mikesamuel.cil.ast.Trees.Decorator;
-import com.mikesamuel.cil.ast.UnqualifiedClassInstanceCreationExpressionNode;
+import com.mikesamuel.cil.ast.j8.CastExpressionNode;
+import com.mikesamuel.cil.ast.j8.CastNode;
+import com.mikesamuel.cil.ast.j8.ClassLiteralNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.ConditionalExpressionNode;
+import com.mikesamuel.cil.ast.j8.ExpressionNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.Java8Comments;
+import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.StatementExpressionNode;
+import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
+import com.mikesamuel.cil.ast.j8.traits.BinaryOp;
+import com.mikesamuel.cil.ast.j8.traits.ExpressionNameReference;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.traits.MethodDescriptorReference;
+import com.mikesamuel.cil.ast.j8.traits.Typed;
+import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
-import com.mikesamuel.cil.ast.traits.BinaryOp;
-import com.mikesamuel.cil.ast.traits.ExpressionNameReference;
-import com.mikesamuel.cil.ast.traits.FileNode;
-import com.mikesamuel.cil.ast.traits.MethodDescriptorReference;
-import com.mikesamuel.cil.ast.traits.Typed;
-import com.mikesamuel.cil.ast.traits.WholeType;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
 import junit.framework.TestCase;
@@ -44,7 +44,7 @@ public final class TypingPassTest extends TestCase {
 
   private static void assertTyped(
       String[][] inputs,
-      Class<? extends NodeI> target,
+      Class<? extends NodeI<?, ?, ?>> target,
       String[] expectedTypes,
       String... expectedErrors)
   throws UnparseVerificationException {
@@ -54,7 +54,7 @@ public final class TypingPassTest extends TestCase {
   private static void assertTyped(
       @Nullable String[][] expectedWithCasts,
       String[][] inputs,
-      @Nullable Class<? extends NodeI> target,
+      @Nullable Class<? extends NodeI<?, ?, ?>> target,
       @Nullable String[] expectedTypes,
       @Nullable Decorator decorator,
       String... expectedErrors)
@@ -101,9 +101,9 @@ public final class TypingPassTest extends TestCase {
     }
 
     if (target != null) {
-      List<NodeI> typed = Lists.newArrayList();
+      List<NodeI<?, ?, ?>> typed = Lists.newArrayList();
       for (FileNode fileNode : processedFiles) {
-        for (NodeI n : ((BaseNode) fileNode).finder(target).find()) {
+        for (NodeI<?, ?, ?> n : ((J8BaseNode) fileNode).finder(target).find()) {
           if (n instanceof Typed) {
             typed.add(n);
           } else if (n instanceof WholeType) {
@@ -111,7 +111,7 @@ public final class TypingPassTest extends TestCase {
           } else {
             boolean found = false;
             for (Typed t
-                   : ((BaseNode) n).finder(Typed.class)
+                   : ((J8BaseNode) n).finder(Typed.class)
                    .exclude(WholeType.class).exclude(Typed.class)
                    .find()) {
               typed.add(t);
@@ -120,7 +120,7 @@ public final class TypingPassTest extends TestCase {
             }
             if (!found) {
               for (WholeType t
-                     : ((BaseNode) n).finder(WholeType.class)
+                     : ((J8BaseNode) n).finder(WholeType.class)
                      .exclude(WholeType.class)
                      .find()) {
                 typed.add(t);
@@ -131,12 +131,13 @@ public final class TypingPassTest extends TestCase {
         }
       }
       ImmutableList.Builder<String> got = ImmutableList.builder();
-      for (NodeI t : typed) {
+      for (NodeI<?, ?, ?> t : typed) {
         StaticType typ = (t instanceof Typed)
           ? ((Typed)     t).getStaticType()
           : ((WholeType) t).getStaticType();
         got.add(
-            PassTestHelpers.serializeNodes(ImmutableList.of((BaseNode) t), null)
+            PassTestHelpers.serializeNodes(
+                ImmutableList.of((J8BaseNode) t), null)
             + " : " + typ);
       }
 
@@ -147,14 +148,14 @@ public final class TypingPassTest extends TestCase {
 
     // Sanity check that the processed CUs have associated types, even if only
     // the error type, with every Typed and WholeType.
-    List<BaseNode> untyped = Lists.newArrayList();
+    List<J8BaseNode> untyped = Lists.newArrayList();
     for (FileNode fileNode : processedFiles) {
-      sanityCheckUntyped((BaseNode) fileNode, untyped);
+      sanityCheckUntyped((J8BaseNode) fileNode, untyped);
     }
     if (!untyped.isEmpty()) {
       StringBuilder msg = new StringBuilder(
           "Some nodes are missing type information");
-      for (BaseNode untypedNode : untyped) {
+      for (J8BaseNode untypedNode : untyped) {
         msg.append('\n')
             .append(untypedNode.getVariant())
             .append(" @ ")
@@ -165,7 +166,7 @@ public final class TypingPassTest extends TestCase {
   }
 
   private static void sanityCheckUntyped(
-      BaseNode node, List<? super BaseNode> out) {
+      J8BaseNode node, List<? super J8BaseNode> out) {
     if (node instanceof Typed) {
       Typed typed = (Typed) node;
       if (typed.getStaticType() == null) {
@@ -178,7 +179,7 @@ public final class TypingPassTest extends TestCase {
       }
     }
 
-    for (BaseNode child : node.getChildren()) {
+    for (J8BaseNode child : node.getChildren()) {
       if (!(node instanceof ClassOrInterfaceTypeNode
             && child instanceof ClassOrInterfaceTypeNode)) {
         sanityCheckUntyped(child, out);
@@ -2153,7 +2154,7 @@ public final class TypingPassTest extends TestCase {
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 
     @Override
-    public String decorate(BaseNode node) {
+    public String decorate(NodeI<?, ?, ?> node) {
       if (node instanceof MethodDescriptorReference) {
         String descriptor = ((MethodDescriptorReference) node)
             .getMethodDescriptor();
@@ -2170,7 +2171,7 @@ public final class TypingPassTest extends TestCase {
       new Decorator() {
 
         @Override
-        public String decorate(BaseNode node) {
+        public String decorate(NodeI<?, ?, ?> node) {
           if (node instanceof MethodDescriptorReference) {
             MethodDescriptorReference desc = (MethodDescriptorReference) node;
 
@@ -2197,7 +2198,7 @@ public final class TypingPassTest extends TestCase {
   private static final Decorator DECORATE_EXPR_NAMES = new Decorator() {
 
     @Override
-    public String decorate(BaseNode node) {
+    public String decorate(NodeI<?, ?, ?> node) {
       if (node instanceof ExpressionNameReference) {
         Name referent = ((ExpressionNameReference) node)
             .getReferencedExpressionName();

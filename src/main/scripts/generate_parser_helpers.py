@@ -5,7 +5,7 @@ import re
 
 
 
-_JAVA_PACKAGE = 'com.mikesamuel.cil.ast'
+_JAVA_BASE_PACKAGE = 'com.mikesamuel.cil.ast'
 
 BUILTINS = ('builtin', 'any')
 
@@ -119,9 +119,12 @@ _TRAITS = {
 _TRAITS['TypeParameterScope'] = _TRAITS['TypeScope']
 
 _CUSTOM_NODE_CONTENT = {
-    'ConstructorDeclaration': ('  @Override public String getMethodName() { return "<init>"; }', ()),
-    'InstanceInitializer':    ('  @Override public String getMethodName() { return "<init>"; }', ()),
-    'StaticInitializer':      ('  @Override public String getMethodName() { return "<clinit>"; }', ()),
+    'ConstructorDeclaration':
+    ('  @Override public String getMethodName() { return "<init>"; }', ()),
+    'InstanceInitializer':
+    ('  @Override public String getMethodName() { return "<init>"; }', ()),
+    'StaticInitializer':
+    ('  @Override public String getMethodName() { return "<clinit>"; }', ()),
     }
 
 _TOKEN_RE = re.compile(
@@ -320,19 +323,26 @@ def _tokens_to_text(toks):
 
 
 def process_grammar(
+        grammar_name,
         grammar_text,
         source_file_exists,
         emit_java_file,
         dot_out=None,
         verbose=True):
     """
-    grammar_text : string -- See ../resources/jsl-19.txt
+    grammar_name : string -- Specifies the subpackage under _JAVA_BASE_PACKAGE
+        and a common prefix for node, node type, and node variant classes.
+    grammar_text : string -- See ../resources/jsl-19.txt.
     source_file_exists : function --
         given a java file true iff it exists under the source directory in the
-        right sub-directory for _JAVA_PACKAGE
+        right sub-directory for the output package
     emit_java_file : function -- given unqualified name and java_source_code
         writes to a .java file in the generated source directory.
     """
+
+    java_package = '%s.%s' % (_JAVA_BASE_PACKAGE, grammar_name)
+
+    cn_prefix = '%s%s' % (grammar_name[0:1].upper(), grammar_name[1:])
 
     generator = _java_str_lit(os.path.relpath(__file__))
     line_number, column_number, char_count = 1, 1, 0
@@ -462,7 +472,8 @@ def process_grammar(
                     raise SyntaxError('Expected content after "!"')
                 sub_node, j = make_node(toks, i + 1)
                 if sub_node is None:
-                    raise SyntaxError('Expected content after "!" not annotation')
+                    raise SyntaxError(
+                        'Expected content after "!" not annotation')
                 return ({ 'name': 'nla', 'ptree': [sub_node] }), j
             if tok[0] in ('(', '[', '{'):
                 end_bracket = _BRACKET_OTHERS[tok[0]]
@@ -667,7 +678,7 @@ def process_grammar(
         for_each_chapter(add_member)
 
         emit_java_file(
-            'Chapter',
+            '%sChapter' % cn_prefix,
             '''package %(package)s;
 
 /**
@@ -675,11 +686,12 @@ def process_grammar(
  * Some productions have been moved around, so this is approximate.
  */
 @javax.annotation.Generated(%(generator)s)
-public enum Chapter {
+public enum %(cn_prefix)sChapter {
 %(members)s
 }
 ''' % {
-    'package': _JAVA_PACKAGE,
+    'package': java_package,
+    'cn_prefix': cn_prefix,
     'generator': generator,
     'members': '\n'.join(members),
 })
@@ -713,7 +725,8 @@ public enum Chapter {
     def prune_unreachable():
         unreachable = set(prods_by_name.keys()).difference(reachable)
         if verbose:
-            # Dump a list of productions that are not reachable from @toplevel prods
+            # Dump a list of productions that are not reachable from @toplevel
+            # prods
             for ur in unreachable:
                 print 'UNREACHABLE: %s' % ur
         for ur in unreachable:
@@ -771,6 +784,182 @@ public enum Chapter {
         for_each_variant(infer)
     infer_intermediates()
 
+    def create_grammar_specific_base_types():
+        emit_java_file(
+            '%sBaseNode' % cn_prefix,
+
+            '''
+package %(package)s;
+
+import com.mikesamuel.cil.ast.BaseNode;
+
+/**
+ * A node in a %(cn_prefix)s grammar syntax tree.
+ */
+public abstract class %(cn_prefix)sBaseNode
+extends BaseNode<%(cn_prefix)sBaseNode,
+                 %(cn_prefix)sNodeType,
+                 %(cn_prefix)sNodeVariant> {
+
+  %(cn_prefix)sBaseNode(%(cn_prefix)sNodeVariant variant) {
+    super(variant);
+  }
+
+}
+''' % {
+    'package': java_package,
+    'cn_prefix': cn_prefix,
+})
+
+        emit_java_file(
+            '%sBaseInnerNode' % cn_prefix,
+
+            '''
+package %(package)s;
+
+import com.mikesamuel.cil.ast.InnerNode;
+import java.util.List;
+import javax.annotation.Nullable;
+
+/**
+ * A %(cn_prefix)s grammar node that has children instead of token content.
+ */
+public abstract class %(cn_prefix)sBaseInnerNode
+extends %(cn_prefix)sBaseNode
+implements InnerNode<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sNodeVariant> {
+  private final MutableChildList<%(cn_prefix)sBaseNode> children =
+      new MutableChildList<>();
+
+  %(cn_prefix)sBaseInnerNode(
+      %(cn_prefix)sNodeVariant variant,
+      Iterable<? extends %(cn_prefix)sBaseNode> initialChildren) {
+    super(variant);
+    children.replaceChildren(initialChildren);
+  }
+
+  @Override
+  public final MutableChildList<%(cn_prefix)sBaseNode> getMutableChildList() {
+    return children;
+  }
+
+  @Override
+  public final @Nullable String getValue() {
+    return null;
+  }
+
+  @Override
+  public final int getNChildren() {
+    return children.getNChildren();
+  }
+
+  @Override
+  public final %(cn_prefix)sBaseNode getChild(int i) {
+    return children.getChild(i);
+  }
+
+  @Override
+  public final List<%(cn_prefix)sBaseNode> getChildren() {
+    return children.getChildren();
+  }
+
+  @Override
+  public abstract %(cn_prefix)sBaseInnerNode shallowClone();
+
+  @Override
+  public abstract %(cn_prefix)sBaseInnerNode deepClone();
+
+}
+''' % {
+    'package': java_package,
+    'cn_prefix': cn_prefix,
+})
+
+        emit_java_file(
+            '%sBaseLeafNode' % cn_prefix,
+
+            '''
+package %(package)s;
+
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.ast.LeafNode;
+
+/**
+ * A node that has some token content instead of children.
+ */
+public abstract class %(cn_prefix)sBaseLeafNode
+extends %(cn_prefix)sBaseNode
+implements LeafNode<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sNodeVariant> {
+  private String value;
+
+  %(cn_prefix)sBaseLeafNode(%(cn_prefix)sNodeVariant variant, String initialValue) {
+    super(variant);
+    setValue(initialValue);
+  }
+
+  @Override
+  public final String getValue() {
+    return value;
+  }
+
+  @Override
+  public final void setValue(String newValue) {
+    this.value = Preconditions.checkNotNull(newValue);
+  }
+
+  @Override
+  public final int getNChildren() {
+    return 0;
+  }
+
+  @Override
+  public final %(cn_prefix)sBaseNode getChild(int i) {
+    throw new IndexOutOfBoundsException("" + i);
+  }
+
+  @Override
+  public final ImmutableList<%(cn_prefix)sBaseNode> getChildren() {
+    return ImmutableList.of();
+  }
+}
+''' % {
+    'package': java_package,
+    'cn_prefix': cn_prefix,
+})
+
+        emit_java_file(
+            '%sNodeVariant' % cn_prefix,
+
+            '''
+package %(package)s;
+
+import com.mikesamuel.cil.ast.NodeVariant;
+
+/**
+ * A node variant for the %(cn_prefix)s grammar.
+ */
+public interface %(cn_prefix)sNodeVariant
+extends NodeVariant<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
+
+  @Override
+  default %(cn_prefix)sBaseLeafNode buildNode(String value) {
+    throw new IllegalArgumentException(this + " is an inner node type");
+  }
+
+  @Override
+  default %(cn_prefix)sBaseInnerNode buildNode(
+      Iterable<? extends %(cn_prefix)sBaseNode> children) {
+    throw new IllegalArgumentException(this + " is a leaf node type");
+  }
+
+}
+''' % {
+    'package': java_package,
+    'cn_prefix': cn_prefix,
+})
+
+    create_grammar_specific_base_types()
+
     def create_enum_members():
         enum_members = []
         for chapter in grammar:
@@ -780,8 +969,9 @@ public enum Chapter {
   /**
    * <pre>%(jsdoc)s</pre>
    */
-  %(name)s(%(name)sNode.class, %(name)sNode.Variant.class, Chapter.%(chapter_name)s),
+  %(name)s(%(name)sNode.class, %(name)sNode.Variant.class, %(cn_prefix)sChapter.%(chapter_name)s),
 ''' % {
+    'cn_prefix': cn_prefix,
     'jsdoc': _jsdoc_of(_tokens_to_text(prod['toks']), prefix = '   * '),
     'name': prod['name'],
     'name_str': _java_str_lit(prod['name']),
@@ -791,11 +981,13 @@ public enum Chapter {
 
     # Produce an enum with an entry for each production.
     emit_java_file(
-        'NodeType',
+        '%sNodeType' % cn_prefix,
 
         '''
 package %(package)s;
 
+import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.Grammar;
 import com.mikesamuel.cil.parser.ParSer;
 import com.mikesamuel.cil.parser.ParSerable;
 import com.mikesamuel.cil.ptree.PTree;
@@ -804,19 +996,20 @@ import com.mikesamuel.cil.ptree.PTree;
  * A Java language production.
  */
 @javax.annotation.Generated(%(generator)s)
-public enum NodeType implements ParSerable {
+public enum %(cn_prefix)sNodeType
+implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
 %(members)s
   ;
 
-  private final Class<? extends BaseNode> nodeBaseType;
-  private final Class<? extends Enum<? extends NodeVariant>> variantType;
+  private final Class<? extends %(cn_prefix)sBaseNode> nodeBaseType;
+  private final Class<? extends Enum<? extends %(cn_prefix)sNodeVariant>> variantType;
   private final ParSerable parSerable;
-  private final Chapter chapter;
+  private final %(cn_prefix)sChapter chapter;
 
-  NodeType(
-      Class<? extends BaseNode> nodeBaseType,
-      Class<? extends Enum<? extends NodeVariant>> variantType,
-      Chapter chapter) {
+  %(cn_prefix)sNodeType(
+      Class<? extends %(cn_prefix)sBaseNode> nodeBaseType,
+      Class<? extends Enum<? extends %(cn_prefix)sNodeVariant>> variantType,
+      %(cn_prefix)sChapter chapter) {
     this.nodeBaseType = nodeBaseType;
     this.variantType = variantType;
     this.parSerable = PTree.nodeWrapper(this);
@@ -828,20 +1021,22 @@ public enum NodeType implements ParSerable {
    * This establishes where in the gross structure of a compilation unit
    * nodes of this kind can appear.
    */
-  public Class<? extends BaseNode> getNodeBaseType() {
+  @Override
+  public Class<? extends %(cn_prefix)sBaseNode> getNodeBaseType() {
     return nodeBaseType;
   }
   /**
    * Type that allows enumeration over the syntactic variants.
    */
-  public Class<? extends Enum<? extends NodeVariant>> getVariantType() {
+  @Override
+  public Class<? extends Enum<? extends %(cn_prefix)sNodeVariant>> getVariantType() {
     return variantType;
   }
   /**
    * The JLS chapter in which this node is defined.
    * Approximate as some things have moved about.
    */
-  public Chapter getChapter() {
+  public %(cn_prefix)sChapter getChapter() {
     return chapter;
   }
 
@@ -852,12 +1047,37 @@ public enum NodeType implements ParSerable {
   public ParSer getParSer() {
     return parSerable.getParSer();
   }
+
+  @Override
+  public boolean isNonStandard() {
+    return %(cn_prefix)sNodeTypeTables.NONSTANDARD.contains(this);
+  }
+
+  @Override
+  public boolean isTopLevel() {
+    return %(cn_prefix)sNodeTypeTables.TOPLEVEL.contains(this);
+  }
+
+  @Override
+  public boolean isIdentifierWrapper() {
+    return IdentifierWrappers.isIdentifierWrapper(this);
+  }
+
+  /** The grammar for %(cn_prefix)s nodes. */
+  public static final Grammar<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> GRAMMAR =
+      GrammarImpl.INSTANCE;
+
+  @Override
+  public Grammar<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> getGrammar() {
+    return GRAMMAR;
+  }
 }
 ''' % {
-            'package': _JAVA_PACKAGE,
-            'generator': generator,
-            'members': ''.join(create_enum_members()),
-        })
+    'package': java_package,
+    'cn_prefix': cn_prefix,
+    'generator': generator,
+    'members': ''.join(create_enum_members()),
+})
 
     # We need to know which productions can match the empty string so we
     # can reliably identify calls which might be left-recursive.
@@ -1111,10 +1331,10 @@ public enum NodeType implements ParSerable {
                     sub = '%s.add(Tokens.%s)' % (
                         prefix_plus,
                         _camel_to_underscores(prod['name']))
-                    leaf_value = 'Tokens.%sParSec' % name
-                    extra_imports.add('com.mikesamuel.cil.ptree.Tokens')
+                    leaf_value = '%sTokens.%sParSec' % (cn_prefix, name)
                 else:
-                    sub = '%s.add(NodeType.%s)' % (prefix_plus, leaf_text)
+                    sub = '%s.add(%sNodeType.%s)' % (
+                        prefix_plus, cn_prefix, leaf_text)
             else:  # 'lit'
                 leaf_value = _java_str_lit(leaf_text[1:-1])
                 optional_token_merge_hazard = ''
@@ -1166,20 +1386,23 @@ public enum NodeType implements ParSerable {
         copy_code = []
 
         if is_inner_node:
-            ctor_formals = 'Iterable<? extends BaseNode> children'
+            ctor_formals = 'Iterable<? extends %sBaseNode> children' % cn_prefix
             super_ctor_actuals = 'children'
             copy_ctor_actuals = 'source.getVariant(), source.getChildren()'
             build_node_calls = '''
     @Override
-    public %(node_class_name)s buildNode(Iterable<? extends BaseNode> children) {
+    public %(node_class_name)s buildNode(Iterable<? extends %(cn_prefix)sBaseNode> children) {
       return new %(node_class_name)s(this, children);
     }
 
     /** Constructs a node with this variant and the given children. */
-    public %(node_class_name)s buildNode(BaseNode... children) {
+    public %(node_class_name)s buildNode(%(cn_prefix)sBaseNode... children) {
       return buildNode(Arrays.asList(children));
     }
-''' % { 'node_class_name': node_class_name }
+''' % {
+    'node_class_name': node_class_name,
+    'cn_prefix': cn_prefix,
+}
             extra_imports.add('java.util.Arrays');
         else:
             ctor_formals = 'String value'
@@ -1205,9 +1428,9 @@ public enum NodeType implements ParSerable {
                     lambda x: x
                 ),
                 'delegate': (
-                    'NodeType',
+                    '%sNodeType' % cn_prefix,
                     (),
-                    lambda x: 'NodeType.%s' % x
+                    lambda x: '%sNodeType.%s' % (cn_prefix, x)
                 ),
             }
 
@@ -1258,7 +1481,8 @@ public enum NodeType implements ParSerable {
                         'ptree': ptree_builder,
                         'overrides': (
                             overridden_methods
-                            and '{\n%s    }' % '\n'.join(overridden_methods) or ''),
+                            and '{\n%s    }' % '\n'.join(overridden_methods)
+                            or ''),
                     })
             return ('\n'.join(variant_code))
 
@@ -1270,7 +1494,7 @@ public enum NodeType implements ParSerable {
                 traits.extend([x.strip() for x in annot_name[8:-1].split(',') if len(x.strip())])
 
         for trait in traits:
-            extra_imports.add('%s.traits.%s' % (_JAVA_PACKAGE, trait))
+            extra_imports.add('%s.traits.%s' % (java_package, trait))
             trait_fields, trait_imports = _TRAITS.get(trait, ((), ()))
             extra_imports.update(trait_imports)
             copy_calls = []
@@ -1358,13 +1582,13 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
   }
 
   @Override
-  public void copyMetadataFrom(BaseNode source) {
+  public void copyMetadataFrom(%(cn_prefix)sBaseNode source) {
 %(copy_code)s
     super.copyMetadataFrom(source);
   }
 
   /** Variants of this node. */
-  public enum Variant implements NodeVariant {
+  public enum Variant implements %(cn_prefix)sNodeVariant {
 %(variant_members)s
     ;
 
@@ -1378,7 +1602,7 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     public ParSer getParSer() { return parSerable.getParSer(); }
 
     @Override
-    public NodeType getNodeType() { return NodeType.%(name)s; }
+    public %(cn_prefix)sNodeType getNodeType() { return %(cn_prefix)sNodeType.%(name)s; }
 %(build_node_calls)s
 
     @Override
@@ -1388,13 +1612,15 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
   }
 }
 ''' % {
-    'package': _JAVA_PACKAGE,
+    'package': java_package,
+    'cn_prefix': cn_prefix,
     'extra_import_stmts': extra_import_stmts,
     'generator': generator,
     'grammar_jsdoc': _jsdoc_of(_tokens_to_text(prod['toks'])),
     'node_class_name': node_class_name,
     'name': prod['name'],
-    'base_node_class': is_inner_node and 'BaseInnerNode' or 'BaseLeafNode',
+    'base_node_class': '%s%s' % (
+        cn_prefix, is_inner_node and 'BaseInnerNode' or 'BaseLeafNode'),
     'variant_members': variant_members,
     'ctor_formals': ctor_formals,
     'super_ctor_actuals': super_ctor_actuals,
@@ -1447,14 +1673,16 @@ public final class TokenStrings {
   /**
    * Non-alphabetic strings that appear literally in the grammar.
    * This excludes strings that appear purely in the lexical grammar like
-   * whitespace characters, comment boundaries, and string/char literal boundaries.
+   * whitespace characters, comment boundaries, and string/char literal
+   * boundaries.
    */
   public static final ImmutableSet<String> PUNCTUATION = ImmutableSet.copyOf(
       new String[] { %(punctuation)s }
   );
 }
 ''' % {
-    'package': _JAVA_PACKAGE,
+    'package': java_package,
+    'cn_prefix': cn_prefix,
     'generator': generator,
     'reserved_words': ', '.join(_java_str_lit(s) for s in keywords),
     'punctuation': ', '.join(_java_str_lit(s) for s in punctuation),
@@ -1476,6 +1704,8 @@ public final class TokenStrings {
 
         for_each_prod(find_wrapper)
 
+        # TODO: maybe just add annotations instead and let it be handled in
+        # NodeTypeTables.
         emit_java_file(
             'IdentifierWrappers',
             '''
@@ -1489,7 +1719,7 @@ import java.util.EnumSet;
  * The set of productions which just decorate {@link NodeType#Identifier}.
  */
 @javax.annotation.Generated(%(generator)s)
-public final class IdentifierWrappers {
+final class IdentifierWrappers {
 
   private IdentifierWrappers() {
     // Provides static API
@@ -1497,7 +1727,7 @@ public final class IdentifierWrappers {
 
   // We key off the classes instead of the node types to avoid
   // class-initialization cycles.
-  private static final ImmutableSet<NodeType> IDENT_WRAPPERS =
+  private static final ImmutableSet<%(cn_prefix)sNodeType> IDENT_WRAPPERS =
       Sets.immutableEnumSet(EnumSet.of(
 %(wrappers)s));
 
@@ -1505,14 +1735,17 @@ public final class IdentifierWrappers {
    * True iff the given nodetype has a single variant that simply delegate to
    * Identifier.
    */
-  public static boolean isIdentifierWrapper(NodeType nodeType) {
+  public static boolean isIdentifierWrapper(%(cn_prefix)sNodeType nodeType) {
     return IDENT_WRAPPERS.contains(nodeType);
   }
 }
 ''' % {
-    'package': _JAVA_PACKAGE,
+    'package': java_package,
+    'cn_prefix': cn_prefix,
     'generator': generator,
-    'wrappers': ',\n'.join('          NodeType.%s' % wrapper for wrapper in sorted(wrappers)),
+    'wrappers': ',\n'.join(
+        '          %sNodeType.%s' % (cn_prefix, wrapper)
+        for wrapper in sorted(wrappers)),
 })
 
     write_identifier_wrappers()
@@ -1529,15 +1762,17 @@ public final class IdentifierWrappers {
         tables = {}  # Maps annot name to prod_name to values
 
         value_types = {
-            'InterpGroup': ('NodeType', ()),
-            'Interp': ('LeftRecursion.Stage', ('com.mikesamuel.cil.parser.LeftRecursion',)),
+            'InterpGroup': ('%sNodeType' % cn_prefix, ()),
+            'Interp': ('LeftRecursion.Stage',
+                       ('com.mikesamuel.cil.parser.LeftRecursion',)),
             }
 
         def fill_tables(c, p):
             for annot_tok in p['annots']:
                 (annot, (ln, co, ci)) = annot_tok
                 if not _is_annotation(annot):
-                    raise Exception('Bad annotation %r for %s' % (repr(annot), p['name']))
+                    raise Exception('Bad annotation %r for %s' %
+                                    (repr(annot), p['name']))
 
                 if annot.startswith('(@'):
                     annot_name, value = annot[2:-1].split('=')
@@ -1566,24 +1801,28 @@ public final class IdentifierWrappers {
                 table_defs.append(
                     '''
   /** Productions annotated with <code>&#64;%(annot_name)s</code> */
-  public static final ImmutableSet<NodeType> %(table_name_uc)s = Sets.immutableEnumSet(
-      EnumSet.of(%(members)s));
+  public static final ImmutableSet<%(cn_prefix)sNodeType> %(table_name_uc)s =
+      Sets.immutableEnumSet(EnumSet.of(%(members)s));
 ''' % {
+    'cn_prefix': cn_prefix,
     'annot_name': annot_name,
     'table_name': table_name,
     'table_name_uc': _camel_to_underscores(table_name),
-    'members': ', '.join(['NodeType.%s' % pn for pn in sorted(prod_to_value.keys())]),
+    'members': ', '.join(['%sNodeType.%s' % (cn_prefix, pn)
+                          for pn in sorted(prod_to_value.keys())]),
     })
             else:
                 imports.add('com.google.common.collect.ImmutableMap')
                 imports.add('com.google.common.collect.Maps')
                 imports.add('java.util.EnumMap')
-                value_type, value_type_imports = value_types.get(table_name, (table_name, ()))
+                value_type, value_type_imports = value_types.get(
+                    table_name, (table_name, ()))
                 imports.update(value_type_imports)
                 puts = []
                 for (key, value) in prod_to_value.iteritems():
                     puts.append(
-                        '    m.put(NodeType.%(key)s, %(value_type)s.%(value)s);' %
+                        ('    m.put(NodeType.%(key)s,'
+                         ' %(value_type)s.%(value)s);') %
                         {
                             'key': key,
                             'value': value,
@@ -1592,9 +1831,9 @@ public final class IdentifierWrappers {
                 table_defs.append(
                     '''
   /** Maps productions based on <code>&#64;%(annot_name)s</code> annotations. */
-  public static final ImmutableMap<NodeType, %(value_type)s> %(table_name_uc)s;
+  public static final ImmutableMap<%(cn_prefix)sNodeType, %(value_type)s> %(table_name_uc)s;
   static {
-    EnumMap<NodeType, %(value_type)s> m = new EnumMap<>(NodeType.class);
+    EnumMap<%(cn_prefix)sNodeType, %(value_type)s> m = new EnumMap<>(%(cn_prefix)sNodeType.class);
 %(puts)s
     %(table_name_uc)s = Maps.immutableEnumMap(m);
   }
@@ -1613,23 +1852,24 @@ public final class IdentifierWrappers {
             return
 
         emit_java_file(
-            'NodeTypeTables',
+            '%sNodeTypeTables' % cn_prefix,
             '''
 package %(package)s;
 
 %(import_stmts)s
 
 /**
- * The set of productions which just decorate {@link NodeType#Identifier}.
+ * The set of productions which just decorate {@link %(cn_prefix)sNodeType#Identifier}.
  */
 @javax.annotation.Generated(%(generator)s)
-public final class NodeTypeTables {
+public final class %(cn_prefix)sNodeTypeTables {
 
 %(table_defs)s
 
 }
 ''' % {
-    'package': _JAVA_PACKAGE,
+    'package': java_package,
+    'cn_prefix': cn_prefix,
     'generator': generator,
     'import_stmts': import_stmts,
     'table_defs': ''.join(table_defs),
@@ -1689,6 +1929,16 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument(
+        '--grammar_name',
+        help=(
+            'A java identifier that is used as the sub package name and'
+            ' which is used to derive the base node types for nodes in the'
+            ' AST.  For example, if "j8" is supplied, the output will be put'
+            ' in package %s.j8 and nodes will be a subtype of J8BaseNode and'
+            ' the node type enum will be J8NodeType and variants will be of'
+            ' type J8NodeVariant.'
+        ))
+    argparser.add_argument(
         '--srcdir',
         help=(
             'The root of the java source directory, e.g. basedir/src/main/java'
@@ -1711,7 +1961,9 @@ if __name__ == '__main__':
         'grammar_file', help='File containing the gramamr')
     args = argparser.parse_args()
 
-    package_path = _JAVA_PACKAGE.split('.')
+    grammar_name = args.grammar_name
+
+    package_path = tuple(_JAVA_BASE_PACKAGE.split('.') + [grammar_name])
 
     def source_file_exists(rel_path):
         return os.path.isfile(
@@ -1728,6 +1980,7 @@ if __name__ == '__main__':
             out.write(java_source)
 
     process_grammar(
+        grammar_name=grammar_name,
         grammar_text=open(args.grammar_file, 'r').read(),
         source_file_exists=source_file_exists,
         emit_java_file=emit_java_file,

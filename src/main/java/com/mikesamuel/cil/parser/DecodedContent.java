@@ -129,7 +129,8 @@ public final class DecodedContent implements CharSequence {
 
       @Override
       public CharSequence subSequence(int subStart, int subEnd) {
-        return DecodedContent.this.subSequence(start + subStart, start + subEnd);
+        return DecodedContent.this.subSequence(
+            start + subStart, start + subEnd);
       }
 
       @Override

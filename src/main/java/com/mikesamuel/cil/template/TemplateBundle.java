@@ -6,14 +6,14 @@ import java.util.logging.Logger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.HereBe;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.SingleStaticImportDeclarationNode;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.CommonPassRunner;
-import com.mikesamuel.cil.ast.traits.FileNode;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -55,10 +55,10 @@ public class TemplateBundle {
    */
   public static boolean optsIntoTemplateProcessing(FileNode node) {
     for (SingleStaticImportDeclarationNode imp
-         : ((BaseNode) node).finder(SingleStaticImportDeclarationNode.class)
-              .exclude(NodeType.TypeDeclaration,
-                       NodeType.TemplateDirectives,
-                       NodeType.TemplateInterpolation)
+         : ((J8BaseNode) node).finder(SingleStaticImportDeclarationNode.class)
+              .exclude(J8NodeType.TypeDeclaration,
+                       J8NodeType.TemplateDirectives,
+                       J8NodeType.TemplateInterpolation)
               .allowNonStandard(true)  // Descend into pseudo roots.
               .find()) {
       if (isOptInDeclaration(imp)) {
@@ -115,7 +115,7 @@ public class TemplateBundle {
 
     ParseErrorReceiverImpl err = new ParseErrorReceiverImpl();
 
-    ParseResult result = PTree.complete(NodeType.CompilationUnit).getParSer()
+    ParseResult result = PTree.complete(J8NodeType.CompilationUnit).getParSer()
         .parse(new ParseState(inp), new LeftRecursion(), err);
     switch (result.synopsis) {
       case SUCCESS: {
@@ -123,7 +123,8 @@ public class TemplateBundle {
         SList<Event> parseEvents = afterParse.output;
         ImmutableList<Event> fixedEvents = Templates.postprocess(
             inp, SList.forwardIterable(parseEvents));
-        BaseNode root = Trees.of(inp, fixedEvents);
+        J8BaseNode root = Trees.forGrammar(J8NodeType.GRAMMAR)
+            .of(inp, fixedEvents);
         fileNodes.add((FileNode) root);
         return this;
       }
@@ -175,6 +176,6 @@ public class TemplateBundle {
     TemplateProcessingPass ppass = new TemplateProcessingPass(
         logger, passes.getTypePool(), getLoader(), input, out);
 
-    ppass.run(ImmutableList.of(fn.deepClone()));
+    ppass.run(ImmutableList.of((FileNode) fn.deepClone()));
   }
 }

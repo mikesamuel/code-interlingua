@@ -10,14 +10,14 @@ import org.junit.Test;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.mikesamuel.cil.ast.BaseInnerNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.CompilationUnitNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.InterfaceTypeListNode;
-import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.Trees;
-import com.mikesamuel.cil.ast.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.InterfaceTypeListNode;
+import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -47,19 +47,19 @@ public final class AbstractRewritingPassTest extends TestCase {
         "class Foo implements A, B, C, D, E {}",
         "class Foo implements A, B,    D, E {}",
         new AbstractRewritingPass(logger) {
-          final List<BaseNode> stack = Lists.newArrayList();
+          final List<J8BaseNode> stack = Lists.newArrayList();
 
           @Override
           protected ProcessingStatus previsit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             stack.add(node.deepClone());
             return ProcessingStatus.CONTINUE;
           }
 
           @Override
           protected ProcessingStatus postvisit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-            BaseNode original = stack.remove(stack.size() - 1);
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+            J8BaseNode original = stack.remove(stack.size() - 1);
             boolean changed = !original.equals(node);
 
             switch (node.getNodeType()) {
@@ -67,7 +67,7 @@ public final class AbstractRewritingPassTest extends TestCase {
                 // If we see the name D, turn it into a C via the builder.
                 String name = node.getTextContent(".");
                 if (name.equals("D")) {
-                  ((BaseInnerNode) node).replace(
+                  ((J8BaseInnerNode) node).replace(
                       0,
                       IdentifierNode.Variant.Builtin.buildNode("C"));
                 }
@@ -96,7 +96,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         new AbstractRewritingPass(logger) {
           @Override
           protected ProcessingStatus previsit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case Identifier:
                 String ident = node.getValue();
@@ -125,7 +125,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         new AbstractRewritingPass(logger) {
           @Override
           protected ProcessingStatus previsit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceType:
                 if ("C".equals(node.getTextContent("^"))) {
@@ -149,7 +149,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         new AbstractRewritingPass(logger) {
           @Override
           protected ProcessingStatus postvisit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceType:
                 if ("C".equals(node.getTextContent("^"))) {
@@ -173,7 +173,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         new AbstractRewritingPass(logger) {
           @Override
           protected ProcessingStatus previsit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceTypeList:
                 ((InterfaceTypeListNode) node).remove(1);
@@ -195,7 +195,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         new AbstractRewritingPass(logger) {
           @Override
           protected ProcessingStatus previsit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceTypeList:
                 ((InterfaceTypeListNode) node).remove(1);
@@ -217,7 +217,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         new AbstractRewritingPass(logger) {
           @Override
           protected ProcessingStatus postvisit(
-              BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+              J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
             switch (node.getNodeType()) {
               case InterfaceTypeList:
                 ((InterfaceTypeListNode) node).remove(1);
@@ -237,18 +237,20 @@ public final class AbstractRewritingPassTest extends TestCase {
       AbstractRewritingPass pass,
       @Nullable Trees.Decorator decorator)
   throws Exception {
-    ParSer ps = PTree.complete(NodeType.CompilationUnit).getParSer();
+    ParSer ps = PTree.complete(J8NodeType.CompilationUnit).getParSer();
     ParseState start = new ParseState(
         Input.builder().source(getName()).code(input).build());
     ParseResult result =
         ps.parse(start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
     assertEquals(ParseResult.Synopsis.SUCCESS, result.synopsis);
-    CompilationUnitNode cu = (CompilationUnitNode) Trees.of(result.next());
+    CompilationUnitNode cu = (CompilationUnitNode)
+        Trees.forGrammar(J8NodeType.CompilationUnit.getGrammar())
+        .of(result.next());
     StringBuilder sb = new StringBuilder();
     for (FileNode out : pass.run(ImmutableList.of(cu))) {
       Optional<SerialState> ser = ps.unparse(
           new SerialState(SList.forwardIterable(
-              Trees.startUnparse(null, (BaseNode) out, decorator))),
+              Trees.startUnparse(null, (J8BaseNode) out, decorator))),
           SerialErrorReceiver.DEV_NULL);
       if (!ser.isPresent()) {
         fail(out.toAsciiArt("", null));

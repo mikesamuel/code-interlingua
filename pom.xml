@@ -75,6 +75,8 @@
               <workingDirectory>${project.basedir}</workingDirectory>
               <executable>${project.basedir}/src/main/scripts/generate_parser_helpers.py</executable>
               <arguments>
+                <argument>--grammar_name</argument>
+                <argument>j8</argument>
                 <argument>--srcdir</argument>
                 <argument>${project.build.sourceDirectory}</argument>
                 <argument>--outdir</argument>

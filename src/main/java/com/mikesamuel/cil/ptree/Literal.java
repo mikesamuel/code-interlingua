@@ -7,17 +7,18 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSet;
+import com.mikesamuel.cil.ast.j8.Tokens;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.MatchErrorReceiver;
 import com.mikesamuel.cil.parser.MatchState;
-import com.mikesamuel.cil.parser.TokenMergeGuard;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
+import com.mikesamuel.cil.parser.TokenMergeGuard;
 
 final class Literal extends PTParSer {
   final String text;

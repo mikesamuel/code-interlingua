@@ -9,23 +9,26 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.mikesamuel.cil.ast.AnnotationNode;
-import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeNode;
-import com.mikesamuel.cil.ast.ClassOrInterfaceTypeToInstantiateNode;
-import com.mikesamuel.cil.ast.ContextFreeNameNode;
-import com.mikesamuel.cil.ast.ContextFreeNamesNode;
-import com.mikesamuel.cil.ast.DiamondNode;
-import com.mikesamuel.cil.ast.ExpressionAtomNode;
-import com.mikesamuel.cil.ast.FieldNameNode;
-import com.mikesamuel.cil.ast.IdentifierNode;
-import com.mikesamuel.cil.ast.LocalNameNode;
-import com.mikesamuel.cil.ast.NodeType;
-import com.mikesamuel.cil.ast.PackageOrTypeNameNode;
-import com.mikesamuel.cil.ast.PrimaryNode;
-import com.mikesamuel.cil.ast.TypeArgumentsNode;
-import com.mikesamuel.cil.ast.TypeArgumentsOrDiamondNode;
-import com.mikesamuel.cil.ast.TypeNameNode;
+import com.mikesamuel.cil.ast.j8.AnnotationNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeToInstantiateNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNameNode;
+import com.mikesamuel.cil.ast.j8.ContextFreeNamesNode;
+import com.mikesamuel.cil.ast.j8.DiamondNode;
+import com.mikesamuel.cil.ast.j8.ExpressionAtomNode;
+import com.mikesamuel.cil.ast.j8.FieldNameNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.LocalNameNode;
+import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
+import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
+import com.mikesamuel.cil.ast.j8.TypeArgumentsOrDiamondNode;
+import com.mikesamuel.cil.ast.j8.TypeNameNode;
+import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
+import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
        .DeclarationPositionMarker;
@@ -33,14 +36,11 @@ import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
-import com.mikesamuel.cil.ast.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.traits.LimitedScopeElement;
-import com.mikesamuel.cil.ast.traits.TypeScope;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
- * A pass that looks at {@link NodeType#ContextFreeNames} and converts them to
+ * A pass that looks at {@link J8NodeType#ContextFreeNames} and converts them to
  * type, field, and method references as appropriate and sets
  * {@linkplain TypeReference#setReferencedTypeInfo TypeReference meta-data}.
  * <p>
@@ -57,7 +57,7 @@ import com.mikesamuel.cil.parser.SourcePosition;
  *     because multiple classes might have inner class {@code Bar}s, and we need
  *     to know the parameterization of type variables of {@code foo} to type
  *     methods and fields in the created instance.
- * <ol>
+ * </ol>
  */
 final class DisambiguationPass extends AbstractRewritingPass {
 
@@ -76,7 +76,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   @Override
   protected ProcessingStatus previsit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     if (node instanceof TypeScope) {
       typeScopes.add((TypeScope) node);
     }
@@ -88,11 +88,11 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   @Override
   protected ProcessingStatus postvisit(
-      BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     ProcessingStatus result = ProcessingStatus.CONTINUE;
 
     if (node.getNChildren() == 1) {
-      BaseNode child = node.getChild(0);
+      J8BaseNode child = node.getChild(0);
       if (child instanceof ContextFreeNamesNode) {
         result = rewriteContextFreeNames(
             pathFromRoot, node, (ContextFreeNamesNode) child);
@@ -115,7 +115,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
   private ProcessingStatus rewriteContextFreeNames(
       @Nullable SList<Parent> pathFromRoot,
-      BaseNode parent, ContextFreeNamesNode names) {
+      J8BaseNode parent, ContextFreeNamesNode names) {
     Decomposed decomposed = decompose(names);
     if (decomposed == null) {
       return ProcessingStatus.BREAK;  // Logged within.
@@ -146,12 +146,12 @@ final class DisambiguationPass extends AbstractRewritingPass {
               (ClassOrInterfaceTypeToInstantiateNode) pathFromRoot.x.parent;
           int nIdents = decomposed.idents.size();
           IdentifierEtc lastIdent = decomposed.idents.get(nIdents - 1);
-          BaseNode lastIdentArguments = lastIdent.getArguments();
+          J8BaseNode lastIdentArguments = lastIdent.getArguments();
           if (lastIdentArguments != null
               && lastIdentArguments.getVariant()
               == TypeArgumentsOrDiamondNode.Variant.Diamond) {
             if (newTypeNode.getChild(newTypeNode.getNChildren() - 1)
-                .getNodeType() != NodeType.Diamond) {
+                .getNodeType() != J8NodeType.Diamond) {
               // No existing diamond.
               DiamondNode diamond = lastIdentArguments.firstChildWithType(
                   DiamondNode.class);
@@ -226,7 +226,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         if (!dsOpt.isPresent()) { break; }
         ImmutableList<Decomposed> ds = dsOpt.get();
         // The left hand side is the LR seed and the rest are fields.
-        BaseNode seed = null;
+        J8BaseNode seed = null;
         {
           Decomposed seedDecomp = ds.get(0);
           switch (seedDecomp.name.type) {
@@ -272,7 +272,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
         int nParts = ds.size();
 
         // Primary.ExpressionStatement is @anon.
-        BaseNode expr = seed;
+        J8BaseNode expr = seed;
 
         for (Decomposed d : ds.subList(1, nParts)) {
           Preconditions.checkState(d.idents.size() == 1);
@@ -417,7 +417,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
     ImmutableList.Builder<IdentifierEtc> parts = ImmutableList.builder();
 
     Name name = null;
-    for (BaseNode child : node.getChildren()) {
+    for (J8BaseNode child : node.getChildren()) {
       if (!(child instanceof ContextFreeNameNode)) {
         // Fail gracefully on an unevaluated template.
         error(child, "Cannot disambiguate " + child);
@@ -484,15 +484,15 @@ final class DisambiguationPass extends AbstractRewritingPass {
     ImmutableList.Builder<AnnotationNode> annotations =
         ImmutableList.builder();
     IdentifierNode identifier;
-    BaseNode arguments;
+    J8BaseNode arguments;
 
-    List<BaseNode> children = node.getChildren();
+    List<J8BaseNode> children = node.getChildren();
     int nChildren = children.size();
     if (nChildren == 0) {
       return null;
     }
     int index = nChildren - 1;
-    BaseNode child = children.get(index);
+    J8BaseNode child = children.get(index);
     if (child instanceof TypeArgumentsNode
         || child instanceof TypeArgumentsOrDiamondNode) {
       arguments = child;
@@ -533,13 +533,13 @@ final class DisambiguationPass extends AbstractRewritingPass {
     final IdentifierNode identifier;
 
     /** TypeArguments or TypeArgumentsOrDiamond */
-    private @Nullable BaseNode arguments;
+    private @Nullable J8BaseNode arguments;
 
     private IdentifierEtc(
         ContextFreeNameNode node,
         ImmutableList<AnnotationNode> annotations,
         IdentifierNode identifier,
-        @Nullable BaseNode arguments) {
+        @Nullable J8BaseNode arguments) {
       this.node = node;
       this.annotations = annotations;
       this.identifier = identifier;
@@ -550,7 +550,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
       this.arguments = null;
     }
 
-    BaseNode getArguments() {
+    J8BaseNode getArguments() {
       return arguments;
     }
 
@@ -606,7 +606,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
     ctype.add(newIdent);
 
     if (ietc != null) {
-      BaseNode arguments = ietc.getArguments();
+      J8BaseNode arguments = ietc.getArguments();
       if (arguments != null) {
         if (arguments instanceof TypeArgumentsNode) {
           ctype.add(arguments);
@@ -631,7 +631,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
   }
 
   private TypeNameNode buildTypeNameNode(
-      Decomposed d, BaseNode orig, TypeNameResolver resolver) {
+      Decomposed d, J8BaseNode orig, TypeNameResolver resolver) {
     ImmutableList<IdentifierEtc> idents = d.idents;
     if (useLongNames) {
       ImmutableList.Builder<IdentifierEtc> b = ImmutableList.builder();

@@ -8,6 +8,13 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.mikesamuel.cil.ast.j8.ClassLiteralNode;
+import com.mikesamuel.cil.ast.j8.DimNode;
+import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.NumericTypeNode;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -25,10 +32,11 @@ public final class TreesTest extends TestCase {
   public static void testTreesOfIdentifier() {
     Input input = Input.builder().source("test-file").code("  foo").build();
 
-    BaseNode got = Trees.of(input, ImmutableList.of(
-        Event.push(IdentifierNode.Variant.Builtin),
-        Event.content("foo", 2),
-        Event.pop()));
+    J8BaseNode got = Trees.forGrammar(J8NodeType.GRAMMAR)
+        .of(input, ImmutableList.of(
+            Event.push(IdentifierNode.Variant.Builtin),
+            Event.content("foo", 2),
+            Event.pop()));
 
     IdentifierNode want = IdentifierNode.Variant.Builtin.buildNode("foo");
 
@@ -44,30 +52,31 @@ public final class TreesTest extends TestCase {
   @Test
   public static void testTreesOfWithInnerNodes() {
     Input input = Input.builder().code("  int[][].class").build();
-    BaseNode got = Trees.of(input, ImmutableList.of(
-        Event.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
+    J8BaseNode got = Trees.forGrammar(J8NodeType.GRAMMAR)
+        .of(input, ImmutableList.of(
+            Event.push(ClassLiteralNode.Variant.NumericTypeDimDotClass),
 
-        Event.push(NumericTypeNode.Variant.IntegralType),
-        Event.push(IntegralTypeNode.Variant.Int),
-        Event.token("int", 2),
-        Event.pop(),
-        Event.pop(),
+            Event.push(NumericTypeNode.Variant.IntegralType),
+            Event.push(IntegralTypeNode.Variant.Int),
+            Event.token("int", 2),
+            Event.pop(),
+            Event.pop(),
 
-        Event.push(DimNode.Variant.LsRs),
-        Event.token("[", 5),
-        Event.token("]", 6),
-        Event.pop(),
-        Event.push(DimNode.Variant.LsRs),
-        Event.token("[", 7),
-        Event.token("]", 8),
-        Event.pop(),
+            Event.push(DimNode.Variant.LsRs),
+            Event.token("[", 5),
+            Event.token("]", 6),
+            Event.pop(),
+            Event.push(DimNode.Variant.LsRs),
+            Event.token("[", 7),
+            Event.token("]", 8),
+            Event.pop(),
 
-        Event.token(".", 9),
-        Event.token("class", 10),
-        Event.pop()
-        ));
+            Event.token(".", 9),
+            Event.token("class", 10),
+            Event.pop()
+            ));
 
-    BaseNode want = ClassLiteralNode.Variant.NumericTypeDimDotClass.buildNode(
+    J8BaseNode want = ClassLiteralNode.Variant.NumericTypeDimDotClass.buildNode(
         ImmutableList.of(
             NumericTypeNode.Variant.IntegralType.buildNode(ImmutableList.of(
                 IntegralTypeNode.Variant.Int.buildNode(ImmutableList.of()))),
@@ -113,15 +122,16 @@ public final class TreesTest extends TestCase {
     Input input = Input.builder().source("test").code(code).build();
     ParseState start = new ParseState(input);
 
-    ParseResult result = NodeType.FieldDeclaration.getParSer().parse(
+    ParseResult result = J8NodeType.FieldDeclaration.getParSer().parse(
         start, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
-    BaseNode root = null;
+    J8BaseNode root = null;
     switch (result.synopsis) {
       case FAILURE:
         fail("Parse failed");
         break;
       case SUCCESS:
-        root = Trees.of(start.input, result.next().output);
+        root = Trees.forGrammar(J8NodeType.GRAMMAR)
+            .of(start.input, result.next().output);
         break;
     }
     Preconditions.checkNotNull(root);
@@ -129,9 +139,9 @@ public final class TreesTest extends TestCase {
         golden,
         root.toAsciiArt(
             "",
-            new Function<NodeI, String>() {
+            new Function<NodeI<?, ?, ?>, String>() {
               @Override
-              public String apply(@Nonnull NodeI node) {
+              public String apply(@Nonnull NodeI<?, ?, ?> node) {
                 SourcePosition pos = node.getSourcePosition();
                 if (pos != null) {
                   return pos.toString();

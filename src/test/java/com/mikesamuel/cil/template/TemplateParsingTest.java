@@ -3,9 +3,8 @@ package com.mikesamuel.cil.template;
 import org.junit.Test;
 
 import com.mikesamuel.cil.ast.AbstractParSerTestCase;
-import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.parser.Input;
-import com.mikesamuel.cil.ptree.PTree;
 
 @SuppressWarnings("javadoc")
 public final class TemplateParsingTest extends AbstractParSerTestCase {
@@ -22,7 +21,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testInterpolationInExpressionContext() {
     assertParseTree(
-        PTree.complete(NodeType.Expression),
+        J8NodeType.Expression,
         "1 + (%x) + 3",
         "Expression.ConditionalExpression",
         "  AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
@@ -48,7 +47,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testInterpolationInExpressionContextWithExplicitTypeHint() {
     assertParseTree(
-        PTree.complete(NodeType.Expression),
+        J8NodeType.Expression,
         "1 + (%x : MultiplicativeExpression)",
         "Expression.ConditionalExpression",
         "  AdditiveExpression.AdditiveExpressionAdditiveOperatorMultiplicativeExpression",
@@ -70,7 +69,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testDirectiveBlock() {
     assertParseTree(
-        PTree.complete(NodeType.Block),
+        J8NodeType.Block,
         "{ %%{ ; %%} }",
 
         "Block.LcBlockStatementsRc",
@@ -87,7 +86,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testInterpolationInExpressionStatement() {
     assertParseTree(
-        PTree.complete(NodeType.BlockStatements),
+        J8NodeType.BlockStatements,
         "int x; %%{ let s = \"foo\"; int (%s); %%} continue;",
 
         "BlockStatements.BlockStatementBlockStatementBlockTypeScope",
@@ -139,7 +138,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testTopLevelLoop() {
     assertParseTree(
-        PTree.complete(NodeType.CompilationUnit),
+        J8NodeType.CompilationUnit,
         "%%for (x : xs) { package foo; class (%x) {} %%}",
 
         "TemplatePseudoRoot.CompilationUnit",
@@ -173,7 +172,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testTemplateDecls() {
     assertParseTree(
-        PTree.complete(NodeType.CompilationUnit),
+        J8NodeType.CompilationUnit,
         ""
         + "package p;\n"
         + "%%template foo(a, b, c) : Expression { (%a) + (%b) * (%c) }",
@@ -228,7 +227,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
   @Test
   public final void testTemplateBodyIsSingleInterpolation() {
     assertParseTree(
-        PTree.complete(NodeType.CompilationUnit),
+        J8NodeType.CompilationUnit,
         ""
         + "package p;\n"
         // Don't generalize the interpolation to replace the body.  Instead

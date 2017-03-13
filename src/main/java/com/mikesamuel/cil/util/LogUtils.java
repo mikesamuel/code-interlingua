@@ -21,7 +21,8 @@ public class LogUtils {
    * Emits a log message.
    */
   public static void log(
-      Logger logger, Level level, NodeI node, String msg, Throwable th) {
+      Logger logger, Level level, NodeI<?, ?, ?> node,
+      String msg, Throwable th) {
     log(logger, level, node != null ? node.getSourcePosition() : null, msg, th);
   }
 

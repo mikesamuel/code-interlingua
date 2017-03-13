@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.BaseNode;
-import com.mikesamuel.cil.ptree.Tokens;
+import com.mikesamuel.cil.ast.j8.Tokens;
 
 /**
  * State of a {@link ParSer#forceFit} operation.
@@ -85,12 +85,13 @@ public final class ForceFitState {
     /** Index into the force state's fit parts. */
     public final int index;
     /** For each non-fixed fit part in parts[0:index), its resolution. */
-    public @Nullable SList<BaseNode> resolutions;
+    public @Nullable SList<BaseNode<?, ?, ?>> resolutions;
     /** Cached hashCode computation. */
     private int hc;
 
     /** */
-    public PartialFit(int index, @Nullable SList<BaseNode> resolutions) {
+    public PartialFit(
+        int index, @Nullable SList<BaseNode<?, ?, ?>> resolutions) {
       this.index = index;
       this.resolutions = resolutions;
     }
@@ -141,7 +142,7 @@ public final class ForceFitState {
       sb.append(index);
 
       String sep = " [";
-      for (BaseNode resolution : SList.forwardIterable(resolutions)) {
+      for (BaseNode<?, ?, ?> resolution : SList.forwardIterable(resolutions)) {
         sb.append(sep);
         sep = ", ";
         sb.append(resolution.getNodeType());
@@ -159,7 +160,7 @@ public final class ForceFitState {
      * A partial fit like this but with the index incremented, and the
      * index-th part resolved to the given node.
      */
-    public PartialFit advanceAndResolve(BaseNode resolution) {
+    public PartialFit advanceAndResolve(BaseNode<?, ?, ?> resolution) {
       return new PartialFit(index + 1, SList.append(resolutions, resolution));
     }
   }
@@ -176,7 +177,7 @@ public final class ForceFitState {
      * A fit part that is a child that needs no additional wrapping.
      */
     @SuppressWarnings("synthetic-access")
-    public static FixedNode fixedNode(BaseNode child) {
+    public static FixedNode fixedNode(BaseNode<?, ?, ?> child) {
       return new FixedNode(child);
     }
 
@@ -206,11 +207,11 @@ public final class ForceFitState {
     /**
      * A child node that needs no additional wrapping.
      */
-    public final BaseNode child;
+    public final BaseNode<?, ?, ?> child;
 
     /** */
     @SuppressWarnings("synthetic-access")
-    private FixedNode(BaseNode child) {
+    private FixedNode(BaseNode<?, ?, ?> child) {
       this.child = child;
     }
 
@@ -304,7 +305,7 @@ public final class ForceFitState {
           + (value instanceof CharSequence
              ? Tokens.encodeString((CharSequence) value)
              : value instanceof BaseNode
-             ? ((BaseNode) value).getNodeType()
+             ? ((BaseNode<?, ?, ?>) value).getNodeType()
              : value)
           + ")");
     }

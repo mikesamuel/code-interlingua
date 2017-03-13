@@ -6,9 +6,9 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.Name.Type;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
-import com.mikesamuel.cil.ast.meta.Name.Type;
 
 import junit.framework.TestCase;
 

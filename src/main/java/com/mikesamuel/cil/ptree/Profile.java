@@ -2,7 +2,7 @@ package com.mikesamuel.cil.ptree;
 
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -13,7 +13,7 @@ import com.mikesamuel.cil.ast.NodeType;
 @SuppressWarnings("javadoc")
 @VisibleForTesting
 public final class Profile implements AutoCloseable {
-  private Map<NodeType, Integer> profileCount = new EnumMap<>(NodeType.class);
+  private Map<NodeType<?, ?>, Integer> profileCount = new LinkedHashMap<>();
   private static final ThreadLocal<Profile> local = new ThreadLocal<>();
 
   public static Profile startCounting() {
@@ -30,21 +30,22 @@ public final class Profile implements AutoCloseable {
       throw new IllegalStateException();
     }
     local.set(null);
-    List<Map.Entry<NodeType, Integer>> ls =
+    List<Map.Entry<NodeType<?, ?>, Integer>> ls =
         Lists.newArrayList(profileCount.entrySet());
-    Collections.sort(ls, new Comparator<Map.Entry<NodeType, Integer>>() {
+    Collections.sort(ls, new Comparator<Map.Entry<NodeType<?, ?>, Integer>>() {
       @Override
       public int compare(
-          Map.Entry<NodeType, Integer> a, Map.Entry<NodeType, Integer> b) {
+          Map.Entry<NodeType<?, ?>, Integer> a,
+          Map.Entry<NodeType<?, ?>, Integer> b) {
         int delta = a.getValue() - b.getValue();
         if (delta == 0) {
-          delta = a.getKey().compareTo(b.getKey());
+          delta = a.getKey().ordinal() - b.getKey().ordinal();
         }
         return delta;
       }
     });
-    for (Map.Entry<NodeType, Integer> e : ls) {
-      NodeType t = e.getKey();
+    for (Map.Entry<NodeType<?, ?>, Integer> e : ls) {
+      NodeType<?, ?> t = e.getKey();
       int count = e.getValue();
       if (count != 0) {
         System.err.println(t + "\t" + count);
@@ -52,7 +53,7 @@ public final class Profile implements AutoCloseable {
     }
   }
 
-  static void count(NodeType nodeType) {
+  static void count(NodeType<?, ?> nodeType) {
     @SuppressWarnings("resource")
     Profile p = local.get();
     if (p != null) {

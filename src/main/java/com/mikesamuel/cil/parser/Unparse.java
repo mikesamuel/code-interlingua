@@ -48,9 +48,9 @@ public final class Unparse {
       switch (e.getKind()) {
         case TOKEN: case CONTENT:
           sb.append(e.getContent());
-          // Add the space here instead of before the token so that indices added
-          // below always correspond to the beginning of a token or the end of
-          // input.
+          // Add the space here instead of before the token so that indices
+          // added below always correspond to the beginning of a token or the
+          // end of input.
           sb.append(' ');
 
           verifiedTokens.add(e);
@@ -131,8 +131,8 @@ public final class Unparse {
    * input source position -> output source position mapping.
    */
   public static FormattedSource format(
-      Verified v, Formatter<SList<NodeVariant>> f) {
-    SList<NodeVariant> contextStack = null;
+      Verified v, Formatter<SList<NodeVariant<?, ?>>> f) {
+    SList<NodeVariant<?, ?>> contextStack = null;
     for (Event e : v.events) {
       switch (e.getKind()) {
         case CONTENT: case TOKEN:

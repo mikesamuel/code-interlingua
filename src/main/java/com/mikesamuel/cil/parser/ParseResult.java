@@ -1,11 +1,9 @@
 package com.mikesamuel.cil.parser;
 
-import java.util.EnumSet;
 import java.util.Set;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.NodeType;
 
 /**
@@ -24,11 +22,11 @@ public class ParseResult {
    */
   public final int writeBack;
   /** LR exclusions whose failure contributed to this result. */
-  public final ImmutableSet<NodeType> lrExclusionsTriggered;
+  public final ImmutableSet<NodeType<?, ?>> lrExclusionsTriggered;
 
   private ParseResult(
       Synopsis synopsis, int writeBack,
-      ImmutableSet<NodeType> lrExclusionsTriggered) {
+      ImmutableSet<NodeType<?, ?>> lrExclusionsTriggered) {
     this.synopsis = synopsis;
     this.writeBack = writeBack;
     this.lrExclusionsTriggered = lrExclusionsTriggered;
@@ -65,7 +63,7 @@ public class ParseResult {
     Preconditions.checkNotNull(a);
     Preconditions.checkNotNull(b);
 
-    ImmutableSet<NodeType> allLrExcl = union(
+    ImmutableSet<NodeType<?, ?>> allLrExcl = union(
         a.lrExclusionsTriggered, b.lrExclusionsTriggered);
 
     boolean success =
@@ -99,13 +97,13 @@ public class ParseResult {
   }
 
   /** @see Synopsis#FAILURE */
-  public static ParseResult failure(Set<NodeType> exclusionsTriggered) {
+  public static ParseResult failure(Set<NodeType<?, ?>> exclusionsTriggered) {
     if (exclusionsTriggered.isEmpty()) {
       return FAILURE_INSTANCE;
     }
     return new ParseResult(
         Synopsis.FAILURE, NO_WRITE_BACK_RESTRICTION,
-        Sets.immutableEnumSet(exclusionsTriggered));
+        ImmutableSet.copyOf(exclusionsTriggered));
   }
 
   /**
@@ -114,7 +112,7 @@ public class ParseResult {
    */
   public static ParseResult success(
       ParseState after, int wroteBack,
-      Iterable<NodeType> lrExclusionsTriggered) {
+      Iterable<NodeType<?, ?>> lrExclusionsTriggered) {
     return new Pass(after, wroteBack, lrExclusionsTriggered);
   }
 
@@ -125,10 +123,10 @@ public class ParseResult {
     @SuppressWarnings("synthetic-access")
     Pass(
         ParseState next, int wroteBack,
-        Iterable<NodeType> lrExclusionsTriggereed) {
+        Iterable<NodeType<?, ?>> lrExclusionsTriggereed) {
       super(
           Synopsis.SUCCESS, wroteBack,
-          Sets.immutableEnumSet(lrExclusionsTriggereed));
+          ImmutableSet.copyOf(lrExclusionsTriggereed));
       this.next = Preconditions.checkNotNull(next);
     }
 
@@ -139,15 +137,17 @@ public class ParseResult {
   }
 
   /** Convenience for unioning two sets of enum values. */
-  public static <E extends Enum<E>>
-  ImmutableSet<E> union(ImmutableSet<E> a, ImmutableSet<E> b) {
+  public static ImmutableSet<NodeType<?, ?>> union(
+      ImmutableSet<NodeType<?, ?>> a, ImmutableSet<NodeType<?, ?>> b) {
     if (!a.isEmpty()) {
       if (!b.isEmpty()) {
-        EnumSet<E> u = EnumSet.copyOf(a);
-        u.addAll(b);
+        Set<NodeType<?, ?>> u = ImmutableSet.<NodeType<?, ?>>builder()
+            .addAll(a)
+            .addAll(b)
+            .build();
         if (u.size() == a.size()) { return a; }
         if (u.size() == b.size()) { return b; }
-        return Sets.immutableEnumSet(u);
+        return ImmutableSet.copyOf(u);
       }
       return a;
     } else if (!b.isEmpty()) {

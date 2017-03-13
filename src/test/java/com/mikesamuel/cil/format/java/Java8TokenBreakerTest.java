@@ -5,16 +5,17 @@ import org.junit.Test;
 import com.google.common.base.Preconditions;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.TokenBreak;
 import com.mikesamuel.cil.format.TokenBreaker;
 import com.mikesamuel.cil.format.java.Java8TokenBreaker;
-import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
 import com.mikesamuel.cil.parser.ParseErrorReceiver;
 import com.mikesamuel.cil.parser.ParseResult;
 import com.mikesamuel.cil.parser.ParseState;
+import com.mikesamuel.cil.parser.SList;
 
 import junit.framework.TestCase;
 
@@ -119,27 +120,27 @@ public final class Java8TokenBreakerTest extends TestCase {
 
   @Test
   public void testWithContext() {
-    assertParsedSpacedTokens("x + ++x", NodeType.Expression);
-    assertParsedSpacedTokens("x + x++", NodeType.Expression);
-    assertParsedSpacedTokens("x + --x", NodeType.Expression);
-    assertParsedSpacedTokens("x + x--", NodeType.Expression);
-    assertParsedSpacedTokens("+x", NodeType.Expression);
-    assertParsedSpacedTokens("-x", NodeType.Expression);
-    assertParsedSpacedTokens("x + x", NodeType.Expression);
-    assertParsedSpacedTokens("x - x", NodeType.Expression);
-    assertParsedSpacedTokens("for (;;) {}", NodeType.Statement);
+    assertParsedSpacedTokens("x + ++x", J8NodeType.Expression);
+    assertParsedSpacedTokens("x + x++", J8NodeType.Expression);
+    assertParsedSpacedTokens("x + --x", J8NodeType.Expression);
+    assertParsedSpacedTokens("x + x--", J8NodeType.Expression);
+    assertParsedSpacedTokens("+x", J8NodeType.Expression);
+    assertParsedSpacedTokens("-x", J8NodeType.Expression);
+    assertParsedSpacedTokens("x + x", J8NodeType.Expression);
+    assertParsedSpacedTokens("x - x", J8NodeType.Expression);
+    assertParsedSpacedTokens("for (;;) {}", J8NodeType.Statement);
     assertParsedSpacedTokens(
         "try (InputStream in = open();) { use(in); }",
-        NodeType.Statement);
+        J8NodeType.Statement);
   }
 
   private void assertParsedSpacedTokens(
-      String content, NodeType startProduction) {
+      String content, NodeType<?, ?> startProduction) {
     assertParsedSpacedTokens(true, content, content, startProduction);
   }
   private void assertParsedSpacedTokens(
       boolean includeShould, String expected, String content,
-      NodeType startProduction) {
+      NodeType<?, ?> startProduction) {
     Input inp = Input.builder().source(getName()).code(content).build();
     ParseState start = new ParseState(inp);
     ParseResult result = startProduction.getParSer().parse(
@@ -149,8 +150,8 @@ public final class Java8TokenBreakerTest extends TestCase {
 
     StringBuilder sb = new StringBuilder();
     String lastTok = null;
-    SList<NodeVariant> lastStack = null;
-    SList<NodeVariant> stack = null;
+    SList<NodeVariant<?, ?>> lastStack = null;
+    SList<NodeVariant<?, ?>> stack = null;
     for (Event e : SList.forwardIterable(result.next().output)) {
       switch (e.getKind()) {
         case CONTENT:

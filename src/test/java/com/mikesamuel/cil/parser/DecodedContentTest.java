@@ -11,7 +11,8 @@ public final class DecodedContentTest extends TestCase {
 
   @Test
   public static void testDecodedInput() {
-    DecodedContent di = new DecodedContent("Foo\\u000ABar\\u000D\\u005C\\u005c");
+    DecodedContent di = new DecodedContent(
+        "Foo\\u000ABar\\u000D\\u005C\\u005c");
     assertEquals(
         "Foo\nBar\r\\\\u005c", di.toString());
 

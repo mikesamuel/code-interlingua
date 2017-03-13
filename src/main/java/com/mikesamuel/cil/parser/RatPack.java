@@ -8,6 +8,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.NodeType;
+// TODO: Move the checks into Grammar
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.event.Event;
 
 /**
@@ -25,7 +27,7 @@ public final class RatPack {
   /**
    * Cache the fact that a parse failed at the given index.
    */
-  public void cacheFailure(int index, NodeType nodeType) {
+  public void cacheFailure(int index, NodeType<?, ?> nodeType) {
     RatDropping d = new RatDropping(nodeType, index);
     parseCache.put(d, ParseFailure.INSTANCE);
   }
@@ -36,7 +38,7 @@ public final class RatPack {
    */
   public void cacheSuccess(
       int indexBeforeParse, int indexAfterParse,
-      NodeType nodeType, SList<Event> output) {
+      NodeType<?, ?> nodeType, SList<Event> output) {
     Preconditions.checkArgument(
         output !=  null && output.x.getKind() == Event.Kind.POP);
 
@@ -53,12 +55,12 @@ public final class RatPack {
           // argument check above.
           --popCount;
           if (popCount == 0) {
-            NodeType eNodeType = e.getNodeType();
+            NodeType<?, ?> eNodeType = e.getNodeType();
             Preconditions.checkState(
                 // A template element can substitute for any other node type.
                 eNodeType == nodeType
-                || eNodeType == NodeType.TemplateInterpolation
-                || eNodeType == NodeType.TemplateDirectives);
+                || eNodeType == J8NodeType.TemplateInterpolation
+                || eNodeType == J8NodeType.TemplateDirectives);
             break cache_loop;
           }
           break;
@@ -84,7 +86,7 @@ public final class RatPack {
    *
    * @return absent if nothing in the cache.
    */
-  public ParseCacheEntry getCachedParse(NodeType nodeType, int index) {
+  public ParseCacheEntry getCachedParse(NodeType<?, ?> nodeType, int index) {
     RatDropping d = new RatDropping(nodeType, index);
     ParseCacheEntry e = parseCache.get(d);
     if (e == null) { e = ParseUncached.INSTANCE; }
@@ -93,10 +95,10 @@ public final class RatPack {
 
 
   private static final class RatDropping {
-    final NodeType nodeType;
+    final NodeType<?, ?> nodeType;
     final int index;
 
-    RatDropping(NodeType nodeType, int index) {
+    RatDropping(NodeType<?, ?> nodeType, int index) {
       this.nodeType = nodeType;
       this.index = index;
     }
@@ -205,12 +207,12 @@ public final class RatPack {
   }
 
   static final class ParseSuccess implements ParseCacheEntry {
-    final NodeType nodeType;
+    final NodeType<?, ?> nodeType;
     final int indexAfterParse;
     final SList<Event> output;
 
     ParseSuccess(
-        NodeType nodeType, int indexAfterParse, SList<Event> output) {
+        NodeType<?, ?> nodeType, int indexAfterParse, SList<Event> output) {
       this.nodeType = nodeType;
       this.indexAfterParse = indexAfterParse;
       this.output = output;
@@ -243,14 +245,14 @@ public final class RatPack {
               ++popCount;
               break;
             case PUSH:
-              // popCount should not go negative (module underflow) because of the
-              // argument check above.
+              // popCount should not go negative (module underflow) because of
+              // the argument check above.
               --popCount;
               if (popCount == 0) {
-                NodeType ent = e.getNodeType();
+                NodeType<?, ?> ent = e.getNodeType();
                 Preconditions.checkState(
                     nodeType == ent
-                    || ent == NodeType.TemplateInterpolation,
+                    || ent == J8NodeType.TemplateInterpolation,
                     "%s != %s", nodeType, ent);
                 break apply_loop;
               }
