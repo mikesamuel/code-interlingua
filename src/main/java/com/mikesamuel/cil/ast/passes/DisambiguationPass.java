@@ -19,16 +19,16 @@ import com.mikesamuel.cil.ast.j8.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.j8.FieldNameNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8TypeScope;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsOrDiamondNode;
 import com.mikesamuel.cil.ast.j8.TypeNameNode;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
-import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
        .DeclarationPositionMarker;
@@ -61,8 +61,8 @@ import com.mikesamuel.cil.parser.SourcePosition;
  */
 final class DisambiguationPass extends AbstractRewritingPass {
 
-  private final List<TypeScope> typeScopes = Lists.newArrayList();
-  private final List<ExpressionNameScope> nameScopes = Lists.newArrayList();
+  private final List<J8TypeScope> typeScopes = Lists.newArrayList();
+  private final List<J8ExpressionNameScope> nameScopes = Lists.newArrayList();
   private final TypeInfoResolver typeInfoResolver;
   private final boolean useLongNames;
 
@@ -77,11 +77,11 @@ final class DisambiguationPass extends AbstractRewritingPass {
   @Override
   protected ProcessingStatus previsit(
       J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-    if (node instanceof TypeScope) {
-      typeScopes.add((TypeScope) node);
+    if (node instanceof J8TypeScope) {
+      typeScopes.add((J8TypeScope) node);
     }
-    if (node instanceof ExpressionNameScope) {
-      nameScopes.add((ExpressionNameScope) node);
+    if (node instanceof J8ExpressionNameScope) {
+      nameScopes.add((J8ExpressionNameScope) node);
     }
     return ProcessingStatus.CONTINUE;
   }
@@ -101,12 +101,12 @@ final class DisambiguationPass extends AbstractRewritingPass {
     // By inspection of the grammar, context free names
     // never have non-template siblings.
 
-    if (node instanceof TypeScope) {
-      TypeScope popped = typeScopes.remove(typeScopes.size() - 1);
+    if (node instanceof J8TypeScope) {
+      J8TypeScope popped = typeScopes.remove(typeScopes.size() - 1);
       Preconditions.checkState(popped == node);
     }
-    if (node instanceof ExpressionNameScope) {
-      ExpressionNameScope popped = nameScopes.remove(nameScopes.size() - 1);
+    if (node instanceof J8ExpressionNameScope) {
+      J8ExpressionNameScope popped = nameScopes.remove(nameScopes.size() - 1);
       Preconditions.checkState(popped == node);
     }
 
@@ -121,7 +121,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
       return ProcessingStatus.BREAK;  // Logged within.
     }
     Preconditions.checkState(!typeScopes.isEmpty());
-    TypeScope scope = typeScopes.get(typeScopes.size() - 1);
+    J8TypeScope scope = typeScopes.get(typeScopes.size() - 1);
 
     TypeNameResolver resolver = scope.getTypeNameResolver();
     if (resolver == null) {
@@ -319,15 +319,15 @@ final class DisambiguationPass extends AbstractRewritingPass {
     Optional<Name> canonNameOpt = Optional.absent();
     DeclarationPositionMarker marker = DeclarationPositionMarker.LATEST;
     for (SList<Parent> anc = pathFromRoot; anc != null; anc = anc.prev) {
-      if (anc.x.parent instanceof ExpressionNameScope) {
-        ExpressionNameResolver r = ((ExpressionNameScope) anc.x.parent)
+      if (anc.x.parent instanceof J8ExpressionNameScope) {
+        ExpressionNameResolver r = ((J8ExpressionNameScope) anc.x.parent)
             .getExpressionNameResolver();
         if (r == null) { continue; }
         canonNameOpt = r.resolveReference(ident0, marker);
         if (canonNameOpt.isPresent()) { break; }
         marker = DeclarationPositionMarker.LATEST;  // Passing out of scope.
-      } else if (anc.x.parent instanceof LimitedScopeElement) {
-        marker = ((LimitedScopeElement) anc.x.parent)
+      } else if (anc.x.parent instanceof J8LimitedScopeElement) {
+        marker = ((J8LimitedScopeElement) anc.x.parent)
             .getDeclarationPositionMarker();
       }
     }
@@ -354,8 +354,8 @@ final class DisambiguationPass extends AbstractRewritingPass {
     // name.
     TypeNameResolver canonResolver = null;
     for (SList<Parent> anc = pathFromRoot; anc != null; anc = anc.prev) {
-      if (anc.x.parent instanceof TypeScope) {
-        TypeScope ts = (TypeScope) anc.x.parent;
+      if (anc.x.parent instanceof J8TypeScope) {
+        J8TypeScope ts = (J8TypeScope) anc.x.parent;
         canonResolver = ts.getTypeNameResolver();
         break;
       }

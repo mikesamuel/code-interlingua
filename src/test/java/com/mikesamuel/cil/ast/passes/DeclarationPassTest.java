@@ -11,9 +11,9 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.j8.Java8Comments;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -28,8 +28,8 @@ public class DeclarationPassTest extends TestCase {
 
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
-      if (node instanceof TypeDeclaration) {
-        TypeDeclaration td = (TypeDeclaration) node;
+      if (node instanceof J8TypeDeclaration) {
+        J8TypeDeclaration td = (J8TypeDeclaration) node;
         TypeInfo ti = td.getDeclaredTypeInfo();
         if (ti != null) {
           return Java8Comments.blockComment(
@@ -66,8 +66,8 @@ public class DeclarationPassTest extends TestCase {
         new PassTestHelpers.PassRunner() {
 
           @Override
-          public ImmutableList<FileNode> runPasses(
-              Logger logger, ImmutableList<FileNode> files) {
+          public ImmutableList<J8FileNode> runPasses(
+              Logger logger, ImmutableList<J8FileNode> files) {
             DeclarationPass dp = new DeclarationPass(logger);
             dp.run(files);
             return files;
@@ -672,7 +672,7 @@ public class DeclarationPassTest extends TestCase {
 
   @Test
   public static void testTypeParameters() {
-    List<FileNode> files =
+    List<J8FileNode> files =
         PassTestHelpers.parseCompilationUnits(
         new String[][] {
           {

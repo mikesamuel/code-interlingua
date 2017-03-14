@@ -6,7 +6,7 @@ import org.junit.Test;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 
@@ -16,14 +16,14 @@ import junit.framework.TestCase;
 public final class DefragmentTypesPassTest extends TestCase {
 
   private void assertRewritten(String want, String input, String... errors) {
-    ImmutableList<FileNode> wantedFiles =
+    ImmutableList<J8FileNode> wantedFiles =
         PassTestHelpers.parseCompilationUnits(new String[] { want });
 
-    ImmutableList<FileNode> gotFiles = PassTestHelpers.expectErrors(
-        new LoggableOperation<ImmutableList<FileNode>>() {
+    ImmutableList<J8FileNode> gotFiles = PassTestHelpers.expectErrors(
+        new LoggableOperation<ImmutableList<J8FileNode>>() {
           @Override
-          public ImmutableList<FileNode> run(Logger logger) {
-            ImmutableList<FileNode> inputCus =
+          public ImmutableList<J8FileNode> run(Logger logger) {
+            ImmutableList<J8FileNode> inputCus =
                 PassTestHelpers.parseCompilationUnits(new String[] {
                     "//" + getName(), input });
 

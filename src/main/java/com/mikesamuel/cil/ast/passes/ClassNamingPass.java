@@ -21,17 +21,18 @@ import com.mikesamuel.cil.ast.j8.EnumConstantNode;
 import com.mikesamuel.cil.ast.j8.EnumDeclarationNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8CallableDeclaration;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.J8TypeScope;
 import com.mikesamuel.cil.ast.j8.MethodHeaderNode;
+import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.ModifierNode;
 import com.mikesamuel.cil.ast.j8.NormalClassDeclarationNode;
 import com.mikesamuel.cil.ast.j8.SimpleTypeNameNode;
 import com.mikesamuel.cil.ast.j8.TypeParameterNode;
 import com.mikesamuel.cil.ast.j8.TypeParametersNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -55,7 +56,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
   @Override
   protected void handleTypeDeclaration(
-      TypeScope scope, TypeDeclaration d, Name name, boolean isAnonymous) {
+      J8TypeScope scope, J8TypeDeclaration d, Name name, boolean isAnonymous) {
     UnresolvedTypeDeclaration decl = new UnresolvedTypeDeclaration(scope, d);
     UnresolvedTypeDeclaration dupe = declaredTypes.get(name);
     if (dupe == null) {
@@ -115,7 +116,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
 
   private ImmutableList<MemberInfo> findMembers(
-      Name declaringClass, TypeDeclaration declaration) {
+      Name declaringClass, J8TypeDeclaration declaration) {
     J8BaseNode body = declaration.getChild(declaration.getNChildren() - 1);
 
     ImmutableList.Builder<MemberInfo> b = ImmutableList.builder();
@@ -158,7 +159,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
   }
 
   private static void processMembers(
-      Name declaringClass, TypeDeclaration declaration, J8BaseNode bodyElement,
+      Name declaringClass, J8TypeDeclaration declaration, J8BaseNode bodyElement,
       ImmutableList.Builder<MemberInfo> b) {
     J8NodeType nt = bodyElement.getNodeType();
     switch (nt) {
@@ -167,7 +168,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       case InterfaceMethodDeclaration:
       case InstanceInitializer:
       case StaticInitializer: {
-        CallableDeclaration cd = (CallableDeclaration) bodyElement;
+        J8CallableDeclaration cd = (J8CallableDeclaration) bodyElement;
         int mods = 0;
         if (nt == J8NodeType.StaticInitializer) {
           mods |= Modifier.STATIC | Modifier.PRIVATE;
@@ -201,7 +202,8 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         }
         b.add(new CallableInfo(
             mods,
-            declaringClass.method(cd.getMethodName(), cd.getMethodVariant()),
+            declaringClass.method(
+                Mixins.getMethodName(cd), cd.getMethodVariant()),
             typeParametersList.build()
             ));
         break;
@@ -338,11 +340,11 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
 
   static final class DeclarationsAndScopes {
     final ImmutableMap<Name, UnresolvedTypeDeclaration> declarations;
-    final Map<TypeScope, TypeScope> scopeToParent;
+    final Map<J8TypeScope, J8TypeScope> scopeToParent;
 
     DeclarationsAndScopes(
         ImmutableMap<Name, UnresolvedTypeDeclaration> declarations,
-        Map<TypeScope, TypeScope> scopeToParent) {
+        Map<J8TypeScope, J8TypeScope> scopeToParent) {
       this.declarations = declarations;
       this.scopeToParent = scopeToParent;
     }

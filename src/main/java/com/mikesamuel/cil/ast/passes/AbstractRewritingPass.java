@@ -10,14 +10,14 @@ import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.parser.SList;
 
 /**
  * A pass which makes it simple to process a tree and rewrite in-place.
  */
 public abstract class AbstractRewritingPass
-extends AbstractPass<ImmutableList<FileNode>> {
+extends AbstractPass<ImmutableList<J8FileNode>> {
 
   protected AbstractRewritingPass(Logger logger) {
     super(logger);
@@ -192,13 +192,14 @@ extends AbstractPass<ImmutableList<FileNode>> {
   }
 
   @Override
-  public ImmutableList<FileNode> run(Iterable<? extends FileNode> fileNodes) {
-    ImmutableList.Builder<FileNode> b = ImmutableList.builder();
-    for (FileNode fileNode : fileNodes) {
+  public ImmutableList<J8FileNode> run(
+      Iterable<? extends J8FileNode> fileNodes) {
+    ImmutableList.Builder<J8FileNode> b = ImmutableList.builder();
+    for (J8FileNode fileNode : fileNodes) {
       ProcessingStatus status = visit((J8BaseNode) fileNode, null);
       Preconditions.checkState(status.mut == Mutation.REPLACE);
       for (J8BaseNode replacement : status.replacements) {
-        b.add((FileNode) replacement);
+        b.add((J8FileNode) replacement);
       }
     }
     return b.build();

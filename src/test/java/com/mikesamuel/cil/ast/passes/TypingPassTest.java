@@ -19,16 +19,16 @@ import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.ConditionalExpressionNode;
 import com.mikesamuel.cil.ast.j8.ExpressionNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8BinaryOp;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameReference;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8MethodDescriptorReference;
+import com.mikesamuel.cil.ast.j8.J8Typed;
+import com.mikesamuel.cil.ast.j8.J8WholeType;
 import com.mikesamuel.cil.ast.j8.Java8Comments;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.StatementExpressionNode;
 import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
-import com.mikesamuel.cil.ast.j8.traits.BinaryOp;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameReference;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.MethodDescriptorReference;
-import com.mikesamuel.cil.ast.j8.traits.Typed;
-import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
@@ -59,13 +59,13 @@ public final class TypingPassTest extends TestCase {
       @Nullable Decorator decorator,
       String... expectedErrors)
   throws UnparseVerificationException {
-    ImmutableList<FileNode> processedFiles =
+    ImmutableList<J8FileNode> processedFiles =
         PassTestHelpers.expectErrors(
-            new LoggableOperation<ImmutableList<FileNode>>() {
+            new LoggableOperation<ImmutableList<J8FileNode>>() {
 
               @Override
-              public ImmutableList<FileNode> run(Logger logger) {
-                ImmutableList<FileNode> files =
+              public ImmutableList<J8FileNode> run(Logger logger) {
+                ImmutableList<J8FileNode> files =
                     PassTestHelpers.parseCompilationUnits(inputs);
                 DeclarationPass dp = new DeclarationPass(logger);
                 TypeInfoResolver typeInfoResolver = dp.run(files);
@@ -102,26 +102,26 @@ public final class TypingPassTest extends TestCase {
 
     if (target != null) {
       List<NodeI<?, ?, ?>> typed = Lists.newArrayList();
-      for (FileNode fileNode : processedFiles) {
+      for (J8FileNode fileNode : processedFiles) {
         for (NodeI<?, ?, ?> n : ((J8BaseNode) fileNode).finder(target).find()) {
-          if (n instanceof Typed) {
+          if (n instanceof J8Typed) {
             typed.add(n);
-          } else if (n instanceof WholeType) {
+          } else if (n instanceof J8WholeType) {
             typed.add(n);
           } else {
             boolean found = false;
-            for (Typed t
-                   : ((J8BaseNode) n).finder(Typed.class)
-                   .exclude(WholeType.class).exclude(Typed.class)
+            for (J8Typed t
+                   : ((J8BaseNode) n).finder(J8Typed.class)
+                   .exclude(J8WholeType.class).exclude(J8Typed.class)
                    .find()) {
               typed.add(t);
               found = true;
               break;
             }
             if (!found) {
-              for (WholeType t
-                     : ((J8BaseNode) n).finder(WholeType.class)
-                     .exclude(WholeType.class)
+              for (J8WholeType t
+                     : ((J8BaseNode) n).finder(J8WholeType.class)
+                     .exclude(J8WholeType.class)
                      .find()) {
                 typed.add(t);
                 break;
@@ -132,9 +132,9 @@ public final class TypingPassTest extends TestCase {
       }
       ImmutableList.Builder<String> got = ImmutableList.builder();
       for (NodeI<?, ?, ?> t : typed) {
-        StaticType typ = (t instanceof Typed)
-          ? ((Typed)     t).getStaticType()
-          : ((WholeType) t).getStaticType();
+        StaticType typ = (t instanceof J8Typed)
+          ? ((J8Typed)     t).getStaticType()
+          : ((J8WholeType) t).getStaticType();
         got.add(
             PassTestHelpers.serializeNodes(
                 ImmutableList.of((J8BaseNode) t), null)
@@ -149,7 +149,7 @@ public final class TypingPassTest extends TestCase {
     // Sanity check that the processed CUs have associated types, even if only
     // the error type, with every Typed and WholeType.
     List<J8BaseNode> untyped = Lists.newArrayList();
-    for (FileNode fileNode : processedFiles) {
+    for (J8FileNode fileNode : processedFiles) {
       sanityCheckUntyped((J8BaseNode) fileNode, untyped);
     }
     if (!untyped.isEmpty()) {
@@ -167,13 +167,13 @@ public final class TypingPassTest extends TestCase {
 
   private static void sanityCheckUntyped(
       J8BaseNode node, List<? super J8BaseNode> out) {
-    if (node instanceof Typed) {
-      Typed typed = (Typed) node;
+    if (node instanceof J8Typed) {
+      J8Typed typed = (J8Typed) node;
       if (typed.getStaticType() == null) {
         out.add(node);
       }
-    } else if (node instanceof WholeType) {
-      WholeType wholeType = (WholeType) node;
+    } else if (node instanceof J8WholeType) {
+      J8WholeType wholeType = (J8WholeType) node;
       if (wholeType.getStaticType() == null) {
         out.add(node);
       }
@@ -1166,7 +1166,7 @@ public final class TypingPassTest extends TestCase {
             "}",
           },
         },
-        BinaryOp.class,
+        J8BinaryOp.class,
         new String[] {
             "((f || t && f) | t & (boolean) Boolean.TRUE) ^ f : boolean",
             "(f || t && f) | t & (boolean) Boolean.TRUE : boolean",
@@ -1191,7 +1191,7 @@ public final class TypingPassTest extends TestCase {
             "}",
           },
         },
-        BinaryOp.class,
+        J8BinaryOp.class,
         new String[] {
             "(i | x & (int) Integer.valueOf(0)) ^ n : int",
             "i | x & (int) Integer.valueOf(0) : int",
@@ -1292,7 +1292,7 @@ public final class TypingPassTest extends TestCase {
             "}",
           },
         },
-        BinaryOp.class,
+        J8BinaryOp.class,
         new String[] {
           "(int) b << (int) b : int",
           "(int) c >> (int) c : int",
@@ -2155,8 +2155,8 @@ public final class TypingPassTest extends TestCase {
 
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
-      if (node instanceof MethodDescriptorReference) {
-        String descriptor = ((MethodDescriptorReference) node)
+      if (node instanceof J8MethodDescriptorReference) {
+        String descriptor = ((J8MethodDescriptorReference) node)
             .getMethodDescriptor();
         if (descriptor != null) {
           return Java8Comments.blockCommentMinimalSpace(descriptor);
@@ -2172,8 +2172,9 @@ public final class TypingPassTest extends TestCase {
 
         @Override
         public String decorate(NodeI<?, ?, ?> node) {
-          if (node instanceof MethodDescriptorReference) {
-            MethodDescriptorReference desc = (MethodDescriptorReference) node;
+          if (node instanceof J8MethodDescriptorReference) {
+            J8MethodDescriptorReference desc =
+                (J8MethodDescriptorReference) node;
 
             StringBuilder sb = new StringBuilder();
 
@@ -2199,8 +2200,8 @@ public final class TypingPassTest extends TestCase {
 
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
-      if (node instanceof ExpressionNameReference) {
-        Name referent = ((ExpressionNameReference) node)
+      if (node instanceof J8ExpressionNameReference) {
+        Name referent = ((J8ExpressionNameReference) node)
             .getReferencedExpressionName();
         if (referent != null) {
           return Java8Comments.blockCommentMinimalSpace(referent.toString());

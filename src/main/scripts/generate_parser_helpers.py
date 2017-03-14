@@ -9,124 +9,6 @@ _JAVA_BASE_PACKAGE = 'com.mikesamuel.cil.ast'
 
 BUILTINS = ('builtin', 'any')
 
-# Maps trait interfaces to metadata fields specified and imports required.
-_TRAITS = {
-    'CallableDeclaration': (
-        (
-            ('ExpressionNameResolver', 'expressionNameResolver'),
-            ('int', 'methodVariant'),
-            ('MemberInfo', 'memberInfo'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
-            'com.mikesamuel.cil.ast.meta.MemberInfo',
-        )),
-    'ExpressionNameDeclaration': (
-        (
-            ('Name', 'declaredExpressionName'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.Name',
-        )),
-    'ExpressionNameReference': (
-        (
-            ('Name', 'referencedExpressionName'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.Name',
-        )),
-    'ExpressionNameScope': (
-        (
-            ('ExpressionNameResolver', 'expressionNameResolver'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
-        )),
-    'FileNode': (
-        (
-            ('ExpressionNameResolver', 'expressionNameResolver'),
-            ('TypeNameResolver', 'typeNameResolver'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver',
-            'com.mikesamuel.cil.ast.meta.TypeNameResolver',
-        )),
-    'LimitedScopeElement': (
-        (
-            ('DeclarationPositionMarker', 'declarationPositionMarker'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker',
-        )),
-    'MemberDeclaration': (
-        (
-            ('MemberInfo', 'memberInfo'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.MemberInfo',
-        )),
-    'MethodDescriptorReference': (
-        (
-            ('String', 'methodDescriptor'),
-            ('TypeSpecification', 'methodDeclaringType'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.TypeSpecification',
-        )),
-    'NamePart': (
-        (
-            ('Name.Type', 'namePartType'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.Name',
-        )),
-    'TypeDeclaration': (
-        (
-            ('TypeInfo', 'declaredTypeInfo'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.TypeInfo',
-        )),
-    'Typed': (
-        (
-            ('StaticType', 'staticType'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.StaticType',
-        )),
-    'TypeReference': (
-        (
-            ('TypeInfo', 'referencedTypeInfo'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.TypeInfo',
-        )),
-    'TypeScope': (
-        (
-            ('TypeNameResolver', 'typeNameResolver'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.TypeNameResolver',
-        )),
-    'WholeType': (
-        (
-            ('StaticType', 'staticType'),
-        ),
-        (
-            'com.mikesamuel.cil.ast.meta.StaticType',
-        )),
-    }
-_TRAITS['TypeParameterScope'] = _TRAITS['TypeScope']
-
-_CUSTOM_NODE_CONTENT = {
-    'ConstructorDeclaration':
-    ('  @Override public String getMethodName() { return "<init>"; }', ()),
-    'InstanceInitializer':
-    ('  @Override public String getMethodName() { return "<init>"; }', ()),
-    'StaticInitializer':
-    ('  @Override public String getMethodName() { return "<clinit>"; }', ()),
-    }
-
 _TOKEN_RE = re.compile(
     '|'.join([
         r'//[^\r\n]*',  # Line comment
@@ -140,8 +22,6 @@ _TOKEN_RE = re.compile(
         r'[\[\]\{\}:.]',  # Punctuation
         r'.',  # Other
     ]))
-
-_JAVA_IDENT_START_CHARSET = r'\p{javaJavaIdentifierStart}'
 
 _LINE_BREAK_RE = re.compile(r'(\r\n?|\n)')
 
@@ -324,6 +204,7 @@ def _tokens_to_text(toks):
 
 def process_grammar(
         grammar_name,
+        grammar_customizations,
         grammar_text,
         source_file_exists,
         emit_java_file,
@@ -332,6 +213,20 @@ def process_grammar(
     """
     grammar_name : string -- Specifies the subpackage under _JAVA_BASE_PACKAGE
         and a common prefix for node, node type, and node variant classes.
+    gramamr_customizations: { "mixins": {...}, "custom_node_content": {...} } --
+        The "mixins" map maps names of classes in the "mixins" subpackage
+        of the mixin packages to data like
+        {
+          "state": [ ["FieldType", "fieldName"], ... ],
+          "imports": ["foo.bar.FieldType", ...],
+          "extends": ["MixinName"]
+        }
+        so that fields can be generated for node classes along with getters
+        and setters.
+        Absent fields are treated as equivalent to the empty list.
+
+        The "custom_node_content" map maps production names to extra body
+        content, and extra imports.
     grammar_text : string -- See ../resources/jsl-19.txt.
     source_file_exists : function --
         given a java file true iff it exists under the source directory in the
@@ -341,10 +236,13 @@ def process_grammar(
     """
 
     java_package = '%s.%s' % (_JAVA_BASE_PACKAGE, grammar_name)
-
+    mixins_package = '%s.mixins' % _JAVA_BASE_PACKAGE
     cn_prefix = '%s%s' % (grammar_name[0:1].upper(), grammar_name[1:])
-
     generator = _java_str_lit(os.path.relpath(__file__))
+
+    mixin_defs = grammar_customizations['mixins']
+    custom_node_content = grammar_customizations.get("custom_node_content", {})
+
     line_number, column_number, char_count = 1, 1, 0
 
     # Split into (token_text, position)
@@ -1361,6 +1259,8 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
             ), extra_imports
         )
 
+    mixins_used = set()
+
     # For each production, produce a Node subclass.
     def write_node_class_for_production(chapter, prod):
         node_class_name = '%sNode' % prod['name']
@@ -1374,11 +1274,13 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
             'com.mikesamuel.cil.ptree.PTree',
         ))
 
-        is_inner_node = not (len(variants) == 1 and variants[0]['name'] == 'Builtin')
+        is_inner_node = not (len(variants) == 1
+                             and variants[0]['name'] == 'Builtin')
 
         # extra code for the Node body.
         extra_code = []
-        custom_code, custom_code_imports = _CUSTOM_NODE_CONTENT.get(prod['name'], ('', ()))
+        custom_code, custom_code_imports = custom_node_content.get(
+            prod['name'], ('', ()))
         extra_code.append(custom_code)
         extra_imports.update(custom_code_imports)
 
@@ -1488,51 +1390,66 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
 
         variant_members = create_variant_members()
 
-        traits = []
+        mixins = set()
         for (annot_name, _) in prod['annots']:
-            if annot_name.startswith('(@trait='):
-                traits.extend([x.strip() for x in annot_name[8:-1].split(',') if len(x.strip())])
+            if annot_name.startswith('(@mixin='):
+                mixins.update([x.strip() for x in annot_name[8:-1].split(',')
+                               if len(x.strip())])
 
-        for trait in traits:
-            extra_imports.add('%s.traits.%s' % (java_package, trait))
-            trait_fields, trait_imports = _TRAITS.get(trait, ((), ()))
-            extra_imports.update(trait_imports)
+        # expand mixins based on extended mixins.
+        size_before = 0
+        while len(mixins) != size_before:
+            size_before = len(mixins)
+            for mixin in list(mixins):
+                mixins.update(mixin_defs[mixin].get("extends", ()))
+        mixins = list(mixins)
+        mixins.sort()
+
+        for mixin in mixins:
+            mixin_def = mixin_defs.get(mixin, ((), ()))
+            mixin_fields = mixin_def.get('state', ())
+            mixin_imports = mixin_def.get('imports', ())
+            extra_imports.update(mixin_imports)
+            if len(mixin_fields):
+                extra_imports.add('%s.%s' % (mixins_package, mixin))
             copy_calls = []
-            for trait_type, trait_field in trait_fields:
+            for mixin_type, mixin_field in mixin_fields:
                 record = {
                     'node_class_name': node_class_name,
-                    'trait': trait,
-                    'trait_field': trait_field,
-                    'utrait_field': _first_upper(trait_field),
-                    'trait_type': trait_type,
+                    'mixin': mixin,
+                    'mixin_field': mixin_field,
+                    'umixin_field': _first_upper(mixin_field),
+                    'mixin_type': mixin_type,
                 }
                 extra_code.append(
-                    ('  private %(trait_type)s %(trait_field)s;\n'
+                    ('  private %(mixin_type)s %(mixin_field)s;\n'
                      '\n'
                      '  @Override\n'
-                     '  public final %(node_class_name)s set%(utrait_field)s(%(trait_type)s new%(utrait_field)s) {\n'
-                     '    this.%(trait_field)s = new%(utrait_field)s;\n'
+                     '  public final %(node_class_name)s set%(umixin_field)s(%(mixin_type)s new%(umixin_field)s) {\n'
+                     '    this.%(mixin_field)s = new%(umixin_field)s;\n'
                      '    return this;\n'
                      '  }\n'
                      '\n'
                      '  @Override\n'
-                     '  public final %(trait_type)s get%(utrait_field)s() {\n'
-                     '    return this.%(trait_field)s;\n'
+                     '  public final %(mixin_type)s get%(umixin_field)s() {\n'
+                     '    return this.%(mixin_field)s;\n'
                      '  }\n')
                     % record)
                 copy_calls.append(
-                    ('      set%(utrait_field)s('
-                     '((%(trait)s) source).get%(utrait_field)s());')
+                    ('      set%(umixin_field)s('
+                     '((%(mixin)s<?, ?, ?>) source).get%(umixin_field)s());')
                     % record
                     )
             if len(copy_calls):
                 copy_code.append('    %s {\n%s\n    }' % (
-                    'if (source instanceof %(trait)s)' % record,
+                    'if (source instanceof %(mixin)s)' % record,
                     '\n'.join(copy_calls)))
 
-        trait_ifaces = ''
-        if traits:
-            trait_ifaces = '\nimplements %s' % (', '.join(traits))
+        mixin_ifaces = ''
+        if mixins:
+            mixin_ifaces = '\nimplements %s' % ', '.join(
+                '%s%s' % (cn_prefix, t) for t in mixins)
+        mixins_used.update(mixins)
 
         extra_import_stmts = ''.join(
             ['import %s;\n' % imp for imp in sorted(extra_imports)])
@@ -1551,7 +1468,7 @@ package %(package)s;
  * </pre>
  */
 @javax.annotation.Generated(%(generator)s)
-public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces)s {
+public final class %(node_class_name)s extends %(base_node_class)s%(mixin_ifaces)s {
 
   /** */
   public %(node_class_name)s(Variant v, %(ctor_formals)s) {
@@ -1627,11 +1544,38 @@ public final class %(node_class_name)s extends %(base_node_class)s%(trait_ifaces
     'copy_ctor_actuals': copy_ctor_actuals,
     'extra_code': '\n'.join(extra_code),
     'copy_code': '\n'.join(copy_code),
-    'trait_ifaces': trait_ifaces,
+    'mixin_ifaces': mixin_ifaces,
     'build_node_calls': build_node_calls,
     })
 
     for_each_prod(write_node_class_for_production)
+
+    def write_bound_mixins():
+        for mixin in mixins_used:
+            emit_java_file(
+                '%s%s' % (cn_prefix, mixin),
+                '''
+package %(package)s;
+
+import %(mixins_package)s.%(mixin)s;
+
+/**
+ * @see %(mixin)s
+ */
+@javax.annotation.Generated(%(generator)s)
+public interface %(cn_prefix)s%(mixin)s
+extends %(mixin)s<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sNodeVariant> {
+  // Just binds variables.
+}
+''' % {
+    'package': java_package,
+    'mixins_package': mixins_package,
+    'cn_prefix': cn_prefix,
+    'generator': generator,
+    'mixin': mixin,
+    })
+
+    write_bound_mixins()
 
     def write_literal_tokens():
         keywords = []
@@ -1779,7 +1723,7 @@ final class IdentifierWrappers {
                 else:
                     annot_name = annot[1:]
                     value = 'true'
-                if annot_name in ('trait',):
+                if annot_name in ('mixin',):
                     continue
                 annot_name = '%s%s' % (annot_name[0].upper(), annot_name[1:])
                 table = tables.get(annot_name)
@@ -1939,6 +1883,12 @@ if __name__ == '__main__':
             ' type J8NodeVariant.'
         ))
     argparser.add_argument(
+        '--grammar_customizations',
+        help=(
+            'Path to a JSON file that defines the mixins and custom node'
+            ' content for the grammar.'
+        ))
+    argparser.add_argument(
         '--srcdir',
         help=(
             'The root of the java source directory, e.g. basedir/src/main/java'
@@ -1965,6 +1915,9 @@ if __name__ == '__main__':
 
     package_path = tuple(_JAVA_BASE_PACKAGE.split('.') + [grammar_name])
 
+    with file(args.grammar_customizations) as json_file:
+        grammar_customizations = json.load(json_file)
+
     def source_file_exists(rel_path):
         return os.path.isfile(
             os.path.join(
@@ -1981,6 +1934,7 @@ if __name__ == '__main__':
 
     process_grammar(
         grammar_name=grammar_name,
+        grammar_customizations=grammar_customizations,
         grammar_text=open(args.grammar_file, 'r').read(),
         source_file_exists=source_file_exists,
         emit_java_file=emit_java_file,

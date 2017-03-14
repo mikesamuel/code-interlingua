@@ -1,16 +1,18 @@
-package com.mikesamuel.cil.ast.j8.traits;
+package com.mikesamuel.cil.ast.mixins;
 
-import com.mikesamuel.cil.ast.j8.J8BaseNode;
-import com.mikesamuel.cil.ast.j8.J8NodeType;
-import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
-import com.mikesamuel.cil.ast.j8.UnannTypeNode;
-import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.j8.VariableDeclaratorListNode;
+import com.mikesamuel.cil.ast.BaseNode;
+import com.mikesamuel.cil.ast.NodeI;
+import com.mikesamuel.cil.ast.NodeType;
+import com.mikesamuel.cil.ast.NodeVariant;
 
 /**
  * Declares one or more local variables.
  */
-public interface LocalDeclaration extends J8Trait {
+public interface LocalDeclaration<
+    B extends BaseNode<B, T, V>,
+    T extends Enum<T> & NodeType<B, T>,
+    V extends NodeVariant<B, T>>
+extends NodeI<B, T, V> {
   /**
    * The type of the local variables.
    * If the defragment type pass has run, the type is whole.
@@ -23,6 +25,7 @@ public interface LocalDeclaration extends J8Trait {
    *     well-formed template.  Typically this is a {@link UnannTypeNode} but
    *     {@code catch} blocks are an exception to this.
    */
+  /*
   default J8BaseNode getDeclaredTypeNode() {
     for (int i = 0, n = getNChildren(); i < n; ++i) {
       J8BaseNode child = getChild(i);
@@ -34,6 +37,7 @@ public interface LocalDeclaration extends J8Trait {
     }
     return null;
   }
+  */
 
   /**
    * The sub-trees specifying the names of the locals declared.
@@ -43,6 +47,7 @@ public interface LocalDeclaration extends J8Trait {
    *      or {@link VariableDeclaratorListNode} containing the names of the
    *      locals declared.
    */
+  /*
   default J8BaseNode getDeclaredIdOrIds() {
     for (int i = 0, n = getNChildren(); i < n; ++i) {
       J8BaseNode child = getChild(i);
@@ -54,4 +59,5 @@ public interface LocalDeclaration extends J8Trait {
     }
     return null;
   }
+  */
 }

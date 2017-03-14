@@ -10,9 +10,9 @@ import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.j8.ExpressionNode;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.StatementNode;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.parser.Input;
@@ -43,8 +43,9 @@ public final class CommonPassRunner {
   /**
    * Runs passes on the given compilation units and returns the result.
    */
-  public ImmutableList<FileNode> run(Iterable<? extends FileNode> unprocessed) {
-    ImmutableList<FileNode> cus = ImmutableList.copyOf(unprocessed);
+  public ImmutableList<J8FileNode> run(
+      Iterable<? extends J8FileNode> unprocessed) {
+    ImmutableList<J8FileNode> cus = ImmutableList.copyOf(unprocessed);
     cus = new DefragmentTypesPass(logger).setErrorLevel(errorLevel).run(cus);
 
     DeclarationPass dp = new DeclarationPass(logger) {
@@ -90,8 +91,8 @@ public final class CommonPassRunner {
    * since that way only one type pool is allocated, and each compilation unit
    * can refer to types declared in the others.
    */
-  public FileNode run(FileNode fn) {
-    ImmutableList<FileNode> after = run(ImmutableList.of(fn));
+  public J8FileNode run(J8FileNode fn) {
+    ImmutableList<J8FileNode> after = run(ImmutableList.of(fn));
     Preconditions.checkState(after.size() == 1);
     return after.get(0);
   }

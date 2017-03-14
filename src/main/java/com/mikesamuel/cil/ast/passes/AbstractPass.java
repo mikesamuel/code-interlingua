@@ -7,7 +7,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
 import com.mikesamuel.cil.ast.NodeI;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.util.LogUtils;
 
 /** A compiler pass. */
@@ -29,7 +29,7 @@ public abstract class AbstractPass<T> {
   }
 
   /** Applies the pass to the given compilation units. */
-  public abstract T run(Iterable<? extends FileNode> fileNodes);
+  public abstract T run(Iterable<? extends J8FileNode> fileNodes);
 
   /** The logger used to log errors and warnings. */
   public Logger getLogger() {

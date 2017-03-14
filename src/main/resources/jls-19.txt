@@ -223,9 +223,9 @@ parsed.
 @nointerp means the production should not be allowed to contain template
 interpolations when parsed in non-standard mode without an explicit type hint.
 
-(@trait=Ident,Ident,...) attached to a production means that the corresponding
-*Node class implements that trait which might involve creating storage to back
-the trait's setters&getters.
+(@mixin=Ident,Ident,...) attached to a production means that the corresponding
+*Node class implements that mixin which might involve creating storage to back
+the mixin's setters&getters.
 
 @intermediate variants are those that can be manufactured when interpolating into
 an AST.  @intermediate variants have exactly one non-terminal.
@@ -237,22 +237,22 @@ implicitly @intermediate.
 
 // Lexical Structure
 (chapter=Literal)
-Identifier: (@trait=NamePart)
+Identifier: (@mixin=NamePart)
      builtin // IdentifierChars but not a Keyword or BooleanLiteral or NullLiteral
 IdentifierChars:
      builtin // JavaLetter {JavaLetterOrDigit}
-IntegerLiteral: (@trait=Typed)
+IntegerLiteral: (@mixin=Typed)
      builtin
-FloatingPointLiteral: (@trait=Typed)
+FloatingPointLiteral: (@mixin=Typed)
      builtin
-BooleanLiteral: (@trait=Typed)
+BooleanLiteral: (@mixin=Typed)
      "false"
      "true"
-CharacterLiteral: (@trait=Typed)
+CharacterLiteral: (@mixin=Typed)
      builtin
-StringLiteral: (@trait=Typed)
+StringLiteral: (@mixin=Typed)
      builtin
-NullLiteral: (@trait=Typed)
+NullLiteral: (@mixin=Typed)
      "null"
 JavaDocComment: @nointerp
      builtin @ignorable
@@ -273,10 +273,10 @@ Literal:
 Type:
      ReferenceType
      PrimitiveType
-PrimitiveType: (@trait=WholeType)
+PrimitiveType: (@mixin=WholeType)
      {Annotation} NumericType
      {Annotation} "boolean"
-NumericType: (@trait=WholeType)
+NumericType: (@mixin=WholeType)
      IntegralType
      FloatingPointType
 IntegralType:
@@ -288,11 +288,11 @@ IntegralType:
 FloatingPointType:
      "float"
      "double"
-ReferenceType: (@trait=WholeType)
+ReferenceType: (@mixin=WholeType)
      ArrayType
      ClassOrInterfaceType
      TypeVariable
-ClassOrInterfaceType: (@trait=TypeReference,WholeType)
+ClassOrInterfaceType: (@mixin=TypeReference,WholeType)
      // This turns the original grammar on its head because in JLS chapter 19,
      // ClassOrInterfaceType:
      //    ClassType
@@ -306,13 +306,13 @@ ClassOrInterfaceType: (@trait=TypeReference,WholeType)
      // interfaces from normal classes.
      ContextFreeNames
      [ClassOrInterfaceType "."] {Annotation} Identifier [TypeArguments]
-ClassType: (@trait=WholeType)
+ClassType: (@mixin=WholeType)
      ClassOrInterfaceType
-InterfaceType: (@trait=WholeType)
+InterfaceType: (@mixin=WholeType)
      ClassOrInterfaceType
-TypeVariable: (@trait=TypeReference)
+TypeVariable: (@mixin=TypeReference)
      {Annotation} Identifier
-ArrayType: (@trait=WholeType)
+ArrayType: (@mixin=WholeType)
      Type {Annotation} Dim
 // This Dim production does not appear in the grammar, but including it here
 // means that the presence of optional or repeated "[]" pairs results in an
@@ -321,7 +321,7 @@ Dim: @nointerp
      "[" "]"
 Dims: @nointerp
      {Annotation} Dim {{Annotation} Dim}
-TypeParameter: (@trait=TypeDeclaration)
+TypeParameter: (@mixin=TypeDeclaration)
      {!!TypeParameterModifier Modifier} SimpleTypeName [TypeBound] (@name=TypeParameter)
 TypeParameterModifier:
      Annotation
@@ -346,28 +346,28 @@ WildcardBounds:
 // I rewrote them to delegate with a lookahead.
 // That way we don't have largely duplicative
 // node types for the annotatable and unannotated equivalents.
-UnannType: (@trait=WholeType)
+UnannType: (@mixin=WholeType)
      !"@" Type
-Result: (@trait=WholeType)
+Result: (@mixin=WholeType)
      "void"
      UnannType
 
 
 // Names
 (chapter=Name)
-FieldName: (@trait=ExpressionNameReference)
+FieldName: (@mixin=ExpressionNameReference)
      Identifier
 EnumConstantName:
      FieldName
 Label:
      Identifier
-LocalName: (@trait=ExpressionNameReference)
+LocalName: (@mixin=ExpressionNameReference)
      Identifier
-MethodName: (@trait=MethodDescriptorReference)
+MethodName: (@mixin=MethodDescriptorReference)
      Identifier
 SimpleTypeName:
      Identifier
-TypeName: (@trait=TypeReference)
+TypeName: (@mixin=TypeReference)
      !"@" ContextFreeNames
      PackageOrTypeName "." Identifier
      Identifier
@@ -407,7 +407,7 @@ ContextFreeName:
 
 // Packages
 (chapter=Package)
-CompilationUnit: (@trait=FileNode) @toplevel
+CompilationUnit: (@mixin=FileNode) @toplevel
      [PackageDeclaration] {ImportDeclaration} {TypeDeclaration}
 PackageDeclaration:
      // TODO: Why is the package name here not left-associative as it is under the names chapter?
@@ -437,7 +437,7 @@ TypeDeclaration:
 ClassDeclaration:
      NormalClassDeclaration
      EnumDeclaration
-NormalClassDeclaration: (@trait=TypeDeclaration,TypeParameterScope)
+NormalClassDeclaration: (@mixin=TypeDeclaration,TypeParameterScope)
      [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
@@ -458,7 +458,7 @@ Superinterfaces:
      "implements" InterfaceTypeList
 InterfaceTypeList:
      InterfaceType {"," InterfaceType}
-ClassBody: (@trait=TypeScope,ExpressionNameScope)
+ClassBody: (@mixin=TypeScope,ExpressionNameScope)
      "{" {ClassBodyDeclaration} "}"
 ClassBodyDeclaration:
      ClassMemberDeclaration
@@ -475,7 +475,7 @@ ClassMemberDeclaration:
 // declarators then there are multiple declarations here.
 // We could solve this by iterating out field declarations to have one
 // variable declarator per declaration.
-FieldDeclaration: (@trait=MemberDeclaration)
+FieldDeclaration: (@mixin=MemberDeclaration)
      [JavaDocComment] {!!FieldModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
      Annotation
@@ -490,12 +490,12 @@ VariableDeclaratorList:
      VariableDeclarator {"," VariableDeclarator}
 VariableDeclarator:
      VariableDeclaratorId ["=" VariableInitializer]
-VariableDeclaratorId: (@trait=ExpressionNameDeclaration)
+VariableDeclaratorId: (@mixin=ExpressionNameDeclaration)
      Identifier [Dims]
 VariableInitializer:
      Expression
      ArrayInitializer
-MethodDeclaration: (@trait=TypeParameterScope,CallableDeclaration)
+MethodDeclaration: (@mixin=TypeParameterScope,CallableDeclaration)
      [JavaDocComment] {!!MethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
 MethodModifier:
      Annotation
@@ -518,12 +518,12 @@ FormalParameterList:
 FormalParameters:
      FormalParameter {"," FormalParameter}
      ReceiverParameter {"," FormalParameter}
-FormalParameter: (@trait=LocalDeclaration)
+FormalParameter: (@mixin=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType VariableDeclaratorId (@name=Declaration)
 VariableModifier:
      Annotation
      "final"
-LastFormalParameter: (@trait=LocalDeclaration)
+LastFormalParameter: (@mixin=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType {Annotation} "..." VariableDeclaratorId  (@name=Variadic)
      FormalParameter @anon
 ReceiverParameter:
@@ -538,11 +538,11 @@ ExceptionType:
 MethodBody:
      Block
      ";"
-InstanceInitializer: (@trait=CallableDeclaration)
+InstanceInitializer: (@mixin=CallableDeclaration)
      Block
-StaticInitializer: (@trait=CallableDeclaration)
+StaticInitializer: (@mixin=CallableDeclaration)
      "static" Block
-ConstructorDeclaration: (@trait=TypeParameterScope,CallableDeclaration)
+ConstructorDeclaration: (@mixin=TypeParameterScope,CallableDeclaration)
      [JavaDocComment] {!!ConstructorModifier Modifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
 ConstructorModifier:
      Annotation
@@ -559,17 +559,17 @@ ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
      Primary "." [TypeArguments] "super" "(" [ArgumentList] ")" ";"
-EnumDeclaration: (@trait=TypeDeclaration)
+EnumDeclaration: (@mixin=TypeDeclaration)
      [JavaDocComment] {!!ClassModifier Modifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
-EnumBody: (@trait=TypeScope,ExpressionNameScope)
+EnumBody: (@mixin=TypeScope,ExpressionNameScope)
      "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
 EnumConstantList:
      EnumConstant {"," EnumConstant}
-EnumConstant: (@trait=TypeDeclaration,ExpressionNameDeclaration)
+EnumConstant: (@mixin=TypeDeclaration,ExpressionNameDeclaration)
      {!!EnumConstantModifier Modifier} EnumConstantName ["(" [ArgumentList] ")"] [ClassBody] (@name=Declaration)
 EnumConstantModifier:
      Annotation
-EnumBodyDeclarations: (@trait=TypeScope)
+EnumBodyDeclarations: (@mixin=TypeScope)
      ";" {ClassBodyDeclaration}
 
 // Interfaces
@@ -577,7 +577,7 @@ EnumBodyDeclarations: (@trait=TypeScope)
 InterfaceDeclaration:
      NormalInterfaceDeclaration
      AnnotationTypeDeclaration
-NormalInterfaceDeclaration: (@trait=TypeDeclaration,TypeParameterScope)
+NormalInterfaceDeclaration: (@mixin=TypeDeclaration,TypeParameterScope)
      [JavaDocComment] {!!InterfaceModifier Modifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
 InterfaceModifier:
      Annotation
@@ -589,7 +589,7 @@ InterfaceModifier:
      "strictfp"
 ExtendsInterfaces:
      "extends" InterfaceTypeList
-InterfaceBody: (@trait=TypeScope,ExpressionNameScope)
+InterfaceBody: (@mixin=TypeScope,ExpressionNameScope)
      "{" {InterfaceMemberDeclaration} "}"
 InterfaceMemberDeclaration:
      ConstantDeclaration
@@ -597,14 +597,14 @@ InterfaceMemberDeclaration:
      ClassDeclaration
      InterfaceDeclaration
      ";"
-ConstantDeclaration: (@trait=MemberDeclaration)
+ConstantDeclaration: (@mixin=MemberDeclaration)
      [JavaDocComment] {!!ConstantModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 ConstantModifier:
      Annotation
      "public"
      "static"
      "final"
-InterfaceMethodDeclaration: (@trait=TypeParameterScope,CallableDeclaration)
+InterfaceMethodDeclaration: (@mixin=TypeParameterScope,CallableDeclaration)
      [JavaDocComment] {!!InterfaceMethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
 InterfaceMethodModifier:
      Annotation
@@ -613,9 +613,9 @@ InterfaceMethodModifier:
      "default"
      "static"
      "strictfp"
-AnnotationTypeDeclaration: (@trait=TypeDeclaration)
+AnnotationTypeDeclaration: (@mixin=TypeDeclaration)
      [JavaDocComment] {!!InterfaceModifier Modifier} "@" "interface" SimpleTypeName AnnotationTypeBody (@name=Declaration)
-AnnotationTypeBody: (@trait=TypeScope)
+AnnotationTypeBody: (@mixin=TypeScope)
      "{" {AnnotationTypeMemberDeclaration} "}"
 AnnotationTypeMemberDeclaration:
      AnnotationTypeElementDeclaration
@@ -623,7 +623,7 @@ AnnotationTypeMemberDeclaration:
      ClassDeclaration
      InterfaceDeclaration
      ";"
-AnnotationTypeElementDeclaration: (@trait=MemberDeclaration)
+AnnotationTypeElementDeclaration: (@mixin=MemberDeclaration)
      [JavaDocComment] {!!AnnotationTypeElementModifier Modifier} UnannType MethodName "(" ")" [Dims] [DefaultValue] ";" (@name=Declaration)
 AnnotationTypeElementModifier:
      Annotation
@@ -670,14 +670,14 @@ SingleElementAnnotation: @nointerp
 
 // Arrays
 (chapter=Array)
-ArrayInitializer: (@trait=Typed)
+ArrayInitializer: (@mixin=Typed)
      "{" [VariableInitializerList] [","] "}"
 VariableInitializerList:
      VariableInitializer {"," VariableInitializer}
 
 // Blocks and Statements
 (chapter=Statement)
-Block: (@trait=ExpressionNameScope)
+Block: (@mixin=ExpressionNameScope)
      "{" [BlockStatements] "}"
 BlockStatements:
      // The JLS grammar originally was defined simply
@@ -697,14 +697,14 @@ BlockStatements:
      // defined in a TypeScope is visible to all type references in the scope
      BlockStatement {BlockStatement} [BlockTypeScope]
      BlockTypeScope
-BlockTypeScope: (@trait=TypeScope)
+BlockTypeScope: (@mixin=TypeScope)
      ClassDeclaration [BlockStatements]
-BlockStatement: (@trait=LimitedScopeElement)
+BlockStatement: (@mixin=LimitedScopeElement)
      LocalVariableDeclarationStatement
      Statement
 LocalVariableDeclarationStatement:
      LocalVariableDeclaration ";"
-LocalVariableDeclaration: (@trait=LocalDeclaration)
+LocalVariableDeclaration: (@mixin=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType VariableDeclaratorList (@name=Declaration)
 Statement:
      Block
@@ -742,7 +742,7 @@ AssertStatement:
      "assert" Expression [":" Expression] ";"
 SwitchStatement:
      "switch" "(" Expression ")" SwitchBlock
-SwitchBlock: (@trait=ExpressionNameScope)
+SwitchBlock: (@mixin=ExpressionNameScope)
      "{" {SwitchBlockStatementGroup} "}"
 SwitchBlockStatementGroup:
      SwitchLabels [BlockStatements]
@@ -751,7 +751,7 @@ SwitchLabels:
 SwitchLabel: @nointerp
      "case" CaseValue ":"
      "default" ":"
-CaseValue: (@trait=Typed)
+CaseValue: (@mixin=Typed)
      Identifier !!":" (@name=Ambiguous)  // Foo could be a constant reference or an enum name
      EnumConstantName !!":"
      ConstantExpression
@@ -771,7 +771,7 @@ ForUpdate:
      StatementExpressionList
 StatementExpressionList:
      StatementExpression {"," StatementExpression}
-EnhancedForStatement: (@trait=LocalDeclaration)
+EnhancedForStatement: (@mixin=LocalDeclaration)
      "for" "(" {!!VariableModifier Modifier} UnannType VariableDeclaratorId ":" Expression ")" Statement (@name=EnhancedForStatement)
 BreakStatement:
      "break" [Label] ";"
@@ -791,7 +791,7 @@ Catches:
      CatchClause {CatchClause}
 CatchClause:
      "catch" "(" CatchFormalParameter ")" Block
-CatchFormalParameter: (@trait=LocalDeclaration)
+CatchFormalParameter: (@mixin=LocalDeclaration)
      {!!VariableModifier Modifier} CatchType VariableDeclaratorId (@name=CatchFormalParameter)
 CatchType:
      ClassType {"|" ClassType}
@@ -803,12 +803,12 @@ ResourceSpecification:
      "(" ResourceList [";"] ")"
 ResourceList:
      Resource {";" Resource}
-Resource: (@trait=LocalDeclaration)
+Resource: (@mixin=LocalDeclaration)
      {!!VariableModifier Modifier} UnannType VariableDeclaratorId "=" Expression (@name=Resource)
 
 // Expressions
 (chapter=Expression)
-ExpressionAtom: (@trait=Typed)
+ExpressionAtom: (@mixin=Typed)
      UnqualifiedClassInstanceCreationExpression
      ArrayCreationExpression
      Literal
@@ -824,7 +824,7 @@ ExpressionAtom: (@trait=Typed)
      ReferenceType !!"::"  (@name=StaticReference)
      !CastExpression "(" Expression ")"  (@name=Parenthesized) @intermediate
      QuotedName
-Primary: (@trait=Typed)
+Primary: (@mixin=Typed)
      Primary "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
      Primary "::" [TypeArguments] MethodName  (@name=MethodReference)
      Primary "." UnqualifiedClassInstanceCreationExpression  (@name=InnerClassCreation)
@@ -856,12 +856,12 @@ UsePrefix:
      "."
      "["
      "::"
-ClassLiteral: (@trait=Typed)
+ClassLiteral: (@mixin=Typed)
      TypeName {Dim} "." "class"
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-UnqualifiedClassInstanceCreationExpression: (@trait=TypeDeclaration,MethodDescriptorReference)
+UnqualifiedClassInstanceCreationExpression: (@mixin=TypeDeclaration,MethodDescriptorReference)
      "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
 ClassOrInterfaceTypeToInstantiate:
      // Lookahead avoids type arguments then diamond as in (new foo.Bar<T><>())
@@ -877,7 +877,7 @@ Diamond:
      "<" ">"
 ArgumentList:
      Expression {"," Expression}
-ArrayCreationExpression: (@trait=Typed)
+ArrayCreationExpression: (@mixin=Typed)
      "new" ArrayElementType Dims ArrayInitializer
      "new" ArrayElementType DimExprs [Dims] !"["
 ArrayElementType:
@@ -887,7 +887,7 @@ DimExprs:
      DimExpr {DimExpr}
 DimExpr:
      {Annotation} "[" Expression "]"
-Expression: (@trait=Typed) @nointerp
+Expression: (@mixin=Typed) @nointerp
      Assignment
      LambdaExpression
      ConditionalExpression
@@ -902,7 +902,7 @@ InferredFormalParameterList:
 LambdaBody:
      Expression
      Block
-Assignment: (@trait=Typed) @nointerp
+Assignment: (@mixin=Typed) @nointerp
      LeftHandSide AssignmentOperator Expression
 AssignmentOperator: @operator
      "="
@@ -917,26 +917,26 @@ AssignmentOperator: @operator
      "&="
      "^="
      "|="
-ConditionalExpression: (@trait=Typed) @nointerp
+ConditionalExpression: (@mixin=Typed) @nointerp
      ConditionalOrExpression "?" Expression ":" LambdaExpression
      ConditionalOrExpression "?" Expression ":" ConditionalExpression
      ConditionalOrExpression @anon
-ConditionalOrExpression: (@trait=Typed,BinaryOp) @nointerp
+ConditionalOrExpression: (@mixin=Typed,BinaryOp) @nointerp
      ConditionalOrExpression "||" ConditionalAndExpression
      ConditionalAndExpression @anon
-ConditionalAndExpression: (@trait=Typed,BinaryOp) @nointerp
+ConditionalAndExpression: (@mixin=Typed,BinaryOp) @nointerp
      ConditionalAndExpression "&&" InclusiveOrExpression
      InclusiveOrExpression @anon
-InclusiveOrExpression: (@trait=Typed,BinaryOp) @nointerp
+InclusiveOrExpression: (@mixin=Typed,BinaryOp) @nointerp
      InclusiveOrExpression "|" ExclusiveOrExpression
      ExclusiveOrExpression @anon
-ExclusiveOrExpression: (@trait=Typed,BinaryOp) @nointerp
+ExclusiveOrExpression: (@mixin=Typed,BinaryOp) @nointerp
      ExclusiveOrExpression "^" AndExpression
      AndExpression @anon
-AndExpression: (@trait=Typed,BinaryOp) @nointerp
+AndExpression: (@mixin=Typed,BinaryOp) @nointerp
      AndExpression "&" EqualityExpression
      EqualityExpression @anon
-EqualityExpression: (@trait=Typed,BinaryOp) @nointerp
+EqualityExpression: (@mixin=Typed,BinaryOp) @nointerp
      EqualityExpression EqualityOperator RelationalExpression
      RelationalExpression @anon
 // TODO: Attach metadata about whether primitive or reference comparison
@@ -944,7 +944,7 @@ EqualityExpression: (@trait=Typed,BinaryOp) @nointerp
 EqualityOperator: @operator @nointerp
      "=="
      "!="
-RelationalExpression: (@trait=Typed,BinaryOp) @nointerp
+RelationalExpression: (@mixin=Typed,BinaryOp) @nointerp
      RelationalExpression RelationalOperator ShiftExpression
      RelationalExpression "instanceof" ReferenceType
      ShiftExpression @anon
@@ -953,14 +953,14 @@ RelationalOperator: @operator @nointerp
      ">="
      "<"
      ">"
-ShiftExpression: (@trait=Typed,BinaryOp) @nointerp
+ShiftExpression: (@mixin=Typed,BinaryOp) @nointerp
      ShiftExpression ShiftOperator AdditiveExpression
      AdditiveExpression @anon
 ShiftOperator: @operator @nointerp
      "<<"
      ">>>"
      ">>"
-AdditiveExpression: (@trait=Typed,BinaryOp) @nointerp
+AdditiveExpression: (@mixin=Typed,BinaryOp) @nointerp
      AdditiveExpression AdditiveOperator MultiplicativeExpression
      MultiplicativeExpression @anon
 // TODO: Attach metadata about whether numeric addition or
@@ -968,14 +968,14 @@ AdditiveExpression: (@trait=Typed,BinaryOp) @nointerp
 AdditiveOperator: @operator @nointerp
      "+"
      "-"
-MultiplicativeExpression: (@trait=Typed,BinaryOp) @nointerp
+MultiplicativeExpression: (@mixin=Typed,BinaryOp) @nointerp
      MultiplicativeExpression MultiplicativeOperator UnaryExpression
      UnaryExpression @anon
 MultiplicativeOperator: @operator @nointerp
      "*"
      "/"
      "%"
-UnaryExpression: (@trait=Typed) @nointerp
+UnaryExpression: (@mixin=Typed) @nointerp
      CastExpression
      PreExpression
      PostExpression
@@ -989,14 +989,14 @@ PrefixOperator: @operator @nointerp
 IncrDecrOperator: @operator @nointerp
      "++"
      "--"
-PreExpression: (@trait=Typed) @nointerp
+PreExpression: (@mixin=Typed) @nointerp
      IncrDecrOperator LeftHandSideExpression
-PostExpression: (@trait=Typed) @nointerp
+PostExpression: (@mixin=Typed) @nointerp
      LeftHandSideExpression IncrDecrOperator
 LeftHandSideExpression:
      LeftHandSide @anon
      "(" LeftHandSideExpression ")"
-CastExpression: (@trait=Typed) @nointerp
+CastExpression: (@mixin=Typed) @nointerp
      ConfirmCast LambdaExpression (@name=Lambda)
      Cast        UnaryExpression  (@name=Expression)
 Cast: @nointerp
@@ -1053,7 +1053,7 @@ NodeTypeHint: @nonstandard
 // compilation unit, followed by the same number of block ends.
 //
 // This pseudo-production allows collecting all of those into one pseudo-root.
-TemplatePseudoRoot: @nonstandard @toplevel (@trait=FileNode)
+TemplatePseudoRoot: @nonstandard @toplevel (@mixin=FileNode)
     CompilationUnit
 
 QuotedName: @nonstandard

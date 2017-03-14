@@ -64,8 +64,8 @@
         <version>1.4.0</version>
         <executions>
           <execution>
-            <!-- Derive .java files from the JLS gramamr -->
-            <id>Process Grammar</id>
+            <!-- Derive .java files from the JLS grammar -->
+            <id>Process Java8 Grammar</id>
             <!-- We want to run this before compilation -->
             <phase>generate-sources</phase>
             <goals>
@@ -77,6 +77,8 @@
               <arguments>
                 <argument>--grammar_name</argument>
                 <argument>j8</argument>
+                <argument>--grammar_customizations</argument>
+                <argument>${project.build.resources[0].directory}/jls-19-custom.json</argument>
                 <argument>--srcdir</argument>
                 <argument>${project.build.sourceDirectory}</argument>
                 <argument>--outdir</argument>

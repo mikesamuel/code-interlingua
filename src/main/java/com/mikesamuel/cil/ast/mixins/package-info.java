@@ -11,8 +11,8 @@
  *
  * <p>
  * The code generator that generates a *Node class per grammar production also
- * generates getter/setter overrides, and can mix-in overrides for trait
+ * generates getter/setter overrides, and can mix-in overrides for mixin
  * methods.
  */
 @javax.annotation.ParametersAreNonnullByDefault
-package com.mikesamuel.cil.ast.j8.traits;
+package com.mikesamuel.cil.ast.mixins;

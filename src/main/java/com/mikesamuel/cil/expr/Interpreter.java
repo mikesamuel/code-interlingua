@@ -36,11 +36,14 @@ import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.IncrDecrOperatorNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8Typed;
+import com.mikesamuel.cil.ast.j8.J8WholeType;
 import com.mikesamuel.cil.ast.j8.LabelNode;
 import com.mikesamuel.cil.ast.j8.LeftHandSideNode;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.LocalVariableDeclarationNode;
 import com.mikesamuel.cil.ast.j8.MethodNameNode;
+import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.MultiplicativeExpressionNode;
 import com.mikesamuel.cil.ast.j8.MultiplicativeOperatorNode;
 import com.mikesamuel.cil.ast.j8.PrefixOperatorNode;
@@ -62,8 +65,6 @@ import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorNode;
 import com.mikesamuel.cil.ast.j8.VariableInitializerListNode;
 import com.mikesamuel.cil.ast.j8.VariableInitializerNode;
-import com.mikesamuel.cil.ast.j8.traits.Typed;
-import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -577,8 +578,8 @@ public final class Interpreter<VALUE> {
         J8BaseNode cast = node.getChild(0);
         Completion<VALUE> operandResult = interpret(
             node.getChild(1), locals, null);
-        Optional<WholeType> targetTypeOpt = cast.finder(WholeType.class)
-            .exclude(WholeType.class).findOne();
+        Optional<J8WholeType> targetTypeOpt = cast.finder(J8WholeType.class)
+            .exclude(J8WholeType.class).findOne();
         if (!targetTypeOpt.isPresent()
             || !context.completedNormallyWithoutError(operandResult)) {
           error(node, "Missing cast target type");
@@ -741,7 +742,7 @@ public final class Interpreter<VALUE> {
         return nullCompletion;
       case EnhancedForStatement: {
         EnhancedForStatementNode s = (EnhancedForStatementNode) node;
-        WholeType elementTypeNode = s.firstChildWithType(WholeType.class);
+        J8WholeType elementTypeNode = s.firstChildWithType(J8WholeType.class);
         VariableDeclaratorIdNode decl = s.firstChildWithType(
             VariableDeclaratorIdNode.class);
         ExpressionNode sequenceNode = s.firstChildWithType(
@@ -763,7 +764,8 @@ public final class Interpreter<VALUE> {
         Name elementName = declaredName != null
             ? declaredName
             : Name.root(
-                decl.getDeclaredExpressionIdentifier(), Name.Type.AMBIGUOUS);
+                Mixins.getDeclaredExpressionIdentifier(decl),
+                Name.Type.AMBIGUOUS);
 
         Locals<VALUE> loopLocals = new Locals<>(locals);
         loopLocals.declare(elementName, context.coercion(elementType));
@@ -801,11 +803,11 @@ public final class Interpreter<VALUE> {
           void previewOperands(J8BaseNode left, J8BaseNode right) {
             isPrimitiveComparison = TriState.OTHER;
             // Do primitive comparison if either is primitive.
-            StaticType ltype = ((Typed) left).getStaticType();
+            StaticType ltype = ((J8Typed) left).getStaticType();
             if (ltype == null) {
               return;
             }
-            StaticType rtype = ((Typed) right).getStaticType();
+            StaticType rtype = ((J8Typed) right).getStaticType();
             if (rtype == null) {
               return;
             }
@@ -1338,7 +1340,7 @@ public final class Interpreter<VALUE> {
               .exclude(ResourceNode.class)
               .find();
           for (ResourceNode r : rs) {
-            WholeType type = (WholeType) r.getDeclaredTypeNode();
+            J8WholeType type = (J8WholeType) Mixins.getDeclaredTypeNode(r);
             VariableDeclaratorIdNode decl = r.firstChildWithType(
                 VariableDeclaratorIdNode.class);
             ExpressionNode expr = r.firstChildWithType(ExpressionNode.class);
@@ -1349,7 +1351,8 @@ public final class Interpreter<VALUE> {
             Name declName = decl.getDeclaredExpressionName();
             if (declName == null) {
               declName = Name.root(
-                  decl.getDeclaredExpressionIdentifier(), Name.Type.AMBIGUOUS);
+                  Mixins.getDeclaredExpressionIdentifier(decl),
+                  Name.Type.AMBIGUOUS);
             }
             StaticType staticType = type.getStaticType();
             if (staticType == null) {
@@ -1870,8 +1873,8 @@ public final class Interpreter<VALUE> {
   private static StaticType typeOf(J8BaseNode node) {
     J8BaseNode n = node;
     while (true) {
-      if (n instanceof Typed) {
-        return ((Typed) n).getStaticType();
+      if (n instanceof J8Typed) {
+        return ((J8Typed) n).getStaticType();
       }
       if (node.getNChildren() == 1) {
         n = node.getChild(0);
@@ -2094,8 +2097,8 @@ public final class Interpreter<VALUE> {
       case FieldAccess: {
         if (e.getNChildren() != 2) { break; }
         J8BaseNode objNode = leftOperand(e);
-        StaticType objType = objNode instanceof Typed
-            ? ((Typed) objNode).getStaticType()
+        StaticType objType = objNode instanceof J8Typed
+            ? ((J8Typed) objNode).getStaticType()
             : null;
 
         FieldNameNode nameNode = e.firstChildWithType(FieldNameNode.class);

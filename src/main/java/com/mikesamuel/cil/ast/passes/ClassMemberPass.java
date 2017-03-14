@@ -23,9 +23,16 @@ import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
 import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8CallableDeclaration;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8MemberDeclaration;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.J8TypeScope;
+import com.mikesamuel.cil.ast.j8.J8WholeType;
 import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
+import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.NumericTypeNode;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
@@ -36,12 +43,6 @@ import com.mikesamuel.cil.ast.j8.TypeNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
 import com.mikesamuel.cil.ast.j8.UnannTypeNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.MemberDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeScope;
-import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
@@ -71,10 +72,10 @@ final class ClassMemberPass extends AbstractPass<Void> {
       @Nullable SList<J8NodeVariant> ancestors) {
     TypeNameResolver childResolver = nr;
     TypeInfo childTypeInfo = typeInfo;
-    if (node instanceof TypeScope) {
-      childResolver = ((TypeScope) node).getTypeNameResolver();
+    if (node instanceof J8TypeScope) {
+      childResolver = ((J8TypeScope) node).getTypeNameResolver();
     }
-    if (node instanceof WholeType
+    if (node instanceof J8WholeType
         // Skip partial types like those in (expr).new Partial.Inner.Type()
         && !(ancestors != null
              && ancestors.x ==
@@ -95,8 +96,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
       processStaticType(node, nr);
       return;
     }
-    if (node instanceof TypeDeclaration) {
-      childTypeInfo = ((TypeDeclaration) node).getDeclaredTypeInfo();
+    if (node instanceof J8TypeDeclaration) {
+      childTypeInfo = ((J8TypeDeclaration) node).getDeclaredTypeInfo();
     }
 
     // Compute whole types for method results and field types.
@@ -106,19 +107,19 @@ final class ClassMemberPass extends AbstractPass<Void> {
       run(child, childTypeInfo, childResolver, ancestorsAndNode);
     }
 
-    if (node instanceof CallableDeclaration) {
-      CallableDeclaration cd = (CallableDeclaration) node;
+    if (node instanceof J8CallableDeclaration) {
+      J8CallableDeclaration cd = (J8CallableDeclaration) node;
       Name methodName = childTypeInfo.canonName.method(
-          cd.getMethodName(), cd.getMethodVariant());
+          Mixins.getMethodName(cd), cd.getMethodVariant());
       CallableInfo info = (CallableInfo) memberWithName(
           childTypeInfo, methodName);
       if (info != null) {
         StaticType returnType;
-        if (cd.getMethodName().startsWith("<")) {
+        if (methodName.identifier.startsWith("<")) {
           // A special method.
           returnType = StaticType.T_VOID;
         } else {
-          WholeType wholeReturnType = findWholeType(node);
+          J8WholeType wholeReturnType = findWholeType(node);
           returnType = wholeReturnType != null
               ? wholeReturnType.getStaticType() : null;
           if (returnType == null) {
@@ -167,7 +168,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
                 continue;
               }
             }
-            WholeType formalType = findWholeType(formal);
+            J8WholeType formalType = findWholeType(formal);
             StaticType staticType =
                 formalType != null ? formalType.getStaticType() : null;
             if (staticType == null) {
@@ -223,11 +224,11 @@ final class ClassMemberPass extends AbstractPass<Void> {
           FieldInfo info = (FieldInfo) memberWithName(
               childTypeInfo, fieldName);
           if (info != null) {
-            WholeType valueType = findWholeType(node);
+            J8WholeType valueType = findWholeType(node);
             if (valueType != null) {
               info.setValueType(valueType.getStaticType().typeSpecification);
             }
-            ((MemberDeclaration) node).setMemberInfo(info);
+            ((J8MemberDeclaration) node).setMemberInfo(info);
           } else {
             error(node, "Missing member info for " + fieldName);
           }
@@ -253,10 +254,10 @@ final class ClassMemberPass extends AbstractPass<Void> {
 
   }
 
-  private WholeType findWholeType(J8BaseNode node) {
-    WholeType wholeType = null;
-    for (WholeType t
-        : node.finder(WholeType.class)
+  private J8WholeType findWholeType(J8BaseNode node) {
+    J8WholeType wholeType = null;
+    for (J8WholeType t
+        : node.finder(J8WholeType.class)
         .exclude(J8NodeType.Throws, J8NodeType.TypeParameters,
             J8NodeType.MethodBody, J8NodeType.ConstructorBody,
             J8NodeType.BlockStatements,
@@ -369,8 +370,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
         TypeArgumentsNode args = node.firstChildWithType(
             TypeArgumentsNode.class);
         if (args != null) {
-          for (WholeType argType : args.finder(WholeType.class)
-              .exclude(WholeType.class)
+          for (J8WholeType argType : args.finder(J8WholeType.class)
+              .exclude(J8WholeType.class)
               .find()) {
             processStaticType((J8BaseNode) argType, r);
           }
@@ -483,15 +484,15 @@ final class ClassMemberPass extends AbstractPass<Void> {
       error(node, "Malformed type for node of type " + node.getNodeType());
       t = StaticType.ERROR_TYPE;
     }
-    if (node instanceof WholeType) {
-      ((WholeType) node).setStaticType(t);
+    if (node instanceof J8WholeType) {
+      ((J8WholeType) node).setStaticType(t);
     }
     return t;
   }
 
   @Override
-  public Void run(Iterable<? extends FileNode> fileNodes) {
-    for (FileNode fileNode : fileNodes) {
+  public Void run(Iterable<? extends J8FileNode> fileNodes) {
+    for (J8FileNode fileNode : fileNodes) {
       run((J8BaseNode) fileNode, null, null, null);
     }
     return null;

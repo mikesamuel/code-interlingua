@@ -90,7 +90,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     this.sourcePosition = newSourcePosition;
   }
 
-  /** Copies all parse and trait metadata from the given node. */
+  /** Copies all parse and mixin metadata from the given node. */
   @Override
   public void copyMetadataFrom(BASE_NODE source) {
     SourcePosition pos = source.getSourcePosition();
@@ -182,7 +182,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
 
   /**
    * A finder rooted at this that returns results of the given node type or
-   * trait.
+   * mixin.
    */
   @SuppressWarnings("synthetic-access")
   public <T> Finder<T> finder(Class<T> resultType) {

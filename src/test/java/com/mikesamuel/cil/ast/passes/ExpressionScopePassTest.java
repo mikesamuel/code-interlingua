@@ -7,10 +7,10 @@ import org.junit.Test;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
 import com.mikesamuel.cil.ast.j8.Java8Comments;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
        .DeclarationPositionMarker;
@@ -28,12 +28,12 @@ public final class ExpressionScopePassTest extends TestCase {
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
       DeclarationPositionMarker m = null;
-      if (node instanceof LimitedScopeElement) {
-        m = ((LimitedScopeElement) node).getDeclarationPositionMarker();
+      if (node instanceof J8LimitedScopeElement) {
+        m = ((J8LimitedScopeElement) node).getDeclarationPositionMarker();
       }
       ExpressionNameResolver r = null;
-      if (node instanceof ExpressionNameScope) {
-        r = ((ExpressionNameScope) node).getExpressionNameResolver();
+      if (node instanceof J8ExpressionNameScope) {
+        r = ((J8ExpressionNameScope) node).getExpressionNameResolver();
       }
       String s = m != null
           ? (r != null ? m + " " + r : m.toString())
@@ -324,8 +324,8 @@ public final class ExpressionScopePassTest extends TestCase {
         new PassRunner() {
 
           @Override
-          public ImmutableList<FileNode> runPasses(
-              Logger logger, ImmutableList<FileNode> files) {
+          public ImmutableList<J8FileNode> runPasses(
+              Logger logger, ImmutableList<J8FileNode> files) {
             DeclarationPass dp = new DeclarationPass(logger);
             TypeInfoResolver tir = dp.run(files);
             ExpressionScopePass esp = new ExpressionScopePass(tir, logger);

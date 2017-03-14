@@ -16,8 +16,8 @@ import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.InterfaceTypeListNode;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.parser.Input;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -247,7 +247,7 @@ public final class AbstractRewritingPassTest extends TestCase {
         Trees.forGrammar(J8NodeType.CompilationUnit.getGrammar())
         .of(result.next());
     StringBuilder sb = new StringBuilder();
-    for (FileNode out : pass.run(ImmutableList.of(cu))) {
+    for (J8FileNode out : pass.run(ImmutableList.of(cu))) {
       Optional<SerialState> ser = ps.unparse(
           new SerialState(SList.forwardIterable(
               Trees.startUnparse(null, (J8BaseNode) out, decorator))),

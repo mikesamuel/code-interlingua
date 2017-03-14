@@ -7,9 +7,9 @@ import org.junit.Test;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8MemberDeclaration;
 import com.mikesamuel.cil.ast.j8.Java8Comments;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.MemberDeclaration;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -30,8 +30,8 @@ public final class ClassMemberPassTest extends TestCase {
         new PassRunner() {
 
           @Override
-          public ImmutableList<FileNode> runPasses(
-              Logger logger, ImmutableList<FileNode> files) {
+          public ImmutableList<J8FileNode> runPasses(
+              Logger logger, ImmutableList<J8FileNode> files) {
             DeclarationPass declPass = new DeclarationPass(logger);
             TypeInfoResolver typeInfoResolver = declPass.run(files);
             ExpressionScopePass esp = new ExpressionScopePass(
@@ -39,7 +39,7 @@ public final class ClassMemberPassTest extends TestCase {
             esp.run(files);
             DisambiguationPass disambigPass = new DisambiguationPass(
                 typeInfoResolver, logger, false);
-            ImmutableList<FileNode> rewritten = disambigPass.run(files);
+            ImmutableList<J8FileNode> rewritten = disambigPass.run(files);
             TypePool typePool = new TypePool(typeInfoResolver);
             ClassMemberPass classMemberPass = new ClassMemberPass(
                 logger, typePool);
@@ -103,8 +103,8 @@ public final class ClassMemberPassTest extends TestCase {
 
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
-      if (node instanceof MemberDeclaration) {
-        MemberDeclaration md = (MemberDeclaration) node;
+      if (node instanceof J8MemberDeclaration) {
+        J8MemberDeclaration md = (J8MemberDeclaration) node;
         MemberInfo mi = md.getMemberInfo();
         return Java8Comments.blockComment(
             mi != null ? mi.toString() : "?",

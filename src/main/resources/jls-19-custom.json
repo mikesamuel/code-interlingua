@@ -1,0 +1,123 @@
+{
+  "mixins": {
+    "BinaryOp": {
+    },
+    "CallableDeclaration": {
+      "state": [
+        ["int", "methodVariant"]
+      ],
+      "extends": [
+        "ExpressionNameScope",
+        "MemberDeclaration"
+      ]
+    },
+    "ExpressionNameDeclaration": {
+      "state": [
+        ["Name", "declaredExpressionName"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.Name"
+      ]
+    },
+    "ExpressionNameReference": {
+      "state": [
+        ["Name", "referencedExpressionName"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.Name"
+      ]
+    },
+    "ExpressionNameScope": {
+      "state": [
+        ["ExpressionNameResolver", "expressionNameResolver"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.ExpressionNameResolver"
+      ]
+    },
+    "FileNode": {
+      "extends": [
+        "ExpressionNameScope",
+        "TypeScope"
+      ]
+    },
+    "LimitedScopeElement": {
+      "state": [
+        ["DeclarationPositionMarker", "declarationPositionMarker"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker"
+      ]
+    },
+    "LocalDeclaration": {
+    },
+    "MemberDeclaration": {
+      "state": [
+        ["MemberInfo", "memberInfo"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.MemberInfo"
+      ]
+    },
+    "MethodDescriptorReference": {
+      "state": [
+        ["String", "methodDescriptor"],
+        ["TypeSpecification", "methodDeclaringType"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.TypeSpecification"
+      ]
+    },
+    "NamePart": {
+      "state": [
+        ["Name.Type", "namePartType"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.Name"
+      ]
+    },
+    "TypeDeclaration": {
+      "state": [
+        ["TypeInfo", "declaredTypeInfo"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.TypeInfo"
+      ]
+    },
+    "Typed": {
+      "state": [
+        ["StaticType", "staticType"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.StaticType"
+      ]
+    },
+    "TypeParameterScope": {
+      "extends": ["TypeScope"]
+    },
+    "TypeReference": {
+      "state": [
+        ["TypeInfo", "referencedTypeInfo"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.TypeInfo"
+      ]
+    },
+    "TypeScope": {
+      "state": [
+        ["TypeNameResolver", "typeNameResolver"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.TypeNameResolver"
+      ]
+    },
+    "WholeType": {
+      "state": [
+        ["StaticType", "staticType"]
+      ],
+      "imports": [
+        "com.mikesamuel.cil.ast.meta.StaticType"
+      ]
+    }
+  }
+}

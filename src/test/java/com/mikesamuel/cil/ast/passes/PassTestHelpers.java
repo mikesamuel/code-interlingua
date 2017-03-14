@@ -20,8 +20,8 @@ import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.ast.Trees.Decorator;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.parser.Input;
@@ -46,7 +46,7 @@ public final class PassTestHelpers {
    * @param linesPerFile {@code linesPerFile[f][i]} is line i (zero-indexed)
    *   in the f-th file.
    */
-  public static ImmutableList<FileNode> parseCompilationUnits(
+  public static ImmutableList<J8FileNode> parseCompilationUnits(
       String[]... linesPerFile) {
     return maybeParseCompilationUnits(linesPerFile).get();
   }
@@ -58,9 +58,9 @@ public final class PassTestHelpers {
    *   in the f-th file.
    * @return absent if there was a parse failure.
    */
-  public static Optional<ImmutableList<FileNode>> maybeParseCompilationUnits(
+  public static Optional<ImmutableList<J8FileNode>> maybeParseCompilationUnits(
       String[]... linesPerFile) {
-    ImmutableList.Builder<FileNode> b = ImmutableList.builder();
+    ImmutableList.Builder<J8FileNode> b = ImmutableList.builder();
     for (String[] lines : linesPerFile) {
       Input.Builder inputBuilder = Input.builder()
           .code(Joiner.on('\n').join(lines));
@@ -76,7 +76,7 @@ public final class PassTestHelpers {
         return Optional.absent();
       }
       ParseState afterParse = result.next();
-      b.add((FileNode)
+      b.add((J8FileNode)
           Trees.forGrammar(J8NodeType.GRAMMAR)
           .of(inp, afterParse.output));
     }
@@ -95,10 +95,10 @@ public final class PassTestHelpers {
       Decorator decorator,
       String... expectedErrors)
   throws UnparseVerificationException {
-    ImmutableList<FileNode> files = expectErrors(
-        new LoggableOperation<ImmutableList<FileNode>>() {
+    ImmutableList<J8FileNode> files = expectErrors(
+        new LoggableOperation<ImmutableList<J8FileNode>>() {
           @Override
-          public ImmutableList<FileNode> run(Logger logger) {
+          public ImmutableList<J8FileNode> run(Logger logger) {
             return passRunner.runPasses(
                 logger,
                 parseCompilationUnits(inputLines));
@@ -247,7 +247,7 @@ public final class PassTestHelpers {
   public static Optional<String> normalizeCompilationUnitSource(
       String[][] linesPerFile)
   throws UnparseVerificationException {
-    Optional<ImmutableList<FileNode>> files =
+    Optional<ImmutableList<J8FileNode>> files =
         maybeParseCompilationUnits(linesPerFile);
     return files.isPresent()
         ? Optional.of(serializeNodes(files.get(), null))
@@ -261,7 +261,7 @@ public final class PassTestHelpers {
     /**
      * @return the processed compilation units.
      */
-    ImmutableList<FileNode> runPasses(
-        Logger logger, ImmutableList<FileNode> cus);
+    ImmutableList<J8FileNode> runPasses(
+        Logger logger, ImmutableList<J8FileNode> cus);
   }
 }

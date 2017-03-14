@@ -66,12 +66,23 @@ import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
 import com.mikesamuel.cil.ast.j8.Intermediates;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8BinaryOp;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
+import com.mikesamuel.cil.ast.j8.J8LocalDeclaration;
+import com.mikesamuel.cil.ast.j8.J8MemberDeclaration;
+import com.mikesamuel.cil.ast.j8.J8MethodDescriptorReference;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8NodeTypeTables;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.J8TypeScope;
+import com.mikesamuel.cil.ast.j8.J8Typed;
+import com.mikesamuel.cil.ast.j8.J8WholeType;
 import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.MethodNameNode;
+import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.MultiplicativeExpressionNode;
 import com.mikesamuel.cil.ast.j8.MultiplicativeOperatorNode;
 import com.mikesamuel.cil.ast.j8.NumericTypeNode;
@@ -97,16 +108,6 @@ import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.j8.VariableInitializerNode;
 import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.j8.WildcardNode;
-import com.mikesamuel.cil.ast.j8.traits.BinaryOp;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
-import com.mikesamuel.cil.ast.j8.traits.LocalDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.MemberDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.MethodDescriptorReference;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeScope;
-import com.mikesamuel.cil.ast.j8.traits.Typed;
-import com.mikesamuel.cil.ast.j8.traits.WholeType;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
@@ -203,8 +204,8 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
 
-    if (node instanceof ExpressionNameScope) {
-      ExpressionNameScope scope = (ExpressionNameScope) node;
+    if (node instanceof J8ExpressionNameScope) {
+      J8ExpressionNameScope scope = (J8ExpressionNameScope) node;
       ExpressionNameResolver exprNameResolver =
           scope.getExpressionNameResolver();
       DeclarationPositionMarker marker = DeclarationPositionMarker.EARLIEST;
@@ -215,8 +216,8 @@ final class TypingPass extends AbstractRewritingPass {
       expressionNameResolvers.add(exprNameResolver);
       declarationPositionMarkers.add(marker);
     }
-    if (node instanceof TypeScope) {
-      TypeScope scope = (TypeScope) node;
+    if (node instanceof J8TypeScope) {
+      J8TypeScope scope = (J8TypeScope) node;
       TypeNameResolver typeNameResolver = scope.getTypeNameResolver();
       if (typeNameResolver == null) {
         typeNameResolver = typeNameResolvers.peekLast();
@@ -224,8 +225,8 @@ final class TypingPass extends AbstractRewritingPass {
       typeNameResolvers.add(typeNameResolver);
     }
 
-    if (node instanceof LimitedScopeElement) {
-      LimitedScopeElement el = (LimitedScopeElement) node;
+    if (node instanceof J8LimitedScopeElement) {
+      J8LimitedScopeElement el = (J8LimitedScopeElement) node;
       DeclarationPositionMarker marker = el.getDeclarationPositionMarker();
       if (marker != null) {
         declarationPositionMarkers.set(
@@ -233,8 +234,8 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
 
-    if (node instanceof TypeDeclaration) {
-      TypeInfo typeInfo = ((TypeDeclaration) node).getDeclaredTypeInfo();
+    if (node instanceof J8TypeDeclaration) {
+      TypeInfo typeInfo = ((J8TypeDeclaration) node).getDeclaredTypeInfo();
       if (typeInfo == null) {
         typeInfo = containingTypes.peekLast();
       }
@@ -248,9 +249,9 @@ final class TypingPass extends AbstractRewritingPass {
       if (name != null && name.type == Name.Type.LOCAL) {
         for (SList<Parent> p = pathFromRoot; p != null; p = p.prev) {
           J8BaseNode anc = p.x.parent;
-          if (anc instanceof LocalDeclaration) {
-            LocalDeclaration localDecl = (LocalDeclaration) anc;
-            J8BaseNode typeNode = localDecl.getDeclaredTypeNode();
+          if (anc instanceof J8LocalDeclaration) {
+            J8LocalDeclaration localDecl = (J8LocalDeclaration) anc;
+            J8BaseNode typeNode = Mixins.getDeclaredTypeNode(localDecl);
             if (typeNode instanceof CatchTypeNode) {
               CatchTypeNode ctyp = (CatchTypeNode) typeNode;
               ImmutableList.Builder<ReferenceType> excTypes =
@@ -279,8 +280,8 @@ final class TypingPass extends AbstractRewritingPass {
                   isError
                   ? StaticType.ERROR_TYPE
                   : typePool.leastUpperBound(excTypes.build()));
-            } else if (typeNode instanceof WholeType) {
-              StaticType styp = ((WholeType) typeNode).getStaticType();
+            } else if (typeNode instanceof J8WholeType) {
+              StaticType styp = ((J8WholeType) typeNode).getStaticType();
               if (anc.getVariant()
                   == LastFormalParameterNode.Variant.Variadic) {
                 styp = typePool.type(
@@ -304,16 +305,16 @@ final class TypingPass extends AbstractRewritingPass {
       J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     process(node, pathFromRoot);
 
-    if (node instanceof ExpressionNameScope) {
+    if (node instanceof J8ExpressionNameScope) {
       expressionNameResolvers.removeLast();
       declarationPositionMarkers.removeLast();
     }
 
-    if (node instanceof TypeScope) {
+    if (node instanceof J8TypeScope) {
       typeNameResolvers.removeLast();
     }
 
-    if (node instanceof TypeDeclaration) {
+    if (node instanceof J8TypeDeclaration) {
       containingTypes.removeLast();
     }
 
@@ -322,8 +323,8 @@ final class TypingPass extends AbstractRewritingPass {
 
   private void process(J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
 
-    if (node instanceof Typed) {
-      Typed t = (Typed) node;
+    if (node instanceof J8Typed) {
+      J8Typed t = (J8Typed) node;
       StaticType exprType;
       type_switch:
       switch (t.getNodeType()) {
@@ -636,8 +637,8 @@ final class TypingPass extends AbstractRewritingPass {
 
           ArrayElementTypeNode elementTypeNode = e.firstChildWithType(
               ArrayElementTypeNode.class);
-          WholeType wholeElementType = elementTypeNode != null
-              ? elementTypeNode.firstChildWithType(WholeType.class) : null;
+          J8WholeType wholeElementType = elementTypeNode != null
+              ? elementTypeNode.firstChildWithType(J8WholeType.class) : null;
           StaticType elementType = wholeElementType != null
               ? wholeElementType.getStaticType()
               : null;
@@ -729,11 +730,11 @@ final class TypingPass extends AbstractRewritingPass {
               break type_switch;
             }
 
-            BinaryOp completeRightHandSideBinOp =
-                (BinaryOp) completeRightHandSideOp;
-            J8BaseNode adjustedLeft =
+            J8BinaryOp completeRightHandSideBinOp =
+                (J8BinaryOp) completeRightHandSideOp;
+            J8BaseNode adjustedLeft = (J8BaseNode)
                 completeRightHandSideBinOp.getLeftOperand();
-            J8BaseNode adjustedRight =
+            J8BaseNode adjustedRight = (J8BaseNode)
                 completeRightHandSideBinOp.getRightOperand();
 
             StaticType adjustedLeftType = maybePassThru(adjustedLeft);
@@ -912,7 +913,7 @@ final class TypingPass extends AbstractRewritingPass {
               Operand left = nthOperandOf(
                   0, e, J8NodeType.RelationalExpression);
               StaticType leftType = left != null ? maybePassThru(left) : null;
-              WholeType right = e.firstChildWithType(WholeType.class);
+              J8WholeType right = e.firstChildWithType(J8WholeType.class);
               StaticType rightType = right != null
                   ? right.getStaticType()
                   : null;
@@ -1209,11 +1210,11 @@ final class TypingPass extends AbstractRewritingPass {
           CastExpressionNode e = (CastExpressionNode) node;
           CastNode castNode = e.firstChildWithType(CastNode.class);
           exprType = null;
-          for (WholeType wt
-               : e.finder(WholeType.class)
+          for (J8WholeType wt
+               : e.finder(J8WholeType.class)
                  .exclude(J8NodeType.UnaryExpression,
                           J8NodeType.LambdaExpression)
-                 .exclude(WholeType.class)
+                 .exclude(J8WholeType.class)
                  .find()) {
             exprType = wt.getStaticType();
           }
@@ -1288,7 +1289,7 @@ final class TypingPass extends AbstractRewritingPass {
     if (node instanceof VariableInitializerNode) {
       Operand op = nthOperandOf(0, node, J8NodeType.Expression);
       if (op == null) { return; }
-      StaticType exprType = ((Typed) op.getNode()).getStaticType();
+      StaticType exprType = ((J8Typed) op.getNode()).getStaticType();
       if (exprType == null) { return; }
 
       SList<Parent> path = pathFromRoot;
@@ -1472,7 +1473,7 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
   private StaticType processFieldAccess(J8BaseNode e) {
-    @Nullable Typed container = e.firstChildWithType(Typed.class);
+    @Nullable J8Typed container = e.firstChildWithType(J8Typed.class);
     StaticType containerType;
     if (container != null) {
       containerType = container.getStaticType();
@@ -1564,7 +1565,7 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
   private StaticType processMethodInvocation(J8BaseNode e) {
-    Typed callee = e.firstChildWithType(Typed.class);
+    J8Typed callee = e.firstChildWithType(J8Typed.class);
 
     MethodNameNode nameNode = e.firstChildWithType(
         MethodNameNode.class);
@@ -1618,7 +1619,7 @@ final class TypingPass extends AbstractRewritingPass {
 
   private StaticType processCallableInvocation(
       J8BaseNode e, StaticType calleeType, String name,
-      MethodDescriptorReference descriptorRef) {
+      J8MethodDescriptorReference descriptorRef) {
     @Nullable TypeArgumentsNode args = e.firstChildWithType(
         TypeArgumentsNode.class);
 
@@ -1630,8 +1631,8 @@ final class TypingPass extends AbstractRewritingPass {
         ImmutableList.builder();
     if (actuals != null) {
       for (J8BaseNode actual : actuals.getChildren()) {
-        if (actual instanceof Typed) {
-          StaticType actualType = ((Typed) actual).getStaticType();
+        if (actual instanceof J8Typed) {
+          StaticType actualType = ((J8Typed) actual).getStaticType();
           if (actualType == null) {
             actualType = StaticType.ERROR_TYPE;
           }
@@ -1723,8 +1724,8 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
   private StaticType maybePassThru(J8BaseNode node) {
-    if (node instanceof Typed) {
-      StaticType t = ((Typed) node).getStaticType();
+    if (node instanceof J8Typed) {
+      StaticType t = ((J8Typed) node).getStaticType();
       if (t == null) {
         error(node, "Untyped " + node.getVariant());
         return StaticType.ERROR_TYPE;
@@ -1743,8 +1744,8 @@ final class TypingPass extends AbstractRewritingPass {
         System.err.println(
             "Considering " + child.getNodeType() + " in " + node.getNodeType());
       }
-      if (child instanceof Typed) {
-        StaticType t = ((Typed) child).getStaticType();
+      if (child instanceof J8Typed) {
+        StaticType t = ((J8Typed) child).getStaticType();
         if (t == null) {
           error(child, "Untyped " + child.getVariant());
           return StaticType.ERROR_TYPE;
@@ -1856,9 +1857,9 @@ final class TypingPass extends AbstractRewritingPass {
     }
 
     J8BaseNode node = anc.x.parent;
-    if (node instanceof LocalDeclaration) {
-      WholeType typeNode = (WholeType)
-          ((LocalDeclaration) node).getDeclaredTypeNode();
+    if (node instanceof J8LocalDeclaration) {
+      J8WholeType typeNode = (J8WholeType)
+          Mixins.getDeclaredTypeNode(((J8LocalDeclaration) node));
       StaticType declaredType = typeNode != null
           ? typeNode.getStaticType() : null;
       if (declaredType == null) {
@@ -1866,8 +1867,8 @@ final class TypingPass extends AbstractRewritingPass {
         return StaticType.ERROR_TYPE;
       }
       return declaredType;
-    } else if (node instanceof MemberDeclaration) {
-      MemberDeclaration decl = (MemberDeclaration) node;
+    } else if (node instanceof J8MemberDeclaration) {
+      J8MemberDeclaration decl = (J8MemberDeclaration) node;
       MemberInfo info = decl.getMemberInfo();
       if (info instanceof FieldInfo) {
         return typePool.type(
@@ -1878,8 +1879,8 @@ final class TypingPass extends AbstractRewritingPass {
       ArrayCreationExpressionNode newArr = (ArrayCreationExpressionNode) node;
       ArrayElementTypeNode elementTypeNode =
           newArr.firstChildWithType(ArrayElementTypeNode.class);
-      WholeType elementTypeNodeWholeType = elementTypeNode != null
-          ? elementTypeNode.firstChildWithType(WholeType.class)
+      J8WholeType elementTypeNodeWholeType = elementTypeNode != null
+          ? elementTypeNode.firstChildWithType(J8WholeType.class)
           : null;
       StaticType elementType = elementTypeNodeWholeType != null
           ? elementTypeNodeWholeType.getStaticType()
@@ -2079,8 +2080,8 @@ final class TypingPass extends AbstractRewritingPass {
           new Function<J8BaseNode, Void> () {
             @Override
             public Void apply(J8BaseNode intermediate) {
-              if (intermediate instanceof Typed) {
-                ((Typed) intermediate).setStaticType(sourceType);
+              if (intermediate instanceof J8Typed) {
+                ((J8Typed) intermediate).setStaticType(sourceType);
               }
               return null;
             }
@@ -2119,8 +2120,8 @@ final class TypingPass extends AbstractRewritingPass {
           new Function<J8BaseNode, Void> () {
             @Override
             public Void apply(J8BaseNode intermediate) {
-              if (intermediate instanceof Typed) {
-                ((Typed) intermediate).setStaticType(targetType);
+              if (intermediate instanceof J8Typed) {
+                ((J8Typed) intermediate).setStaticType(targetType);
               }
               return null;
             }

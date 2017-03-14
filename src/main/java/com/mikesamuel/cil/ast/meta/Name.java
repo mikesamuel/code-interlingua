@@ -28,7 +28,7 @@ public final class Name {
    * particular variant.  Until the class member pass runs, we can't use
    * method descriptors.
    * <p>
-   * See {@link com.mikesamuel.cil.ast.j8.traits.CallableDeclaration#getMethodVariant caveat}.
+   * See {@link com.mikesamuel.cil.ast.mixins.CallableDeclaration#getMethodVariant caveat}.
    */
   public final @Nullable int variant;
   /** The type of thing to which identifier refers. */

@@ -10,7 +10,7 @@ import com.google.common.base.Strings;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
- * Base interface for nodes and node traits.
+ * Base interface for nodes and node mixins.
  */
 public interface NodeI<
     BASE_NODE extends BaseNode<BASE_NODE, NODE_TYPE, NODE_VARIANT>,

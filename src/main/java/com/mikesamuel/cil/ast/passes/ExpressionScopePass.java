@@ -11,19 +11,20 @@ import com.mikesamuel.cil.ast.j8.BlockNode;
 import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8CallableDeclaration;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameDeclaration;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.PackageDeclarationNode;
 import com.mikesamuel.cil.ast.j8.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.j8.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.j8.SwitchBlockNode;
 import com.mikesamuel.cil.ast.j8.TemplateDirectivesNode;
 import com.mikesamuel.cil.ast.j8.TypeNameNode;
-import com.mikesamuel.cil.ast.j8.traits.CallableDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameScope;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.LimitedScopeElement;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
     .BlockExpressionNameResolver;
@@ -65,8 +66,8 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
       return m;
     }
 
-    if (node instanceof TypeDeclaration) {
-      TypeInfo ti = ((TypeDeclaration) node).getDeclaredTypeInfo();
+    if (node instanceof J8TypeDeclaration) {
+      TypeInfo ti = ((J8TypeDeclaration) node).getDeclaredTypeInfo();
       if (ti != null) {
         // Could be null for (new ...) that do not declare an
         // anonymous type.
@@ -74,31 +75,32 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
         childResolver = ExpressionNameResolver.Resolvers.forType(
             ti, typeInfoResolver);
         currentMarker = DeclarationPositionMarker.EARLIEST;
-        childOuter = ((TypeDeclaration) node).getDeclaredTypeInfo().canonName;
+        childOuter = ((J8TypeDeclaration) node).getDeclaredTypeInfo().canonName;
       }
     }
 
-    if (node instanceof CallableDeclaration) {
-      CallableDeclaration cd = (CallableDeclaration) node;
-      childOuter = outer.method(cd.getMethodName(), cd.getMethodVariant());
+    if (node instanceof J8CallableDeclaration) {
+      J8CallableDeclaration cd = (J8CallableDeclaration) node;
+      childOuter = outer.method(
+          Mixins.getMethodName(cd), cd.getMethodVariant());
     }
 
-    if (node instanceof ExpressionNameScope) {
-      if (node instanceof CallableDeclaration
+    if (node instanceof J8ExpressionNameScope) {
+      if (node instanceof J8CallableDeclaration
           || node instanceof BlockNode
           || node instanceof SwitchBlockNode) {
         Preconditions.checkState(childResolver == r);
         childResolver = new BlockExpressionNameResolver();
         currentMarker = DeclarationPositionMarker.EARLIEST;
       }
-      ((ExpressionNameScope) node).setExpressionNameResolver(childResolver);
+      ((J8ExpressionNameScope) node).setExpressionNameResolver(childResolver);
     }
-    if (node instanceof ExpressionNameDeclaration
+    if (node instanceof J8ExpressionNameDeclaration
         && r instanceof BlockExpressionNameResolver) {
-      ExpressionNameDeclaration decl = (ExpressionNameDeclaration) node;
+      J8ExpressionNameDeclaration decl = (J8ExpressionNameDeclaration) node;
       // TODO: disambiguate multiple uses of the same name in a block of code.
       Name declName = outer.child(
-          decl.getDeclaredExpressionIdentifier(), Name.Type.LOCAL);
+          Mixins.getDeclaredExpressionIdentifier(decl), Name.Type.LOCAL);
       decl.setDeclaredExpressionName(declName);
       currentMarker = ((BlockExpressionNameResolver) r).declare(declName);
     }
@@ -107,16 +109,17 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
       currentMarker = walk(child, childResolver, currentMarker, childOuter);
     }
 
-    if (node instanceof LimitedScopeElement) {
-      ((LimitedScopeElement) node).setDeclarationPositionMarker(currentMarker);
+    if (node instanceof J8LimitedScopeElement) {
+      ((J8LimitedScopeElement) node).setDeclarationPositionMarker(
+          currentMarker);
     }
 
     return childResolver != r ? m : currentMarker;
   }
 
   @Override
-  public Void run(Iterable<? extends FileNode> fileNodes) {
-    for (FileNode fn : fileNodes) {
+  public Void run(Iterable<? extends J8FileNode> fileNodes) {
+    for (J8FileNode fn : fileNodes) {
       ExpressionNameResolver r = resolverFor(fn);
       fn.setExpressionNameResolver(r);
       walk((J8BaseNode) fn, r, DeclarationPositionMarker.LATEST, null);
@@ -124,7 +127,7 @@ public final class ExpressionScopePass extends AbstractPass<Void> {
     return null;
   }
 
-  private ExpressionNameResolver resolverFor(FileNode fn) {
+  private ExpressionNameResolver resolverFor(J8FileNode fn) {
     CompilationUnitNode cu;
     if (fn instanceof CompilationUnitNode) {
       cu = (CompilationUnitNode) fn;

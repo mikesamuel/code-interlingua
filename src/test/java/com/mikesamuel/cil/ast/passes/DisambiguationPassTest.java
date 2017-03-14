@@ -17,14 +17,14 @@ import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.j8.ContextFreeNameNode;
 import com.mikesamuel.cil.ast.j8.ContextFreeNamesNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameReference;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8NamePart;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.J8TypeReference;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
-import com.mikesamuel.cil.ast.j8.traits.ExpressionNameReference;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.NamePart;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeReference;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -722,12 +722,12 @@ public final class DisambiguationPassTest extends TestCase {
       boolean useLongNames,
       @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator,
       String... expectedErrors) {
-    ImmutableList<FileNode> disambiguated = PassTestHelpers.expectErrors(
-        new PassTestHelpers.LoggableOperation<ImmutableList<FileNode>>() {
+    ImmutableList<J8FileNode> disambiguated = PassTestHelpers.expectErrors(
+        new PassTestHelpers.LoggableOperation<ImmutableList<J8FileNode>>() {
 
           @Override
-          public ImmutableList<FileNode> run(Logger logger) {
-            ImmutableList<FileNode> fileNodes =
+          public ImmutableList<J8FileNode> run(Logger logger) {
+            ImmutableList<J8FileNode> fileNodes =
                 PassTestHelpers.parseCompilationUnits(inputs);
 
             DeclarationPass declarationPass = new DeclarationPass(logger);
@@ -771,7 +771,7 @@ public final class DisambiguationPassTest extends TestCase {
         wantJoined.toString(),
         got.toString());
 
-    for (FileNode fn : disambiguated) {
+    for (J8FileNode fn : disambiguated) {
       checkNoContextFreeNames(
           fn.getChildren(), SList.append(null, (J8BaseNode) fn));
     }
@@ -894,21 +894,21 @@ public final class DisambiguationPassTest extends TestCase {
         @Override
         public String apply(NodeI<?, ?, ?> n) {
           Name canonName = null;
-          if (n instanceof TypeDeclaration) {
-            TypeInfo ti = ((TypeDeclaration) n).getDeclaredTypeInfo();
+          if (n instanceof J8TypeDeclaration) {
+            TypeInfo ti = ((J8TypeDeclaration) n).getDeclaredTypeInfo();
             canonName = ti != null ? ti.canonName : null;
           }
-          if (canonName == null && n instanceof TypeReference) {
-            TypeInfo ti = ((TypeReference) n).getReferencedTypeInfo();
+          if (canonName == null && n instanceof J8TypeReference) {
+            TypeInfo ti = ((J8TypeReference) n).getReferencedTypeInfo();
             canonName = ti != null ? ti.canonName : null;
           }
-          if (canonName == null && n instanceof ExpressionNameReference) {
-            canonName = ((ExpressionNameReference) n)
+          if (canonName == null && n instanceof J8ExpressionNameReference) {
+            canonName = ((J8ExpressionNameReference) n)
                 .getReferencedExpressionName();
           }
           Name.Type nt = null;
-          if (n instanceof NamePart) {
-            NamePart np = (NamePart) n;
+          if (n instanceof J8NamePart) {
+            J8NamePart np = (J8NamePart) n;
             nt = np.getNamePartType();
           }
           return canonName != null

@@ -29,13 +29,13 @@ import com.mikesamuel.cil.ast.j8.InterfaceTypeListNode;
 import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8Chapter;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
+import com.mikesamuel.cil.ast.j8.J8TypeScope;
 import com.mikesamuel.cil.ast.j8.ModifierNode;
 import com.mikesamuel.cil.ast.j8.TemplatePseudoRootNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
-import com.mikesamuel.cil.ast.j8.traits.TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.traits.TypeScope;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
@@ -71,7 +71,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
    * @return a TypeInfoResolver that resolves canonical names.
    */
   @Override
-  public TypeInfoResolver run(Iterable<? extends FileNode> fileNodes) {
+  public TypeInfoResolver run(Iterable<? extends J8FileNode> fileNodes) {
     // To properly map type names to canonical type names, we need four things:
     // 1. The set of internally defined types.
     // 2. The set of external types.
@@ -81,7 +81,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     // (3) requires (1, 2) so before wildcard imports can be resolved.
     // (4) requires (1, 2, 3) so we can resolve super-type relationships.
 
-    ImmutableList<FileNode> files = ImmutableList.copyOf(fileNodes);
+    ImmutableList<J8FileNode> files = ImmutableList.copyOf(fileNodes);
     // (1)
     ClassNamingPass.DeclarationsAndScopes declarationsAndScopes =
         new ClassNamingPass(logger).run(files);
@@ -104,15 +104,15 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
      * TypeInfoResolver for qualified and unqualified names in scope.
      * Built progressively as types are resolved.
      */
-    final Map<TypeScope, TypeNameResolver> resolvedScopes =
+    final Map<J8TypeScope, TypeNameResolver> resolvedScopes =
         new IdentityHashMap<>();
     /**
      * Converts external type names
      */
     final TypeNameResolver canonicalizer;
     final ImmutableMap<Name, UnresolvedTypeDeclaration> internallyDefinedTypes;
-    final Map<TypeScope, TypeScope> scopeToParent;
-    final Multimap<TypeScope, UnresolvedTypeDeclaration> scopeToDecls =
+    final Map<J8TypeScope, J8TypeScope> scopeToParent;
+    final Multimap<J8TypeScope, UnresolvedTypeDeclaration> scopeToDecls =
         Multimaps.newMultimap(
             new IdentityHashMap<>(),
             new Supplier<Collection<UnresolvedTypeDeclaration>>() {
@@ -153,7 +153,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
         loop.clear();
         resolve(d, loop);
       }
-      for (TypeScope scope : scopeToParent.keySet()) {
+      for (J8TypeScope scope : scopeToParent.keySet()) {
         resolverForScope(scope, new HashSet<Name>());
       }
     }
@@ -181,7 +181,8 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       throw new AssertionError(d.stage);
     }
 
-    private TypeNameResolver resolverForScope(TypeScope scope, Set<Name> loop) {
+    private TypeNameResolver resolverForScope(
+        J8TypeScope scope, Set<Name> loop) {
       TypeNameResolver resolver = resolvedScopes.get(scope);
       if (resolver != null) {
         return resolver;
@@ -199,7 +200,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       } else {
         TypeNameResolver parentResolver;
         {
-          TypeScope parentScope = scopeToParent.get(scope);
+          J8TypeScope parentScope = scopeToParent.get(scope);
           // Compilation units handled above.
           Preconditions.checkNotNull(
               parentScope, "%s has no parent scope", scope);
@@ -314,7 +315,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       }
       TypeNameResolver nameResolver = resolverForScope(d.scope, loop);
 
-      TypeDeclaration decl = d.decl;
+      J8TypeDeclaration decl = d.decl;
       J8BaseNode node = (J8BaseNode) decl;
       List<J8BaseNode> children = node.getChildren();
       // Collect the declared type after resolving its super-types.
@@ -375,7 +376,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
             break;
           default:
             Preconditions.checkState(
-                child instanceof TypeScope,
+                child instanceof J8TypeScope,
                 "%s in %s", child, node);
         }
       }

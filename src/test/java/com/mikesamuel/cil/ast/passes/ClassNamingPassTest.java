@@ -12,7 +12,7 @@ import org.junit.Test;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
 
@@ -26,7 +26,7 @@ public final class ClassNamingPassTest extends TestCase {
 
   @Test
   public static void testClassFinder() {
-    List<FileNode> compilationUnits =
+    List<J8FileNode> compilationUnits =
         PassTestHelpers.parseCompilationUnits(
         new String[][] {
           {

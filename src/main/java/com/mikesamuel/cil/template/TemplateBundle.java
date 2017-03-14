@@ -9,9 +9,9 @@ import com.mikesamuel.cil.HereBe;
 import com.mikesamuel.cil.ast.Trees;
 import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.SingleStaticImportDeclarationNode;
-import com.mikesamuel.cil.ast.j8.traits.FileNode;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.passes.CommonPassRunner;
 import com.mikesamuel.cil.event.Event;
@@ -30,7 +30,7 @@ import com.mikesamuel.cil.util.LogUtils;
 public class TemplateBundle {
 
   private final Logger logger;
-  private final ImmutableList.Builder<FileNode> fileNodes
+  private final ImmutableList.Builder<J8FileNode> fileNodes
       = ImmutableList.builder();
   private ClassLoader loader;
 
@@ -53,7 +53,7 @@ public class TemplateBundle {
    * <p>
    * @see HereBe#_TEMPLATES_
    */
-  public static boolean optsIntoTemplateProcessing(FileNode node) {
+  public static boolean optsIntoTemplateProcessing(J8FileNode node) {
     for (SingleStaticImportDeclarationNode imp
          : ((J8BaseNode) node).finder(SingleStaticImportDeclarationNode.class)
               .exclude(J8NodeType.TypeDeclaration,
@@ -125,7 +125,7 @@ public class TemplateBundle {
             inp, SList.forwardIterable(parseEvents));
         J8BaseNode root = Trees.forGrammar(J8NodeType.GRAMMAR)
             .of(inp, fixedEvents);
-        fileNodes.add((FileNode) root);
+        fileNodes.add((J8FileNode) root);
         return this;
       }
       case FAILURE:
@@ -148,10 +148,10 @@ public class TemplateBundle {
     passes.setTypeInfoResolver(
         TypeInfoResolver.Resolvers.forClassLoader(getLoader()));
     passes.setErrorLevel(Level.WARNING);
-    ImmutableList<FileNode> processed = passes.run(fileNodes.build());
+    ImmutableList<J8FileNode> processed = passes.run(fileNodes.build());
 
     ImmutableList.Builder<CompilationUnitNode> b = ImmutableList.builder();
-    for (FileNode fn : processed) {
+    for (J8FileNode fn : processed) {
       if (optsIntoTemplateProcessing(fn)) {
         apply(fn, inputObj, passes, b);
       } else if (fn instanceof CompilationUnitNode) {
@@ -171,11 +171,11 @@ public class TemplateBundle {
   }
 
   void apply(
-      FileNode fn, DataBundle input, CommonPassRunner passes,
+      J8FileNode fn, DataBundle input, CommonPassRunner passes,
       ImmutableList.Builder<CompilationUnitNode> out) {
     TemplateProcessingPass ppass = new TemplateProcessingPass(
         logger, passes.getTypePool(), getLoader(), input, out);
 
-    ppass.run(ImmutableList.of((FileNode) fn.deepClone()));
+    ppass.run(ImmutableList.of((J8FileNode) fn.deepClone()));
   }
 }
