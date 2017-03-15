@@ -833,11 +833,11 @@ Primary: (@mixin=Typed)
      Primary "." FieldName  (@name=FieldAccess)
      ExpressionAtom @anon
 LeftHandSide:
-     Primary (@postcond=Postconds.Primary.FieldAccess)       (@name=FieldAccess)
-     Primary (@postcond=Postconds.Primary.ArrayAccess)       (@name=ArrayAccess)
-     Primary (@postcond=Postconds.Primary.ExpressionAtom.Local)     (@name=Local)
-     Primary (@postcond=Postconds.Primary.ExpressionAtom.FreeField) (@name=FreeField)
-     Primary (@postcond=Postconds.Primary.Ambiguous)                (@name=Ambiguous)
+     Primary (@postcond=Primary.FieldAccess)              (@name=FieldAccess)
+     Primary (@postcond=Primary.ArrayAccess)              (@name=ArrayAccess)
+     Primary (@postcond=Primary.ExpressionAtom.Local)     (@name=Local)
+     Primary (@postcond=Primary.ExpressionAtom.FreeField) (@name=FreeField)
+     Primary (@postcond=Primary.Ambiguous)                (@name=Ambiguous)
 DotKeywordDimsOrCtorRef:
      "." "class"
      "." "super"
@@ -847,11 +847,11 @@ DotKeywordDimsOrCtorRef:
 SimpleCallPrefix:
      MethodName "("
 MethodInvocation:
-     Primary (@postcond=Postconds.Primary.MethodInvocation) (@name=ExplicitCallee)
-     Primary (@postcond=Postconds.Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
+     Primary (@postcond=Primary.MethodInvocation) (@name=ExplicitCallee)
+     Primary (@postcond=Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
 ClassInstanceCreationExpression:
-     Primary (@postcond=Postconds.Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
-     Primary (@postcond=Postconds.Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
+     Primary (@postcond=Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
+     Primary (@postcond=Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
 UsePrefix:
      "."
      "["

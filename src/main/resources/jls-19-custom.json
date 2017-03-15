@@ -1,4 +1,6 @@
 {
+  "tokens": "com.mikesamuel.cil.ast.j8.Tokens",
+  "postconds": "com.mikesamuel.cil.ast.j8.Postconds",
   "mixins": {
     "BinaryOp": {
     },

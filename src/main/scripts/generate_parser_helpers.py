@@ -202,6 +202,11 @@ def _tokens_to_text(toks):
     return ''.join(parts)
 
 
+def _split_class(full_name):
+    short_name = full_name[full_name.rfind('.') + 1:]
+    return full_name, short_name
+
+
 def process_grammar(
         grammar_name,
         grammar_customizations,
@@ -213,7 +218,19 @@ def process_grammar(
     """
     grammar_name : string -- Specifies the subpackage under _JAVA_BASE_PACKAGE
         and a common prefix for node, node type, and node variant classes.
-    gramamr_customizations: { "mixins": {...}, "custom_node_content": {...} } --
+    gramamr_customizations: obj -- a data object of the form
+        {
+          "tokens": "foo.bar.Tokens",
+          "postconds": "foo.bar.Postconds",
+          "mixins": {...},
+          "custom_node_content": {...}
+        }
+
+        The "tokens" value is the name of a class that includes a ParSer for
+        each production with a single "builtin" variant.
+
+        The "postconds" value similarly supports the @postcond annotation.
+
         The "mixins" map maps names of classes in the "mixins" subpackage
         of the mixin packages to data like
         {
@@ -240,8 +257,12 @@ def process_grammar(
     cn_prefix = '%s%s' % (grammar_name[0:1].upper(), grammar_name[1:])
     generator = _java_str_lit(os.path.relpath(__file__))
 
-    mixin_defs = grammar_customizations['mixins']
+    mixin_defs = grammar_customizations.get('mixins', {})
     custom_node_content = grammar_customizations.get("custom_node_content", {})
+    tokens_full_class_name, tokens_class_name = _split_class(
+        grammar_customizations.get('tokens', '%s.Tokens' % java_package))
+    postconds_full_class_name, postconds_class_name = _split_class(
+        grammar_customizations.get('postconds', '%s.Postconds' % java_package))
 
     line_number, column_number, char_count = 1, 1, 0
 
@@ -877,6 +898,18 @@ extends NodeVariant<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
     })
         return enum_members
 
+    def annotation_on_any_prod(annot_name):
+        for prod in prods_by_name.itervalues():
+            for (a, _) in prod['annots']:
+                if annot_name == a:
+                    return True
+        return False
+    if annotation_on_any_prod('@nonstandard'):
+        is_non_standard = '%sNodeTypeTables.NONSTANDARD.contains(this)' % (
+            cn_prefix)
+    else:
+        is_non_standard = 'false'
+
     # Produce an enum with an entry for each production.
     emit_java_file(
         '%sNodeType' % cn_prefix,
@@ -948,7 +981,7 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
 
   @Override
   public boolean isNonStandard() {
-    return %(cn_prefix)sNodeTypeTables.NONSTANDARD.contains(this);
+    return %(is_non_standard)s;
   }
 
   @Override
@@ -974,6 +1007,7 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
     'package': java_package,
     'cn_prefix': cn_prefix,
     'generator': generator,
+    'is_non_standard': is_non_standard,
     'members': ''.join(create_enum_members()),
 })
 
@@ -1226,10 +1260,10 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
             (leaf_text, (leaf_ln, leaf_co, leaf_ci)) = pt['pleaf']
             if name == 'ref':
                 if leaf_text in BUILTINS:
-                    sub = '%s.add(Tokens.%s)' % (
-                        prefix_plus,
+                    sub = '%s.add(%s.%s)' % (
+                        prefix_plus, tokens_class_name,
                         _camel_to_underscores(prod['name']))
-                    leaf_value = '%sTokens.%sParSec' % (cn_prefix, name)
+                    extra_imports.add(tokens_full_class_name)
                 else:
                     sub = '%s.add(%sNodeType.%s)' % (
                         prefix_plus, cn_prefix, leaf_text)
@@ -1326,8 +1360,9 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
                     'Predicate<SList<Event>>',
                     ('com.mikesamuel.cil.event.Event',
                      'com.mikesamuel.cil.parser.SList',
-                     'com.google.common.base.Predicate'),
-                    lambda x: x
+                     'com.google.common.base.Predicate',
+                     postconds_full_class_name),
+                    lambda x: '%s.%s' % (postconds_class_name, x)
                 ),
                 'delegate': (
                     '%sNodeType' % cn_prefix,

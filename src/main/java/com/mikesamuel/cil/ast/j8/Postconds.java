@@ -13,7 +13,7 @@ import com.mikesamuel.cil.parser.SList;
  * match a subset of a larger production like {@Link J8NodeType#Primary} without
  * having to copy node types.
  */
-final class Postconds {
+public final class Postconds {
 
   private static final boolean DEBUG = false;
 
@@ -77,33 +77,42 @@ final class Postconds {
    * Postconditions that apply to variants that delegate to
    * {@link J8NodeType#Primary}.
    */
-  static final class Primary {
+  public static final class Primary {
 
-    static final Postcond Ambiguous = new Postcond(
+    /** */
+    public static final Postcond Ambiguous = new Postcond(
         1, PrimaryNode.Variant.Ambiguous);
 
-    static final Postcond ArrayAccess = new Postcond(
+    /** */
+    public static final Postcond ArrayAccess = new Postcond(
         1, PrimaryNode.Variant.ArrayAccess);
-    static final Postcond FieldAccess = new Postcond(
+    /** */
+    public static final Postcond FieldAccess = new Postcond(
         1, PrimaryNode.Variant.FieldAccess);
-    static final Postcond InnerClassCreation = new Postcond(
+    /** */
+    public static final Postcond InnerClassCreation = new Postcond(
         1, PrimaryNode.Variant.InnerClassCreation);
-    static final Postcond MethodInvocation = new Postcond(
+    /** */
+    public static final Postcond MethodInvocation = new Postcond(
         1, PrimaryNode.Variant.MethodInvocation);
 
     /**
      * Postconditions that apply to Primaries that have no PostOps and which
-     * check the {@link NodeType#ExpressionAtom}'s variant.
+     * check the {@link J8NodeType#ExpressionAtom}'s variant.
      */
-    static final class ExpressionAtom {
-      static final Postcond FreeField = new Postcond(
+    public static final class ExpressionAtom {
+      /** */
+      public static final Postcond FreeField = new Postcond(
           2, ExpressionAtomNode.Variant.FreeField);
-      static final Postcond Local = new Postcond(
+      /** */
+      public static final Postcond Local = new Postcond(
           2, ExpressionAtomNode.Variant.Local);
+      /** */
       @SuppressWarnings("hiding")
-      static final Postcond MethodInvocation = new Postcond(
+      public static final Postcond MethodInvocation = new Postcond(
           2, ExpressionAtomNode.Variant.MethodInvocation);
-      static final Postcond UnqualifiedClassInstanceCreationExpression =
+      /** */
+      public static final Postcond UnqualifiedClassInstanceCreationExpression =
           new Postcond(
               2,
               ExpressionAtomNode.Variant

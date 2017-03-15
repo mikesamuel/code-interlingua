@@ -88,6 +88,28 @@
             </configuration>
           </execution>
           <execution>
+            <id>Process Java-Minimal Grammar</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <workingDirectory>${project.basedir}</workingDirectory>
+              <executable>${project.basedir}/src/main/scripts/generate_parser_helpers.py</executable>
+              <arguments>
+                <argument>--grammar_name</argument>
+                <argument>jmin</argument>
+                <argument>--grammar_customizations</argument>
+                <argument>${project.build.resources[0].directory}/jls-19-custom.json</argument>
+                <argument>--srcdir</argument>
+                <argument>${project.build.sourceDirectory}</argument>
+                <argument>--outdir</argument>
+                <argument>${project.build.directory}/generated-sources/parse-helpers</argument>
+                <argument>${project.build.resources[0].directory}/jmin.txt</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
             <id>List source files</id>
             <!-- Generate list of source files used by SourceParsingSanityTest
                  before tests run -->

@@ -1,0 +1,598 @@
+/*
+ * A grammar for a minimal subset of Java.
+ * This grammar is derived from JLS chapter 19 by subtracting out all
+ * constructs that can be expressed in terms of simpler constructs.
+ */
+
+// Lexical Structure
+(chapter=Literal)
+Identifier: (@mixin=NamePart)
+     builtin // IdentifierChars but not a Keyword or BooleanLiteral or NullLiteral
+IdentifierChars:
+     builtin // JavaLetter {JavaLetterOrDigit}
+IntegerLiteral: (@mixin=Typed)
+     builtin
+FloatingPointLiteral: (@mixin=Typed)
+     builtin
+BooleanLiteral: (@mixin=Typed)
+     "false"
+     "true"
+CharacterLiteral: (@mixin=Typed)
+     builtin
+StringLiteral: (@mixin=Typed)
+     builtin
+NullLiteral: (@mixin=Typed)
+     "null"
+JavaDocComment: @nointerp
+     builtin @ignorable
+Literal:
+     FloatingPointLiteral
+     IntegerLiteral
+     BooleanLiteral
+     CharacterLiteral
+     StringLiteral
+     NullLiteral
+
+// 4. Types, Values, and Variables
+(chapter=Type)
+Type:
+     ReferenceType
+     PrimitiveType
+PrimitiveType: (@mixin=WholeType)
+     {Annotation} NumericType
+     {Annotation} "boolean"
+NumericType: (@mixin=WholeType)
+     IntegralType
+     FloatingPointType
+IntegralType:
+     "byte"
+     "short"
+     "int"
+     "long"
+     "char"
+FloatingPointType:
+     "float"
+     "double"
+ReferenceType: (@mixin=WholeType)
+     ArrayType
+     ClassOrInterfaceType
+     TypeVariable
+ClassOrInterfaceType: (@mixin=TypeReference,WholeType)
+     PackageName ["."] {Annotation} Identifier [TypeArguments]
+ClassType: (@mixin=WholeType)
+     ClassOrInterfaceType
+InterfaceType: (@mixin=WholeType)
+     ClassOrInterfaceType
+TypeVariable: (@mixin=TypeReference)
+     {Annotation} Identifier
+ArrayType: (@mixin=WholeType)
+     Type {Annotation} Dim
+Dim: @nointerp
+     "[" "]"
+Dims: @nointerp
+     {Annotation} Dim {{Annotation} Dim}
+TypeParameter: (@mixin=TypeDeclaration)
+     {!!TypeParameterModifier Modifier} SimpleTypeName [TypeBound] (@name=TypeParameter)
+TypeParameterModifier:
+     Annotation
+TypeBound:
+     "extends" ClassOrInterfaceType {AdditionalBound}
+     "extends" TypeVariable
+AdditionalBound: @nointerp
+     "&" InterfaceType
+TypeArguments: @nointerp
+     "<" TypeArgumentList ">"
+TypeArgumentList:
+     TypeArgument {"," TypeArgument}
+TypeArgument:
+     ReferenceType
+     Wildcard
+Wildcard:
+     {Annotation} "?" WildcardBounds
+WildcardBounds:
+     "extends" ReferenceType
+     "super" ReferenceType
+UnannType: (@mixin=WholeType)
+     !"@" Type
+Result: (@mixin=WholeType)
+     "void"
+     UnannType
+
+
+// Names
+(chapter=Name)
+FieldName: (@mixin=ExpressionNameReference)
+     Identifier
+EnumConstantName:
+     FieldName
+Label:
+     Identifier
+LocalName: (@mixin=ExpressionNameReference)
+     Identifier
+MethodName: (@mixin=MethodDescriptorReference)
+     Identifier
+SimpleTypeName:
+     Identifier
+TypeName: (@mixin=TypeReference)
+     PackageOrTypeName "." Identifier
+     Identifier
+PackageOrTypeName:
+     PackageOrTypeName "." Identifier
+     Identifier
+PackageName:
+     Identifier {"." Identifier}
+
+// Packages
+(chapter=Package)
+CompilationUnit: (@mixin=FileNode) @toplevel
+     {TypeDeclaration}
+TypeDeclaration:
+     ClassDeclaration
+     InterfaceDeclaration
+
+// Classes
+(chapter=Class)
+ClassDeclaration:
+     NormalClassDeclaration
+NormalClassDeclaration: (@mixin=TypeDeclaration,TypeParameterScope)
+     [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
+ClassModifier:
+     Annotation
+     "public"
+     "protected"
+     "private"
+     "abstract"
+     "static"
+     "final"
+     "strictfp"
+TypeParameters:
+     "<" TypeParameterList ">"
+TypeParameterList:
+     TypeParameter {"," TypeParameter}
+Superclass:
+     "extends" ClassType
+Superinterfaces:
+     "implements" InterfaceTypeList
+InterfaceTypeList:
+     InterfaceType {"," InterfaceType}
+ClassBody: (@mixin=TypeScope,ExpressionNameScope)
+     "{" {ClassBodyDeclaration} "}"
+ClassBodyDeclaration:
+     ClassMemberDeclaration
+     StaticInitializer
+     ConstructorDeclaration
+ClassMemberDeclaration:
+     ConstantDeclaration
+     FieldDeclaration
+     MethodDeclaration
+FieldDeclaration: (@mixin=MemberDeclaration)
+     [JavaDocComment] {!!FieldModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
+FieldModifier:
+     Annotation
+     "public"
+     "protected"
+     "private"
+     "static"
+     "final"
+     "transient"
+     "volatile"
+VariableDeclaratorList:
+     VariableDeclarator {"," VariableDeclarator}
+ConstantDeclaratorList:
+     ConstantDeclarator {"," ConstantDeclarator}
+VariableDeclarator:
+     VariableDeclaratorId
+ConstantDeclarator:
+     VariableDeclaratorId ["=" VariableInitializer]
+VariableDeclaratorId: (@mixin=ExpressionNameDeclaration)
+     Identifier
+VariableInitializer:
+     Expression
+     ArrayInitializer
+MethodDeclaration: (@mixin=TypeParameterScope,CallableDeclaration)
+     [JavaDocComment] {!!MethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
+MethodModifier:
+     Annotation
+     "public"
+     "protected"
+     "private"
+     "abstract"
+     "static"
+     "final"
+     "synchronized"
+     "native"
+     "strictfp"
+MethodHeader:
+     [TypeParameters {Annotation}] Result MethodDeclarator [Throws]
+MethodDeclarator:
+     MethodName "(" [FormalParameterList] ")"
+FormalParameterList:
+     FormalParameter {"," FormalParameter}
+FormalParameter: (@mixin=LocalDeclaration)
+     {!!VariableModifier Modifier} UnannType VariableDeclaratorId (@name=Declaration)
+VariableModifier:
+     Annotation
+     "final"
+Throws:
+     "throws" ExceptionTypeList
+ExceptionTypeList:
+     ExceptionType {"," ExceptionType}
+ExceptionType:
+     ClassType
+     TypeVariable
+MethodBody:
+     Block
+     ";"
+InstanceInitializer: (@mixin=CallableDeclaration)
+     Block
+StaticInitializer: (@mixin=CallableDeclaration)
+     "static" Block
+ConstructorDeclaration: (@mixin=TypeParameterScope,CallableDeclaration)
+     [JavaDocComment] {!!ConstructorModifier Modifier} ConstructorDeclarator [Throws] ConstructorBody (@name=Declaration)
+ConstructorModifier:
+     Annotation
+     "public"
+     "protected"
+     "private"
+ConstructorDeclarator:
+     [TypeParameters] SimpleTypeName "(" [FormalParameterList] ")"
+ConstructorBody:
+     "{" ExplicitConstructorInvocation [BlockStatements] "}"
+// TODO: Resolve constructor descriptor reference for explicit constructor
+// invocations.
+ExplicitConstructorInvocation:
+     [TypeArguments] "this" "(" [ArgumentList] ")" ";"
+     [TypeArguments] "super" "(" [ArgumentList] ")" ";"
+
+// Interfaces
+(chapter=Interface)
+InterfaceDeclaration:
+     NormalInterfaceDeclaration
+NormalInterfaceDeclaration: (@mixin=TypeDeclaration,TypeParameterScope)
+     [JavaDocComment] {!!InterfaceModifier Modifier} "interface" SimpleTypeName [TypeParameters] [ExtendsInterfaces] InterfaceBody (@name=Declaration)
+InterfaceModifier:
+     Annotation
+     "public"
+     "protected"
+     "private"
+     "abstract"
+     "static"
+     "strictfp"
+ExtendsInterfaces:
+     "extends" InterfaceTypeList
+InterfaceBody: (@mixin=TypeScope,ExpressionNameScope)
+     "{" {InterfaceMemberDeclaration} "}"
+InterfaceMemberDeclaration:
+     ConstantDeclaration
+     InterfaceMethodDeclaration
+ConstantDeclaration: (@mixin=MemberDeclaration)
+     [JavaDocComment] !!HasStatic !!HasFinal {!!ConstantModifier Modifier} UnannType ConstantDeclaratorList ";" (@name=Declaration)
+ConstantModifier:
+     Annotation
+     "public"
+     "static"
+     "final"
+HasStatic:
+     "static"
+     Modifier HasStatic
+HasFinal:
+     "final"
+     Modifier HasFinal
+InterfaceMethodDeclaration: (@mixin=TypeParameterScope,CallableDeclaration)
+     [JavaDocComment] {!!InterfaceMethodModifier Modifier} MethodHeader MethodBody (@name=Declaration)
+InterfaceMethodModifier:
+     Annotation
+     "public"
+     "abstract"
+     "default"
+     "static"
+     "strictfp"
+Annotation: @nointerp
+     NormalAnnotation
+Modifier: @nointerp
+     "abstract"
+     "default"
+     "final"
+     "native"
+     "private"
+     "protected"
+     "public"
+     "static"
+     "strictfp"
+     "synchronized"
+     "transient"
+     "volatile"
+     Annotation
+NormalAnnotation: @nointerp
+     "@" TypeName "(" [ElementValuePairList] ")"
+ElementValuePairList:
+     ElementValuePair {"," ElementValuePair}
+ElementValuePair:
+     Identifier "=" ElementValue
+ElementValue:
+     ConditionalExpression
+     ElementValueArrayInitializer
+     Annotation
+ElementValueArrayInitializer:
+     "{" [ElementValueList] [","] "}"
+ElementValueList:
+     ElementValue {"," ElementValue}
+
+// Arrays
+(chapter=Array)
+ArrayInitializer: (@mixin=Typed)
+     "{" [VariableInitializerList] [","] "}"
+VariableInitializerList:
+     VariableInitializer {"," VariableInitializer}
+
+// Blocks and Statements
+(chapter=Statement)
+Block: (@mixin=ExpressionNameScope)
+     "{" [BlockStatements] "}"
+BlockStatements:
+     // The JLS grammar originally was defined simply
+     //     BlockStatement {BlockStatement}
+     // and included ClassDeclaration among BlockStatement.
+     //
+     // Class declarations in blocks cannot be forward referenced, so in
+     //   static class C {}
+     //   static {
+     //     C x;  // The type C refers to the class C defined outside the block.
+     //     class C {}
+     //     C y;  // The rype C refers to the class C defined within the block.
+     //   }
+     // x and y have different types.
+     //
+     // Adding BlockTypeScope lets us maintain the invariant that each type
+     // defined in a TypeScope is visible to all type references in the scope
+     BlockStatement {BlockStatement} [BlockTypeScope]
+     BlockTypeScope
+BlockTypeScope: (@mixin=TypeScope)
+     ClassDeclaration [BlockStatements]
+BlockStatement: (@mixin=LimitedScopeElement)
+     LocalVariableDeclarationStatement
+     Statement
+LocalVariableDeclarationStatement:
+     LocalVariableDeclaration ";"
+LocalVariableDeclaration: (@mixin=LocalDeclaration)
+     {!!VariableModifier Modifier} UnannType VariableDeclaratorList (@name=Declaration)
+Statement:
+     Block
+     ExpressionStatement
+     AssertStatement
+     SwitchStatement
+     DoStatement
+     BreakStatement
+     ContinueStatement
+     ReturnStatement
+     ThrowStatement
+     TryStatement
+     LabeledStatement
+     IfStatement
+     WhileStatement
+     ForStatement
+LabeledStatement:
+     Label ":" Statement
+ExpressionStatement:
+     StatementExpression ";" @intermediate
+StatementExpression:
+     Assignment
+     PreExpression
+     MethodInvocation
+     ClassInstanceCreationExpression
+IfStatement:
+     "if" "(" Expression ")" Statement "else" Statement
+AssertStatement:
+     "assert" Expression [":" Expression] ";"
+SwitchStatement:
+     "switch" "(" Expression ")" SwitchBlock
+SwitchBlock: (@mixin=ExpressionNameScope)
+     "{" {SwitchBlockStatementGroup} "}"
+SwitchBlockStatementGroup:
+     SwitchLabels [BlockStatements]
+SwitchLabels:
+     SwitchLabel {SwitchLabel}
+SwitchLabel: @nointerp
+     "case" CaseValue ":"
+     "default" ":"
+CaseValue: (@mixin=Typed)
+     Identifier !!":" (@name=Ambiguous)  // Foo could be a constant reference or an enum name
+     ConstantExpression
+WhileStatement:
+     "while" "(" Expression ")" Statement
+DoStatement:
+     "do" Statement "while" "(" Expression ")" ";"
+ForStatement:
+     BasicForStatement
+     EnhancedForStatement
+BasicForStatement:
+     "for" "(" [ForInit] ";" [Expression] ";" [ForUpdate] ")" Statement
+ForInit:
+     StatementExpressionList
+     LocalVariableDeclaration
+ForUpdate:
+     StatementExpressionList
+StatementExpressionList:
+     StatementExpression {"," StatementExpression}
+EnhancedForStatement: (@mixin=LocalDeclaration)
+     "for" "(" {!!VariableModifier Modifier} UnannType VariableDeclaratorId ":" Expression ")" Statement (@name=EnhancedForStatement)
+BreakStatement:
+     "break" [Label] ";"
+ContinueStatement:
+     "continue" [Label] ";"
+ReturnStatement:
+     "return" [Expression] ";"
+ThrowStatement:
+     "throw" Expression ";"
+SynchronizedStatement:
+     "synchronized" "(" Expression ")" Block
+TryStatement:
+     "try" [ResourceSpecification] Block [Catches] Finally
+Catches:
+     CatchClause {CatchClause}
+CatchClause:
+     "catch" "(" CatchFormalParameter ")" Block
+CatchFormalParameter: (@mixin=LocalDeclaration)
+     {!!VariableModifier Modifier} CatchType VariableDeclaratorId (@name=CatchFormalParameter)
+CatchType:
+     ClassType {"|" ClassType}
+Finally:
+     "finally" Block
+ResourceSpecification:
+     "(" ResourceList [";"] ")"
+ResourceList:
+     Resource {";" Resource}
+Resource: (@mixin=LocalDeclaration)
+     {!!VariableModifier Modifier} UnannType VariableDeclaratorId "=" Expression (@name=Resource)
+
+// Expressions
+(chapter=Expression)
+ExpressionAtom: (@mixin=Typed)
+     UnqualifiedClassInstanceCreationExpression
+     ArrayCreationExpression
+     Literal
+     ClassLiteral
+     "this" (@name=This)
+     LocalName (@name=Local)
+     TypeName !!"."  (@name=StaticMember)
+     !CastExpression "(" Expression ")"  (@name=Parenthesized) @intermediate
+Primary: (@mixin=Typed)
+     Primary "." [TypeArguments] MethodName "(" [ArgumentList] ")"  (@name=MethodInvocation)
+     Primary "[" Expression "]"  (@name=ArrayAccess)
+     Primary "." FieldName  (@name=FieldAccess)
+     ExpressionAtom @anon
+LeftHandSide:
+     Primary (@postcond=Primary.FieldAccess)              (@name=FieldAccess)
+     Primary (@postcond=Primary.ArrayAccess)              (@name=ArrayAccess)
+     Primary (@postcond=Primary.ExpressionAtom.Local)     (@name=Local)
+     Primary (@postcond=Primary.ExpressionAtom.FreeField) (@name=FreeField)
+MethodInvocation:
+     Primary (@postcond=Primary.MethodInvocation) (@name=ExplicitCallee)
+     Primary (@postcond=Primary.ExpressionAtom.MethodInvocation) (@name=ImplicitCallee)
+ClassInstanceCreationExpression:
+     Primary (@postcond=Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
+     Primary (@postcond=Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
+ClassLiteral: (@mixin=Typed)
+     TypeName {Dim} "." "class"
+     NumericType {Dim} "." "class"
+     "boolean" {Dim} "." "class"
+     "void" "." "class"
+UnqualifiedClassInstanceCreationExpression: (@mixin=TypeDeclaration,MethodDescriptorReference)
+     "new" [TypeArguments] ClassOrInterfaceType "(" [ArgumentList] ")" [ClassBody]
+ArgumentList:
+     Expression {"," Expression}
+ArrayCreationExpression: (@mixin=Typed)
+     "new" ArrayElementType Dims ArrayInitializer
+     "new" ArrayElementType DimExprs [Dims] !"["
+ArrayElementType:
+     PrimitiveType
+     ClassOrInterfaceType
+DimExprs:
+     DimExpr {DimExpr}
+DimExpr:
+     {Annotation} "[" Expression "]"
+Expression: (@mixin=Typed) @nointerp
+     Assignment
+     ConditionalExpression
+Assignment: (@mixin=Typed) @nointerp
+     LeftHandSide AssignmentOperator Expression
+AssignmentOperator: @operator
+     "="
+     "*="
+     "/="
+     "%="
+     "+="
+     "-="
+     "<<="
+     ">>="
+     ">>>="
+     "&="
+     "^="
+     "|="
+ConditionalExpression: (@mixin=Typed) @nointerp
+     ConditionalOrExpression "?" Expression ":" ConditionalExpression
+     ConditionalOrExpression @anon
+ConditionalOrExpression: (@mixin=Typed,BinaryOp) @nointerp
+     ConditionalOrExpression "||" ConditionalAndExpression
+     ConditionalAndExpression @anon
+ConditionalAndExpression: (@mixin=Typed,BinaryOp) @nointerp
+     ConditionalAndExpression "&&" InclusiveOrExpression
+     InclusiveOrExpression @anon
+InclusiveOrExpression: (@mixin=Typed,BinaryOp) @nointerp
+     InclusiveOrExpression "|" ExclusiveOrExpression
+     ExclusiveOrExpression @anon
+ExclusiveOrExpression: (@mixin=Typed,BinaryOp) @nointerp
+     ExclusiveOrExpression "^" AndExpression
+     AndExpression @anon
+AndExpression: (@mixin=Typed,BinaryOp) @nointerp
+     AndExpression "&" EqualityExpression
+     EqualityExpression @anon
+EqualityExpression: (@mixin=Typed,BinaryOp) @nointerp
+     EqualityExpression EqualityOperator RelationalExpression
+     RelationalExpression @anon
+EqualityOperator: @operator @nointerp
+     "=="
+     "!="
+RelationalExpression: (@mixin=Typed,BinaryOp) @nointerp
+     RelationalExpression RelationalOperator ShiftExpression
+     RelationalExpression "instanceof" ReferenceType
+     ShiftExpression @anon
+RelationalOperator: @operator @nointerp
+     "<="
+     ">="
+     "<"
+     ">"
+ShiftExpression: (@mixin=Typed,BinaryOp) @nointerp
+     ShiftExpression ShiftOperator AdditiveExpression
+     AdditiveExpression @anon
+ShiftOperator: @operator @nointerp
+     "<<"
+     ">>>"
+     ">>"
+AdditiveExpression: (@mixin=Typed,BinaryOp) @nointerp
+     AdditiveExpression AdditiveOperator MultiplicativeExpression
+     MultiplicativeExpression @anon
+AdditiveOperator: @operator @nointerp
+     "+"
+     "-"
+MultiplicativeExpression: (@mixin=Typed,BinaryOp) @nointerp
+     MultiplicativeExpression MultiplicativeOperator UnaryExpression
+     UnaryExpression @anon
+MultiplicativeOperator: @operator @nointerp
+     "*"
+     "/"
+     "%"
+UnaryExpression: (@mixin=Typed) @nointerp
+     CastExpression
+     PreExpression
+     PostExpression
+     PrefixOperator UnaryExpression
+     Primary @anon
+PrefixOperator: @operator @nointerp
+     "+"
+     "-"
+     "~"
+     "!"
+IncrDecrOperator: @operator @nointerp
+     "++"
+     "--"
+PreExpression: (@mixin=Typed) @nointerp
+     IncrDecrOperator LeftHandSideExpression
+PostExpression: (@mixin=Typed) @nointerp
+     LeftHandSideExpression IncrDecrOperator
+LeftHandSideExpression:
+     LeftHandSide @anon
+CastExpression: (@mixin=Typed) @nointerp
+     Cast        UnaryExpression  (@name=Expression)
+Cast: @nointerp
+     "(" ConfirmCast ")" !AmbiguousBinaryUnaryOperator @anon (@name=ConfirmCast)
+     "(" ConvertCast ")" @anon (@name=ConvertCast)
+ConfirmCast:
+     ReferenceType {AdditionalBound}
+ConvertCast:
+     PrimitiveType
+AmbiguousBinaryUnaryOperator: @operator
+     "+"
+     "-"
+ConstantExpression:
+     Expression
