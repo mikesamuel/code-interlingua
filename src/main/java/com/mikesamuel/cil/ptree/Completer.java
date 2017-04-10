@@ -84,7 +84,9 @@ final class Completer extends ParSer {
   }
 
   @Override
-  public String toString() {
-    return "(complete " + this.p + ")";
+  public void appendShallowStructure(StringBuilder sb) {
+    sb.append("(complete ");
+    p.getParSer().appendShallowStructure(sb);
+    sb.append(")");
   }
 }

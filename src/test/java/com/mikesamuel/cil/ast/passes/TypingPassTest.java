@@ -1097,13 +1097,16 @@ public final class TypingPassTest extends TestCase {
   }
 
   @Test
-  public static final void testMoreExpressionAtoms() throws Exception {
+  public static final void testClassLiterals() throws Exception {
     assertTyped(
         null,
         new String[][] {
           {
             "//C",
             "class C {",
+            "  static class Outer<T> {",
+            "    class Inner<U> {}",
+            "  }",
             "  Class<?> tc = C.class;",
             "  Class<?> tac = C[].class;",
             "  Class<?> nc = ((int.class));",
@@ -1111,6 +1114,7 @@ public final class TypingPassTest extends TestCase {
             "  Class<?> bc = boolean.class;",
             "  Class<?> bac = boolean[].class;",
             "  Class<?> vc = (void.class);",
+            "  Class<?> pc = C.Outer.Inner.class;",
             "}",
           },
         },
@@ -1123,6 +1127,10 @@ public final class TypingPassTest extends TestCase {
             "boolean.class : /java/lang/Class</java/lang/Boolean>",
             "boolean[].class : /java/lang/Class</java/lang/Boolean.TYPE[]>",
             "void.class : /java/lang/Class</java/lang/Void>",
+
+            "C.Outer.Inner.class : /java/lang/Class<"
+            + "/C$Outer<? extends /java/lang/Object>"
+            + "$Inner<? extends /java/lang/Object>>",
         },
         null);
   }

@@ -15,7 +15,7 @@ public final class TypeInfoResolverTest extends TestCase {
   public void testClassbasedFieldAndMethodInfo() {
     TypeInfoResolver r = TypeInfoResolver.Resolvers.forClassLoader(
         getClass().getClassLoader());
-    r.resolve(typ("java", "lang", "Integer").typeName);
+    r.resolve(typ("java", "lang", "Integer").rawName);
   }
 
   @Test
@@ -73,15 +73,12 @@ public final class TypeInfoResolverTest extends TestCase {
     for (int i = 0, n = parts.length; i < n; ++i) {
       nm = nm.child(parts[i], i + 1 == n ? Name.Type.CLASS : Name.Type.PACKAGE);
     }
-    return new TypeSpecification(nm);
+    return TypeSpecification.unparameterized(nm);
   }
 
   private static TypeSpecification typ(
       TypeSpecification raw, TypeSpecification.TypeBinding... bs) {
-    return new TypeSpecification(
-        raw.typeName,
-        ImmutableList.copyOf(bs),
-        raw.nDims);
+    return raw.withBindings(ImmutableList.copyOf(bs));
   }
 
   private static TypeSpecification.TypeBinding is(TypeSpecification bound) {

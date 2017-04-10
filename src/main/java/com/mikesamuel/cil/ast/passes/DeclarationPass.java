@@ -12,14 +12,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
+import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.j8.AdditionalBoundNode;
 import com.mikesamuel.cil.ast.j8.AnnotationNode;
 import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
@@ -30,6 +35,7 @@ import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8Chapter;
 import com.mikesamuel.cil.ast.j8.J8FileNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.j8.J8TypeScope;
 import com.mikesamuel.cil.ast.j8.ModifierNode;
@@ -38,6 +44,7 @@ import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.PartialTypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
@@ -219,11 +226,11 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
             TypeInfo outerTypeInfo = outerDecl.decl.getDeclaredTypeInfo();
             resolve(outerDecl, loop);
             for (TypeSpecification iface : outerTypeInfo.interfaces) {
-              interfacesToInheritDeclarationsFrom.add(iface.typeName);
+              interfacesToInheritDeclarationsFrom.add(iface.rawName);
             }
             if (outerTypeInfo.superType.isPresent()) {
               superTypesToInheritDeclarationsFrom.add(
-                  outerTypeInfo.superType.get().typeName);
+                  outerTypeInfo.superType.get().rawName);
             }
           }
         }
@@ -317,15 +324,23 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
       J8TypeDeclaration decl = d.decl;
       J8BaseNode node = (J8BaseNode) decl;
+      J8NodeType nodeType = node.getNodeType();
       List<J8BaseNode> children = node.getChildren();
       // Collect the declared type after resolving its super-types.
-      Name typeName = decl.getDeclaredTypeInfo().canonName;
+      final Name typeName = decl.getDeclaredTypeInfo().canonName;
+
+      TypeInfo partialTypeInfo = typeInfoResolver.resolve(typeName).get();
+      Preconditions.checkState(typeName.equals(partialTypeInfo.canonName));
 
       TypeSpecification superTypeSpec = JavaLang.JAVA_LANG_OBJECT;
 
       ImmutableList.Builder<TypeSpecification> interfaceNames =
           ImmutableList.builder();
       int modifiers = 0;
+      if (nodeType == J8NodeType.NormalInterfaceDeclaration
+          || nodeType == J8NodeType.AnnotationTypeDeclaration) {
+        modifiers |= Modifier.INTERFACE;
+      }
       for (J8BaseNode child : children) {
         switch (child.getNodeType()) {
           case JavaDocComment:
@@ -345,6 +360,99 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           case ClassOrInterfaceTypeToInstantiate: {
             superTypeSpec = AmbiguousNames.typeSpecificationOf(
                 child, nameResolver, logger);
+            // If
+            //   1. d declares an inner class, and d's super type is an inner
+            //      class and
+            //   2. d is non-static, and d's super type is non-static, and
+            //   3. d's outer class extends d's super type's outer type,
+            // Then
+            // Attach any resolved parameter bindings from the outer type to the
+            // appropriate layer in the type spec.
+            Map<Name, TypeBinding> extraBindings = Maps.newLinkedHashMap();
+            if (!Modifier.isStatic(modifiers)
+                && !Modifier.isInterface(modifiers)) {
+              for (TypeInfo ti = partialTypeInfo; ti != null;
+                   ti = typeInfoResolver.resolve(ti.outerClass.get())
+                        .orNull()) {
+                TypeSpecification superType;
+                if (ti == partialTypeInfo) {
+                  superType = superTypeSpec;
+                } else if (ti.superType.isPresent()) {
+                  superType = ti.superType.get();
+                } else {
+                  break;
+                }
+                if (!computeExtraSuperTypeBindings(
+                        ti, superType, extraBindings)) {
+                  break;
+                }
+              }
+            }
+            if (!extraBindings.isEmpty()) {
+              superTypeSpec = superTypeSpec.withBindings(
+                  new Function<PartialTypeSpecification,
+                               ImmutableList<TypeBinding>>() {
+
+                    private final Set<Name> flattened = Sets.newHashSet();
+
+                    private
+                    @Nullable TypeBinding getBinding(Name typeParamName) {
+                      Preconditions.checkArgument(
+                          typeParamName.type == Name.Type.TYPE_PARAMETER,
+                          typeParamName);
+                      TypeBinding b = extraBindings.get(typeParamName);
+                      if (b != null) {
+                        if (flattened.add(typeParamName)) {
+                          extraBindings.put(
+                              typeParamName,
+                              new TypeBinding(
+                                  TypeSpecification.ERROR_TYPE_SPEC));
+                          while (true) {
+                            TypeBinding bs = b.subst(
+                                new Function<Name, TypeBinding>() {
+                                  @SuppressWarnings("synthetic-access")
+                                  @Override
+                                  public TypeBinding apply(Name nm) {
+                                    return getBinding(nm);
+                                  }
+                                });
+                            if (bs.equals(b)) {
+                              break;
+                            }
+                            b = bs;
+                          }
+                          extraBindings.put(typeParamName, b);
+                        }
+                      }
+                      return b;
+                    }
+
+                    @Override
+                    public ImmutableList<TypeBinding> apply(
+                        PartialTypeSpecification s) {
+                      ImmutableList<TypeBinding> old = s.bindings();
+                      if (old.isEmpty() && s instanceof TypeSpecification) {
+                        Optional<TypeInfo> tiOpt = typeInfoResolver.resolve(
+                            s.getRawName());
+                        if (tiOpt.isPresent()) {
+                          ImmutableList.Builder<TypeBinding> b =
+                              ImmutableList.builder();
+                          for (Name param : tiOpt.get().parameters) {
+                            TypeBinding binding = getBinding(param);
+                            if (binding == null) {
+                              return old;
+                            }
+                            b.add(binding);
+                          }
+                          // TODO: check all template parameters in scope.
+                          return b.build();
+                        }
+                      }
+                      return old;
+                    }
+
+                  });
+            }
             break;
           }
           case TypeBound:
@@ -392,8 +500,8 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           break;
         case EnumDeclaration:
           // Would be Enum<typeName> if Name captured generic parameters.
-          superTypeSpec = JavaLang.JAVA_LANG_ENUM.withBindings(
-              ImmutableList.of(new TypeBinding(typeName)));
+          superTypeSpec = JavaLang.JAVA_LANG_ENUM.withBindings(ImmutableList.of(
+              new TypeBinding(TypeSpecification.unparameterized(typeName))));
           break;
         case UnqualifiedClassInstanceCreationExpression:
         case EnumConstant:
@@ -407,9 +515,6 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
         modifiers |= Modifier.FINAL;
       }
 
-      TypeInfo partialTypeInfo = typeInfoResolver.resolve(typeName).get();
-      Preconditions.checkState(typeName.equals(partialTypeInfo.canonName));
-
       TypeInfo typeInfo = partialTypeInfo.builder()
           .modifiers(modifiers)
           .isAnonymous(isAnonymous)
@@ -421,6 +526,64 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
       if (DEBUG) {
         System.err.println("Resolved " + typeName);
+      }
+    }
+
+    private boolean computeExtraSuperTypeBindings(
+        TypeInfo ti, TypeSpecification superType,
+        Map<Name, TypeBinding> extraBindings) {
+      if (!ti.outerClass.isPresent()) {
+        return false;
+      }
+      Optional<TypeInfo> superTypeInfoOpt = typeInfoResolver
+          .resolve(superType.rawName);
+      if (!superTypeInfoOpt.isPresent()) { return false; }
+      TypeInfo superTypeInfo = superTypeInfoOpt.get();
+      if (!superTypeInfo.outerClass.isPresent()
+          || Modifier.isStatic(superTypeInfo.modifiers)) {
+        return false;
+      }
+      TypeSpecification superOuterType = superType.getOuterType().get();
+            Optional<TypeInfo> outerTypeInfoOpt = typeInfoResolver.resolve(
+          ti.outerClass.get());
+      Optional<TypeInfo> superOuterTypeInfoOpt = typeInfoResolver
+          .resolve(superOuterType.rawName);
+      if (!(outerTypeInfoOpt.isPresent()
+            && superOuterTypeInfoOpt.isPresent())) {
+        return false;
+      }
+      TypeInfo outerTypeInfo = outerTypeInfoOpt.get();
+      TypeInfo superOuterTypeInfo = superOuterTypeInfoOpt.get();
+      findBindingsBetween(
+          superOuterType, superOuterTypeInfo,
+          TypeSpecification.autoScoped(
+              outerTypeInfo.canonName, typeInfoResolver),
+          outerTypeInfo,
+          extraBindings);
+      return true;
+    }
+
+    private void findBindingsBetween(
+        TypeSpecification dest, TypeInfo destInfo,
+        TypeSpecification src, TypeInfo srcInfo,
+        Map<Name, TypeBinding> bindingsOut) {
+      int nParams = srcInfo.parameters.size();
+      if (nParams == src.bindings.size()) {
+        for (int i = 0; i < nParams; ++i) {
+          bindingsOut.put(srcInfo.parameters.get(i), src.bindings.get(i));
+        }
+      }
+
+      if (!destInfo.canonName.equals(srcInfo.canonName)
+          && srcInfo.superType.isPresent()) {
+        TypeSpecification superType = srcInfo.superType.get();
+        Optional<TypeInfo> superTypeInfo = typeInfoResolver.resolve(
+            superType.rawName);
+        if (superTypeInfo.isPresent()) {
+          findBindingsBetween(
+              dest, destInfo, superType, superTypeInfo.get(),
+              bindingsOut);
+        }
       }
     }
   }

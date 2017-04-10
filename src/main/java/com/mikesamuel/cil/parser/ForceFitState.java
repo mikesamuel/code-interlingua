@@ -186,7 +186,7 @@ public final class ForceFitState {
      * into the parent node's child list.
      */
     @SuppressWarnings("synthetic-access")
-    public static InterpolatedValue interpolatedValue(Object value) {
+    public static InterpolatedValue interpolatedValue(@Nullable Object value) {
       return new InterpolatedValue(value);
     }
 
@@ -260,11 +260,11 @@ public final class ForceFitState {
      * An interpolated value that may need wrapping and type conversion to fit
      * into the parent node's child list.
      */
-    public final Object value;
+    public final @Nullable Object value;
 
     /** */
     @SuppressWarnings("synthetic-access")
-    private InterpolatedValue(Object value) {
+    private InterpolatedValue(@Nullable Object value) {
       this.value = value;
     }
 
@@ -277,7 +277,7 @@ public final class ForceFitState {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(@Nullable Object obj) {
       if (this == obj) {
         return true;
       }

@@ -444,7 +444,7 @@ extends AbstractRewritingPass {
               error(directive, "Missing %%if condition");
             } else {
               Completion<Object> conditionResult = interpreter.interpret(
-                  condition, templateScope.locals);
+                  Preconditions.checkNotNull(condition), templateScope.locals);
               switch (context.toBoolean(conditionResult.value)) {
                 case FALSE:
                   templateScope.elide = true;

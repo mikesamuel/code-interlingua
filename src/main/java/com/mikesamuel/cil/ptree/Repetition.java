@@ -145,7 +145,9 @@ final class Repetition extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    return "{" + this.p + "}";
+  public void appendShallowStructure(StringBuilder sb) {
+    sb.append("{");
+    this.p.getParSer().appendShallowStructure(sb);
+    sb.append("}");
   }
 }

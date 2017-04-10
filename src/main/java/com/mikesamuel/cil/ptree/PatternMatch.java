@@ -120,7 +120,9 @@ final class PatternMatch extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    return "(/" + this.p.pattern() + "/)";
+  public void appendShallowStructure(StringBuilder sb) {
+    sb.append("(/");
+    sb.append(this.p.pattern());
+    sb.append("/)");
   }
 }

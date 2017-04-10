@@ -62,7 +62,7 @@ public final class TypeInfo extends AccessibleInfo {
 
     if (superType.isPresent()) {
       Optional<TypeInfo> superTypeInfo =
-          superTypeResolver.resolve(superType.get().typeName);
+          superTypeResolver.resolve(superType.get().rawName);
       if (superTypeInfo.isPresent()) {
         Optional<MemberInfo> miOpt =
             superTypeInfo.get().memberMatching(superTypeResolver, p);
@@ -74,7 +74,7 @@ public final class TypeInfo extends AccessibleInfo {
     // TODO: Might this be called before inheritance cycles have been ruled out?
     for (TypeSpecification iface : interfaces) {
       Optional<TypeInfo> ifaceTypeInfoOpt =
-          superTypeResolver.resolve(iface.typeName);
+          superTypeResolver.resolve(iface.rawName);
       if (ifaceTypeInfoOpt.isPresent()) {
         Optional<MemberInfo> miOpt = ifaceTypeInfoOpt.get().memberMatching(
             superTypeResolver, p);

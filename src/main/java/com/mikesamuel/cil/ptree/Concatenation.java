@@ -175,10 +175,12 @@ class Concatenation extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    if (ps.isEmpty()) { return "()"; }
+  public void appendShallowStructure(StringBuilder sb) {
+    if (ps.isEmpty()) {
+      sb.append("()");
+      return;
+    }
 
-    StringBuilder sb = new StringBuilder();
     boolean first = true;
     for (ParSerable p : ps) {
       if (first) {
@@ -194,11 +196,12 @@ class Concatenation extends PTParSer {
             && !Alternation.getOptionBody(alt).isPresent();
       }
       if (parenthesize) {
-        sb.append('(').append(c).append(')');
+        sb.append('(');
+        c.appendShallowStructure(sb);
+        sb.append(')');
       } else {
         sb.append(c);
       }
     }
-    return sb.toString();
   }
 }

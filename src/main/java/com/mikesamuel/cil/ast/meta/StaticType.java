@@ -1,5 +1,7 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -9,6 +11,7 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -178,6 +181,56 @@ public abstract class StaticType {
     Cast(boolean explicit) {
       this.explicit = explicit;
     }
+
+    static Cast worstCase(Cast a, Cast b) {
+      return WORST_CASES[diag(a, b)];
+    }
+
+    private static final Cast[] WORST_CASES;
+    static {
+      Cast[] VALUES = Cast.values();
+      WORST_CASES = new Cast[diag(VALUES.length - 1, VALUES.length - 1) + 1];
+      Arrays.fill(WORST_CASES, Cast.DISJOINT);
+
+      for (Cast c : VALUES) {
+        WORST_CASES[diag(Cast.SAME, c)] = c;
+        WORST_CASES[diag(c, c)] = c;
+      }
+
+      WORST_CASES[diag(Cast.CONFIRM_UNCHECKED, Cast.CONFIRM_CHECKED)] =
+          Cast.CONFIRM_UNCHECKED;
+      WORST_CASES[diag(Cast.CONFIRM_UNCHECKED, Cast.CONFIRM_SAFE)] =
+          Cast.CONFIRM_UNCHECKED;
+      WORST_CASES[diag(Cast.CONFIRM_CHECKED, Cast.CONFIRM_SAFE)] =
+          Cast.CONFIRM_CHECKED;
+    }
+
+    /** Index into a diagonal matrix. */
+    static int diag(Cast a, Cast b) {
+      return diag(a.ordinal(), b.ordinal());
+    }
+
+    static int diag(int a, int b) {
+      // (0, 0)
+      // (0, 1) (1, 1)
+      // (0, 2) (1, 2) (2, 2)
+      // ...
+      // (0, n) (1, n) (2, n) ... (n, n)
+      //
+      // Where i <= j
+      // (i, j) is at index i + (sum 0..j)
+      // (i, j) is at index i + (j * (j + 1)) / 2
+      int i, j;
+      int delta = a - b;
+      if (delta <= 0) {
+        i = a;
+        j = b;
+      } else {
+        i = b;
+        j = a;
+      }
+      return i + ((j * (j + 1)) >> 1);
+    }
   }
 
   /** Base type for primitive types. */
@@ -191,13 +244,17 @@ public abstract class StaticType {
     final String descriptorFragment;
 
     private PrimitiveType(
-        String name, @Nullable Name wrapperType, @Nullable Name specType,
+        String name, @Nullable Name wrapperType,
+        @Nullable TypeSpecification spec,
         Class<?> primitiveClass,
         String descriptorFragment) {
-      super(new TypeSpecification(
-          specType != null
-          ? specType
-          : wrapperType.child("TYPE", Name.Type.FIELD)));
+      super(
+          spec != null
+          ? spec
+          : new TypeSpecification(
+              new TypeSpecification(
+                  JavaLang.PKG, wrapperType.identifier, Name.Type.CLASS),
+              "TYPE", Name.Type.FIELD));
       this.name = name;
       this.wrapperType = wrapperType;
       this.descriptorFragment = descriptorFragment;
@@ -275,11 +332,7 @@ public abstract class StaticType {
 
   /** A type returned when a type is malformed. */
   public static final StaticType ERROR_TYPE = new StaticType(
-      new TypeSpecification(
-          Name.DEFAULT_PACKAGE
-          .child("error", Name.Type.PACKAGE)
-          .child("ErrorType", Name.Type.CLASS)
-          .child("TYPE", Name.Type.FIELD))) {
+      TypeSpecification.ERROR_TYPE_SPEC) {
 
     @Override
     public String toString() {
@@ -313,10 +366,10 @@ public abstract class StaticType {
   private static final class OneOffType extends PrimitiveType {
 
     private OneOffType(
-        String name, @Nullable Name wrapperType, @Nullable Name specTypeName,
+        String name, @Nullable Name wrapperType,
+        @Nullable TypeSpecification spec,
         Class<?> primitiveClass, String descriptorFragment) {
-      super(
-          name, wrapperType, specTypeName, primitiveClass, descriptorFragment);
+      super(name, wrapperType, spec, primitiveClass, descriptorFragment);
     }
 
     @Override
@@ -344,7 +397,10 @@ public abstract class StaticType {
   /** Type {@code byte} */
   public static final PrimitiveType T_VOID = new OneOffType(
       "void", null,
-      JAVA_LANG.child("Void", Name.Type.CLASS).child("TYPE", Name.Type.FIELD),
+      new TypeSpecification(
+          new TypeSpecification(
+              JavaLang.PKG, "Void", Name.Type.CLASS),
+          "TYPE", Name.Type.FIELD),
       void.class, "V");
 
   /** Type {@code byte} */
@@ -387,12 +443,24 @@ public abstract class StaticType {
       "double", true, 8, true,
       JAVA_LANG.child("Double", Name.Type.CLASS), double.class, "D");
 
-  private static final Set<Name> ARRAY_SUPER_TYPES = ImmutableSet.of(
-      JavaLang.JAVA_LANG_OBJECT.typeName,
-      JavaLang.JAVA_LANG_CLONEABLE.typeName,
-      JavaLang.JAVA.child("io", Name.Type.PACKAGE)
-          .child("Serializable", Name.Type.CLASS)
+  private static final Set<TypeSpecification> ARRAY_SUPER_TYPES =
+      ImmutableSet.of(
+          JavaLang.JAVA_LANG_OBJECT,
+          JavaLang.JAVA_LANG_CLONEABLE,
+          new TypeSpecification(
+              new PackageSpecification(
+                  JavaLang.JAVA.child("io", Name.Type.PACKAGE)),
+              "Serializable", Name.Type.CLASS)
       );
+
+  private static final Set<Name> ARRAY_SUPER_TYPE_NAMES;
+  static {
+    ImmutableSet.Builder<Name> b = ImmutableSet.builder();
+    for (TypeSpecification s : ARRAY_SUPER_TYPES) {
+      b.add(s.rawName);
+    }
+    ARRAY_SUPER_TYPE_NAMES = b.build();
+  }
 
   /**
    * All the primitive types.
@@ -472,17 +540,17 @@ public abstract class StaticType {
               }
 
               // Check that the type exists.
-              if (!ts.typeName.type.isType) {
+              if (!ts.rawName.type.isType) {
                 // Primitive types should not reach here due to cache seeding
                 // above, but malformed types like int<String> might.
                 if (logger != null) {
                   logger.severe(
                       (pos != null ? pos + ": " : "") + " type name "
-                      + ts.typeName + " does not specify a type");
+                      + ts.rawName + " does not specify a type");
                 }
                 if (!ts.bindings.isEmpty()) {
-                  TypeSpecification withoutBindings = new TypeSpecification(
-                      ts.typeName);
+                  TypeSpecification withoutBindings =
+                      TypeSpecification.unparameterized(ts.rawName);
                   if (pool.containsKey(withoutBindings)) {
                     return pool.get(withoutBindings);
                   }
@@ -490,12 +558,12 @@ public abstract class StaticType {
                 return ERROR_TYPE;
               }
 
-              Optional<TypeInfo> tiOpt = r.resolve(ts.typeName);
+              Optional<TypeInfo> tiOpt = r.resolve(ts.rawName);
               if (!tiOpt.isPresent()) {
                 if (logger != null) {
                   logger.severe(
                       (pos != null ? pos + ": " : "") + " type name "
-                      + ts.typeName + " does not specify a type");
+                      + ts.rawName + " does not specify a type");
                 }
                 return ERROR_TYPE;
               }
@@ -521,7 +589,8 @@ public abstract class StaticType {
                 }
               }
               if (!bindingsOk) {
-                TypeSpecification rawSpec = new TypeSpecification(ts.typeName);
+                TypeSpecification rawSpec = TypeSpecification.unparameterized(
+                    ts.rawName);
                 return type(rawSpec, pos, logger);
               }
 
@@ -689,8 +758,8 @@ public abstract class StaticType {
           for (int i = 0; i < nTypes; ++i) {
             for (ReferenceType v : st.get(i)) {
               if (v instanceof ClassOrInterfaceType
-                  && g.typeSpecification.typeName.equals(
-                      v.typeSpecification.typeName)) {
+                  && g.typeSpecification.rawName.equals(
+                      v.typeSpecification.rawName)) {
                 b.put(g, (ClassOrInterfaceType) v);
               }
             }
@@ -764,36 +833,38 @@ public abstract class StaticType {
 
       // The above does a pairwise reduction from the left.
       ClassOrInterfaceType t = g.get(0);
-      int arity = t.typeParameterBindings.size();
+      // TODO: outer type parameter bindings
+      int arity = t.innermostBindings().size();
       for (int i = 1, n = g.size(); i < n; ++i) {
         ClassOrInterfaceType e1 = t;
         ClassOrInterfaceType e2 = g.get(i);
 
         Preconditions.checkArgument(
             e1.info.canonName.equals(e2.info.canonName));
-        Preconditions.checkArgument(e1.typeParameterBindings.size() == arity);
-        Preconditions.checkArgument(e2.typeParameterBindings.size() == arity);
+        Preconditions.checkArgument(e1.innermostBindings().size() == arity);
+        Preconditions.checkArgument(e2.innermostBindings().size() == arity);
         ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
             ImmutableList.builder();
         for (int j = 0; j < arity; ++j) {
           bindings.add(lcta(
-              e1.typeParameterBindings.get(j),
-              e2.typeParameterBindings.get(j),
+              e1.innermostBindings().get(j),
+              e2.innermostBindings().get(j),
               infTypeDetect));
         }
         t = (ClassOrInterfaceType) type(
-            new TypeSpecification(e1.info.canonName, bindings.build()),
+            e1.typeSpecification.withBindings(bindings.build()),
             null, null);
       }
 
       // Last case.
       ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
           ImmutableList.builder();
+      // TODO: outer class bindings.
       for (int j = 0; j < arity; ++j) {
-        bindings.add(lcta(t.typeParameterBindings.get(j)));
+        bindings.add(lcta(t.innermostBindings().get(j)));
       }
       return (ClassOrInterfaceType) type(
-          new TypeSpecification(t.info.canonName, bindings.build()),
+          t.typeSpecification.withBindings(bindings.build()),
           null, null);
     }
 
@@ -804,7 +875,7 @@ public abstract class StaticType {
       /// lcta(U) = ? if U's upper bound is Object,
       TypeSpecification upperBound = upperBound(typeBinding);
       if (upperBound == null
-          || JavaLang.JAVA_LANG_OBJECT.typeName.equals(upperBound.typeName)) {
+          || JavaLang.JAVA_LANG_OBJECT.rawName.equals(upperBound.rawName)) {
         return EXTENDS_OBJECT;
       }
       /// otherwise ? extends lub(U,Object)
@@ -905,7 +976,7 @@ public abstract class StaticType {
       /// glb(V1,...,Vm) is defined as V1 & ... & Vm.
       // TODO: We need to be able to represent type intersections.
       if (u.equals(v)) { return u; }
-      if (u.typeName.equals(v.typeName)) {
+      if (u.rawName.equals(v.rawName)) {
         return u.withBindings(ImmutableList.of());
       }
       return T_NULL.typeSpecification;
@@ -917,7 +988,7 @@ public abstract class StaticType {
       }
       TypeSpecification upperBound = b.typeSpec;
       while (upperBound != null
-             && upperBound.typeName.type == Name.Type.TYPE_PARAMETER) {
+             && upperBound.rawName.type == Name.Type.TYPE_PARAMETER) {
         StaticType t = type(upperBound, null, null);
         if (!(t instanceof ClassOrInterfaceType)) {
           // type bounds can't extend array types or <null>
@@ -970,7 +1041,8 @@ public abstract class StaticType {
       private NullType() {
         super(new TypeSpecification(
             // Outside normal type namespace since null is a keyword.
-            Name.DEFAULT_PACKAGE.child("null", Name.Type.CLASS)));
+            PackageSpecification.DEFAULT_PACKAGE,
+            "null", Name.Type.CLASS));
       }
 
       @Override
@@ -1024,10 +1096,6 @@ public abstract class StaticType {
        * The type info for the type.
        */
       public final TypeInfo info;
-      /**
-       * Any type parameter bindings that correspond to info.parameters.
-       */
-      public final ImmutableList<TypeBinding> typeParameterBindings;
 
       private ImmutableMap<Name, ClassOrInterfaceType> superTypesTransitive;
 
@@ -1036,7 +1104,6 @@ public abstract class StaticType {
           TypeInfo info) {
         super(spec);
         this.info = info;
-        this.typeParameterBindings = spec.bindings;
       }
 
       /** The name of the raw type. */
@@ -1044,14 +1111,23 @@ public abstract class StaticType {
         return info.canonName;
       }
 
+      /**
+       * Any bindings on the innermost class.
+       * For {@code pkg.Foo.Bar<A, B>} returns {@code <A, B>}.
+       * For {@code pkg.Foo<A>.Bar} returns {@code []}.
+       */
+      public ImmutableList<TypeBinding> innermostBindings() {
+        return typeSpecification.bindings;
+      }
+
       @Override
       public ReferenceType toErasedType() {
         TypeSpecification erasedSpec;
         if (info.canonName.type == Name.Type.CLASS) {
-          if (this.typeParameterBindings.isEmpty()) {
+          erasedSpec = this.typeSpecification.withBindings(
+              Functions.constant(ImmutableList.<TypeBinding>of()));
+          if (erasedSpec.equals(typeSpecification)) {
             return this;
-          } else {
-            erasedSpec = typeSpecification.withBindings(ImmutableList.of());
           }
         } else {
           Preconditions.checkState(
@@ -1066,20 +1142,7 @@ public abstract class StaticType {
 
       @Override
       public String toString() {
-        if (typeParameterBindings.isEmpty()) {
-          return info.canonName.toString();
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(info.canonName);
-        sb.append('<');
-        for (int i = 0, n = typeParameterBindings.size(); i < n; ++i) {
-          if (i != 0) {
-            sb.append(',');
-          }
-          sb.append(typeParameterBindings.get(i));
-        }
-        sb.append('>');
-        return sb.toString();
+        return typeSpecification.toString();
       }
 
       Map<Name, ClassOrInterfaceType> getSuperTypesTransitive() {
@@ -1088,11 +1151,11 @@ public abstract class StaticType {
           m.put(info.canonName, this);
 
           for (TypeSpecification ts : r.superTypesOf(this.typeSpecification)) {
-            if (!m.containsKey(ts.typeName)) {
+            if (!m.containsKey(ts.rawName)) {
               StaticType superType = TypePool.this.type(ts, null, null);
               if (superType instanceof ClassOrInterfaceType) {  // Not error
                 ClassOrInterfaceType superCT = (ClassOrInterfaceType) superType;
-                m.put(ts.typeName, superCT);
+                m.put(ts.rawName, superCT);
                 // TODO: Fails to halt if dep cycles.
                 for (Map.Entry<Name, ClassOrInterfaceType> e :
                   superCT.getSuperTypesTransitive().entrySet()) {
@@ -1116,134 +1179,23 @@ public abstract class StaticType {
         }
         if (t instanceof ClassOrInterfaceType) {
           ClassOrInterfaceType ct = (ClassOrInterfaceType) t;
-          if (info.canonName.equals(ct.info.canonName)) {
-            // This single-class-loader-esque assumption is valid for all code
-            // compiled together.
-            if (this.typeParameterBindings.equals(ct.typeParameterBindings)) {
-              return Cast.SAME;
-            } else if (this.typeParameterBindings.isEmpty()) {
-              // Optimistic raw type assumptions.
-              return Cast.CONFIRM_SAFE;
-            } else if (ct.typeParameterBindings.isEmpty()) {
-              return Cast.CONFIRM_UNCHECKED;
-            } else {
-              int n = typeParameterBindings.size();
-              Preconditions.checkState(n == ct.typeParameterBindings.size());
-
-              // Optimistically assume this, and look for reasons to downgrade
-              // to disjoint or unchecked.
-              Cast result = Cast.CONFIRM_SAFE;
-
-              // Check parameters pairwise taking variance into account.
-              for (int i = 0; i < n; ++i) {
-                TypeBinding left = typeParameterBindings.get(i);
-                TypeBinding right = ct.typeParameterBindings.get(i);
-                if (left.variance == Variance.INVARIANT
-                    && right.variance == Variance.INVARIANT) {
-                  if (!left.equals(right)) {
-                    return Cast.DISJOINT;
-                  }
-                  continue;
-                }
-
-                StaticType leftType = type(left.typeSpec, null, null);
-                StaticType rightType = type(right.typeSpec, null, null);
-
-                Cast pc = leftType.assignableFrom(rightType);
-                switch (pc) {
-                  case DISJOINT:
-                    return Cast.DISJOINT;
-                  case SAME:
-                    if (left.variance != right.variance
-                        && right.variance != Variance.INVARIANT) {
-                      result = Cast.CONFIRM_UNCHECKED;
-                    }
-                    continue;
-                  case CONFIRM_SAFE:
-                    if (right.variance == Variance.SUPER
-                        // Special case
-                        //   X<? super Foo> y = ...;
-                        //   X<? extends Object> x = y;
-                        // which is safe because all parameter bindings are
-                        // reference types and Object is a top for reference
-                        // types.
-                        && (left.variance != Variance.EXTENDS
-                            || !JavaLang.JAVA_LANG_OBJECT.typeName.equals(
-                                left.typeSpec.typeName))) {
-                      result = Cast.CONFIRM_UNCHECKED;
-                    } else if (left.variance != Variance.EXTENDS) {
-                      return Cast.DISJOINT;
-                    }
-                    break;
-                  case CONFIRM_CHECKED:
-                    if (right.variance == Variance.EXTENDS) {
-                      result = Cast.CONFIRM_UNCHECKED;
-                    } else if (left.variance != Variance.SUPER) {
-                      return Cast.DISJOINT;
-                    }
-                    break;
-                  case CONFIRM_UNCHECKED:
-                    result = Cast.CONFIRM_UNCHECKED;
-                    break;
-                  case BOX:
-                  case CONVERTING_LOSSLESS:
-                  case CONVERTING_LOSSY:
-                  case UNBOX:
-                    throw new AssertionError(
-                        left + " =~= " + right + " => " + pc);
-                }
+          Cast c = assignableFromClassIgnoringOuter(ct);
+          if (!Modifier.isStatic(this.info.modifiers)
+              && !Modifier.isStatic(ct.info.modifiers)) {
+            Optional<TypeSpecification> tOuterSpec = this.typeSpecification
+                .getOuterType();
+            if (tOuterSpec.isPresent()) {
+              Optional<TypeSpecification> ctOuterSpec = ct.typeSpecification
+                  .getOuterType();
+              if (ctOuterSpec.isPresent()) {
+                StaticType tOuter = type(tOuterSpec.get(), null, null);
+                StaticType ctOuter = type(ctOuterSpec.get(), null, null);
+                Cast oc = tOuter.assignableFrom(ctOuter);
+                return Cast.worstCase(c, oc);
               }
-              return result;
             }
           }
-          Map<Name, ClassOrInterfaceType> ctSuperTypes =
-              ct.getSuperTypesTransitive();
-          ClassOrInterfaceType ctCommonSuperType = ctSuperTypes.get(
-              info.canonName);
-          if (ctCommonSuperType != null) {
-            Cast castToCtCommonSuper = this.assignableFrom(ctCommonSuperType);
-            switch (castToCtCommonSuper) {
-              case SAME:
-                return Cast.CONFIRM_SAFE;
-              case CONFIRM_SAFE:
-              case CONFIRM_CHECKED:  // Is this right?
-              case CONFIRM_UNCHECKED:
-                return castToCtCommonSuper;
-              case DISJOINT:
-                return Cast.DISJOINT;
-              case CONVERTING_LOSSLESS:
-              case CONVERTING_LOSSY:
-              case BOX:
-              case UNBOX:
-                throw new AssertionError(castToCtCommonSuper);
-            }
-          }
-
-          Map<Name, ClassOrInterfaceType> superTypes =
-              getSuperTypesTransitive();
-          ClassOrInterfaceType commonSuperType = superTypes.get(
-              ct.info.canonName);
-          if (commonSuperType != null) {
-            Cast castToCommonSuper = commonSuperType.assignableFrom(ct);
-            switch (castToCommonSuper) {
-              case SAME:
-              case CONFIRM_UNCHECKED:
-                return Cast.CONFIRM_CHECKED;
-              case CONFIRM_SAFE:
-              case CONFIRM_CHECKED:  // Is this right?
-                return castToCommonSuper;
-              case CONVERTING_LOSSLESS:
-              case CONVERTING_LOSSY:
-              case DISJOINT:
-              case BOX:
-              case UNBOX:
-                throw new AssertionError(castToCommonSuper);
-            }
-          }
-
-          // TODO: Do we need to work on the case where this is a type parameter
-          // and use its upper bound above?
-          return Cast.DISJOINT;
+          return c;
         }
         if (t instanceof PrimitiveType) {
           PrimitiveType pt = (PrimitiveType) t;
@@ -1254,7 +1206,7 @@ public abstract class StaticType {
             return Cast.BOX;
           }
           StaticType wrapperType = type(
-              new TypeSpecification(pt.wrapperType), null, null);
+              TypeSpecification.unparameterized(pt.wrapperType), null, null);
           Cast c = assignableFrom(wrapperType);
           switch (c) {
             case BOX:
@@ -1276,12 +1228,147 @@ public abstract class StaticType {
         throw new AssertionError(c);
       }
       if (t instanceof ArrayType) {
-        if (ARRAY_SUPER_TYPES.contains(info.canonName)) {
+        if (ARRAY_SUPER_TYPE_NAMES.contains(info.canonName)) {
           return Cast.CONFIRM_SAFE;
         }
         return Cast.DISJOINT;
       }
       throw new IllegalArgumentException(t.getClass().getName());
+    }
+
+    private Cast assignableFromClassIgnoringOuter(ClassOrInterfaceType ct) {
+      if (info.canonName.equals(ct.info.canonName)) {
+        ImmutableList<TypeBinding> tTypeParameterBindings =
+            this.innermostBindings();
+        ImmutableList<TypeBinding> ctTypeParameterBindings =
+            ct.innermostBindings();
+        // This single-class-loader-esque assumption is valid for all code
+        // compiled together.
+        if (tTypeParameterBindings.equals(ctTypeParameterBindings)) {
+          return Cast.SAME;
+        } else if (tTypeParameterBindings.isEmpty()) {
+          // Optimistic raw type assumptions.
+          return Cast.CONFIRM_SAFE;
+        } else if (ctTypeParameterBindings.isEmpty()) {
+          return Cast.CONFIRM_UNCHECKED;
+        } else {
+          int n = tTypeParameterBindings.size();
+          Preconditions.checkState(n == ctTypeParameterBindings.size());
+
+          // Optimistically assume this, and look for reasons to downgrade
+          // to disjoint or unchecked.
+          Cast result = Cast.CONFIRM_SAFE;
+
+          // Check parameters pairwise taking variance into account.
+          for (int i = 0; i < n; ++i) {
+            TypeBinding left = tTypeParameterBindings.get(i);
+            TypeBinding right = ctTypeParameterBindings.get(i);
+            if (left.variance == Variance.INVARIANT
+                && right.variance == Variance.INVARIANT) {
+              if (!left.equals(right)) {
+                return Cast.DISJOINT;
+              }
+              continue;
+            }
+
+            StaticType leftType = type(left.typeSpec, null, null);
+            StaticType rightType = type(right.typeSpec, null, null);
+
+            Cast pc = leftType.assignableFrom(rightType);
+            switch (pc) {
+              case DISJOINT:
+                return Cast.DISJOINT;
+              case SAME:
+                if (left.variance != right.variance
+                    && right.variance != Variance.INVARIANT) {
+                  result = Cast.CONFIRM_UNCHECKED;
+                }
+                continue;
+              case CONFIRM_SAFE:
+                if (right.variance == Variance.SUPER
+                    // Special case
+                    //   X<? super Foo> y = ...;
+                    //   X<? extends Object> x = y;
+                    // which is safe because all parameter bindings are
+                    // reference types and Object is a top for reference
+                    // types.
+                    && (left.variance != Variance.EXTENDS
+                        || !JavaLang.JAVA_LANG_OBJECT.rawName.equals(
+                            left.typeSpec.rawName))) {
+                  result = Cast.CONFIRM_UNCHECKED;
+                } else if (left.variance != Variance.EXTENDS) {
+                  return Cast.DISJOINT;
+                }
+                break;
+              case CONFIRM_CHECKED:
+                if (right.variance == Variance.EXTENDS) {
+                  result = Cast.CONFIRM_UNCHECKED;
+                } else if (left.variance != Variance.SUPER) {
+                  return Cast.DISJOINT;
+                }
+                break;
+              case CONFIRM_UNCHECKED:
+                result = Cast.CONFIRM_UNCHECKED;
+                break;
+              case BOX:
+              case CONVERTING_LOSSLESS:
+              case CONVERTING_LOSSY:
+              case UNBOX:
+                throw new AssertionError(
+                    left + " =~= " + right + " => " + pc);
+            }
+          }
+          return result;
+        }
+      }
+      Map<Name, ClassOrInterfaceType> ctSuperTypes =
+          ct.getSuperTypesTransitive();
+      ClassOrInterfaceType ctCommonSuperType = ctSuperTypes.get(
+          info.canonName);
+      if (ctCommonSuperType != null) {
+        Cast castToCtCommonSuper = this.assignableFrom(ctCommonSuperType);
+        switch (castToCtCommonSuper) {
+          case SAME:
+            return Cast.CONFIRM_SAFE;
+          case CONFIRM_SAFE:
+          case CONFIRM_CHECKED:  // Is this right?
+          case CONFIRM_UNCHECKED:
+            return castToCtCommonSuper;
+          case DISJOINT:
+            return Cast.DISJOINT;
+          case CONVERTING_LOSSLESS:
+          case CONVERTING_LOSSY:
+          case BOX:
+          case UNBOX:
+            throw new AssertionError(castToCtCommonSuper);
+        }
+      }
+
+      Map<Name, ClassOrInterfaceType> superTypes =
+          getSuperTypesTransitive();
+      ClassOrInterfaceType commonSuperType = superTypes.get(
+          ct.info.canonName);
+      if (commonSuperType != null) {
+        Cast castToCommonSuper = commonSuperType.assignableFrom(ct);
+        switch (castToCommonSuper) {
+          case SAME:
+          case CONFIRM_UNCHECKED:
+            return Cast.CONFIRM_CHECKED;
+          case CONFIRM_SAFE:
+          case CONFIRM_CHECKED:  // Is this right?
+            return castToCommonSuper;
+          case CONVERTING_LOSSLESS:
+          case CONVERTING_LOSSY:
+          case DISJOINT:
+          case BOX:
+          case UNBOX:
+            throw new AssertionError(castToCommonSuper);
+        }
+      }
+
+      // TODO: Do we need to work on the case where this is a type parameter
+      // and use its upper bound above?
+      return Cast.DISJOINT;
     }
 
     @Override
@@ -1356,8 +1443,11 @@ public abstract class StaticType {
         // All Array types are reference types, and the type info resolver has
         // already resolved the base type's type name to a type other than
         // error type.
-        return (ReferenceType) type(new TypeSpecification(
-            erasedBaseType.typeSpecification.typeName, nDims), null, null);
+        return (ReferenceType) type(
+            TypeSpecification.unparameterized(
+                erasedBaseType.typeSpecification.rawName)
+            .withNDims(nDims),
+            null, null);
       }
 
       @Override
@@ -1383,7 +1473,7 @@ public abstract class StaticType {
         }
         if (t instanceof ClassOrInterfaceType) {
           ClassOrInterfaceType cit = (ClassOrInterfaceType) t;
-          if (ARRAY_SUPER_TYPES.contains(cit.info.canonName)) {
+          if (ARRAY_SUPER_TYPE_NAMES.contains(cit.info.canonName)) {
             return Cast.CONFIRM_CHECKED;
           }
           return Cast.DISJOINT;
@@ -1421,11 +1511,8 @@ public abstract class StaticType {
       @Override
       ImmutableSet<ReferenceType> buildSuperTypeSet() {
         ImmutableSet.Builder<ReferenceType> supertypes = ImmutableSet.builder();
-        for (Name superTypeName : ARRAY_SUPER_TYPES) {
-          supertypes.add(
-              (ReferenceType) type(
-                  new TypeSpecification(superTypeName),
-                  null, null));
+        for (TypeSpecification superTypeSpec : ARRAY_SUPER_TYPES) {
+          supertypes.add((ReferenceType) type(superTypeSpec, null, null));
         }
         if (elementType instanceof ReferenceType) {
           for (ReferenceType elementSuperType : getSuperTypes()) {

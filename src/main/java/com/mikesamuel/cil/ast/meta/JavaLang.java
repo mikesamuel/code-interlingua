@@ -19,42 +19,44 @@ public final class JavaLang {
   public static final Name JAVA_LANG =
       JAVA.child("lang", Name.Type.PACKAGE);
 
+  /** The package specification for {@code java.lang}. */
+  public static final PackageSpecification PKG = new PackageSpecification(
+      JAVA_LANG);
+
   /** */
   public static final TypeSpecification JAVA_LANG_OBJECT =
-      new TypeSpecification(
-          JAVA_LANG.child("Object", Name.Type.CLASS));
+      new TypeSpecification(PKG, "Object", Name.Type.CLASS);
 
   /** */
   public static final TypeSpecification JAVA_LANG_CLONEABLE =
-      new TypeSpecification(
-          JAVA_LANG.child("Cloneable", Name.Type.CLASS));
+      new TypeSpecification(PKG, "Cloneable", Name.Type.CLASS);
 
   /** */
   public static final TypeSpecification JAVA_LANG_STRING =
-      new TypeSpecification(JAVA_LANG.child("String", Name.Type.CLASS));
+      new TypeSpecification(PKG, "String", Name.Type.CLASS);
 
   /** */
   public static final TypeSpecification JAVA_LANG_CLASS =
       new TypeSpecification(
-          JAVA_LANG.child("Class", Name.Type.CLASS),
-          ImmutableList.of(TypeBinding.WILDCARD));
+          PKG, "Class", Name.Type.CLASS,
+          ImmutableList.of(TypeBinding.WILDCARD), 0);
 
   /** */
   public static final TypeSpecification JAVA_LANG_VOID =
-      new TypeSpecification(JAVA_LANG.child("Void", Name.Type.CLASS));
+      new TypeSpecification(PKG, "Void", Name.Type.CLASS);
 
   /** */
   public static final TypeSpecification JAVA_LANG_ENUM = new TypeSpecification(
-          JAVA_LANG.child("Enum", Name.Type.CLASS));
+          PKG, "Enum", Name.Type.CLASS);  // TODO: missing type parameter
 
   /** */
   public static final TypeSpecification JAVA_LANG_ANNOTATION_ANNOTATION =
       new TypeSpecification(
-          JAVA_LANG
-          .child("annotation", Name.Type.PACKAGE)
-          .child("Annotation", Name.Type.CLASS));
+          new PackageSpecification(
+              JAVA_LANG.child("annotation", Name.Type.PACKAGE)),
+          "Annotation", Name.Type.CLASS);
 
   /** */
   public static final TypeSpecification JAVA_LANG_AUTOCLOSEABLE =
-      new TypeSpecification(JAVA_LANG.child("AutoCloseable", Name.Type.CLASS));
+      new TypeSpecification(PKG, "AutoCloseable", Name.Type.CLASS);
 }

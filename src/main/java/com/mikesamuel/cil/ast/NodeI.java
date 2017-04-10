@@ -20,7 +20,7 @@ public interface NodeI<
   /**
    * Copies metadata from the source node.
    */
-  void copyMetadataFrom(BASE_NODE node);
+  void copyMetadataFrom(NodeI<?, ?, ?> node);
 
   /**
    * The variant of the node.

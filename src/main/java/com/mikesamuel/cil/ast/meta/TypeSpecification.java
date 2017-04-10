@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.util.List;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -16,14 +17,26 @@ import com.google.common.collect.Sets;
  * A specification for a type that has not yet been checked for structural
  * consistency with {@link TypeInfo}.
  */
-public final class TypeSpecification {
+public final class TypeSpecification extends PartialTypeSpecification {
+
+  /** A special invalid type value. */
+  public static final TypeSpecification ERROR_TYPE_SPEC = new TypeSpecification(
+      new TypeSpecification(
+          new PackageSpecification(
+              Name.DEFAULT_PACKAGE.child("error", Name.Type.PACKAGE)),
+          "ErrorType", Name.Type.CLASS),
+      "TYPE", Name.Type.FIELD);
 
   /**
-   * The name of the raw element type.  If this specifies an
-   * array of primitives, like {@code int[]} then use a field name like
-   * {@code /java/lang/Integer#TYPE}.
+   * The type specification of any containing type, method, or package.
    */
-  public final Name typeName;
+  public final PartialTypeSpecification parent;
+  /**
+   * The raw name of the element type.
+   * For a type like {@code int} or {@code int[]} we use a raw name like
+   * {@code /java/lang/Integer#TYPE} so this can be a {@link Name.Type#FIELD}.
+   */
+  public final Name rawName;
   /** Bindings for any type parameters. */
   public final ImmutableList<TypeBinding> bindings;
   /**
@@ -33,65 +46,101 @@ public final class TypeSpecification {
   public final int nDims;
 
   /**
-   * @param typeName The name of the raw element type.  If this specifies an
-   *   array of primitives, like {@code int[]} then use a field name like
+   * @param unqualifiedName The unqualified type name.
+   * @param nameType The type of identifier.  If this specifies an
+   *   array of primitives, like {@code int[]} we use a field name like
    *   {@code /java/lang/Integer#TYPE}.
-   */
-  public TypeSpecification(Name typeName) {
-    this(typeName, ImmutableList.of(), 0);
-  }
-
-  /**
-   * @param typeName The name of the raw element type.  If this specifies an
-   *   array of primitives, like {@code int[]} then use a field name like
-   *   {@code /java/lang/Integer#TYPE}.
-   * @param bindings Bindings for any type parameters.
    */
   public TypeSpecification(
-      Name typeName, ImmutableList<TypeBinding> bindings) {
-    this(typeName, bindings, 0);
+      PartialTypeSpecification parent,
+      String unqualifiedName, Name.Type nameType) {
+    this(parent, unqualifiedName, nameType, ImmutableList.of(), 0);
   }
 
   /**
-   * @param typeName The name of the raw element type.  If this specifies an
-   *   array of primitives, like {@code int[]} then use a field name like
+   * @param unqualifiedName The unqualified type name.
+   * @param nameType The type of identifier.  If this specifies an
+   *   array of primitives, like {@code int[]} we use a field name like
    *   {@code /java/lang/Integer#TYPE}.
    * @param dims the number of levels of array present.
    *       3 for {@code int[][][]}.
    */
-  public TypeSpecification(Name typeName, int dims) {
-    this(typeName, ImmutableList.of(), dims);
+  public TypeSpecification(
+      PartialTypeSpecification parent,
+      String unqualifiedName, Name.Type nameType, int dims) {
+    this(parent, unqualifiedName, nameType, ImmutableList.of(), dims);
   }
 
   /**
-   * @param typeName The name of the raw element type.  If this specifies an
-   *   array of primitives, like {@code int[]} then use a field name like
+   * @param unqualifiedName The unqualified type name.
+   * @param nameType The type of identifier.  If this specifies an
+   *   array of primitives, like {@code int[]} we use a field name like
    *   {@code /java/lang/Integer#TYPE}.
    * @param bindings Bindings for any type parameters.
    * @param nDims the number of levels of array present.
    *       3 for {@code int[][][]}.
    */
   public TypeSpecification(
-      Name typeName, ImmutableList<TypeBinding> bindings, int nDims) {
+      PartialTypeSpecification parent,
+      String unqualifiedName, Name.Type nameType,
+      List<TypeBinding> bindings, int nDims) {
+    this(parent, parent.getRawName().child(unqualifiedName, nameType),
+        bindings, nDims);
+  }
+
+  TypeSpecification(
+      PartialTypeSpecification parent, Name rawName,
+      List<TypeBinding> bindings, int nDims) {
+    Preconditions.checkArgument(parent != null);
+    Preconditions.checkArgument(
+        parent.getRawName() == rawName.parent,
+        "%s != %s", parent.getRawName(), rawName.parent);
     Preconditions.checkArgument(nDims >= 0);
     Preconditions.checkArgument(
-        typeName.type.isType
+        rawName.type.isType
         ||
-        typeName.type == Name.Type.FIELD
-        && typeName.identifier.equals("TYPE"),
-        typeName);
-    this.typeName = typeName;
-    this.bindings = bindings;
+        rawName.type == Name.Type.FIELD
+        && rawName.identifier.equals("TYPE"),
+        rawName);
+    this.parent = parent;
+    this.rawName = rawName;
+    this.bindings = ImmutableList.copyOf(bindings);
     this.nDims = nDims;
   }
+
+  @Override
+  public Name getRawName() { return rawName; }
+
+  @Override
+  public PartialTypeSpecification parent() { return parent; }
+
+  /**
+   * The specification of the enclosing type if any.
+   */
+  public Optional<TypeSpecification> getOuterType() {
+    for (PartialTypeSpecification anc = parent;
+         anc != null; anc = anc.parent()) {
+      if (anc instanceof TypeSpecification) {
+        return Optional.of((TypeSpecification) anc);
+      }
+    }
+    return Optional.absent();
+  }
+
+  @Override
+  public ImmutableList<TypeSpecification.TypeBinding> bindings() {
+    return bindings;
+  }
+
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((bindings == null) ? 0 : bindings.hashCode());
+    result = prime * result + bindings.hashCode();
     result = prime * result + nDims;
-    result = prime * result + ((typeName == null) ? 0 : typeName.hashCode());
+    result = prime * result + parent.hashCode();
+    result = prime * result + rawName.hashCode();
     return result;
   }
 
@@ -117,33 +166,29 @@ public final class TypeSpecification {
     if (nDims != other.nDims) {
       return false;
     }
-    if (typeName == null) {
-      if (other.typeName != null) {
+    if (parent == null) {
+      if (other.parent != null) {
         return false;
       }
-    } else if (!typeName.equals(other.typeName)) {
+    } else if (!parent.equals(other.parent)) {
+      return false;
+    }
+    if (rawName == null) {
+      if (other.rawName != null) {
+        return false;
+      }
+    } else if (!rawName.equals(other.rawName)) {
       return false;
     }
     return true;
   }
 
   @Override
-  public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append(typeName);
-    if (!bindings.isEmpty()) {
-      String pre = "<";
-      for (TypeBinding b : bindings) {
-        sb.append(pre);
-        pre = ", ";
-        sb.append(b);
-      }
-      sb.append('>');
-    }
+  public void appendToStringBuilder(StringBuilder sb) {
+    super.appendToStringBuilder(sb);
     for (int i = 0; i < nDims; ++i) {
       sb.append("[]");
     }
-    return sb.toString();
   }
 
 
@@ -177,16 +222,14 @@ public final class TypeSpecification {
       this(Variance.INVARIANT, typeSpec);
     }
 
-    /** */
-    public TypeBinding(Name typeName) {
-      this(Variance.INVARIANT, new TypeSpecification(typeName));
-    }
-
-    TypeBinding subst(Function<? super Name, ? extends TypeBinding> bindings) {
+    /** Substitutes type parameters in the binding. */
+    public TypeBinding subst(
+        Function<? super Name, ? extends TypeBinding> bindings) {
       Variance v = this.variance;
       TypeSpecification ts = this.typeSpec;
-      if (typeSpec != null && typeSpec.bindings.isEmpty()) {
-        TypeBinding b = bindings.apply(ts.typeName);
+      if (typeSpec != null && typeSpec.bindings.isEmpty()
+          && ts.rawName.type == Name.Type.TYPE_PARAMETER) {
+        TypeBinding b = bindings.apply(ts.rawName);
         if (b != null) {
           if (ts.nDims != 0) {
             ts = b.typeSpec.withNDims(b.typeSpec.nDims + ts.nDims);
@@ -285,12 +328,49 @@ public final class TypeSpecification {
    * the type specification {@code C<X, Y, Z>} by binding each type parameter
    * to itself.
    */
-  public static TypeSpecification autoScoped(TypeInfo info) {
-    ImmutableList.Builder<TypeBinding> autoBindings = ImmutableList.builder();
-    for (Name parameter : info.parameters) {
-      autoBindings.add(new TypeBinding(parameter));
-    }
-    return new TypeSpecification(info.canonName, autoBindings.build());
+  public static TypeSpecification autoScoped(
+      Name typeName, TypeInfoResolver r) {
+    Preconditions.checkArgument(
+        typeName.type.isType || typeName.type == Name.Type.FIELD);
+    return (TypeSpecification) autoScopedPartial(typeName, r);
+  }
+
+  private static TypeBinding selfBinding(Name typeParameterName) {
+    Preconditions.checkArgument(
+        typeParameterName.type == Name.Type.TYPE_PARAMETER);
+    return new TypeBinding(
+        (TypeSpecification)
+        autoScopedPartial(
+            typeParameterName,
+            TypeInfoResolver.Resolvers.nullResolver()));
+  }
+
+  static PartialTypeSpecification autoScopedPartial(
+      Name partialTypeName, TypeInfoResolver r) {
+    return PartialTypeSpecification.fromName(partialTypeName,
+        new Function<Name, ImmutableList<TypeBinding>>() {
+
+          @SuppressWarnings("synthetic-access")
+          @Override
+          public ImmutableList<TypeBinding> apply(Name typeName) {
+            Optional<TypeInfo> tiOpt = r.resolve(typeName);
+            if (tiOpt.isPresent()) {
+              TypeInfo ti = tiOpt.get();
+              for (MemberInfo mi : ti.declaredMembers) {
+                if (typeName.equals(mi.canonName)) {
+                  ImmutableList.Builder<TypeBinding> bindings =
+                      ImmutableList.builder();
+                  for (Name p : ((CallableInfo) mi).typeParameters) {
+                    bindings.add(selfBinding(p));
+                  }
+                  return bindings.build();
+                }
+              }
+            }
+            return ImmutableList.of();
+          }
+
+        });
   }
 
   /** Substitute for type parameters. */
@@ -314,7 +394,9 @@ public final class TypeSpecification {
   /** Substitute for type parameters. */
   public TypeSpecification subst(
       Function<? super Name, ? extends TypeBinding> bindingFn) {
-    TypeBinding b = bindingFn.apply(typeName);
+    TypeBinding b = rawName.type == Name.Type.TYPE_PARAMETER
+        ? bindingFn.apply(rawName)
+        : null;
     if (b != null) {
       switch (b.variance) {
         case EXTENDS:
@@ -339,12 +421,12 @@ public final class TypeSpecification {
     if (substs == null) { return this; }
     ImmutableList<TypeBinding> newBindings = substs.build();
     Preconditions.checkState(bindings.size() == newBindings.size());
-    return new TypeSpecification(typeName, newBindings, nDims);
+    return new TypeSpecification(parent, rawName, newBindings, nDims);
   }
 
   /**
-   * A type specification that contains (transitively) no type bindings with
-   * a null specification.
+   * A partial type specification that contains (transitively) no type bindings
+   * with a null specification.
    * <p>
    * Effectively, this means that {@code List<?>} has been rewritten to
    * {@code List<? extends Object>}.
@@ -353,70 +435,14 @@ public final class TypeSpecification {
     return canon(r, Sets.newHashSet());
   }
 
-  private TypeSpecification canon(TypeInfoResolver r, Set<Name> resolving) {
-    Optional<TypeInfo> infoOpt = null;
-    ImmutableList.Builder<TypeBinding> canonBindings = null;
-    for (int i = 0, n = bindings.size(); i < n; ++i) {
-      TypeBinding b = bindings.get(i);
-      TypeBinding canon;
-      if (b.typeSpec == null) {
-        if (infoOpt == null) {
-          infoOpt = r.resolve(typeName);
-        }
-        TypeSpecification paramBaseType = JavaLang.JAVA_LANG_OBJECT;
+  @Override
+  protected TypeSpecification canon(TypeInfoResolver r, Set<Name> resolving) {
+    PartialTypeSpecification canonParent = parent.canon(r, resolving);
+    ImmutableList<TypeBinding> canonBindings = getCanonBindings(r, resolving);
 
-        find_type_parameter_bound:
-        if (infoOpt.isPresent()) {
-          TypeInfo info = infoOpt.get();
-          if (info.parameters.size() > i) {
-            TypeSpecification paramSpec = new TypeSpecification(
-                info.parameters.get(i));
-            // Handle cases where one type parameter extends another as in
-            // <T1, T2 extends T1>
-            while (true) {
-              Optional<TypeInfo> paramInfoOpt = r.resolve(paramSpec.typeName);
-              if (!paramInfoOpt.isPresent()) {
-                break find_type_parameter_bound;
-              }
-              TypeInfo paramInfo = paramInfoOpt.get();
-              if (!paramInfo.superType.isPresent()) {
-                break find_type_parameter_bound;
-              }
-              TypeSpecification paramSuperType = paramInfo.superType.get();
-              paramSpec = paramSuperType;
-              if (paramSuperType.typeName.type == Name.Type.CLASS) {
-                break;
-              }
-            }
-            paramBaseType = paramSpec;
-          }
-        }
-        if (resolving.add(this.typeName)) {
-          paramBaseType = paramBaseType.canon(r);
-        } else {
-          // TODO: Does this occur in legit cases?
-          // TODO: testcase (non-legit but parses)
-          //   class C<T extends C<?>> {
-          //     { C<?> c = null; }
-          //   }
-          paramBaseType = StaticType.ERROR_TYPE.typeSpecification;
-        }
-        canon = new TypeBinding(b.variance, paramBaseType);
-      } else {
-        TypeSpecification bspec = b.typeSpec.canon(r);
-        canon = bspec == b.typeSpec ? b : new TypeBinding(b.variance, bspec);
-      }
-      if (canonBindings == null && canon != b) {
-        canonBindings = ImmutableList.builder();
-        canonBindings.addAll(bindings.subList(0, i));
-      }
-      if (canonBindings != null) {
-        canonBindings.add(canon);
-      }
-    }
-
-    return canonBindings != null
-        ? withBindings(canonBindings.build())
+    return canonBindings != bindings || parent != canonParent
+        ? new TypeSpecification(
+            canonParent, rawName, canonBindings, nDims)
         : this;
   }
 
@@ -435,13 +461,44 @@ public final class TypeSpecification {
     if (bindings.equals(newBindings)) {
       return this;
     }
-    return new TypeSpecification(this.typeName, newBindings, nDims);
+    return new TypeSpecification(parent, rawName, newBindings, nDims);
+  }
+
+  /**
+   * This but if {@code bindings.get(rawName)} is non-null,
+   * the returned bindings, and with a parent similarly constructed.
+   */
+  @Override
+  public TypeSpecification withBindings(
+      Function<? super PartialTypeSpecification,
+               ? extends Iterable<TypeBinding>> newBindings) {
+    Iterable<TypeSpecification.TypeBinding> newBindingList =
+        newBindings.apply(this);
+    PartialTypeSpecification newParent = parent.withBindings(newBindings);
+    if (newBindingList != null || newParent != parent) {
+      return new TypeSpecification(
+          newParent, rawName,
+          newBindingList != null
+          ? ImmutableList.copyOf(newBindingList) : bindings,
+          nDims);
+    }
+    return this;
   }
 
   /**
    * This but with the given number of dimensions.
    */
   public TypeSpecification withNDims(int n) {
-    return new TypeSpecification(this.typeName, this.bindings, n);
+    return new TypeSpecification(parent, rawName, bindings, n);
+  }
+
+  /**
+   * The type specification for the unparameterized type with the given name.
+   *
+   * @param canonName a canonical java type name.
+   */
+  public static TypeSpecification unparameterized(Name canonName) {
+    return (TypeSpecification) PartialTypeSpecification.fromName(
+        canonName, Functions.constant(ImmutableList.of()));
   }
 }

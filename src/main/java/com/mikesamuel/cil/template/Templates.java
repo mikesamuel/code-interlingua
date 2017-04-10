@@ -607,8 +607,8 @@ public final class Templates {
     private final int countToPushRight;
 
     Deltas(int pos, List<Events> chain) {
-      NonstandardEvents nes = (NonstandardEvents) chain.get(pos);
       if (DEBUG) {
+        NonstandardEvents nes = (NonstandardEvents) chain.get(pos);
         System.err.println("Computing deltas for " + nes + " at " + pos);
       }
 

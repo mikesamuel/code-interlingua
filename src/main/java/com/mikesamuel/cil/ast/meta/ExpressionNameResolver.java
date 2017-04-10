@@ -119,7 +119,7 @@ public interface ExpressionNameResolver {
       }
       if (ti.superType.isPresent()) {
         Optional<TypeInfo> superTypeInfoOpt = canonNameResolver.resolve(
-            ti.superType.get().typeName);
+            ti.superType.get().rawName);
         if (superTypeInfoOpt.isPresent()) {
           addFieldsFrom(
               superTypeInfoOpt.get(), fieldNameToCanonName, canonNameResolver,
@@ -128,7 +128,7 @@ public interface ExpressionNameResolver {
       }
       for (TypeSpecification interfaceSpec : ti.interfaces) {
         Optional<TypeInfo> interfaceTypeInfoOpt = canonNameResolver.resolve(
-            interfaceSpec.typeName);
+            interfaceSpec.rawName);
         if (interfaceTypeInfoOpt.isPresent()) {
           addFieldsFrom(
               interfaceTypeInfoOpt.get(),

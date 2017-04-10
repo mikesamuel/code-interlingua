@@ -107,7 +107,7 @@ public final class Interpreter<VALUE> {
 
   protected final void log(
       Level level, @Nullable NodeI<?, ?, ?> node, String message,
-      Throwable cause) {
+      @Nullable Throwable cause) {
     SourcePosition pos = node != null ? node.getSourcePosition() : null;
     if (pos == null) { pos = currentSourcePosition; }
     LogUtils.log(context.getLogger(), level, pos, message, cause);
@@ -1517,7 +1517,7 @@ public final class Interpreter<VALUE> {
    * @return the null completion on normal exit.
    */
   public Completion<VALUE> forEach(
-      J8BaseNode sequenceNode, String parentLabel,
+      J8BaseNode sequenceNode, @Nullable String parentLabel,
       VALUE sequenceValue, Function<VALUE, Completion<VALUE>> elementToResult,
       StaticType sequenceType) {
 

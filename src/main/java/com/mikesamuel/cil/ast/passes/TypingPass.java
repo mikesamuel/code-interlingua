@@ -110,13 +110,17 @@ import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.j8.WildcardNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
-import com.mikesamuel.cil.ast.meta.ExpressionNameResolver.DeclarationPositionMarker;
+import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
+    .DeclarationPositionMarker;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool;
 import com.mikesamuel.cil.ast.meta.MemberInfoPool.ParameterizedMember;
+import com.mikesamuel.cil.ast.meta.MethodTypeContainer;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.PackageSpecification;
+import com.mikesamuel.cil.ast.meta.PartialTypeSpecification;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.Cast;
 import com.mikesamuel.cil.ast.meta.StaticType.NumericType;
@@ -418,7 +422,7 @@ final class TypingPass extends AbstractRewritingPass {
               TypeInfo ti = tn != null ? tn.getReferencedTypeInfo() : null;
               if (ti != null) {
                 exprType = typePool.type(
-                    new TypeSpecification(ti.canonName),
+                    TypeSpecification.unparameterized(ti.canonName),
                     e.getSourcePosition(), logger);
               } else {
                 error(e, "Cannot find info for type " + e.getTextContent("."));
@@ -442,7 +446,9 @@ final class TypingPass extends AbstractRewritingPass {
               // findMembers.
             case This:
               exprType = typePool.type(
-                  TypeSpecification.autoScoped(containingTypes.peekLast()),
+                  TypeSpecification.autoScoped(
+                      containingTypes.peekLast().canonName,
+                      typePool.r),
                   e.getSourcePosition(), logger);
               break type_switch;
             case UnqualifiedClassInstanceCreationExpression: {
@@ -528,32 +534,39 @@ final class TypingPass extends AbstractRewritingPass {
                   ? typeToInstantiate.firstChildWithType(
                       ClassOrInterfaceTypeNode.class)
                   : null;
+              Map<Name, TypeArgumentListNode> argumentsPerInnerName =
+                  Maps.newLinkedHashMap();
               Name innerName = type != null
-                  ? AmbiguousNames.ambiguousNameOf(type)
+                  ? AmbiguousNames.ambiguousNameOf(
+                      null, type, argumentsPerInnerName)
                   : null;
               if (outerType != null && innerName != null) {
                 TypeSpecification outerSpec = outerType.typeSpecification;
                 if (outerSpec.nDims == 0
-                    && outerSpec.typeName.type == Name.Type.CLASS) {
+                    && outerSpec.rawName.type == Name.Type.CLASS) {
                   SList<Name> names = null;
                   for (Name nm = innerName; nm != null; nm = nm.parent) {
                     Preconditions.checkState(nm.type == Name.Type.CLASS);
                     names = SList.append(names, nm);
                   }
 
-                  Name fullInnerTypeName = outerSpec.typeName;
+                  TypeSpecification fullInnerTypeSpec = outerSpec;
                   for (SList<Name> nm = names; nm != null; nm = nm.prev) {
-                    fullInnerTypeName = fullInnerTypeName.child(
-                        nm.x.identifier, nm.x.type);
+                    TypeArgumentListNode typeArguments =
+                        argumentsPerInnerName.get(nm);
+                    ImmutableList<TypeSpecification.TypeBinding> bindings =
+                        typeArguments != null
+                        ? AmbiguousNames.bindingsOf(
+                            typeArguments, typeNameResolvers.peekLast(), logger)
+                        : ImmutableList.of();
+                    fullInnerTypeSpec = new TypeSpecification(
+                        fullInnerTypeSpec, nm.x.identifier, nm.x.type,
+                        bindings, 0);
+                    // TODO: grab bindings from
+                    // ClassOrInterfaceTypeToInstantiate or infer for diamond.
                   }
-
-                  // TODO: grab from ClassOrInterfaceTypeToInstantiate
-                  // or infer for diamond.
-                  ImmutableList<TypeBinding> bindings = ImmutableList.of();
-                  TypeSpecification innerTypeSpec = new TypeSpecification(
-                      fullInnerTypeName, bindings);
                   exprType = typePool.type(
-                      innerTypeSpec, e.getSourcePosition(), logger);
+                      fullInnerTypeSpec, e.getSourcePosition(), logger);
                   Preconditions.checkNotNull(type).setStaticType(exprType);
                   processCallableInvocation(
                       instantiation, exprType, "<init>", instantiation);
@@ -580,7 +593,8 @@ final class TypingPass extends AbstractRewritingPass {
           switch (e.getVariant()) {
             case BooleanDimDotClass:
               spec = dimensionality == 0
-                  ? new TypeSpecification(StaticType.T_BOOLEAN.wrapperType)
+                  ? TypeSpecification.unparameterized(
+                      StaticType.T_BOOLEAN.wrapperType)
                   : StaticType.T_BOOLEAN.typeSpecification
                     .withNDims(dimensionality);
               break;
@@ -589,12 +603,12 @@ final class TypingPass extends AbstractRewritingPass {
               if (nt != null) {
                 StaticType st = nt.getStaticType();
                 if (st instanceof NumericType) {
-                  spec = new TypeSpecification(
-                      ((NumericType) st).wrapperType,
-                      dimensionality);
+                  spec = TypeSpecification
+                      .unparameterized(((NumericType) st).wrapperType)
+                      .withNDims(dimensionality);
                   NumericType numType = (NumericType) st;
                   spec = dimensionality == 0
-                      ? new TypeSpecification(numType.wrapperType)
+                      ? TypeSpecification.unparameterized(numType.wrapperType)
                       : numType.typeSpecification.withNDims(dimensionality);
                 }
               }
@@ -604,13 +618,41 @@ final class TypingPass extends AbstractRewritingPass {
               if (tn != null) {
                 TypeInfo ti = tn.getReferencedTypeInfo();
                 if (ti != null) {
-                  ImmutableList.Builder<TypeBinding> bindings =
-                      ImmutableList.builder();
-                  for (@SuppressWarnings("unused") Name param : ti.parameters) {
-                    bindings.add(TypeBinding.WILDCARD);
+                  spec = TypeSpecification.unparameterized(ti.canonName);
+                  // Classes always represent the lower-bound regardless of type
+                  // parameters present.  For example, List.class represents
+                  // Class<List<? extends Object>>
+                  spec = spec.withBindings(
+                      new Function<PartialTypeSpecification,
+                                   ImmutableList<TypeBinding>>() {
+
+                        @Override
+                        public ImmutableList<TypeBinding> apply(
+                            PartialTypeSpecification s) {
+                          if (s instanceof TypeSpecification) {
+                            Optional<TypeInfo> sti = typePool.r.resolve(
+                                s.getRawName());
+                            if (sti.isPresent()) {
+                              ImmutableList.Builder<TypeBinding> b =
+                                  ImmutableList.builder();
+                              for (@SuppressWarnings("unused")
+                                   Name param : sti.get().parameters) {
+                                b.add(TypeBinding.WILDCARD);
+                              }
+                              return b.build();
+                            }
+                          }
+                          return ImmutableList.of();
+                        }
+
+                      });
+                  // Let the type pool canonicalize the given specification to
+                  // resolve any wildcards inserted above.
+                  spec = typePool.type(spec, e.getSourcePosition(), logger)
+                      .typeSpecification;
+                  if (!StaticType.ERROR_TYPE.typeSpecification.equals(spec)) {
+                    spec = spec.withNDims(dimensionality);
                   }
-                  spec = new TypeSpecification(
-                      ti.canonName, bindings.build(), dimensionality);
                 }
               }
               break;
@@ -620,8 +662,7 @@ final class TypingPass extends AbstractRewritingPass {
               break;
           }
           if (spec != null) {
-            TypeSpecification classSpec = new TypeSpecification(
-                JavaLang.JAVA_LANG_CLASS.typeName,
+            TypeSpecification classSpec = JavaLang.JAVA_LANG_CLASS.withBindings(
                 ImmutableList.of(new TypeBinding(spec)));
             exprType = typePool.type(
                 classSpec, e.getSourcePosition(), logger);
@@ -1543,8 +1584,7 @@ final class TypingPass extends AbstractRewritingPass {
       valueTypeInContext = typeInDeclaringClass;
     } else {
       Map<Name, TypeBinding> substMap = Maps.newLinkedHashMap();
-      Optional<TypeInfo> tiOpt = typePool.r.resolve(
-          f.declaringType.typeName);
+      Optional<TypeInfo> tiOpt = typePool.r.resolve(f.declaringType.rawName);
       if (tiOpt.isPresent()) {
         TypeInfo ti = tiOpt.get();
         int nTypeParams = ti.parameters.size();
@@ -1811,7 +1851,7 @@ final class TypingPass extends AbstractRewritingPass {
     }
     if (t instanceof PrimitiveType) {
       return typePool.type(
-          new TypeSpecification(
+          TypeSpecification.unparameterized(
               Preconditions.checkNotNull(((PrimitiveType) t).wrapperType)),
           context.getSourcePosition(), logger);
     }
@@ -2302,10 +2342,12 @@ final class TypingPass extends AbstractRewritingPass {
         ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
             ImmutableList.builder();
         for (Name param : containingType.parameters) {
-          bindings.add(new TypeSpecification.TypeBinding(param));
+          bindings.add(new TypeSpecification.TypeBinding(
+              TypeSpecification.unparameterized(param)));
         }
         Optional<ImmutableList<ParameterizedMember<T>>> results =
-            searchOne.apply(TypeSpecification.autoScoped(containingType));
+            searchOne.apply(TypeSpecification.autoScoped(
+                containingType.canonName, typePool.r));
         if (results.isPresent()) {
           return results.get();
         }
@@ -2320,7 +2362,8 @@ final class TypingPass extends AbstractRewritingPass {
           ImmutableList.builder();
       for (TypeInfo imported : staticImportsForMember) {
         Optional<ImmutableList<ParameterizedMember<T>>> results =
-            searchOne.apply(TypeSpecification.autoScoped(imported));
+            searchOne.apply(
+                TypeSpecification.autoScoped(imported.canonName, typePool.r));
         if (results.isPresent()) {
           staticallyImported.addAll(results.get());
         }
@@ -2336,7 +2379,8 @@ final class TypingPass extends AbstractRewritingPass {
         ImmutableList.builder();
     for (TypeInfo imported : staticWildcardImports) {
       Optional<ImmutableList<ParameterizedMember<T>>> results =
-          searchOne.apply(TypeSpecification.autoScoped(imported));
+          searchOne.apply(TypeSpecification.autoScoped(
+              imported.canonName, typePool.r));
       if (results.isPresent()) {
         staticallyImported.addAll(results.get());
       }
@@ -2443,7 +2487,7 @@ final class TypingPass extends AbstractRewritingPass {
         Map<Name, TypeBinding> substMap = Maps.newLinkedHashMap();
         if (!m.declaringType.bindings.isEmpty()) {
           Optional<TypeInfo> tiOpt = typePool.r.resolve(
-              m.declaringType.typeName);
+              m.declaringType.rawName);
           if (tiOpt.isPresent()) {
             TypeInfo ti = tiOpt.get();
             int nTypeParams = ti.parameters.size();
@@ -2465,7 +2509,7 @@ final class TypingPass extends AbstractRewritingPass {
             Name typeParameter = m.member.typeParameters.get(i);
             if (TypeBinding.WILDCARD.equals(typeArgument)) {
               StaticType lowerBound = typePool.type(
-                  new TypeSpecification(typeParameter),
+                  TypeSpecification.unparameterized(typeParameter),
                   null,
                   logger);
               if (lowerBound instanceof ReferenceType) {
@@ -2487,7 +2531,7 @@ final class TypingPass extends AbstractRewritingPass {
                   b = substMap.get(nm);
                   if (b == null) {
                     StaticType t = typePool.type(
-                        new TypeSpecification(nm),
+                        TypeSpecification.unparameterized(nm),
                         sourceNode.getSourcePosition(), logger);
                     if (t instanceof ReferenceType) {
                       StaticType lowerBound = ((ReferenceType) t).lowerBound();
@@ -2976,7 +3020,7 @@ final class TypingPass extends AbstractRewritingPass {
     } else if (typ instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (ClassOrInterfaceType) typ;
       ClassOrInterfaceTypeNode ciNode = toClassOrInterfaceTypeNode(
-          ct.typeSpecification.typeName, ct.typeParameterBindings);
+          ct.typeSpecification);
       ciNode.setStaticType(typ);
       return ReferenceTypeNode.Variant.ClassOrInterfaceType.buildNode(ciNode)
           .setStaticType(typ);
@@ -2985,20 +3029,36 @@ final class TypingPass extends AbstractRewritingPass {
     }
   }
 
-  private ClassOrInterfaceTypeNode toClassOrInterfaceTypeNode(
-      Name nm, ImmutableList<TypeBinding> bindings) {
-    ClassOrInterfaceTypeNode parent = nm.parent.equals(Name.DEFAULT_PACKAGE)
-        ? null
-        : toClassOrInterfaceTypeNode(nm.parent, ImmutableList.of());
+  private ClassOrInterfaceTypeNode packageToClassOrInterfaceTypeNode(
+      Name packageName) {
+    if (Name.DEFAULT_PACKAGE.equals(packageName)) {
+      return null;
+    }
+    ClassOrInterfaceTypeNode parent = packageToClassOrInterfaceTypeNode(
+        packageName.parent);
     IdentifierNode ident = IdentifierNode.Variant.Builtin
-        .buildNode(nm.identifier)
-        .setNamePartType(nm.type);
+        .buildNode(packageName.identifier)
+        .setNamePartType(packageName.type);
+    ClassOrInterfaceTypeNode newTypeNode = ClassOrInterfaceTypeNode.Variant
+        .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments.buildNode();
+    if (parent != null) {
+      newTypeNode.add(parent);
+    }
+    newTypeNode.add(ident);
+    return newTypeNode;
+  }
+
+  private ClassOrInterfaceTypeNode toClassOrInterfaceTypeNode(
+      PartialTypeSpecification spec) {
+    ClassOrInterfaceTypeNode parent = spec.parent() != null
+        ? toClassOrInterfaceTypeNode(spec.parent())
+        : null;
     TypeArgumentsNode arguments = null;
-    if (!bindings.isEmpty()) {
+    if (!spec.bindings().isEmpty()) {
       TypeArgumentListNode typeArgumentList =
           TypeArgumentListNode.Variant.TypeArgumentComTypeArgument
           .buildNode();
-      for (TypeBinding b : bindings) {
+      for (TypeBinding b : spec.bindings()) {
         ReferenceTypeNode rt = toReferenceTypeNode(
             (ReferenceType) typePool.type(b.typeSpec, null, logger));
         WildcardBoundsNode.Variant boundsVariant = null;
@@ -3025,16 +3085,32 @@ final class TypingPass extends AbstractRewritingPass {
       arguments = TypeArgumentsNode.Variant.LtTypeArgumentListGt.buildNode(
           typeArgumentList);
     }
-    ClassOrInterfaceTypeNode newTypeNode = ClassOrInterfaceTypeNode.Variant
-        .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments.buildNode();
-    if (parent != null) {
-      newTypeNode.add(parent);
+
+    if (spec instanceof PackageSpecification) {
+      return packageToClassOrInterfaceTypeNode(
+          ((PackageSpecification) spec).packageName);
+    } else if (spec instanceof TypeSpecification) {
+      TypeSpecification ts = (TypeSpecification) spec;
+      Preconditions.checkArgument(ts.nDims == 0);
+      Preconditions.checkArgument(ts.rawName.type.isType);
+      IdentifierNode ident = IdentifierNode.Variant.Builtin
+          .buildNode(ts.rawName.identifier)
+          .setNamePartType(ts.rawName.type);
+      ClassOrInterfaceTypeNode newTypeNode = ClassOrInterfaceTypeNode.Variant
+          .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments.buildNode();
+      if (parent != null) {
+        newTypeNode.add(parent);
+      }
+      newTypeNode.add(ident);
+      if (arguments != null) {
+        newTypeNode.add(arguments);
+      }
+      return newTypeNode;
+    } else {
+      Preconditions.checkState(spec instanceof MethodTypeContainer);
+      // Anonymous class names cannot be addressed by type names.
+      throw new IllegalArgumentException(spec.toString());
     }
-    newTypeNode.add(ident);
-    if (arguments != null) {
-      newTypeNode.add(arguments);
-    }
-    return newTypeNode;
   }
 
   private TypeNode toTypeNode(StaticType typ) {

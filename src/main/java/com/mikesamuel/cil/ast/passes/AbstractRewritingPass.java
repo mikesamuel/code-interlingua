@@ -33,19 +33,19 @@ extends AbstractPass<ImmutableList<J8FileNode>> {
      * Continue processing the subtree rooted at the current node.
      * In the post-processing phase, this is equivalent to break.
      */
-    public static ProcessingStatus CONTINUE = new ProcessingStatus(
+    public static final ProcessingStatus CONTINUE = new ProcessingStatus(
         Mutation.CONTINUE);
     /**
      * Cease processing the subtree rooted at the current node.
      * In the post-processing phase, this means use the current state of the
      * node as the replacement.
      */
-    public static ProcessingStatus BREAK = new ProcessingStatus(
+    public static final ProcessingStatus BREAK = new ProcessingStatus(
         Mutation.BREAK);
     /**
      * Remove the subtree rooted at the current node and cease .
      */
-    public static ProcessingStatus REMOVE = new ProcessingStatus(
+    public static final ProcessingStatus REMOVE = new ProcessingStatus(
         Mutation.REPLACE);
 
     /**

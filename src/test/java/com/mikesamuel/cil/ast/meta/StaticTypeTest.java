@@ -108,8 +108,9 @@ public final class StaticTypeTest extends TestCase {
     if (hash >= 0) {
       nm = nm.child(name.substring(hash + 1), Name.Type.FIELD);
     }
-    return new TypeSpecification(
-            nm, ImmutableList.copyOf(bindings), nDims);
+    return TypeSpecification.unparameterized(nm)
+        .withBindings(ImmutableList.copyOf(bindings))
+        .withNDims(nDims);
   }
 
   private static TypeBinding is(String s) {
@@ -511,7 +512,6 @@ public final class StaticTypeTest extends TestCase {
         Cast.CONFIRM_SAFE);
   }
 
-
   @Test
   public void testNullType() {
     StaticType bool = type("java.lang.Boolean");
@@ -552,6 +552,64 @@ public final class StaticTypeTest extends TestCase {
         pool.T_NULL,
         Cast.CONFIRM_SAFE);
   }
+
+
+  /** An outer class that assists testing multiply-parameterized types. */
+  public static final class Outer<O> {
+    /** An inner class that inherits its outer types parameters. */
+    public final class Inner<I> {
+      O o;
+      I i;
+    }
+  }
+
+
+  private static TypeSpecification outerInner(TypeBinding o, TypeBinding i) {
+    TypeSpecification testClass = spec(StaticTypeTest.class.getName());
+    TypeSpecification outer = new TypeSpecification(
+        testClass, "Outer", Name.Type.CLASS,
+        o != null ? ImmutableList.of(o) : ImmutableList.of(),
+        0);
+    TypeSpecification inner = new TypeSpecification(
+        outer, "Inner", Name.Type.CLASS,
+        i != null ? ImmutableList.of(i) : ImmutableList.of(),
+        0);
+    return inner;
+  }
+
+  @Test
+  public final void testInnerTypes() {
+    StaticType fooIntBarStr = pool.type(
+        outerInner(is("java.lang.Integer"), is("java.lang.String")),
+        null, logger);
+    StaticType fooNumBarStr = pool.type(
+        outerInner(ext("java.lang.Number"), is("java.lang.String")),
+        null, logger);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        fooIntBarStr,
+        fooNumBarStr,
+        Cast.CONFIRM_UNCHECKED);
+
+    StaticType fooNumBarNum = pool.type(
+        outerInner(ext("java.lang.Number"), is("java.lang.Number")),
+        null, logger);
+    assertCasts(
+        Cast.DISJOINT,
+        fooNumBarNum,
+        fooNumBarStr,
+        Cast.DISJOINT);
+
+    StaticType fooBarNum = pool.type(
+        outerInner(null, is("java.lang.Number")),
+        null, logger);
+    assertCasts(
+        Cast.CONFIRM_SAFE,
+        fooNumBarNum,
+        fooBarNum,
+        Cast.CONFIRM_UNCHECKED);
+  }
+
 
   /**
    * @param bToA The cast kind needed for code like

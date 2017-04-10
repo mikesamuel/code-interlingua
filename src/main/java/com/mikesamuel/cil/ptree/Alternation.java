@@ -114,15 +114,18 @@ final class Alternation extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    if (ps.isEmpty()) { return "[]"; }
+  public void appendShallowStructure(StringBuilder sb) {
+    if (ps.isEmpty()) {
+      sb.append("[]");
+      return;
+    }
 
     Optional<ParSerable> notEmpty = getOptionBody(this);
     if (notEmpty.isPresent()) {
-      return "[" + notEmpty.get() + "]";
+      sb.append("[").append(notEmpty.get()).append("]");
+      return;
     }
 
-    StringBuilder sb = new StringBuilder();
     boolean first = true;
     for (ParSerable p : ps) {
       if (first) {
@@ -132,12 +135,13 @@ final class Alternation extends PTParSer {
       }
       ParSer c = p.getParSer();
       if (c instanceof Alternation) {
-        sb.append('(').append(c).append(')');
+        sb.append('(');
+        c.appendShallowStructure(sb);
+        sb.append(')');
       } else {
-        sb.append(c);
+        c.appendShallowStructure(sb);
       }
     }
-    return sb.toString();
   }
 
   /**

@@ -275,18 +275,31 @@ public final class Name {
     if (parent != null) {
       parent.appendInternalNameString(sb);
     }
+    appendInternalNamePart(
+        parent != null ? parent.type : null,
+        identifier, type, variant, sb);
+  }
 
+  /**
+   * Appends a single part of an internal name to the given buffer.
+   *
+   * @param parentType the type of the parent that is at the end of the
+   *      buffer content or null if there is no parent.
+   */
+  public static void appendInternalNamePart(
+      @Nullable Name.Type parentType, String identifier, Name.Type type,
+      int variant, StringBuilder sb) {
     String before = null;
     String after = null;
     switch (type) {
       case AMBIGUOUS:
-        if (parent != null) {
+        if (parentType != null) {
           before = "\ufe56";
         }
         break;
       case CLASS:
-        if (parent == null
-            || parent.type == Type.CLASS || parent.type == Type.METHOD) {
+        if (parentType == null
+            || parentType == Type.CLASS || parentType == Type.METHOD) {
           before = "$";
         }
         break;
@@ -297,7 +310,7 @@ public final class Name {
         before = ":";
         break;
       case METHOD:
-        if (parent != null) {
+        if (parentType != null) {
           before = ".";
         }
         after = "(" + variant + ")";
@@ -307,8 +320,8 @@ public final class Name {
         break;
       case TYPE_PARAMETER:
         before = "<";
-        if (parent != null) {
-          switch (parent.type) {
+        if (parentType != null) {
+          switch (parentType) {
             case PACKAGE:
               break;
             default:

@@ -62,4 +62,17 @@ public abstract class ParSer implements ParSerable {
    * be unparsed to a string that matches the language matched by this ParSer.
    */
   public abstract ForceFitState forceFit(ForceFitState state);
+
+  /**
+   * A string representing the shallow structure of the grammar backing this
+   * ParSer.  A shallow structure does not look through non-terminals.
+   */
+  public abstract void appendShallowStructure(StringBuilder sb);
+
+  @Override
+  public final String toString() {
+    StringBuilder sb = new StringBuilder();
+    appendShallowStructure(sb);
+    return sb.toString();
+  }
 }

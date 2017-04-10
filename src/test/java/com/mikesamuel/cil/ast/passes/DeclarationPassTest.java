@@ -154,6 +154,22 @@ public class DeclarationPassTest extends TestCase {
   }
 
   @Test
+  public static void testOneTypeWithExplicitSuperType() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "/* /C extends /java/lang/Object */"
+            + "class C extends Object { public C() {} }",
+          }
+        },
+        new String[][] {
+          {
+            "class C extends Object {}"
+          },
+        });
+  }
+
+  @Test
   public static void testTypeInDefaultPackageResolvedWhenMasksJavaLang()
   throws Exception {
     assertDeclarations(
@@ -179,7 +195,7 @@ public class DeclarationPassTest extends TestCase {
         new String[][] {
           {
             "package foo.bar;",
-            "/* /foo/bar/I extends /java/lang/Object"
+            "/* interface /foo/bar/I extends /java/lang/Object"
             + " implements /java/lang/Runnable */",
             "interface I extends Runnable {}",
           }
@@ -257,9 +273,9 @@ public class DeclarationPassTest extends TestCase {
             "/* /foo/C extends /java/lang/Object"
             + " contains /foo/C$I, /foo/C$J */",
             "class C {",
-            "  /* /foo/C$I extends /java/lang/Object in /foo/C */",
+            "  /* interface /foo/C$I extends /java/lang/Object in /foo/C */",
             "  interface I {}",
-            "  /* /foo/C$J extends /java/lang/Object in /foo/C */",
+            "  /* interface /foo/C$J extends /java/lang/Object in /foo/C */",
             "  interface J {}",
             "  public C() {}",
             "}",
@@ -318,7 +334,8 @@ public class DeclarationPassTest extends TestCase {
             "/* /foo/C extends /java/lang/Object"
             + " contains /foo/C$I */",  // Only one mentioned as inner
             "class C {",
-            "  /* /foo/C$I extends /java/lang/Object in /foo/C */",  // Resolved
+            // Resolved
+            "  /* interface /foo/C$I extends /java/lang/Object in /foo/C */",
             "  interface I {}",
             "  /* /foo/C$I in /foo/C */",  // Partially resolved
             "  interface I {}",
@@ -428,7 +445,8 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "/* public /C extends /java/lang/Object contains /C.f(1)$R */",
+            "/* public interface /C extends /java/lang/Object"
+            + " contains /C.f(1)$R */",
             "public interface C {",
             "  default void f() {",
             "    /* /C.f(1)$R extends /java/lang/Object"
@@ -669,6 +687,72 @@ public class DeclarationPassTest extends TestCase {
           },
         });
   }
+
+
+  @Test
+  public static void testInnerClassesThatInheritFromParameterizedSuperType()
+  throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "/* /C extends /java/lang/Object contains /C$O, /C$SO */",
+            "class C<",
+            "/* /C.<X> extends /java/lang/Object */",
+            "X> {",
+            "  /* static /C$O extends /java/lang/Object in /C"
+            + " contains /C$O$I */",
+            "  static class O<",
+            "  /* /C$O.<Y> extends /java/lang/Object */",
+            "  Y> {",
+            "    /* /C$O$I extends /java/lang/Object in /C$O */",
+            "    class I<",
+            "    /* /C$O$I.<Z> extends /java/lang/Object */",
+            "    Z> { public I() {} }",
+            "    public O() {}",
+            "  }",
+            "  /* static /C$SO extends /C$O</java/lang/String> in /C"
+            + " contains /C$SO$SI */",
+            "  static class SO extends O<String> {",
+            "    /* /C$SO$SI extends"
+            +     " /C$O</java/lang/String>$I</java/lang/Integer> in /C$SO */",
+            "    class SI extends I<Integer> { public SI() {} }",
+            "    public SO() {}",
+            "  }",
+            "  public C() {}",
+            "}",
+            "/* /D extends /C</java/lang/Boolean> contains /D$TO */",
+            "class D extends C<Boolean> {",
+            "  /* static /D$TO extends /C$O</java/lang/String> in /D"
+            + " contains /D$TO$TI */",
+            "  static class TO extends O<String> {",
+            "    /* /D$TO$TI extends"
+            +     " /C$O</java/lang/String>$I</java/lang/Integer> in /D$TO */",
+            "    class TI extends I<Integer> { public TI() {} }",
+            "    public TO() {}",
+            "  }",
+            "  public D() {}",
+            "}",
+          }
+        },
+        new String[][] {
+          {
+            "class C<X> {",
+            "  static class O<Y> {",
+            "    class I<Z> {}",
+            "  }",
+            "  static class SO extends O<String> {",
+            "    class SI extends I<Integer> {}",
+            "  }",
+            "}",
+            "class D extends C<Boolean> {",
+            "  static class TO extends O<String> {",
+            "    class TI extends I<Integer> {}",
+            "  }",
+            "}",
+          },
+        });
+  }
+
 
   @Test
   public static void testTypeParameters() {

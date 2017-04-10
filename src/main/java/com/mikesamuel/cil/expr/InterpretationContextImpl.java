@@ -892,8 +892,8 @@ implements InterpretationContext<Object> {
     ImmutableMap.Builder<Class<?>, Name> a = ImmutableMap.builder();
     ImmutableMap.Builder<Name, Class<?>> b = ImmutableMap.builder();
     for (StaticType.PrimitiveType pt : StaticType.PRIMITIVE_TYPES) {
-      a.put(pt.primitiveClass, pt.typeSpecification.typeName);
-      b.put(pt.typeSpecification.typeName, pt.primitiveClass);
+      a.put(pt.primitiveClass, pt.typeSpecification.rawName);
+      b.put(pt.typeSpecification.rawName, pt.primitiveClass);
     }
     PRIM_NAMES = a.build();
     PRIM_CLASSES = b.build();
@@ -907,11 +907,11 @@ implements InterpretationContext<Object> {
             @SuppressWarnings("synthetic-access")
             @Override
             public Optional<Class<?>> load(TypeSpecification type) {
-              Class<?> cl = PRIM_CLASSES.get(type.typeName);
+              Class<?> cl = PRIM_CLASSES.get(type.rawName);
               if (cl == null) {
-                Preconditions.checkState(type.typeName.type == Name.Type.CLASS);
+                Preconditions.checkState(type.rawName.type == Name.Type.CLASS);
                 try {
-                  cl = loader.loadClass(type.typeName.toBinaryName());
+                  cl = loader.loadClass(type.rawName.toBinaryName());
                 } catch (ClassNotFoundException ex) {
                   log(Level.SEVERE, "Failed to find class for " + type, ex);
                   return Optional.absent();
@@ -949,7 +949,7 @@ implements InterpretationContext<Object> {
                   fn.type == Name.Type.FIELD
                   && fn.parent.type == Name.Type.CLASS);
               Optional<Class<?>> declaringClass = classFor(
-                  new TypeSpecification(fn.parent));
+                  TypeSpecification.unparameterized(fn.parent));
               if (declaringClass.isPresent()) {
                 try {
                   return Optional.of(
@@ -986,7 +986,7 @@ implements InterpretationContext<Object> {
                   nm.type == Name.Type.METHOD
                   && nm.parent.type == Name.Type.CLASS);
               Optional<Class<?>> declaringClass = classFor(
-                  new TypeSpecification(nm.parent));
+                  TypeSpecification.unparameterized(nm.parent));
               ImmutableTable.Builder<String, String, Executable> b =
                   ImmutableTable.builder();
               if (declaringClass.isPresent()) {
@@ -1135,7 +1135,8 @@ implements InterpretationContext<Object> {
       cl = cl.getComponentType();
     }
     Name typeName = toTypeName(cl);
-    TypeSpecification spec = new TypeSpecification(typeName, nDims);
+    TypeSpecification spec = TypeSpecification.unparameterized(typeName)
+        .withNDims(nDims);
     return typePool.type(spec, null, logger);
   }
 

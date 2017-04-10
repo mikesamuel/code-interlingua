@@ -109,34 +109,29 @@ public final class MemberInfoPool {
 
 
   private Collection<Name> maskedBy(FieldInfo fi) {
-    Optional<TypeInfo> declaringTypeInfoOpt = typePool.r.resolve(
-        fi.canonName.getContainingClass());
-    if (declaringTypeInfoOpt.isPresent()) {
-      TypeInfo dti = declaringTypeInfoOpt.get();
-      TypeSpecification typeSpec = TypeSpecification.autoScoped(dti);
+    TypeSpecification typeSpec = TypeSpecification.autoScoped(
+        fi.canonName.getContainingClass(), typePool.r);
 
-      ImmutableSet.Builder<Name> b = ImmutableSet.builder();
-      for (TypeSpecification superType
-          // Even if the start type is a concrete type we still need to walk
-          // interfaces to get default methods and static methods.
-          : typePool.r.superTypesTransitiveOf(typeSpec)) {
-        if (typeSpec.typeName.equals(superType.typeName)) {
-          continue;
-        }
+    ImmutableSet.Builder<Name> b = ImmutableSet.builder();
+    for (TypeSpecification superType
+        // Even if the start type is a concrete type we still need to walk
+        // interfaces to get default methods and static methods.
+        : typePool.r.superTypesTransitiveOf(typeSpec)) {
+      if (typeSpec.rawName.equals(superType.rawName)) {
+        continue;
+      }
 
-        Optional<TypeInfo> tio = typePool.r.resolve(superType.typeName);
-        if (!tio.isPresent()) { continue; }
-        TypeInfo ti = tio.get();
-        for (MemberInfo mi : ti.declaredMembers) {
-          if (mi instanceof FieldInfo
-              && mi.canonName.identifier.equals(fi.canonName.identifier)) {
-            b.add(mi.canonName);
-          }
+      Optional<TypeInfo> tio = typePool.r.resolve(superType.rawName);
+      if (!tio.isPresent()) { continue; }
+      TypeInfo ti = tio.get();
+      for (MemberInfo mi : ti.declaredMembers) {
+        if (mi instanceof FieldInfo
+            && mi.canonName.identifier.equals(fi.canonName.identifier)) {
+          b.add(mi.canonName);
         }
       }
-      return b.build();
     }
-    return ImmutableList.of();
+    return b.build();
   }
 
   private final LoadingCache<CallableInfo, ImmutableSet<Name>> overriddenBy =
@@ -150,27 +145,23 @@ public final class MemberInfoPool {
           // and see if this properly matches the definition of subsignature.
           // I don't think it deals with overrides when there are raw parameter
           // types.
-          Optional<TypeInfo> declaringTypeInfoOpt = typePool.r.resolve(
-              ci.canonName.getContainingClass());
-          if (!declaringTypeInfoOpt.isPresent()) {
-            return ImmutableSet.of();
-          }
+          Name containingClassName = ci.canonName.getContainingClass();
           @SuppressWarnings("synthetic-access")
           ImmutableList<TypeSpecification> erasedSig = erasedSignatureOf(
               ci, ImmutableMap.of());
-          TypeInfo dti = declaringTypeInfoOpt.get();
-          TypeSpecification typeSpec = TypeSpecification.autoScoped(dti);
+          TypeSpecification typeSpec = TypeSpecification.autoScoped(
+              containingClassName, typePool.r);
 
           ImmutableSet.Builder<Name> b = ImmutableSet.builder();
           for (TypeSpecification superType
               // Even if the start type is a concrete type we still need to
               // walk interfaces to get default methods and static methods.
               : typePool.r.superTypesTransitiveOf(typeSpec)) {
-            if (superType.typeName.equals(typeSpec.typeName)) {
+            if (superType.rawName.equals(typeSpec.rawName)) {
               continue;
             }
 
-            Optional<TypeInfo> tio = typePool.r.resolve(superType.typeName);
+            Optional<TypeInfo> tio = typePool.r.resolve(superType.rawName);
             if (!tio.isPresent()) { continue; }
             TypeInfo ti = tio.get();
             Map<Name, TypeBinding> typeParamMap = null;
@@ -233,10 +224,10 @@ public final class MemberInfoPool {
       List<ParameterizedMember<MI>> out = Lists.newArrayList();
 
       void search(TypeSpecification declaringType) {
-        if (!typesSeen.add(declaringType.typeName)) {
+        if (!typesSeen.add(declaringType.rawName)) {
           return;
         }
-        Optional<TypeInfo> tio = typePool.r.resolve(declaringType.typeName);
+        Optional<TypeInfo> tio = typePool.r.resolve(declaringType.rawName);
         if (!tio.isPresent()) {
           return;
         }

@@ -1,19 +1,23 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
-import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.j8.WildcardNode;
 import com.mikesamuel.cil.ast.meta.Name;
+import com.mikesamuel.cil.ast.meta.PartialTypeSpecification;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -38,43 +42,118 @@ final class AmbiguousNames {
       J8BaseNode nameNode, TypeNameResolver canonResolver, Logger logger) {
     SourcePosition pos = nameNode.getSourcePosition();
 
-    // TODO: obviate the distinction between diamonds and arguments by rewriting
-    // all diamond operators in-situ.
-    Name rawName = ambiguousNameOf(nameNode);
+    Map<Name, TypeArgumentListNode> argumentsByName = Maps.newLinkedHashMap();
+    Name rawName = ambiguousNameOf(null, nameNode, argumentsByName);
     if (rawName == null) {
       error(logger, pos, "Missing type name");
       return StaticType.ERROR_TYPE.typeSpecification;
     }
+
+    Optional<Name> canonNameOpt = oneCanon(canonResolver, rawName, logger, pos);
+    if (!canonNameOpt.isPresent()) {
+      return StaticType.ERROR_TYPE.typeSpecification;
+    }
+    Name canonName = canonNameOpt.get();
+
+    if (!canonName.equals(rawName)) {
+      // canonicalize keys in the map so we can match it up with segments of
+      // the canonical name.
+      Map<Name, TypeArgumentListNode> canonArgumentsByName =
+          Maps.newLinkedHashMap();
+      for (Map.Entry<Name, TypeArgumentListNode> e
+           : argumentsByName.entrySet()) {
+        Optional<Name> canonKeyOpt = oneCanon(
+            canonResolver, e.getKey(), logger, pos);
+        if (canonKeyOpt.isPresent()) {
+          Name canonKey = canonKeyOpt.get();
+          TypeArgumentListNode dupe = canonArgumentsByName.put(
+              canonKey, e.getValue());
+          if (dupe != null) {
+            error(logger, e.getValue().getSourcePosition(),
+                "Two lists of type arguments modify the same canonical type "
+                + canonKey + ".  Original at " + dupe.getSourcePosition());
+          }
+        }
+      }
+      argumentsByName = canonArgumentsByName;
+    }
+
+    if (!canonName.type.isType) {
+      error(logger, pos, "Expected type name not " + canonName);
+    }
+
+    TypeSpecification spec = (TypeSpecification) buildPartialType(
+        canonName, argumentsByName, canonResolver, logger);
+    if (!argumentsByName.isEmpty()) {
+      // Warn on any type arguments that were obviated during type name
+      // canonicalization.  The building removes entries so any left over are
+      // unused.
+      for (Map.Entry<Name, TypeArgumentListNode> e
+          : argumentsByName.entrySet()) {
+        error(logger, e.getValue().getSourcePosition(),
+              "Unused type arguments");
+      }
+    }
+    return spec;
+  }
+
+  private static PartialTypeSpecification buildPartialType(
+      Name canonName, Map<Name, TypeArgumentListNode> argumentsByName,
+      TypeNameResolver canonResolver, Logger logger) {
+    return PartialTypeSpecification.fromName(
+        canonName,
+        new Function<Name, ImmutableList<TypeBinding>>() {
+
+          @Override
+          public ImmutableList<TypeBinding> apply(Name name) {
+            // This remove makes this function not really a function, but
+            // fromName advertises call-once per name, and our obviated name
+            // detection above requires a way of tracking used keys.
+            TypeArgumentListNode arguments = argumentsByName.remove(name);
+            if (arguments == null) { return ImmutableList.of(); }
+            return bindingsOf(arguments, canonResolver, logger);
+          }
+
+        }
+        );
+  }
+
+  static ImmutableList<TypeBinding> bindingsOf(
+      TypeArgumentListNode arguments, TypeNameResolver canonResolver,
+      Logger logger) {
+    ImmutableList.Builder<TypeBinding> b = ImmutableList.builder();
+    for (int i = 0, n = arguments.getNChildren(); i < n; ++i) {
+      J8BaseNode child = arguments.getChild(i);
+      if (child instanceof TypeArgumentNode) {
+        b.add(typeBindingOf(
+            (TypeArgumentNode) child, canonResolver, logger));
+      } else {
+        error(logger, child.getSourcePosition(),
+            "Expected a type argument, not " + child.getVariant());
+      }
+    }
+    return b.build();
+  }
+
+  private static Optional<Name> oneCanon(
+      TypeNameResolver canonResolver, Name rawName, Logger logger,
+      SourcePosition pos) {
     ImmutableList<Name> canonNames = canonResolver.lookupTypeName(rawName);
     switch (canonNames.size()) {
       case 0:
         error(logger, pos, "Unrecognized type " + rawName);
-        return StaticType.ERROR_TYPE.typeSpecification;
+        return Optional.absent();
       case 1:
         break;
       default:
         error(logger, pos, "Ambiguous type " + rawName + ": " + canonNames);
         break;
     }
-
-    Name canonName = canonNames.get(0);
-
-    ImmutableList.Builder<TypeBinding> bindings = ImmutableList.builder();
-    for (TypeArgumentNode arg :
-         nameNode.finder(TypeArgumentNode.class)
-             .exclude(
-                 J8NodeType.Annotation,
-                 // Don't recurse in the finder.  Recurse via this method.
-                 J8NodeType.TypeArgument)
-             .find()) {
-      bindings.add(typeBindingOf(arg, canonResolver, logger));
-    }
-    return new TypeSpecification(canonName, bindings.build());
+    return Optional.of(canonNames.get(0));
   }
 
   static TypeBinding typeBindingOf(
-      TypeArgumentNode arg, TypeNameResolver canonResolver,
-      Logger logger) {
+      TypeArgumentNode arg, TypeNameResolver canonResolver, Logger logger) {
     TypeSpecification argSpec = null;
     TypeSpecification.Variance variance =
         TypeSpecification.Variance.INVARIANT;
@@ -116,26 +195,41 @@ final class AmbiguousNames {
   }
 
   static @Nullable Name ambiguousNameOf(J8BaseNode nameNode) {
-    Name name = null;
-    for (IdentifierNode ident :
-         nameNode.finder(IdentifierNode.class)
-             .exclude(
-                 J8NodeType.Annotation,
-                 J8NodeType.TypeArgumentList,
-                 J8NodeType.TypeParameters)
-             .find()) {
-      Name.Type type = ident.getNamePartType();
-      if (type == null) {
-        type = Name.Type.AMBIGUOUS;
-      }
-      if (type == Name.Type.PACKAGE && name == null) {
-        name = Name.DEFAULT_PACKAGE;
-      }
-      name = (name == null)
-          ? Name.root(ident.getValue(), type)
-          : name.child(ident.getValue(), type);
+    return ambiguousNameOf(null, nameNode, null);
+  }
+
+  static @Nullable Name ambiguousNameOf(
+      @Nullable Name prev, J8BaseNode nameNode,
+      @Nullable Map<Name, TypeArgumentListNode> argumentsByName) {
+    switch (nameNode.getNodeType()) {
+      case Identifier:
+        IdentifierNode ident = (IdentifierNode) nameNode;
+        Name.Type type = ident.getNamePartType();
+        if (type == null) {
+          type = Name.Type.AMBIGUOUS;
+        }
+        Name parent = prev;
+        if (type == Name.Type.PACKAGE && parent == null) {
+          parent = Name.DEFAULT_PACKAGE;
+        }
+        return (parent == null)
+            ? Name.root(ident.getValue(), type)
+            : parent.child(ident.getValue(), type);
+      case TypeArgumentList:
+        if (argumentsByName != null) {
+          argumentsByName.put(prev, (TypeArgumentListNode) nameNode);
+        }
+        return prev;
+      case Annotation:
+      case TypeParameters:
+        return prev;
+      default:
+        Name nm = prev;
+        for (int i = 0, n = nameNode.getNChildren(); i < n; ++i) {
+          nm = ambiguousNameOf(nm, nameNode.getChild(i), argumentsByName);
+        }
+        return nm;
     }
-    return name;
   }
 
   static Optional<MaximalMatch> longestTypeMatch(

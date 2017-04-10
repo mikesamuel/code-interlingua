@@ -137,6 +137,11 @@ final class GrammarImpl implements Grammar<J8BaseNode, J8NodeType> {
       public ForceFitState forceFit(ForceFitState state) {
         throw new UnsupportedOperationException();
       }
+
+      @Override
+      public void appendShallowStructure(StringBuilder sb) {
+        sb.append("NonStandardReplacement");
+      }
     });
   }
 
@@ -260,6 +265,10 @@ final class GrammarImpl implements Grammar<J8BaseNode, J8NodeType> {
         throw new UnsupportedOperationException();
       }
 
+      @Override
+      public void appendShallowStructure(StringBuilder sb) {
+        sb.append("NonStandardInterstitial");
+      }
     });
   }
 

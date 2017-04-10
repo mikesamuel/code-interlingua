@@ -263,15 +263,15 @@ public interface TypeInfoResolver {
 
     private static final ImmutableMap<Class<?>, Name> PRIMITIVE_CLASS_TO_NAME =
         ImmutableMap.<Class<?>, Name>builder()
-        .put(void.class, StaticType.T_VOID.typeSpecification.typeName)
-        .put(boolean.class, StaticType.T_BOOLEAN.typeSpecification.typeName)
-        .put(byte.class, StaticType.T_BYTE.typeSpecification.typeName)
-        .put(char.class, StaticType.T_CHAR.typeSpecification.typeName)
-        .put(short.class, StaticType.T_SHORT.typeSpecification.typeName)
-        .put(int.class, StaticType.T_INT.typeSpecification.typeName)
-        .put(float.class, StaticType.T_FLOAT.typeSpecification.typeName)
-        .put(long.class, StaticType.T_LONG.typeSpecification.typeName)
-        .put(double.class, StaticType.T_DOUBLE.typeSpecification.typeName)
+        .put(void.class, StaticType.T_VOID.typeSpecification.rawName)
+        .put(boolean.class, StaticType.T_BOOLEAN.typeSpecification.rawName)
+        .put(byte.class, StaticType.T_BYTE.typeSpecification.rawName)
+        .put(char.class, StaticType.T_CHAR.typeSpecification.rawName)
+        .put(short.class, StaticType.T_SHORT.typeSpecification.rawName)
+        .put(int.class, StaticType.T_INT.typeSpecification.rawName)
+        .put(float.class, StaticType.T_FLOAT.typeSpecification.rawName)
+        .put(long.class, StaticType.T_LONG.typeSpecification.rawName)
+        .put(double.class, StaticType.T_DOUBLE.typeSpecification.rawName)
         .build();
 
     private static TypeSpecification specForType(Type t) {
@@ -289,16 +289,30 @@ public interface TypeInfoResolver {
         } else {
           nm = nameForClass(cl);
         }
-        return new TypeSpecification(nm, nDims);
+        return TypeSpecification.unparameterized(nm).withNDims(nDims);
       } else if (t instanceof ParameterizedType) {
         ParameterizedType pt = (ParameterizedType) t;
+
         ImmutableList.Builder<TypeSpecification.TypeBinding> bindings =
             ImmutableList.builder();
         for (Type ta : pt.getActualTypeArguments()) {
           bindings.add(bindingForType(ta));
         }
-        return new TypeSpecification(
-            nameForClass((Class<?>) pt.getRawType()), bindings.build());
+
+        Name rawTypeName = nameForClass((Class<?>) pt.getRawType());
+
+        Type ownerType = pt.getOwnerType();
+        if (ownerType != null) {
+          TypeSpecification parent = specForType(ownerType);
+          return new TypeSpecification(
+              parent, rawTypeName.identifier, rawTypeName.type,
+              bindings.build(), 0);
+        } else {
+          return new TypeSpecification(
+              new PackageSpecification(rawTypeName.parent),
+              rawTypeName.identifier, rawTypeName.type,
+              bindings.build(), 0);
+        }
       } else if (t instanceof TypeVariable) {
         TypeVariable<?> tv = (TypeVariable<?>) t;
         GenericDeclaration d = tv.getGenericDeclaration();
@@ -326,7 +340,7 @@ public interface TypeInfoResolver {
         } else {
           throw new AssertionError(d + " : " + d.getClass().getName());
         }
-        return new TypeSpecification(
+        return TypeSpecification.unparameterized(
             parentName.child(tv.getName(), Name.Type.TYPE_PARAMETER));
       } else if (t instanceof GenericArrayType) {
         GenericArrayType at = (GenericArrayType) t;
@@ -419,6 +433,11 @@ public interface TypeInfoResolver {
 
       };
     }
+
+    /** A resolver that resolves no names. */
+    public static TypeInfoResolver nullResolver() {
+      return NullResolver.INSTANCE;
+    }
   }
 
   /**
@@ -429,7 +448,7 @@ public interface TypeInfoResolver {
    */
   public default Iterable<TypeSpecification> superTypesOf(
       TypeSpecification ts) {
-    Optional<TypeInfo> infoOpt = resolve(ts.typeName);
+    Optional<TypeInfo> infoOpt = resolve(ts.rawName);
     if (!infoOpt.isPresent()) {
       return ImmutableList.of();
     }
@@ -464,17 +483,32 @@ public interface TypeInfoResolver {
     Set<Name> seen = Sets.newHashSet();
     Deque<TypeSpecification> unprocessed = Lists.newLinkedList();
     unprocessed.add(ts);
-    seen.add(ts.typeName);
+    seen.add(ts.rawName);
 
     ImmutableList.Builder<TypeSpecification> b = ImmutableList.builder();
     for (TypeSpecification st; (st = unprocessed.poll()) != null;) {
       b.add(st);
       for (TypeSpecification sst : superTypesOf(st)) {
-        if (seen.add(sst.typeName)) {
+        if (seen.add(sst.rawName)) {
           unprocessed.add(sst);
         }
       }
     }
     return b.build();
+  }
+}
+
+
+final class NullResolver implements TypeInfoResolver {
+  static final NullResolver INSTANCE = new NullResolver();
+
+  @Override
+  public Optional<TypeInfo> resolve(Name className) {
+    return Optional.absent();
+  }
+
+  @Override
+  public String toString() {
+    return "(NullResolver)";
   }
 }

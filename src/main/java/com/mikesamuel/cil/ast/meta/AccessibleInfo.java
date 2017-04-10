@@ -108,12 +108,12 @@ public abstract class AccessibleInfo {
       do {
         TypeInfo ti = unprocessed.removeFirst();
         for (TypeSpecification ts : ti.interfaces) {
-          if (ts.typeName.equals(potentialSuperTypeName)) {
+          if (ts.rawName.equals(potentialSuperTypeName)) {
             return true;
           }
-          if (interfaceNames.add(ts.typeName)) {
+          if (interfaceNames.add(ts.rawName)) {
             Optional<TypeInfo> interfaceInfoOpt = typeInfoResolver.resolve(
-                ts.typeName);
+                ts.rawName);
             if (interfaceInfoOpt.isPresent()) {
               unprocessed.add(interfaceInfoOpt.get());
             }
@@ -128,11 +128,11 @@ public abstract class AccessibleInfo {
           break;
         }
         TypeSpecification ts = ti.superType.get();
-        if (ts.typeName.equals(potentialSuperTypeName)) {
+        if (ts.rawName.equals(potentialSuperTypeName)) {
           return true;
         }
         Optional<TypeInfo> ancestorTypeInfoOpt = typeInfoResolver.resolve(
-            ts.typeName);
+            ts.rawName);
         if (ancestorTypeInfoOpt.isPresent()) {
           ti = ancestorTypeInfoOpt.get();
         } else {

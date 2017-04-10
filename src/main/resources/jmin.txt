@@ -58,7 +58,7 @@ ReferenceType: (@mixin=WholeType)
      ClassOrInterfaceType
      TypeVariable
 ClassOrInterfaceType: (@mixin=TypeReference,WholeType)
-     PackageName ["."] {Annotation} Identifier [TypeArguments]
+     [PackageName "."] {Annotation} Identifier [TypeArguments]
 ClassType: (@mixin=WholeType)
      ClassOrInterfaceType
 InterfaceType: (@mixin=WholeType)
@@ -125,7 +125,9 @@ PackageName:
 // Packages
 (chapter=Package)
 CompilationUnit: (@mixin=FileNode) @toplevel
-     {TypeDeclaration}
+     PackageDeclaration {TypeDeclaration}
+PackageDeclaration:
+     "package" PackageName ";" (@name=Declaration)
 TypeDeclaration:
      ClassDeclaration
      InterfaceDeclaration

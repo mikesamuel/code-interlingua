@@ -68,7 +68,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
   }
 
   void run(
-      J8BaseNode node, @Nullable TypeInfo typeInfo, TypeNameResolver nr,
+      J8BaseNode node, @Nullable TypeInfo typeInfo,
+      @Nullable TypeNameResolver nr,
       @Nullable SList<J8NodeVariant> ancestors) {
     TypeNameResolver childResolver = nr;
     TypeInfo childTypeInfo = typeInfo;
@@ -246,7 +247,8 @@ final class ClassMemberPass extends AbstractPass<Void> {
               typeInfo,
               typeInfo.canonName.child(
                   identNode.get().getValue(), Name.Type.FIELD));
-          info.setValueType(new TypeSpecification(typeInfo.canonName));
+          info.setValueType(TypeSpecification.unparameterized(
+              typeInfo.canonName));
         }
       }
     }
@@ -422,7 +424,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
                   t = StaticType.ERROR_TYPE;
                 } else {
                   t = typePool.type(
-                      new TypeSpecification(canonName),
+                      TypeSpecification.unparameterized(canonName),
                       ident.getSourcePosition(),
                       logger);
                 }

@@ -695,6 +695,11 @@ public final class Tokens {
           : Preconditions.checkNotNull(sb).append(
               multilineToken, pos, n).toString();
     }
+
+    @Override
+    public void appendShallowStructure(StringBuilder sb) {
+      sb.append("<javadoc-comment-lookback>");
+    }
   }
 
   /**
@@ -779,5 +784,11 @@ public final class Tokens {
     public ForceFitState forceFit(ForceFitState state) {
       throw new Error("TODO");   // TODO
     }
+
+    @Override
+    public void appendShallowStructure(StringBuilder sb) {
+      sb.append("<template-body-lookback>");
+    }
+
   }
 }

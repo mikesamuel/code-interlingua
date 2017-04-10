@@ -76,8 +76,8 @@ final class Reference extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    return nodeType.name();
+  public void appendShallowStructure(StringBuilder sb) {
+    sb.append(nodeType.name());
   }
 
   @Override

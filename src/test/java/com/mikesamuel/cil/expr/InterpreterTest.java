@@ -255,7 +255,7 @@ public final class InterpreterTest extends TestCase {
     }
 
     ClassOrInterfaceType thisType = (ClassOrInterfaceType) tc.typePool.type(
-        new TypeSpecification(thisTypeName), null, tc.logger);
+        TypeSpecification.unparameterized(thisTypeName), null, tc.logger);
 
     InterpretationContext<Object> ctx = new InterpretationContextImpl(
         tc.logger, tc.loader, tc.typePool) {
@@ -465,7 +465,7 @@ public final class InterpreterTest extends TestCase {
     }
 
     ClassOrInterfaceType thisType = (ClassOrInterfaceType) tc.typePool.type(
-        new TypeSpecification(thisTypeName), null, tc.logger);
+        TypeSpecification.unparameterized(thisTypeName), null, tc.logger);
 
     InterpretationContext<Object> ctx = new InterpretationContextImpl(
         tc.logger, tc.loader, tc.typePool);

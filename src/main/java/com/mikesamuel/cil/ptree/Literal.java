@@ -97,8 +97,8 @@ final class Literal extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    return Tokens.encodeString(text);
+  public void appendShallowStructure(StringBuilder sb) {
+    sb.append(Tokens.encodeString(text));
   }
 
 

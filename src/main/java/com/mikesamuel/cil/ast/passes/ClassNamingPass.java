@@ -137,7 +137,8 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           ImmutableList.of());
       values.setDescriptor("()[" + declaringClass.toTypeDescriptor());
       values.setFormalTypes(ImmutableList.of());
-      values.setReturnType(new TypeSpecification(declaringClass, 1));
+      values.setReturnType(
+          TypeSpecification.unparameterized(declaringClass).withNDims(1));
 
       // public static E valueOf(String name);
       Name valueOfName = methodVariantPool.allocateVariant(
@@ -149,7 +150,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       valueOf.setDescriptor(
           "(Ljava/lang/String;)" + declaringClass.toTypeDescriptor());
       valueOf.setFormalTypes(ImmutableList.of(JavaLang.JAVA_LANG_STRING));
-      valueOf.setReturnType(new TypeSpecification(declaringClass));
+      valueOf.setReturnType(TypeSpecification.unparameterized(declaringClass));
 
       b.add(values);
       b.add(valueOf);
@@ -159,8 +160,8 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
   }
 
   private static void processMembers(
-      Name declaringClass, J8TypeDeclaration declaration, J8BaseNode bodyElement,
-      ImmutableList.Builder<MemberInfo> b) {
+      Name declaringClass, J8TypeDeclaration declaration,
+      J8BaseNode bodyElement, ImmutableList.Builder<MemberInfo> b) {
     J8NodeType nt = bodyElement.getNodeType();
     switch (nt) {
       case ConstructorDeclaration:

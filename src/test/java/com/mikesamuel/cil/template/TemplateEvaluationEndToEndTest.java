@@ -82,7 +82,10 @@ public final class TemplateEvaluationEndToEndTest extends TestCase {
       final Map<String, File> prefixToOutput = Maps.newTreeMap();
       final Map<String, File> prefixToLog = Maps.newTreeMap();
 
-      for (File f : testRoot.listFiles()) {
+      File[] testRootFiles = testRoot.listFiles();
+      assertNotNull(
+          "Unreadable test root directory " + testRoot, testRootFiles);
+      for (File f : testRootFiles) {
         if (f.isFile()) {
           String name = f.getName();
           int dot = name.lastIndexOf('.');

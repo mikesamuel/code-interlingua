@@ -92,7 +92,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
 
   /** Copies all parse and mixin metadata from the given node. */
   @Override
-  public void copyMetadataFrom(BASE_NODE source) {
+  public void copyMetadataFrom(NodeI<?, ?, ?> source) {
     SourcePosition pos = source.getSourcePosition();
     if (pos != null) {
       setSourcePosition(pos);

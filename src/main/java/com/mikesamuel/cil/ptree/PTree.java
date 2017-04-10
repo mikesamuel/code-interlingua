@@ -69,7 +69,7 @@ public final class PTree {
   }
 
   /**
-   * Builder for a ParSer.
+   * Builder for a PTree.
    */
   public static final class Builder {
     private final Kind kind;

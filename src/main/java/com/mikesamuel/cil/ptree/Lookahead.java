@@ -121,8 +121,10 @@ final class Lookahead extends PTParSer {
   }
 
   @Override
-  public String toString() {
-    return (valence == Valence.POSITIVE ? "=(" : "!(") + body + ")";
+  public void appendShallowStructure(StringBuilder sb) {
+    sb.append((valence == Valence.POSITIVE ? "=(" : "!("));
+    body.getParSer().appendShallowStructure(sb);
+    sb.append(")");
   }
 
 

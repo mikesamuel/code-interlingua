@@ -1303,6 +1303,7 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
         variants = prod['variants']
 
         extra_imports = set((
+            'com.mikesamuel.cil.ast.NodeI',
             'com.mikesamuel.cil.parser.ParSer',
             'com.mikesamuel.cil.parser.ParSerable',
             'com.mikesamuel.cil.ptree.PTree',
@@ -1534,7 +1535,7 @@ public final class %(node_class_name)s extends %(base_node_class)s%(mixin_ifaces
   }
 
   @Override
-  public void copyMetadataFrom(%(cn_prefix)sBaseNode source) {
+  public void copyMetadataFrom(NodeI<?, ?, ?> source) {
 %(copy_code)s
     super.copyMetadataFrom(source);
   }

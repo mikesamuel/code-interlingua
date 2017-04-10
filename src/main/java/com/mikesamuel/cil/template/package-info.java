@@ -24,7 +24,9 @@
  * that can be invoked.
  *
  * <p>
- * <code>%%{ let ident<sub>0</sub> = expr, ident<sub>1</sub> = expr; &hellip; %%}</code>
+ * <code>
+ * %%{ let ident<sub>0</sub> = expr, ident<sub>1</sub> = expr; &hellip; %%}
+ * </code>
  * starts a block and optionally declares variables visible to
  * expressions in template directives and interpolations in that
  * block.
@@ -76,10 +78,10 @@
  * unit being produced.
  * The scope includes the contents of the input bundle, any template variables
  * introduced via the {@code let} syntax described above, and any
- * {@code static final} field declarations that are in scope and which appear before
- * the template instruction and which are initialized
- * (directly, not via static initializers) to a valid constant expression that does
- * not refer to any constants defined outside the compilation unit.
+ * {@code static final} field declarations that are in scope and which appear
+ * before the template instruction and which are initialized
+ * (directly, not via static initializers) to a valid constant expression that
+ * does not refer to any constants defined outside the compilation unit.
  *
  * <h4>Order of application</h4>
  * <p>
