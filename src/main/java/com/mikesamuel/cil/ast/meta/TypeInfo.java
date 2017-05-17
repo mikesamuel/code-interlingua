@@ -1,8 +1,11 @@
 package com.mikesamuel.cil.ast.meta;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 /** Describes a type. */
 public final class TypeInfo extends AccessibleInfo {
@@ -23,6 +26,8 @@ public final class TypeInfo extends AccessibleInfo {
    * interfaces.
    */
   public final ImmutableList<Name> innerClasses;
+  // TODO: split declaredMembers in two.  There's nothing gained by mixing
+  // methods and callables.
   /**
    * The declared members excluding inner classes.
    */
@@ -81,6 +86,19 @@ public final class TypeInfo extends AccessibleInfo {
         if (miOpt.isPresent()) {
           return miOpt;
         }
+      }
+    }
+    return Optional.absent();
+  }
+
+  /**
+   * The method with the given name.  Does not search super-types.
+   */
+  public Optional<CallableInfo> declaredCallableNamed(Name nm) {
+    Preconditions.checkArgument(nm.type == Name.Type.METHOD);
+    for (MemberInfo mi : declaredMembers) {
+      if (mi.canonName.equals(nm)) {
+        return Optional.of((CallableInfo) mi);
       }
     }
     return Optional.absent();
@@ -176,5 +194,61 @@ public final class TypeInfo extends AccessibleInfo {
           declaredMembers);
       return ti;
     }
+  }
+
+  /**
+   * Translate type info based on the given bridge.
+   */
+  public TypeInfo map(MetadataBridge metadataBridge) {
+    Function<TypeSpecification, TypeSpecification> bridgeType =
+        new Function<TypeSpecification, TypeSpecification>() {
+      @Override
+      public TypeSpecification apply(TypeSpecification x) {
+        return metadataBridge.bridgeTypeSpecification(x);
+      }
+    };
+
+    Function<Name, Name> bridgeTypeName = new Function<Name, Name>() {
+      @Override
+      public Name apply(Name typeName) {
+        return bridgeType.apply(TypeSpecification.unparameterized(typeName))
+            .rawName;
+      }
+    };
+
+    return new TypeInfo(
+        modifiers,
+        bridgeTypeName.apply(canonName),
+        isAnonymous,
+
+        superType.isPresent()
+        ? Optional.of(bridgeType.apply(superType.get()))
+        : Optional.absent(),
+
+        ImmutableList.copyOf(
+            Lists.transform(interfaces, bridgeType)),
+
+        ImmutableList.copyOf(
+            Lists.transform(parameters, bridgeTypeName)),
+
+        outerClass.isPresent()
+        ? Optional.of(bridgeTypeName.apply(outerClass.get()))
+        : Optional.absent(),
+
+        ImmutableList.copyOf(
+            Lists.transform(innerClasses, bridgeTypeName)),
+
+        ImmutableList.copyOf(
+            Lists.transform(
+                declaredMembers,
+                new Function<MemberInfo, MemberInfo>() {
+
+                  @Override
+                  public MemberInfo apply(MemberInfo x) {
+                    return metadataBridge.bridgeMemberInfo(x);
+                  }
+
+                }))
+        );
   }
 }

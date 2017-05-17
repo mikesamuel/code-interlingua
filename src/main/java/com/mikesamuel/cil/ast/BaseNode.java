@@ -11,6 +11,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.mikesamuel.cil.ast.meta.MetadataBridge;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -92,7 +93,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
 
   /** Copies all parse and mixin metadata from the given node. */
   @Override
-  public void copyMetadataFrom(NodeI<?, ?, ?> source) {
+  public void copyMetadataFrom(NodeI<?, ?, ?> source, MetadataBridge bridge) {
     SourcePosition pos = source.getSourcePosition();
     if (pos != null) {
       setSourcePosition(pos);
@@ -216,7 +217,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     }
 
     /**
-     * Restricts nodes recursively searched by excluding them to ones with a
+     * Restricts nodes recursively searched by excluding ones with a
      * node type among those given.
      *
      * @return {@code this} to enable chaining.
@@ -227,8 +228,8 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     }
 
     /**
-     * Restricts nodes recursively searched by excluding them to ones with a
-     * node type among those given.
+     * Restricts nodes recursively searched by excluding ones that are
+     * an instance of any of the types given.
      *
      * @return {@code this} to enable chaining.
      */

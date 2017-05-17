@@ -7,6 +7,7 @@ import javax.annotation.Nullable;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Strings;
+import com.mikesamuel.cil.ast.meta.MetadataBridge;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -19,8 +20,17 @@ public interface NodeI<
 
   /**
    * Copies metadata from the source node.
+   *
+   * @param bridge receives the value from node and can transform it.
    */
-  void copyMetadataFrom(NodeI<?, ?, ?> node);
+  void copyMetadataFrom(NodeI<?, ?, ?> node, MetadataBridge bridge);
+
+  /**
+   * Copies metadata from the source node using the identity bridge.
+   */
+  default void copyMetadataFrom(NodeI<?, ?, ?> node) {
+    copyMetadataFrom(node, MetadataBridge.Bridges.IDENTITY);
+  }
 
   /**
    * The variant of the node.

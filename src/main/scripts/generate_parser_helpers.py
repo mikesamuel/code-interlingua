@@ -80,6 +80,12 @@ def _classify_token((text, _)):
 def _first_upper(s):
     return '%s%s' % (s[0].upper(), s[1:])
 
+_METADATA_THAT_NEEDS_CONTEXT = set([
+    'String', 'java.lang.String',
+    'Name', 'com.mikesamuel.cil.ast.meta.Name',
+    'Name.Type', 'com.mikesamuel.cil.ast.meta.Name.Type',
+    'boolean', 'byte', 'char', 'double', 'float', 'int', 'long', 'short',
+    ])
 
 # Short names for punctuation strings arranges as a Trie.
 # This is used to derive descriptive variant names.
@@ -1304,6 +1310,7 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
 
         extra_imports = set((
             'com.mikesamuel.cil.ast.NodeI',
+            'com.mikesamuel.cil.ast.meta.MetadataBridge',
             'com.mikesamuel.cil.parser.ParSer',
             'com.mikesamuel.cil.parser.ParSerable',
             'com.mikesamuel.cil.ptree.PTree',
@@ -1450,12 +1457,17 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
                 extra_imports.add('%s.%s' % (mixins_package, mixin))
             copy_calls = []
             for mixin_type, mixin_field in mixin_fields:
+                umixin_field = _first_upper(mixin_field)
                 record = {
                     'node_class_name': node_class_name,
                     'mixin': mixin,
                     'mixin_field': mixin_field,
-                    'umixin_field': _first_upper(mixin_field),
+                    'umixin_field': umixin_field,
                     'mixin_type': mixin_type,
+                    'bridge_name': (
+                        mixin_type in _METADATA_THAT_NEEDS_CONTEXT
+                        and umixin_field or mixin_type
+                        )
                 }
                 extra_code.append(
                     ('  private %(mixin_type)s %(mixin_field)s;\n'
@@ -1472,8 +1484,8 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
                      '  }\n')
                     % record)
                 copy_calls.append(
-                    ('      set%(umixin_field)s('
-                     '((%(mixin)s<?, ?, ?>) source).get%(umixin_field)s());')
+                    ('      set%(umixin_field)s(bridge.bridge%(bridge_name)s('
+                     '((%(mixin)s<?, ?, ?>) source).get%(umixin_field)s()));')
                     % record
                     )
             if len(copy_calls):
@@ -1514,7 +1526,7 @@ public final class %(node_class_name)s extends %(base_node_class)s%(mixin_ifaces
   /** Copy constructor. */
   public %(node_class_name)s(%(node_class_name)s source) {
     super(%(copy_ctor_actuals)s);
-    copyMetadataFrom(source);
+    copyMetadataFrom(source, MetadataBridge.Bridges.IDENTITY);
   }
 
 %(extra_code)s
@@ -1535,9 +1547,9 @@ public final class %(node_class_name)s extends %(base_node_class)s%(mixin_ifaces
   }
 
   @Override
-  public void copyMetadataFrom(NodeI<?, ?, ?> source) {
+  public void copyMetadataFrom(NodeI<?, ?, ?> source, MetadataBridge bridge) {
 %(copy_code)s
-    super.copyMetadataFrom(source);
+    super.copyMetadataFrom(source, bridge);
   }
 
   /** Variants of this node. */

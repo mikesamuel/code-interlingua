@@ -23,6 +23,11 @@ public interface ExpressionNameResolver {
   public Optional<Name> resolveReference(
       String ident, DeclarationPositionMarker m);
 
+  /**
+   * An expression name resolver that behaves the same way as this one, but
+   * with any internal state transformed according to the given bridge.
+   */
+  public ExpressionNameResolver map(MetadataBridge b);
 
   /**
    * Static factories for resolvers.
@@ -145,6 +150,19 @@ public interface ExpressionNameResolver {
       }
 
       @Override
+      public ExpressionNameResolver map(MetadataBridge b) {
+        if (b == MetadataBridge.Bridges.IDENTITY) { return this; }
+        ImmutableMap.Builder<String, Name> identToCanonNameBridged =
+            ImmutableMap.builder();
+        for (Map.Entry<String, Name> e : identToCanonName.entrySet()) {
+          identToCanonNameBridged.put(
+              e.getKey(),
+              b.bridgeReferencedExpressionName(e.getValue()));
+        }
+        return new FromMapResolver(identToCanonNameBridged.build());
+      }
+
+      @Override
       public Optional<Name> resolveReference(
           String ident, DeclarationPositionMarker m) {
         Name canon = identToCanonName.get(ident);
@@ -208,6 +226,17 @@ public interface ExpressionNameResolver {
       declarations.add(name);
       return bm;
     }
+
+    @Override
+    public ExpressionNameResolver map(MetadataBridge b) {
+      if (b == MetadataBridge.Bridges.IDENTITY) { return this; }
+      BlockExpressionNameResolver bridged = new BlockExpressionNameResolver();
+      for (Name d : declarations) {
+        bridged.declarations.add(b.bridgeReferencedExpressionName(d));
+      }
+      return bridged;
+    }
+
 
     final class BlockMarker implements DeclarationPositionMarker {
       final int index;

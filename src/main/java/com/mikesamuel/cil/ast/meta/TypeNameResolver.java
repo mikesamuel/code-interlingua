@@ -22,7 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 /**
- * Looks up the fully qualified name for the given
+ * Looks up the fully qualified name given an ambiguous name.
  */
 public interface TypeNameResolver {
 
@@ -38,6 +38,15 @@ public interface TypeNameResolver {
    *     {@link com.mikesamuel.cil.ast.meta.Name.Type#CLASS}
    */
   public ImmutableList<Name> lookupTypeName(Name ambiguousName);
+
+  /**
+   * A type name that transforms from the bridged namespace.
+   *
+   * @param typeInfoResolver the resolver for all names that might reach
+   *     the bridge resolver.
+   */
+  public TypeNameResolver map(
+      MetadataBridge metadataBridge, TypeInfoResolver typeInfoResolver);
 
   /**
    * Factories for common resolvers.
@@ -127,6 +136,15 @@ public interface TypeNameResolver {
         } catch (ExecutionException e) {
           throw new AssertionError(e);
         }
+      }
+
+      @Override
+      public TypeNameResolver map(
+          MetadataBridge metadataBridge, TypeInfoResolver r) {
+        if (metadataBridge == MetadataBridge.Bridges.IDENTITY) {
+          return this;
+        }
+        return new Canonicalizer(r);
       }
     }
 
@@ -274,11 +292,25 @@ public interface TypeNameResolver {
       return new UnqualifiedNameResolver(identifierToName);
     }
 
-    static class UnqualifiedNameResolver implements TypeNameResolver {
+    static final class UnqualifiedNameResolver implements TypeNameResolver {
       final ImmutableMap<String, Name> identifierToName;
 
       UnqualifiedNameResolver(ImmutableMap<String, Name> identifierToName) {
         this.identifierToName = identifierToName;
+      }
+
+      @Override
+      public TypeNameResolver map(
+          MetadataBridge metadataBridge, TypeInfoResolver typeInfoResolver) {
+        if (metadataBridge == MetadataBridge.Bridges.IDENTITY) { return this; }
+        ImmutableMap.Builder<String, Name> b = ImmutableMap.builder();
+        for (Name name : identifierToName.values()) {
+          Name bridgedName = metadataBridge
+              .bridgeTypeSpecification(TypeSpecification.unparameterized(name))
+              .rawName;
+          b.put(bridgedName.identifier, bridgedName);
+        }
+        return new UnqualifiedNameResolver(b.build());
       }
 
       @Override
@@ -368,6 +400,28 @@ public interface TypeNameResolver {
       }
 
       @Override
+      public TypeNameResolver map(
+          MetadataBridge metadataBridge, TypeInfoResolver typeInfoResolver) {
+        if (metadataBridge == MetadataBridge.Bridges.IDENTITY) { return this; }
+        ImmutableList.Builder<Name> bridgedPackagesAndOuterTypes =
+            ImmutableList.builder();
+        for (Name packageOrOuterType : packagesAndOuterTypes) {
+          if (packageOrOuterType.type == Name.Type.PACKAGE) {
+            // TOOD: Do we need to bridge packages?
+            bridgedPackagesAndOuterTypes.add(packageOrOuterType);
+          } else {
+            bridgedPackagesAndOuterTypes.add(
+                metadataBridge.bridgeTypeSpecification(
+                    TypeSpecification.unparameterized(packageOrOuterType))
+                .rawName);
+          }
+        }
+        return new WildcardLookup(
+            bridgedPackagesAndOuterTypes.build(),
+            metadataBridge.bridgeTypeNameResolver(canonicalizer));
+      }
+
+      @Override
       public ImmutableList<Name> lookupTypeName(Name ambiguousName) {
         ImmutableList<String> typeNameIdents;
         {
@@ -436,7 +490,7 @@ public interface TypeNameResolver {
     }
 
     static final class EitherOr implements TypeNameResolver {
-      ImmutableList<TypeNameResolver> resolvers;
+      final ImmutableList<TypeNameResolver> resolvers;
 
       EitherOr(ImmutableList<TypeNameResolver> resolvers) {
         this.resolvers = resolvers;
@@ -449,6 +503,19 @@ public interface TypeNameResolver {
           if (!names.isEmpty()) { return names; }
         }
         return ImmutableList.of();
+      }
+
+      @Override
+      public TypeNameResolver map(
+          MetadataBridge metadataBridge, TypeInfoResolver typeInfoResolver) {
+        if (metadataBridge == MetadataBridge.Bridges.IDENTITY) {
+          return this;
+        }
+        ImmutableList.Builder<TypeNameResolver> b = ImmutableList.builder();
+        for (TypeNameResolver r : resolvers) {
+          b.add(r.map(metadataBridge, typeInfoResolver));
+        }
+        return new EitherOr(b.build());
       }
 
       @Override

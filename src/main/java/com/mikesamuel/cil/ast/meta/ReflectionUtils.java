@@ -72,4 +72,32 @@ public final class ReflectionUtils {
     }
   }
 
+  static Name nameForClass(Class<?> cl) {
+    Preconditions.checkArgument(!cl.isPrimitive() && !cl.isArray(), cl);
+    String simpleName;
+    if (cl.isAnonymousClass()) {
+      String binaryName = cl.getName();
+      // The ordinal name like $1
+      simpleName = binaryName.substring(binaryName.lastIndexOf('$') + 1);
+    } else {
+      simpleName = cl.getSimpleName();
+    }
+    Name parent;
+    Class<?> outer = cl.getEnclosingClass();
+    if (outer != null) {
+      parent = nameForClass(outer);
+    } else {
+      String cn = cl.getCanonicalName();
+      int lastDot = cn.lastIndexOf('.');
+      Name pkg = Name.DEFAULT_PACKAGE;
+      int pos = 0;
+      while (pos <= lastDot) {
+        int nextDot = cn.indexOf('.', pos);
+        pkg = pkg.child(cn.substring(pos, nextDot), Name.Type.PACKAGE);
+        pos = nextDot + 1;
+      }
+      parent = pkg;
+    }
+    return parent.child(simpleName, Name.Type.CLASS);
+  }
 }

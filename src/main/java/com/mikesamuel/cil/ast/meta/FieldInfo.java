@@ -33,4 +33,16 @@ public final class FieldInfo extends MemberInfo {
       sb.append(" : ").append(valueType);
     }
   }
+
+  @Override
+  public MemberInfo map(MetadataBridge b) {
+    if (b == MetadataBridge.Bridges.IDENTITY) { return this; }
+    FieldInfo bridged = new FieldInfo(
+        modifiers, b.bridgeDeclaredExpressionName(canonName));
+    if (valueType != null) {
+      bridged.setValueType(b.bridgeTypeSpecification(valueType));
+    }
+    return bridged;
+  }
+
 }

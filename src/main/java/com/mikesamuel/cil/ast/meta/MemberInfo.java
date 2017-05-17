@@ -28,4 +28,7 @@ public abstract class MemberInfo extends AccessibleInfo {
       @SuppressWarnings("unused") StringBuilder sb) {
     // Overridable
   }
+
+  /** Remaps names and types using the given bridge. */
+  public abstract MemberInfo map(MetadataBridge b);
 }

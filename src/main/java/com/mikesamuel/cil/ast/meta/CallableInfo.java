@@ -1,7 +1,9 @@
 package com.mikesamuel.cil.ast.meta;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 /** Describes a method, constructor, or initializer. */
 public final class CallableInfo extends MemberInfo {
@@ -25,7 +27,6 @@ public final class CallableInfo extends MemberInfo {
   /**
    * The JVM method descriptor.
    *
-   * @see <a href="https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3">JVM Spec 4.3.3</a>
    * @return null if not set.  Usually set by the class member pass.
    */
   public String getDescriptor() {
@@ -33,8 +34,8 @@ public final class CallableInfo extends MemberInfo {
   }
 
   /** @see #getDescriptor() */
-  public void setDescriptor(String descriptor) {
-    this.descriptor = descriptor;
+  public void setDescriptor(String newDescriptor) {
+    this.descriptor = newDescriptor;
   }
 
   /**
@@ -138,4 +139,48 @@ public final class CallableInfo extends MemberInfo {
     return "<init>".equals(memberName) || "<clinit>".equals(memberName);
   }
 
+
+  @Override
+  public MemberInfo map(MetadataBridge b) {
+    if (b == MetadataBridge.Bridges.IDENTITY) { return this; }
+    CallableInfo bridged = new CallableInfo(
+        modifiers, b.bridgeDeclaredExpressionName(canonName),
+        ImmutableList.copyOf(Lists.transform(
+            typeParameters,
+            new Function<Name, Name>() {
+
+              @Override
+              public Name apply(Name p) {
+                return b
+                    .bridgeTypeSpecification(
+                        TypeSpecification.unparameterized(p))
+                    .rawName;
+              }
+
+            })));
+    if (descriptor != null) {
+      bridged.setDescriptor(b.bridgeMethodDescriptor(descriptor));
+    }
+    if (returnType != null) {
+      bridged.setReturnType(b.bridgeTypeSpecification(returnType));
+    }
+    if (formalTypes != null) {
+      bridged.setFormalTypes(
+          Lists.transform(
+              formalTypes,
+              new Function<TypeSpecification, TypeSpecification>() {
+
+                @Override
+                public TypeSpecification apply(TypeSpecification ft) {
+                  return b.bridgeTypeSpecification(ft);
+                }
+
+              }));
+    }
+    bridged.setVariadic(isVariadic);
+    bridged.setSynthetic(isSynthetic);
+    bridged.setIsBridge(isBridge);
+
+    return bridged;
+  }
 }

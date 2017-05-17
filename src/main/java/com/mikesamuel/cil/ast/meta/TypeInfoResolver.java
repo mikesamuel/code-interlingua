@@ -43,6 +43,18 @@ public interface TypeInfoResolver {
   Optional<TypeInfo> resolve(Name className);
 
   /**
+   * Looks up the given callable.
+   */
+  default Optional<CallableInfo> resolveCallable(Name anc) {
+    Preconditions.checkArgument(anc.type == Name.Type.METHOD);
+    Optional<TypeInfo> tiOpt = resolve(anc.getContainingClass());
+    if (tiOpt.isPresent()) {
+      return tiOpt.get().declaredCallableNamed(anc);
+    }
+    return Optional.absent();
+  }
+
+  /**
    * Factories for common resolvers.
    */
   public static final class Resolvers {
@@ -112,7 +124,7 @@ public interface TypeInfoResolver {
                       return Optional.absent();
                     }
 
-                    Name className = nameForClass(clazz);
+                    Name className = ReflectionUtils.nameForClass(clazz);
 
                     Type superType = clazz.getGenericSuperclass();
                     Class<?> outerClass = clazz.getEnclosingClass();
@@ -203,7 +215,8 @@ public interface TypeInfoResolver {
                         .interfaces(interfaceSpecs.build())
                         .parameters(parameters)
                         .outerClass(outerClass != null
-                            ? Optional.of(nameForClass(outerClass))
+                            ? Optional.of(
+                                ReflectionUtils.nameForClass(outerClass))
                             : Optional.<Name>absent())
                         .innerClasses(innerNames.build())
                         .declaredMembers(members.build());
@@ -232,35 +245,6 @@ public interface TypeInfoResolver {
       return names.build();
     }
 
-    private static Name nameForClass(Class<?> cl) {
-      Preconditions.checkArgument(!cl.isPrimitive() && !cl.isArray());
-      String simpleName;
-      if (cl.isAnonymousClass()) {
-        String binaryName = cl.getName();
-        // The ordinal name like $1
-        simpleName = binaryName.substring(binaryName.lastIndexOf('$') + 1);
-      } else {
-        simpleName = cl.getSimpleName();
-      }
-      Name parent;
-      Class<?> outer = cl.getEnclosingClass();
-      if (outer != null) {
-        parent = nameForClass(outer);
-      } else {
-        String cn = cl.getCanonicalName();
-        int lastDot = cn.lastIndexOf('.');
-        Name pkg = Name.DEFAULT_PACKAGE;
-        int pos = 0;
-        while (pos <= lastDot) {
-          int nextDot = cn.indexOf('.', pos);
-          pkg = pkg.child(cn.substring(pos, nextDot), Name.Type.PACKAGE);
-          pos = nextDot + 1;
-        }
-        parent = pkg;
-      }
-      return parent.child(simpleName, Name.Type.CLASS);
-    }
-
     private static final ImmutableMap<Class<?>, Name> PRIMITIVE_CLASS_TO_NAME =
         ImmutableMap.<Class<?>, Name>builder()
         .put(void.class, StaticType.T_VOID.typeSpecification.rawName)
@@ -287,7 +271,7 @@ public interface TypeInfoResolver {
         if (cl.isPrimitive()) {
           nm = PRIMITIVE_CLASS_TO_NAME.get(cl);
         } else {
-          nm = nameForClass(cl);
+          nm = ReflectionUtils.nameForClass(cl);
         }
         return TypeSpecification.unparameterized(nm).withNDims(nDims);
       } else if (t instanceof ParameterizedType) {
@@ -299,7 +283,8 @@ public interface TypeInfoResolver {
           bindings.add(bindingForType(ta));
         }
 
-        Name rawTypeName = nameForClass((Class<?>) pt.getRawType());
+        Name rawTypeName = ReflectionUtils.nameForClass(
+            (Class<?>) pt.getRawType());
 
         Type ownerType = pt.getOwnerType();
         if (ownerType != null) {
@@ -318,7 +303,7 @@ public interface TypeInfoResolver {
         GenericDeclaration d = tv.getGenericDeclaration();
         Name parentName;
         if (d instanceof Class) {
-          parentName = nameForClass((Class<?>) d);
+          parentName = ReflectionUtils.nameForClass((Class<?>) d);
         } else if (d instanceof Method) {
           Method m = (Method) d;
           String mname = m.getName();
@@ -330,13 +315,13 @@ public interface TypeInfoResolver {
               ++index;
             }
           }
-          parentName = nameForClass(dc).method(mname, index);
+          parentName = ReflectionUtils.nameForClass(dc).method(mname, index);
         } else if (d instanceof Constructor) {
           Constructor<?> c = (Constructor<?>) d;
           Class<?> dc = c.getDeclaringClass();
           int index = Arrays.asList(dc.getDeclaredConstructors())
               .indexOf(c) + 1;
-          parentName = nameForClass(dc).method("<init>", index);
+          parentName = ReflectionUtils.nameForClass(dc).method("<init>", index);
         } else {
           throw new AssertionError(d + " : " + d.getClass().getName());
         }
@@ -409,7 +394,7 @@ public interface TypeInfoResolver {
         Set<Class<?>> interfacesSeen) {
       // getClasses does not include classes from implemented interfaces.
       for (Class<?> c : cl.getClasses()) {
-        names.add(nameForClass(c));
+        names.add(ReflectionUtils.nameForClass(c));
       }
       for (Class<?> iface : cl.getInterfaces()) {
         if (interfacesSeen.add(iface)) {
