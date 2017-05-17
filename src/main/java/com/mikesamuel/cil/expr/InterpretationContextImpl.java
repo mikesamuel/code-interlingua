@@ -30,6 +30,7 @@ import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Table;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
+import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.ReflectionUtils;
 import com.mikesamuel.cil.ast.meta.StaticType;
@@ -975,19 +976,19 @@ implements InterpretationContext<Object> {
 
   /** class name -> method name -> descriptor -> executable */
   private final
-  LoadingCache<Name, Table<String, String, Executable>> executables =
+  LoadingCache<Name, Table<String, MethodDescriptor, Executable>> executables =
       CacheBuilder.newBuilder().build(
-          new CacheLoader<Name, Table<String, String, Executable>>() {
+          new CacheLoader<Name, Table<String, MethodDescriptor, Executable>>() {
 
             @SuppressWarnings("synthetic-access")
             @Override
-            public Table<String, String, Executable> load(Name nm) {
+            public Table<String, MethodDescriptor, Executable> load(Name nm) {
               Preconditions.checkState(
                   nm.type == Name.Type.METHOD
                   && nm.parent.type == Name.Type.CLASS);
               Optional<Class<?>> declaringClass = classFor(
                   TypeSpecification.unparameterized(nm.parent));
-              ImmutableTable.Builder<String, String, Executable> b =
+              ImmutableTable.Builder<String, MethodDescriptor, Executable> b =
                   ImmutableTable.builder();
               if (declaringClass.isPresent()) {
                 for (Method m : declaringClass.get().getDeclaredMethods()) {

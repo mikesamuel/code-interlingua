@@ -63,10 +63,11 @@
     },
     "MethodDescriptorReference": {
       "state": [
-        ["String", "methodDescriptor"],
+        ["MethodDescriptor", "methodDescriptor"],
         ["TypeSpecification", "methodDeclaringType"]
       ],
       "imports": [
+        "com.mikesamuel.cil.ast.meta.MethodDescriptor",
         "com.mikesamuel.cil.ast.meta.TypeSpecification"
       ]
     },

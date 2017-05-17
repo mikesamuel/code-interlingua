@@ -22,7 +22,7 @@ public final class ReflectionUtils {
    * Constructors are treated as equivalent to the special method {@code <init>}
    * with {@code void} return type.
    */
-  public static String descriptorFor(Executable e) {
+  public static MethodDescriptor descriptorFor(Executable e) {
     return descriptorFor(
         e instanceof Method ? ((Method) e).getReturnType() : void.class,
         Arrays.asList(e.getParameterTypes()));
@@ -31,45 +31,33 @@ public final class ReflectionUtils {
   /**
    * A JVM method descriptor for the given return type and formal types.
    */
-  public static String descriptorFor(
+  public static MethodDescriptor descriptorFor(
       Class<?> returnType, Iterable<? extends Class<?>> formalTypes) {
-    StringBuilder sb = new StringBuilder();
-    sb.append('(');
+    MethodDescriptor.Builder b = MethodDescriptor.builder();
     for (Class<?> formalType : formalTypes) {
-      appendTypeDescriptor(sb, formalType);
+      Class<?> ft = formalType;
+      int nDims = 0;
+      while (ft.isArray()) {
+        ft = ft.getComponentType();
+        ++nDims;
+      }
+      b.addFormalParameter(nameForType(ft), nDims);
     }
-    sb.append(')');
-    appendTypeDescriptor(sb, returnType);
-    return sb.toString();
+
+    Class<?> rt = returnType;
+    int nDims = 0;
+    while (rt.isArray()) {
+      rt = rt.getComponentType();
+      ++nDims;
+    }
+    b.withReturnType(nameForType(rt), nDims);
+    return b.build();
   }
 
-  private static final ImmutableMap<Class<?>, Character> PRIMITIVE_FIELD_TYPES
-      = ImmutableMap.<Class<?>, Character>builder()
-      .put(Void.TYPE, 'V')
-      .put(Boolean.TYPE, 'Z')
-      .put(Byte.TYPE, 'B')
-      .put(Character.TYPE, 'C')
-      .put(Double.TYPE, 'D')
-      .put(Float.TYPE, 'F')
-      .put(Integer.TYPE, 'I')
-      .put(Long.TYPE, 'J')
-      .put(Short.TYPE, 'S')
-      .build();
-
-  private static void appendTypeDescriptor(StringBuilder sb, Class<?> t) {
-    Preconditions.checkArgument(!t.isAnnotation());
-    if (t.isPrimitive()) {
-      sb.append(PRIMITIVE_FIELD_TYPES.get(t).charValue());
-    } else {
-      Class<?> bareType = t;
-      while (bareType.isArray()) {
-        sb.append('[');
-        bareType = bareType.getComponentType();
-      }
-      sb.append('L');
-      sb.append(t.getName().replace('.', '/'));
-      sb.append(';');
-    }
+  private static Name nameForType(Class<?> t) {
+    Name nm = PRIMITIVE_FIELD_TYPES.get(t);
+    if (nm != null) { return nm; }
+    return nameForClass(t);
   }
 
   static Name nameForClass(Class<?> cl) {
@@ -100,4 +88,18 @@ public final class ReflectionUtils {
     }
     return parent.child(simpleName, Name.Type.CLASS);
   }
+
+  private static final ImmutableMap<Class<?>, Name> PRIMITIVE_FIELD_TYPES
+      = ImmutableMap.<Class<?>, Name>builder()
+      .put(Void.TYPE, StaticType.T_VOID.typeSpecification.rawName)
+      .put(Boolean.TYPE, StaticType.T_BOOLEAN.typeSpecification.rawName)
+      .put(Byte.TYPE, StaticType.T_BYTE.typeSpecification.rawName)
+      .put(Character.TYPE, StaticType.T_CHAR.typeSpecification.rawName)
+      .put(Double.TYPE, StaticType.T_DOUBLE.typeSpecification.rawName)
+      .put(Float.TYPE, StaticType.T_FLOAT.typeSpecification.rawName)
+      .put(Integer.TYPE, StaticType.T_INT.typeSpecification.rawName)
+      .put(Long.TYPE, StaticType.T_LONG.typeSpecification.rawName)
+      .put(Short.TYPE, StaticType.T_SHORT.typeSpecification.rawName)
+      .build();
+
 }

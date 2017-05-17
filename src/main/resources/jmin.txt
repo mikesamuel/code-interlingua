@@ -125,7 +125,7 @@ PackageName:
 // Packages
 (chapter=Package)
 CompilationUnit: (@mixin=FileNode) @toplevel
-     PackageDeclaration {TypeDeclaration}
+     PackageDeclaration TypeDeclaration
 PackageDeclaration:
      "package" PackageName ";" (@name=Declaration)
 TypeDeclaration:
@@ -137,7 +137,7 @@ TypeDeclaration:
 ClassDeclaration:
      NormalClassDeclaration
 NormalClassDeclaration: (@mixin=TypeDeclaration,TypeParameterScope)
-     [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] [Superclass] [Superinterfaces] ClassBody (@name=Declaration)
+     [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] Superclass [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
      Annotation
      "public"

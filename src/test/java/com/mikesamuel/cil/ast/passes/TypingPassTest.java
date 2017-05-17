@@ -29,6 +29,7 @@ import com.mikesamuel.cil.ast.j8.Java8Comments;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.StatementExpressionNode;
 import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
+import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
@@ -2164,10 +2165,10 @@ public final class TypingPassTest extends TestCase {
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
       if (node instanceof J8MethodDescriptorReference) {
-        String descriptor = ((J8MethodDescriptorReference) node)
+        MethodDescriptor descriptor = ((J8MethodDescriptorReference) node)
             .getMethodDescriptor();
         if (descriptor != null) {
-          return Java8Comments.blockCommentMinimalSpace(descriptor);
+          return Java8Comments.blockCommentMinimalSpace(descriptor.toString());
         }
       }
       return null;
@@ -2191,7 +2192,7 @@ public final class TypingPassTest extends TestCase {
               sb.append(declType.toString());
             }
 
-            String descriptor = desc.getMethodDescriptor();
+            MethodDescriptor descriptor = desc.getMethodDescriptor();
             if (descriptor != null) {
               sb.append(descriptor);
             }

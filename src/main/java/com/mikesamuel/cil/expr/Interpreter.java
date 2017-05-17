@@ -69,6 +69,7 @@ import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
+import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
@@ -97,6 +98,35 @@ public final class Interpreter<VALUE> {
   protected final Completion<VALUE> nullCompletion;
   protected final Completion<VALUE> errorCompletion;
   private SourcePosition currentSourcePosition;
+
+  private static final MethodDescriptor DESCRIPTOR_OBJECT_TO_BOOLEAN =
+      MethodDescriptor.builder()
+      .addFormalParameter(JavaLang.JAVA_LANG_OBJECT.rawName, 0)
+      .withReturnType(StaticType.T_BOOLEAN.typeSpecification.rawName, 0)
+      .build();
+
+  private static final MethodDescriptor DESCRIPTOR_VOID_TO_VOID =
+      MethodDescriptor.builder()
+      .build();
+
+  private static final MethodDescriptor DESCRIPTOR_VOID_TO_BOOLEAN =
+      MethodDescriptor.builder()
+      .withReturnType(StaticType.T_BOOLEAN.typeSpecification.rawName, 0)
+      .build();
+
+  private static final MethodDescriptor DESCRIPTOR_VOID_TO_ITERATOR =
+      MethodDescriptor.builder()
+      .withReturnType(
+          JavaLang.JAVA
+          .child("util", Name.Type.PACKAGE)
+          .child("Iterator", Name.Type.CLASS),
+          0)
+      .build();
+
+  private static final MethodDescriptor DESCRIPTOR_VOID_TO_OBJECT =
+      MethodDescriptor.builder()
+      .withReturnType(JavaLang.JAVA_LANG_OBJECT.rawName, 0)
+      .build();
 
   /** */
   public Interpreter(InterpretationContext<VALUE> context) {
@@ -1187,7 +1217,7 @@ public final class Interpreter<VALUE> {
           if (exprType instanceof ClassOrInterfaceType) {
             TypeInfo ti = ((ClassOrInterfaceType) exprType).info;
             Optional<CallableInfo> mi = findMethod(
-                ti, "equals", "(Ljava/lang/Object;)Z");
+                ti, "equals", DESCRIPTOR_OBJECT_TO_BOOLEAN);
             if (mi.isPresent()) {
               equalsInfo = mi.get();
             }
@@ -1390,7 +1420,8 @@ public final class Interpreter<VALUE> {
 
             if (resourceType instanceof ClassOrInterfaceType) {
               TypeInfo ti = ((ClassOrInterfaceType) resourceType).info;
-              Optional<CallableInfo> close = findMethod(ti, "close", "()V");
+              Optional<CallableInfo> close = findMethod(
+                  ti, "close", DESCRIPTOR_VOID_TO_VOID);
               if (close.isPresent()) {
                 VALUE v = context.invokeVirtual(
                     close.get(), resource, ImmutableList.of());
@@ -1453,7 +1484,7 @@ public final class Interpreter<VALUE> {
         UnqualifiedClassInstanceCreationExpressionNode e =
             (UnqualifiedClassInstanceCreationExpressionNode) node;
 
-        String ctorDescriptor = e.getMethodDescriptor();
+        MethodDescriptor ctorDescriptor = e.getMethodDescriptor();
         TypeSpecification typeSpecToInstantiate = e.getMethodDeclaringType();
         if (ctorDescriptor == null || typeSpecToInstantiate == null) {
           error(e, "Constructor not resolved");
@@ -1524,7 +1555,7 @@ public final class Interpreter<VALUE> {
     if (sequenceType instanceof ClassOrInterfaceType) {
       TypeInfo sti = ((ClassOrInterfaceType) sequenceType).info;
       Optional<CallableInfo> iteratorMethod = findMethod(
-          sti, "iterator", "()Ljava/util/Iterator;");
+          sti, "iterator", DESCRIPTOR_VOID_TO_ITERATOR);
       if (!iteratorMethod.isPresent()) {
         error(sequenceNode, "Not iterable");
         return errorCompletion;
@@ -1540,9 +1571,9 @@ public final class Interpreter<VALUE> {
       }
       TypeInfo iti = ((ClassOrInterfaceType) iteratorType).info;
       Optional<CallableInfo> hasNext = findMethod(
-          iti, "hasNext", "()Z");
+          iti, "hasNext", DESCRIPTOR_VOID_TO_BOOLEAN);
       Optional<CallableInfo> next = findMethod(
-          iti, "next", "()Ljava/lang/Object;");
+          iti, "next", DESCRIPTOR_VOID_TO_OBJECT);
       if (hasNext.isPresent() && next.isPresent()) {
         while (true) {
           VALUE hasNextValue = context.invokeVirtual(
@@ -1624,7 +1655,7 @@ public final class Interpreter<VALUE> {
   }
 
   private Optional<CallableInfo> findMethod(
-      TypeInfo ti, String name, String desc) {
+      TypeInfo ti, String name, MethodDescriptor desc) {
     TypeInfoResolver r = context.getTypePool().r;
     Optional<MemberInfo> mi = ti.memberMatching(
         r,
@@ -1667,7 +1698,7 @@ public final class Interpreter<VALUE> {
     @Nullable ArgumentListNode actuals = call.firstChildWithType(
         ArgumentListNode.class);
     TypeSpecification declType = name.getMethodDeclaringType();
-    String descriptor = name.getMethodDescriptor();
+    MethodDescriptor descriptor = name.getMethodDescriptor();
     Optional<CallableInfo> infoOpt;
     boolean isStatic;
     if (declType == null || descriptor == null) {
@@ -2386,7 +2417,7 @@ public final class Interpreter<VALUE> {
   }
 
   private Optional<CallableInfo> callableForType(
-      TypeSpecification ts, String ident, String descriptor) {
+      TypeSpecification ts, String ident, MethodDescriptor descriptor) {
     StaticType t = context.getTypePool().type(ts, null, context.getLogger());
     if (t instanceof ClassOrInterfaceType) {
       ClassOrInterfaceType cit = (ClassOrInterfaceType) t;
@@ -2396,7 +2427,7 @@ public final class Interpreter<VALUE> {
   }
 
   private Optional<CallableInfo> callableForType(
-      TypeInfo info, String ident, String descriptor) {
+      TypeInfo info, String ident, MethodDescriptor descriptor) {
     Optional<MemberInfo> matching = info.memberMatching(
         context.getTypePool().r,
         new Predicate<MemberInfo>() {

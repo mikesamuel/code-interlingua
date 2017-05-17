@@ -9,7 +9,7 @@ import com.google.common.collect.Lists;
 public final class CallableInfo extends MemberInfo {
   /** Type parameters scoped to the named callable. */
   public final ImmutableList<Name> typeParameters;
-  private String descriptor;
+  private MethodDescriptor descriptor;
   private TypeSpecification returnType;
   private ImmutableList<TypeSpecification> formalTypes;
   private boolean isVariadic;
@@ -29,12 +29,12 @@ public final class CallableInfo extends MemberInfo {
    *
    * @return null if not set.  Usually set by the class member pass.
    */
-  public String getDescriptor() {
+  public MethodDescriptor getDescriptor() {
     return descriptor;
   }
 
   /** @see #getDescriptor() */
-  public void setDescriptor(String newDescriptor) {
+  public void setDescriptor(MethodDescriptor newDescriptor) {
     this.descriptor = newDescriptor;
   }
 

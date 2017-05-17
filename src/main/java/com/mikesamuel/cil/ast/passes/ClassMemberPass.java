@@ -46,6 +46,7 @@ import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
+import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
@@ -139,15 +140,11 @@ final class ClassMemberPass extends AbstractPass<Void> {
         }
 
         boolean hasErrorType = false;
-        String errorDesc = StaticType.ERROR_TYPE.toDescriptor();
-        StringBuilder descriptor = new StringBuilder();
+        MethodDescriptor.Builder descriptor = MethodDescriptor.builder();
         ImmutableList.Builder<TypeSpecification> formalTypes =
             ImmutableList.builder();
 
-        if (paramList == null) {
-          descriptor.append("()");
-        } else {
-          descriptor.append('(');
+        if (paramList != null) {
           for (J8BaseNode formal
               : Iterables.concat(
                   node.finder(FormalParameterNode.class)
@@ -183,28 +180,31 @@ final class ClassMemberPass extends AbstractPass<Void> {
               info.setVariadic(true);
             }
             formalTypes.add(staticType.typeSpecification);
-            String tdesc = staticType.toDescriptor();
-            if (tdesc.endsWith(errorDesc)) {  // [X is an array of errors.
+            StaticType staticErasedType = staticType.toErasedType();
+            if (StaticType.ERROR_TYPE.equals(staticErasedType)) {
               hasErrorType = true;
               break;
             }
-            descriptor.append(tdesc);
+            descriptor.addFormalParameter(
+                staticErasedType.typeSpecification.rawName,
+                staticErasedType.typeSpecification.nDims);
           }
-          descriptor.append(')');
         }
         if (!hasErrorType) {
-          String rdesc = returnType.toDescriptor();
-          if (rdesc.endsWith(errorDesc)) {
+          StaticType returnErasedType = returnType.toErasedType();
+          if (StaticType.ERROR_TYPE.equals(returnErasedType)) {
             hasErrorType = true;
           } else {
-            descriptor.append(rdesc);
+            descriptor.withReturnType(
+                returnErasedType.typeSpecification.rawName,
+                returnErasedType.typeSpecification.nDims);
           }
         } else {
           error(node, "Could not compute method descriptor");
         }
 
         if (!hasErrorType) {
-          info.setDescriptor(descriptor.toString());
+          info.setDescriptor(descriptor.build());
         }
         info.setReturnType(returnType.typeSpecification);
         info.setFormalTypes(formalTypes.build());
@@ -499,5 +499,4 @@ final class ClassMemberPass extends AbstractPass<Void> {
     }
     return null;
   }
-
 }

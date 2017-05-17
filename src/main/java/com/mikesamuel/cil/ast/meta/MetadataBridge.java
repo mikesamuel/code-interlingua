@@ -23,7 +23,7 @@ public interface MetadataBridge {
   MemberInfo bridgeMemberInfo(MemberInfo x);
 
   /** Transforms input from a source to that appropriate for a destination. */
-  String bridgeMethodDescriptor(String x);
+  MethodDescriptor bridgeMethodDescriptor(MethodDescriptor x);
 
   /** Transforms input from a source to that appropriate for a destination. */
   int bridgeMethodVariant(int x);
@@ -80,7 +80,7 @@ public interface MetadataBridge {
       }
 
       @Override
-      public String bridgeMethodDescriptor(String x) {
+      public MethodDescriptor bridgeMethodDescriptor(MethodDescriptor x) {
         return x;
       }
 

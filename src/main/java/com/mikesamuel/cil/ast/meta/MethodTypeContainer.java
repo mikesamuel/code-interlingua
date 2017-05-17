@@ -10,14 +10,21 @@ import com.google.common.collect.ImmutableList;
  * Specifies a method that can contain type declarations.
  */
 public final class MethodTypeContainer extends PartialTypeSpecification {
-  final TypeSpecification parent;
+  /** The type that contains the method. */
+  public final TypeSpecification parent;
   final Name name;
   final ImmutableList<TypeSpecification.TypeBinding> bindings;
 
-  MethodTypeContainer(
+  /**
+   * @param parent the type that contains the method.
+   * @param name the method name including a non-zero variant.
+   * @param bindings for the method's declared type parameters.
+   */
+  public MethodTypeContainer(
       TypeSpecification parent, Name name,
       Iterable<? extends TypeSpecification.TypeBinding> bindings) {
     Preconditions.checkArgument(name.parent == parent.rawName);
+    Preconditions.checkArgument(name.type == Name.Type.METHOD);
     this.parent = Preconditions.checkNotNull(parent);
     this.name = name;
     this.bindings = ImmutableList.copyOf(bindings);

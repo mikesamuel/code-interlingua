@@ -4,6 +4,7 @@ import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 
 /**
@@ -20,7 +21,7 @@ extends NodeI<B, T, V> {
    * The method descriptor if known.  Usually set by the class member and
    * typing passes.
    */
-  String getMethodDescriptor();
+  MethodDescriptor getMethodDescriptor();
 
   /**
    * @param newMethodDescriptor a well-formed method descriptor per
@@ -28,7 +29,7 @@ extends NodeI<B, T, V> {
    * @return this
    */
   MethodDescriptorReference<B, T, V> setMethodDescriptor(
-      String newMethodDescriptor);
+      MethodDescriptor newMethodDescriptor);
 
   /**
    * The name of the type that declares the referenced method.

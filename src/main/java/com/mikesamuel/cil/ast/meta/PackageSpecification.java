@@ -19,7 +19,8 @@ public final class PackageSpecification extends PartialTypeSpecification {
   /** The name of the package. */
   public final Name packageName;
 
-  PackageSpecification(Name name) {
+  /** */
+  public PackageSpecification(Name name) {
     Preconditions.checkArgument(name.type == Name.Type.PACKAGE);
     this.packageName = name;
   }

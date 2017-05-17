@@ -7,7 +7,7 @@ import com.google.common.base.Preconditions;
 /**
  * A name that can represent anything referred to by a name production.
  */
-public final class Name {
+public final class Name implements Comparable<Name> {
   /**
    * The preceding elements in the name if any.
    * In a unambiguous name, this will only be null for the default package.
@@ -58,6 +58,12 @@ public final class Name {
         type != Type.CLASS
         || parent == null || parent.type == Type.PACKAGE
         || parent.type == Type.CLASS || parent.type == Type.AMBIGUOUS
+        || parent.type == Type.METHOD);
+    // Type parameters can only have class or method parents.
+    Preconditions.checkArgument(
+        type != Type.TYPE_PARAMETER
+        || parent == null || parent.type == Type.CLASS
+        || parent.type == Type.AMBIGUOUS
         || parent.type == Type.METHOD);
     // Only the default package can be identifierless.
     Preconditions.checkArgument(
@@ -202,6 +208,19 @@ public final class Name {
   }
 
   @Override
+  public int compareTo(Name nm) {
+    int delta = parent != null
+        ? nm.parent != null ? parent.compareTo(nm.parent) : 1
+        : nm.parent == null ? 0 : -1;
+    if (delta != 0) { return delta; }
+    delta = this.variant - nm.variant;
+    if (delta != 0) { return delta; }
+    delta = this.type.compareTo(nm.type);
+    if (delta != 0) { return delta; }
+    return this.identifier.compareTo(nm.identifier);
+  }
+
+  @Override
   public String toString() {
     return toInternalNameString();
   }
@@ -336,7 +355,15 @@ public final class Name {
       sb.append(before);
     }
     if (identifier != null) {
-      sb.append(identifier);
+      int appended = 0, length = identifier.length();
+      for (int i = 0; i < length; ++i) {
+        char ch = identifier.charAt(i);
+        if (ch == '$') {
+          sb.append(identifier, appended, i).append("\\$");
+          appended = i + 1;
+        }
+      }
+      sb.append(identifier, appended, length);
     }
     if (after != null) {
       sb.append(after);
@@ -427,11 +454,19 @@ public final class Name {
    * Converts a class type to a type descriptor form: {@code Lfoo/bar/Name;}.
    */
   public String toTypeDescriptor() {
-    Preconditions.checkState(this.type == Name.Type.CLASS);
     StringBuilder sb = new StringBuilder();
+    appendTypeDescriptor(sb);
+    return sb.toString();
+  }
+
+  /**
+   * Converts a class type to a type descriptor form: {@code Lfoo/bar/Name;}.
+   */
+  public void appendTypeDescriptor(StringBuilder sb) {
+    Preconditions.checkState(this.type == Name.Type.CLASS);
     sb.append('L');
     toDescriptor(this, sb);
-    return sb.append(';').toString();
+    sb.append(';');
   }
 
   private Name.Type toDescriptor(Name nm, StringBuilder sb) {

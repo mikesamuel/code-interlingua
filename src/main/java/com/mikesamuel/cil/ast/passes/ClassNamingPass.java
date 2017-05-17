@@ -37,6 +37,7 @@ import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
 import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
+import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
@@ -135,7 +136,10 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           Modifier.PUBLIC | Modifier.STATIC,
           methodVariantPool.allocateVariant(declaringClass, "values"),
           ImmutableList.of());
-      values.setDescriptor("()[" + declaringClass.toTypeDescriptor());
+      values.setDescriptor(
+          MethodDescriptor.builder()
+              .withReturnType(declaringClass, 1)
+              .build());
       values.setFormalTypes(ImmutableList.of());
       values.setReturnType(
           TypeSpecification.unparameterized(declaringClass).withNDims(1));
@@ -148,7 +152,10 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           valueOfName,
           ImmutableList.of(valueOfName.child("name", Name.Type.LOCAL)));
       valueOf.setDescriptor(
-          "(Ljava/lang/String;)" + declaringClass.toTypeDescriptor());
+          MethodDescriptor.builder()
+             .addFormalParameter(JavaLang.JAVA_LANG_STRING.rawName, 0)
+             .withReturnType(declaringClass, 0)
+             .build());
       valueOf.setFormalTypes(ImmutableList.of(JavaLang.JAVA_LANG_STRING));
       valueOf.setReturnType(TypeSpecification.unparameterized(declaringClass));
 
