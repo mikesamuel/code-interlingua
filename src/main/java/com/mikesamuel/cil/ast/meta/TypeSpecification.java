@@ -489,6 +489,7 @@ public final class TypeSpecification extends PartialTypeSpecification {
    * This but with the given number of dimensions.
    */
   public TypeSpecification withNDims(int n) {
+    if (n == this.nDims) { return this; }
     return new TypeSpecification(parent, rawName, bindings, n);
   }
 
