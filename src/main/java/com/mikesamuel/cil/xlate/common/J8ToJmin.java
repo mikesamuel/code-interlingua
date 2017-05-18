@@ -58,7 +58,24 @@ import com.mikesamuel.cil.xlate.common.FlatTypes.FlatParamInfo;
  * <p>
  * Differences
  * <ul>
- *
+ *   <li>There are no anonymous or inner classes.  All classes are named and
+ *     top-level.<br>
+ *     This makes it easier for backends that don't themselves allow inner
+ *     classes, and other backends lose little.</li>
+ *   <li>One type declaration per compilation unit.</li>
+ *   <li>Turn {@code enum} classes into normal class declarations and replace
+ *     operations on them with operators that can be bound in a reference-type
+ *     agnostic mode.
+ *     <br>
+ *     Some backends may want to treat <i>enum</i> values as object types with
+ *     methods the way idiomatic Java does.
+ *     <br>
+ *     Some may want to treat <i>enum</i> values as symbolic names for integers
+ *     the way iodimatic C++ does.
+ *     <br>
+ *     Some, like Go, treate <i>enum</i> values as symbolic names with methods.
+ *   <li>Replace reflective operations with ones that lookup into side-tables.
+ *     Only
  * </ul>
  */
 public final class J8ToJmin {
