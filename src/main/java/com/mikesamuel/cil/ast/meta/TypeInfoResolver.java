@@ -43,13 +43,25 @@ public interface TypeInfoResolver {
   Optional<TypeInfo> resolve(Name className);
 
   /**
-   * Looks up the given callable.
+   * Looks up the named callable.
    */
-  default Optional<CallableInfo> resolveCallable(Name anc) {
-    Preconditions.checkArgument(anc.type == Name.Type.METHOD);
-    Optional<TypeInfo> tiOpt = resolve(anc.getContainingClass());
+  default Optional<CallableInfo> resolveCallable(Name methodName) {
+    Preconditions.checkArgument(methodName.type == Name.Type.METHOD);
+    Optional<TypeInfo> tiOpt = resolve(methodName.getContainingClass());
     if (tiOpt.isPresent()) {
-      return tiOpt.get().declaredCallableNamed(anc);
+      return tiOpt.get().declaredCallableNamed(methodName);
+    }
+    return Optional.absent();
+  }
+
+  /**
+   * Looks up the named field.
+   */
+  default Optional<FieldInfo> resolveField(Name fieldName) {
+    Preconditions.checkArgument(fieldName.type == Name.Type.FIELD);
+    Optional<TypeInfo> tiOpt = resolve(fieldName.getContainingClass());
+    if (tiOpt.isPresent()) {
+      return tiOpt.get().declaredFieldNamed(fieldName);
     }
     return Optional.absent();
   }
