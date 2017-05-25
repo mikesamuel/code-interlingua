@@ -195,7 +195,7 @@ public class DeclarationPassTest extends TestCase {
         new String[][] {
           {
             "package foo.bar;",
-            "/* interface /foo/bar/I extends /java/lang/Object"
+            "/* abstract interface /foo/bar/I extends /java/lang/Object"
             + " implements /java/lang/Runnable */",
             "interface I extends Runnable {}",
           }
@@ -273,9 +273,11 @@ public class DeclarationPassTest extends TestCase {
             "/* /foo/C extends /java/lang/Object"
             + " contains /foo/C$I, /foo/C$J */",
             "class C {",
-            "  /* interface /foo/C$I extends /java/lang/Object in /foo/C */",
+            "  /* abstract static interface /foo/C$I extends /java/lang/Object"
+            + " in /foo/C */",
             "  interface I {}",
-            "  /* interface /foo/C$J extends /java/lang/Object in /foo/C */",
+            "  /* abstract static interface /foo/C$J extends /java/lang/Object"
+            + " in /foo/C */",
             "  interface J {}",
             "  public C() {}",
             "}",
@@ -335,7 +337,8 @@ public class DeclarationPassTest extends TestCase {
             + " contains /foo/C$I */",  // Only one mentioned as inner
             "class C {",
             // Resolved
-            "  /* interface /foo/C$I extends /java/lang/Object in /foo/C */",
+            "  /* abstract static interface /foo/C$I"
+            + " extends /java/lang/Object in /foo/C */",
             "  interface I {}",
             "  /* /foo/C$I in /foo/C */",  // Partially resolved
             "  interface I {}",
@@ -445,7 +448,7 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "/* public interface /C extends /java/lang/Object"
+            "/* public abstract interface /C extends /java/lang/Object"
             + " contains /C.f(1)$R */",
             "public interface C {",
             "  default void f() {",
@@ -656,7 +659,6 @@ public class DeclarationPassTest extends TestCase {
         });
   }
 
-
   @Test
   public static void testSelfReferenceToTypeParameter() throws Exception {
     assertDeclarations(
@@ -788,6 +790,46 @@ public class DeclarationPassTest extends TestCase {
         ImmutableList.of(
             bazName.child("T", Name.Type.TYPE_PARAMETER)),
         bazInfoOpt.get().parameters);
+  }
+
+  @Test
+  public static void testEnumDeclaration() throws Exception {
+    assertDeclarations(
+        new String[][] {
+          {
+            "/* public final /E extends /java/lang/Enum</E>"
+            + " implements /I contains /E$1 */",
+            "public enum E implements I {",
+            "  A(-1) , B(2) ,",
+            "  /* final anonymous /E$1 extends /java/lang/Object in /E */",
+            "  C(3) { @Override public String toString() { return\"c\"; } }",
+            "  ,;",
+            "  final int x;",
+            "  E(int x) { this.x = x; }",
+            "}",
+          },
+          {
+            "/* abstract interface /I extends /java/lang/Object */"
+            + "interface I {}",
+          },
+        },
+        new String[][] {
+          {
+            "public enum E implements I {",
+            "  A(-1),",
+            "  B(2),",
+            "  C(3) {",
+            "    @Override public String toString() { return \"c\"; }",
+            "  }",
+            "  ;",
+            "  final int x;",
+            "  E(int x) { this.x = x; }",
+            "}",
+          },
+          {
+            "interface I {}",
+          }
+        });
   }
 
 }

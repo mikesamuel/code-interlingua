@@ -337,9 +337,18 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
       ImmutableList.Builder<TypeSpecification> interfaceNames =
           ImmutableList.builder();
       int modifiers = 0;
+      boolean isInner = typeName.parent.type != Name.Type.PACKAGE;
       if (nodeType == J8NodeType.NormalInterfaceDeclaration
           || nodeType == J8NodeType.AnnotationTypeDeclaration) {
-        modifiers |= Modifier.INTERFACE;
+        modifiers |= Modifier.INTERFACE | Modifier.ABSTRACT;
+        if (isInner) {
+          modifiers |= Modifier.STATIC;
+        }
+      } else if (nodeType == J8NodeType.EnumDeclaration) {
+        modifiers |= Modifier.FINAL;
+        if (isInner) {
+          modifiers |= Modifier.STATIC;
+        }
       }
       for (J8BaseNode child : children) {
         switch (child.getNodeType()) {
@@ -354,7 +363,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
             // Process arguments to enum and anon-class constructors outside
             // the body scope.
             break;
-          case SimpleTypeName: case FieldName:
+          case SimpleTypeName: case FieldName: case EnumConstantName:
             break;
           case Superclass:
           case ClassOrInterfaceTypeToInstantiate: {
@@ -485,7 +494,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           default:
             Preconditions.checkState(
                 child instanceof J8TypeScope,
-                "%s in %s", child, node);
+                "%s in %s", child.getVariant(), node.getVariant());
         }
       }
 
