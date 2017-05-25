@@ -91,7 +91,7 @@ public interface ExpressionNameResolver {
         Name fromPackage) {
       Preconditions.checkArgument(fromPackage.type == Name.Type.PACKAGE);
       Name typePackage = ti.getPackage();
-      for (MemberInfo mi : ti.declaredMembers) {
+      for (MemberInfo mi : ti.getDeclaredMembers()) {
         if (mi instanceof FieldInfo) {
           int mods = mi.modifiers;
           if (staticOnly && !Modifier.isStatic(mods)) { continue; }

@@ -1418,7 +1418,7 @@ final class TypingPass extends AbstractRewritingPass {
         switch (Compatibility.of(enumType.assignableFrom(exprType))) {
           case IMPLICIT_CAST:
             ClassOrInterfaceType cit = (ClassOrInterfaceType) exprType;
-            for (MemberInfo mi : cit.info.declaredMembers) {
+            for (MemberInfo mi : cit.info.getDeclaredMembers()) {
               if (mi instanceof FieldInfo
                   // TODO: check a bit to differentiate enum
                   // declarations from other fields of the enum

@@ -280,7 +280,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
   }
 
   private static MemberInfo memberWithName(TypeInfo typeInfo, Name name) {
-    for (MemberInfo mi : typeInfo.declaredMembers) {
+    for (MemberInfo mi : typeInfo.getDeclaredMembers()) {
       if (mi.canonName.equals(name)) {
         return mi;
       }

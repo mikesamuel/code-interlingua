@@ -85,7 +85,7 @@ public final class MemberInfoPool {
     ImmutableSet<Name> overriddenByDest = overriddenBy(dest);
 
     ImmutableSet.Builder<Name> b = ImmutableSet.builder();
-    for (MemberInfo mi : dti.declaredMembers) {
+    for (MemberInfo mi : dti.getDeclaredMembers()) {
       if (!(mi instanceof CallableInfo)) {
         continue;
       }
@@ -124,7 +124,7 @@ public final class MemberInfoPool {
       Optional<TypeInfo> tio = typePool.r.resolve(superType.rawName);
       if (!tio.isPresent()) { continue; }
       TypeInfo ti = tio.get();
-      for (MemberInfo mi : ti.declaredMembers) {
+      for (MemberInfo mi : ti.getDeclaredMembers()) {
         if (mi instanceof FieldInfo
             && mi.canonName.identifier.equals(fi.canonName.identifier)) {
           b.add(mi.canonName);
@@ -165,7 +165,7 @@ public final class MemberInfoPool {
             if (!tio.isPresent()) { continue; }
             TypeInfo ti = tio.get();
             Map<Name, TypeBinding> typeParamMap = null;
-            for (MemberInfo mi : ti.declaredMembers) {
+            for (MemberInfo mi : ti.getDeclaredMembers()) {
               if (mi instanceof CallableInfo
                   && mi.canonName.identifier.equals(ci.canonName.identifier)) {
                 // Method with same name.
@@ -233,7 +233,7 @@ public final class MemberInfoPool {
         }
         TypeInfo ti = tio.get();
 
-        for (MemberInfo mi : ti.declaredMembers) {
+        for (MemberInfo mi : ti.getDeclaredMembers()) {
           if (!cancelled.contains(mi.canonName)
               && memberType.isInstance(mi)
               && mi.canonName.identifier.equals(memberName)

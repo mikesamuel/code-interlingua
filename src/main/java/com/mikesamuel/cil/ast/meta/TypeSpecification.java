@@ -356,7 +356,7 @@ public final class TypeSpecification extends PartialTypeSpecification {
             Optional<TypeInfo> tiOpt = r.resolve(typeName);
             if (tiOpt.isPresent()) {
               TypeInfo ti = tiOpt.get();
-              for (MemberInfo mi : ti.declaredMembers) {
+              for (MemberInfo mi : ti.getDeclaredMembers()) {
                 if (typeName.equals(mi.canonName)) {
                   ImmutableList.Builder<TypeBinding> bindings =
                       ImmutableList.builder();

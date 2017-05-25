@@ -54,7 +54,7 @@ public abstract class PartialTypeSpecification {
           parameters = infoOpt.get().parameters;
           break;
         case METHOD:
-          for (MemberInfo mi : infoOpt.get().declaredMembers) {
+          for (MemberInfo mi : infoOpt.get().getDeclaredMembers()) {
             if (mi.canonName.equals(nm)) {
               parameters = ((CallableInfo) mi).typeParameters;
               break;

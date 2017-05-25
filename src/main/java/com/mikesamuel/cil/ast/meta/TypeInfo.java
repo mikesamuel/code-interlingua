@@ -1,10 +1,16 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 /** Describes a type. */
@@ -31,7 +37,7 @@ public final class TypeInfo extends AccessibleInfo {
   /**
    * The declared members excluding inner classes.
    */
-  public final ImmutableList<MemberInfo> declaredMembers;
+  private final List<MemberInfo> declaredMembers;
 
   private TypeInfo(
       int modifiers,
@@ -50,7 +56,89 @@ public final class TypeInfo extends AccessibleInfo {
     this.parameters = parameters;
     this.outerClass = outerClass;
     this.innerClasses = innerClasses;
-    this.declaredMembers = declaredMembers;
+    this.declaredMembers = new ArrayList<>(declaredMembers);
+  }
+
+  /**
+   * The declared members excluding inner classes, but including synthetics.
+   */
+  public Iterable<MemberInfo> getDeclaredMembers() {
+    return Collections.unmodifiableList(declaredMembers);
+  }
+
+  /**
+   * Adds a synthetic member to the class.
+   * It is the responsibility of the pass that defines the synthetic member
+   * to ensure that its name/signature does not introduce a name-space conflict.
+   */
+  public void addSyntheticMember(MemberInfo mi) {
+    Preconditions.checkArgument(canonName.equals(mi.canonName.parent));
+    this.declaredMembers.add(mi);
+  }
+
+  /**
+   * Iterates through all members of this type info and super types.
+   */
+  public Iterable<MemberInfo> transitiveMembers(
+      TypeInfoResolver superTypeResolver) {
+    return new Iterable<MemberInfo>() {
+      @Override
+      public Iterator<MemberInfo> iterator() {
+        return new Iterator<MemberInfo>() {
+
+          @SuppressWarnings("synthetic-access")
+          private Iterator<MemberInfo> declared = declaredMembers.iterator();
+          private Iterator<TypeSpecification> superTypes =
+              Iterables.concat(superType.asSet(), interfaces).iterator();
+          private Iterator<MemberInfo> superTypeMembers =
+              ImmutableList.<MemberInfo>of().iterator();
+
+          private void getOne() {
+            if (pending == null) {
+              if (declared.hasNext()) {
+                pending = Preconditions.checkNotNull(declared.next());
+              }
+            }
+
+            if (pending == null) {
+              while (!superTypeMembers.hasNext() && superTypes.hasNext()) {
+                TypeSpecification oneSuperType = superTypes.next();
+                Optional<TypeInfo> superTypeInfo =
+                    superTypeResolver.resolve(oneSuperType.rawName);
+                // We may end up visiting some interfaces multiple times, but
+                // this is ok as long as there are no inheritance cycles.
+                // TODO: Might this be called before inheritance cycles have
+                // been ruled out?
+                if (superTypeInfo.isPresent()) {
+                  superTypeMembers = superTypeInfo.get()
+                      .transitiveMembers(superTypeResolver).iterator();
+                }
+              }
+              if (superTypeMembers != null && superTypeMembers.hasNext()) {
+                pending = Preconditions.checkNotNull(superTypeMembers.next());
+              }
+            }
+          }
+
+          private MemberInfo pending;
+
+          @Override
+          public boolean hasNext() {
+            getOne();
+            return pending != null;
+          }
+
+          @Override
+          public MemberInfo next() {
+            getOne();
+            MemberInfo mi = Preconditions.checkNotNull(pending);
+            pending = null;
+            return mi;
+          }
+
+        };
+      }
+    };
   }
 
   /**
@@ -59,34 +147,8 @@ public final class TypeInfo extends AccessibleInfo {
    */
   public Optional<MemberInfo> memberMatching(
       TypeInfoResolver superTypeResolver, Predicate<MemberInfo> p) {
-    for (MemberInfo m : declaredMembers) {
-      if (p.apply(m)) {
-        return Optional.of(m);
-      }
-    }
-
-    if (superType.isPresent()) {
-      Optional<TypeInfo> superTypeInfo =
-          superTypeResolver.resolve(superType.get().rawName);
-      if (superTypeInfo.isPresent()) {
-        Optional<MemberInfo> miOpt =
-            superTypeInfo.get().memberMatching(superTypeResolver, p);
-        if (miOpt.isPresent()) { return miOpt; }
-      }
-    }
-    // We may end up visiting some interfaces multiple times, but this is ok
-    // as long as there are no inheritance cycles.
-    // TODO: Might this be called before inheritance cycles have been ruled out?
-    for (TypeSpecification iface : interfaces) {
-      Optional<TypeInfo> ifaceTypeInfoOpt =
-          superTypeResolver.resolve(iface.rawName);
-      if (ifaceTypeInfoOpt.isPresent()) {
-        Optional<MemberInfo> miOpt = ifaceTypeInfoOpt.get().memberMatching(
-            superTypeResolver, p);
-        if (miOpt.isPresent()) {
-          return miOpt;
-        }
-      }
+    for (MemberInfo mi : transitiveMembers(superTypeResolver)) {
+      if (p.apply(mi)) { return Optional.of(mi); }
     }
     return Optional.absent();
   }
@@ -99,6 +161,19 @@ public final class TypeInfo extends AccessibleInfo {
     for (MemberInfo mi : declaredMembers) {
       if (mi.canonName.equals(nm)) {
         return Optional.of((CallableInfo) mi);
+      }
+    }
+    return Optional.absent();
+  }
+
+  /**
+   * The method with the given name.  Does not search super-types.
+   */
+  public Optional<FieldInfo> declaredFieldNamed(Name nm) {
+    Preconditions.checkArgument(nm.type == Name.Type.FIELD);
+    for (MemberInfo mi : declaredMembers) {
+      if (mi.canonName.equals(nm)) {
+        return Optional.of((FieldInfo) mi);
       }
     }
     return Optional.absent();
@@ -181,8 +256,8 @@ public final class TypeInfo extends AccessibleInfo {
       return this;
     }
     public Builder declaredMembers(
-        ImmutableList<MemberInfo> newDeclaredMembers) {
-      this.declaredMembers = newDeclaredMembers;
+        Iterable<? extends MemberInfo> newDeclaredMembers) {
+      this.declaredMembers = ImmutableList.copyOf(newDeclaredMembers);
       return this;
     }
 
