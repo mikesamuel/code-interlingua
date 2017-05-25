@@ -136,6 +136,7 @@ TypeDeclaration:
 (chapter=Class)
 ClassDeclaration:
      NormalClassDeclaration
+     EnumDeclaration
 NormalClassDeclaration: (@mixin=TypeDeclaration,TypeParameterScope)
      [JavaDocComment] {!!ClassModifier Modifier} "class" SimpleTypeName [TypeParameters] Superclass [Superinterfaces] ClassBody (@name=Declaration)
 ClassModifier:
@@ -161,6 +162,7 @@ ClassBody: (@mixin=TypeScope,ExpressionNameScope)
      "{" {ClassBodyDeclaration} "}"
 ClassBodyDeclaration:
      ClassMemberDeclaration
+     InstanceInitializer
      StaticInitializer
      ConstructorDeclaration
 ClassMemberDeclaration:
@@ -180,11 +182,7 @@ FieldModifier:
      "volatile"
 VariableDeclaratorList:
      VariableDeclarator {"," VariableDeclarator}
-ConstantDeclaratorList:
-     ConstantDeclarator {"," ConstantDeclarator}
 VariableDeclarator:
-     VariableDeclaratorId
-ConstantDeclarator:
      VariableDeclaratorId ["=" VariableInitializer]
 VariableDeclaratorId: (@mixin=ExpressionNameDeclaration)
      Identifier
@@ -245,6 +243,19 @@ ConstructorBody:
 ExplicitConstructorInvocation:
      [TypeArguments] "this" "(" [ArgumentList] ")" ";"
      [TypeArguments] "super" "(" [ArgumentList] ")" ";"
+EnumDeclaration: (@mixin=TypeDeclaration)
+     [JavaDocComment] {!!ClassModifier Modifier} "enum" SimpleTypeName [Superinterfaces] EnumBody (@name=Declaration)
+EnumBody: (@mixin=TypeScope,ExpressionNameScope)
+     "{" [EnumConstantList] [","] [EnumBodyDeclarations] "}"
+EnumConstantList:
+     EnumConstant {"," EnumConstant}
+EnumConstant: (@mixin=ExpressionNameDeclaration)
+     {!!EnumConstantModifier Modifier} EnumConstantName ["(" [ArgumentList] ")"] (@name=Declaration)
+EnumConstantModifier:
+     Annotation
+EnumBodyDeclarations: (@mixin=TypeScope)
+     ";" {ClassBodyDeclaration}
+
 
 // Interfaces
 (chapter=Interface)
@@ -268,7 +279,7 @@ InterfaceMemberDeclaration:
      ConstantDeclaration
      InterfaceMethodDeclaration
 ConstantDeclaration: (@mixin=MemberDeclaration)
-     [JavaDocComment] !!HasStatic !!HasFinal {!!ConstantModifier Modifier} UnannType ConstantDeclaratorList ";" (@name=Declaration)
+     [JavaDocComment] !!HasStatic !!HasFinal {!!ConstantModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 ConstantModifier:
      Annotation
      "public"
@@ -479,8 +490,8 @@ ClassLiteral: (@mixin=Typed)
      NumericType {Dim} "." "class"
      "boolean" {Dim} "." "class"
      "void" "." "class"
-UnqualifiedClassInstanceCreationExpression: (@mixin=TypeDeclaration,MethodDescriptorReference)
-     "new" [TypeArguments] ClassOrInterfaceType "(" [ArgumentList] ")" [ClassBody]
+UnqualifiedClassInstanceCreationExpression: (@mixin=MethodDescriptorReference)
+     "new" [TypeArguments] ClassOrInterfaceType "(" [ArgumentList] ")"
 ArgumentList:
      Expression {"," Expression}
 ArrayCreationExpression: (@mixin=Typed)

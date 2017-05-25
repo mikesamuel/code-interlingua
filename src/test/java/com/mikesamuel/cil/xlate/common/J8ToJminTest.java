@@ -119,10 +119,115 @@ public final class J8ToJminTest extends TestCase {
         });
   }
 
-  // TODO: test that inner classes are extracted properly and converted to
-  // named classes.
+  @Test
+  public static void testEnum() throws Exception {
+if (false)  // TODO
+    assertTranslated(
+        new String[][] {
+          {
+            "package foo;",
+            "",
+            "class C extends bar.D {",
+            "  public C() {",
+            "    super ();",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "package foo;",
+            "",
+            "public enum E implements I {",
+            "  A(42),",
+            "  B(1337),",
+            "  C(-1, true) {",
+            "    @Override public String toString() {",
+            "      return \"C!\";",
+            "    }",
+            "  },",
+            "  ;",
+            "  public final int x;",
+            "  final boolean b;",
+            "",
+            "  E(int x) {",
+            "    this(x, false);",
+            "  }",
+            "",
+            "  E(int x, boolean b) {",
+            "    this.x = x;",
+            "    this.b = b;",
+            "  }",
+            "}",
+          },
+          {
+            "package foo;",
+            "",
+            "interface I {",
+            "}",
+          },
+        });
+  }
+
+  @Test
+  public static void testQualifiedThisReferences() throws Exception {
+    assertTranslated(
+        new String[][] {
+          {
+            "package foo;",
+            "",
+            "class Inner extends java.lang.Object {",
+            "  final foo.Outer $$containingInstance;",
+            "  int x = 2;",
+            "  {",
+            "    System.err.println((this.$$containingInstance).x);",
+            "  }",
+            "  public Inner(foo.Outer $$containingInstance) {",
+            "    super();",
+            "    this.$$containingInstance = $$containingInstance;",
+            "  }",
+            "}",
+          },
+          {
+            "package foo;",
+            "",
+            "class Outer extends java.lang.Object {",
+            "  int x = 1;",
+            "  public Outer() {",
+            "    super();",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "package foo;",
+            "",
+            "class Outer {",
+            "  int x = 1;",
+            "  class Inner {",
+            "    int x = 2;",
+            "    { System.err.println(Outer.this.x); }",
+            "  }",
+            "}",
+          },
+        });
+  }
+
 
   // TODO: test that custom enum instances with fields and overridden methods
   // are converted to enums without specialization
+
+  // TODO: Calls to outer class super-type methods like
+  // class Super {
+  //   void foo() { System.err.println("Super.foo"); }
+  // }
+  // class Outer extends Super {
+  //   @Override void foo() { System.err.println("Outer.foo"); }
+  //
+  //   class D {
+  //     { Outer.super.foo(); }
+  //   }
+  // }
 
 }

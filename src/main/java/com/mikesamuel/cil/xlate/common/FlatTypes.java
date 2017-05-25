@@ -14,8 +14,12 @@ import java.util.logging.Logger;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.SetMultimap;
@@ -63,13 +67,14 @@ final class FlatTypes {
 
 
   /**
-   * Map hierarchical class type names to flat class type names.
+   * Map hierarchical (bumpy) class type names to flat class type names.
    * <p>
-   * This is advisory until disambiguation when we make sure this is a proper
-   * 1:1 mapping.
+   * This is advisory until disambiguation but is guaranteed to be 1:1.
    */
-  private final Map<Name, Name> flatTypeNames = new LinkedHashMap<>();
+  private final BiMap<Name, Name> typeNameMap = HashBiMap.create();
 
+
+  /** Maps bumpy class names to info about their type parameters. */
   private final Map<Name, FlatParamInfo> paramInfo = new LinkedHashMap<>();
 
   /**
@@ -81,21 +86,30 @@ final class FlatTypes {
   private final Set<Name> processedBumpyTypeParameters =
       Sets.newLinkedHashSet();
 
+  /**
+   * The flat type name corresponding to the given bumpy name.
+   * This is not guaranteed stable after {@link #disambiguate()}.
+   */
   Name getFlatTypeName(Name bumpyTypeName) {
     // Type parameters need to be renamed in a way that takes into account
     // the context that allows outer type parameters to be wedged among an
     // inner types parameters.
     Preconditions.checkArgument(bumpyTypeName.type == Name.Type.CLASS);
-    Name flatTypeName = flatTypeNames.get(bumpyTypeName);
+    Name flatTypeName = typeNameMap.get(bumpyTypeName);
     if (flatTypeName == null) {
       if (recording) {
         recordType(bumpyTypeName);
-        flatTypeName = flatTypeNames.get(bumpyTypeName);
+        flatTypeName = typeNameMap.get(bumpyTypeName);
       } else {
         throw new IllegalArgumentException(bumpyTypeName.toString());
       }
     }
     return flatTypeName;
+  }
+
+  Name getBumpyTypeName(Name flatTypeName) {
+    return Preconditions.checkNotNull(
+        typeNameMap.inverse().get(flatTypeName), flatTypeName);
   }
 
   static final class FlatParamInfo {
@@ -138,8 +152,11 @@ final class FlatTypes {
       processedBumpyTypeParameters.clear();
       paramInfo.clear();
 
+      ImmutableSet<Name> sortedBumpyTypeNames = ImmutableSortedSet.copyOf(
+          typeNameMap.keySet());
+
       ParameterFlattener pf = new ParameterFlattener(
-          flatTypeNames.keySet(),
+          sortedBumpyTypeNames,
           unprocessedBumpyTypeParameters);
       paramInfo.putAll(pf.flatten());
 
@@ -329,7 +346,7 @@ final class FlatTypes {
         Set<String> exclusions = Sets.newHashSet();
         Optional<TypeInfo> tiOpt = r.resolve(bumpyContainerName);
         assert tiOpt.isPresent();
-        for (MemberInfo mi : tiOpt.get().declaredMembers) {
+        for (MemberInfo mi : tiOpt.get().getDeclaredMembers()) {
           if (mi instanceof CallableInfo && !Modifier.isStatic(mi.modifiers)) {
             CallableInfo ci = (CallableInfo) mi;
             for (Name p : ci.typeParameters) {
@@ -374,98 +391,94 @@ final class FlatTypes {
   }
 
   void disambiguate() {
-    // Construct a 1:1 map
-    Map<Name, Name> unambiguous = new LinkedHashMap<>();
+    // Construct a 1:1 map that gives preference to identity mappings for
+    // public types.
+    BiMap<Name, Name> unambiguous = HashBiMap.create();
 
-    for (Name.Type t
-         : new Name.Type[] { Name.Type.CLASS, Name.Type.TYPE_PARAMETER }) {
-      // Reverse the mapping
-      SetMultimap<Name, Name> flatToBumpy = TreeMultimap.create();
-      for (Map.Entry<Name, Name> e : flatTypeNames.entrySet()) {
-        Name flat = e.getValue();
-        Name bumpy = e.getKey();
-        if (flat.type == t) {
-          if (t == Name.Type.TYPE_PARAMETER) {
-            // remap parent type if a type parameter.
-            Name parentRemapped = Preconditions.checkNotNull(
-                unambiguous.get(bumpy.parent));
-            if (!(parentRemapped.equals(flat.parent))) {
-              Name remapped = parentRemapped.child(flat.identifier, flat.type);
-              flat = remapped;
-            }
-          }
-          boolean added = flatToBumpy.put(flat, bumpy);
-          Preconditions.checkState(added);  // hash should be equiv to cmp
-        }
+    ImmutableSet<Name> sortedBumpyTypeNames = ImmutableSortedSet.copyOf(
+        typeNameMap.keySet());
+
+    // Reverse the mapping
+    SetMultimap<Name, Name> flatToBumpy = TreeMultimap.create();
+    for (Name bumpy : sortedBumpyTypeNames) {
+      Name flat = flatRootOf(bumpy);
+      boolean added = flatToBumpy.put(flat, bumpy);
+      Preconditions.checkState(added);  // hash should be equiv to cmp
+    }
+
+    for (Name possibleFlatName : flatToBumpy.keySet()) {
+      Set<Name> bumpyNames = flatToBumpy.get(possibleFlatName);
+      if (bumpyNames.size() == 1) {
+        Name dupe = unambiguous.put(
+            Iterables.getOnlyElement(bumpyNames), possibleFlatName);
+        Preconditions.checkState(dupe == null);
+        continue;
       }
 
-      for (Name possibleFlatName : flatToBumpy.keySet()) {
-        Set<Name> bumpyNames = flatToBumpy.get(possibleFlatName);
-        if (bumpyNames.size() == 1) {
-          Name dupe = unambiguous.put(
-              Iterables.getOnlyElement(bumpyNames), possibleFlatName);
-          Preconditions.checkState(dupe == null);
-          continue;
-        }
-
-        // Choose unambiguous names for each.
-        // First, see if there is at most one public type so that we can
-        // preserve public names.
-        Name unqualifiedBumpyName = null;
-        for (Name bumpyName : bumpyNames) {
-          Optional<TypeInfo> tiOpt = r.resolve(bumpyName.getContainingClass());
-          if (tiOpt.isPresent() && Modifier.isPublic(tiOpt.get().modifiers)) {
-            if (unqualifiedBumpyName == null) {
-              unqualifiedBumpyName = bumpyName;
-            } else {
-              LogUtils.log(
-                  logger, Level.SEVERE, (SourcePosition) null,
-                  "Cannot flatten public type " + bumpyName + " to "
-                      + possibleFlatName + " since that would conflict with "
-                      + unqualifiedBumpyName,
-                      null);
-            }
-          }
-        }
-        if (unqualifiedBumpyName == null) {
-          unqualifiedBumpyName = bumpyNames.iterator().next();
-        }
-
-        // Now make sure that all bumpyNames appear as keys in unambiguous,
-        // qualifying names as necessary.
-        int counter = 1;
-        for (Name bumpyName : bumpyNames) {
-          Name flatName;
-          if (unqualifiedBumpyName.equals(bumpyName)) {
-            flatName = possibleFlatName;
+      // Choose unambiguous names for each.
+      // First, see if there is at most one public type so that we can
+      // preserve public names.
+      Name unqualifiedBumpyName = null;
+      for (Name bumpyName : bumpyNames) {
+        Optional<TypeInfo> tiOpt = r.resolve(bumpyName.getContainingClass());
+        if (tiOpt.isPresent() && Modifier.isPublic(tiOpt.get().modifiers)) {
+          if (unqualifiedBumpyName == null) {
+            unqualifiedBumpyName = bumpyName;
           } else {
-            Name candidate;
-            do {
-              candidate = possibleFlatName.parent
-                  .child(possibleFlatName.identifier + "_" + counter,
-                      possibleFlatName.type);
-              ++counter;
-            } while (flatTypeNames.containsKey(candidate));
-            flatName = candidate;
             LogUtils.log(
-                logger, Level.INFO, (SourcePosition) null,
-                "Flattening type " + bumpyName + " to " + flatName,
-                null);
+                logger, Level.SEVERE, (SourcePosition) null,
+                "Cannot flatten public type " + bumpyName + " to "
+                    + possibleFlatName + " since that would conflict with "
+                    + unqualifiedBumpyName,
+                    null);
           }
-          unambiguous.put(bumpyName, flatName);
         }
+      }
+      if (unqualifiedBumpyName == null) {
+        unqualifiedBumpyName = bumpyNames.iterator().next();
+      }
+
+      // Now make sure that all bumpyNames appear as keys in unambiguous,
+      // qualifying names as necessary.
+      for (Name bumpyName : bumpyNames) {
+        Name flatName;
+        if (unqualifiedBumpyName.equals(bumpyName)) {
+          flatName = possibleFlatName;
+        } else {
+          flatName = uniqueIn(
+              Sets.union(
+                  ImmutableSet.of(possibleFlatName),
+                  unambiguous.values()),
+              possibleFlatName);
+          LogUtils.log(
+              logger, Level.INFO, (SourcePosition) null,
+              "Flattening type " + bumpyName + " to " + flatName,
+              null);
+        }
+        unambiguous.put(bumpyName, flatName);
       }
     }
 
     // Swap in the unambiguous names.
-    flatTypeNames.clear();
-    flatTypeNames.putAll(unambiguous);
+    typeNameMap.clear();
+    typeNameMap.putAll(unambiguous);
 
     paramInfo.clear();
     unprocessedBumpyTypeParameters.addAll(processedBumpyTypeParameters);
     processedBumpyTypeParameters.clear();
     // Next call to getSubstMap will rebuild the substitution maps with the
     // right containing type names.
+  }
+
+  private static Name uniqueIn(Set<? super Name> s, Name root) {
+    int counter = 1;
+    Name candidate = root;
+    while (s.contains(candidate)) {
+      candidate = root.parent
+          .child(root.identifier + "_" + counter, root.type);
+      ++counter;
+    }
+    return candidate;
   }
 
   /**
@@ -475,23 +488,10 @@ final class FlatTypes {
   void recordType(Name bumpyTypeName) {
     switch (bumpyTypeName.type) {
       case CLASS:
-        if (!flatTypeNames.containsKey(bumpyTypeName)) {
-          Name flatTypeName;
-          if (bumpyTypeName.parent.type == Name.Type.PACKAGE) {
-            // We're done.  Just record the fact that it exists.
-            flatTypeName = bumpyTypeName;
-          } else {
-            List<String> parts = new ArrayList<>();
-            Name nm = bumpyTypeName;
-            Preconditions.checkState(nm.type == Name.Type.CLASS);
-            for (; nm.type != Name.Type.PACKAGE; nm = nm.parent) {
-              parts.add(nm.identifier);
-            }
-            flatTypeName = nm.child(
-                Joiner.on('$').join(Lists.reverse(parts)),
-                Name.Type.CLASS);
-          }
-          flatTypeNames.put(bumpyTypeName, flatTypeName);
+        if (!typeNameMap.containsKey(bumpyTypeName)) {
+          Name flatTypeNameRoot = flatRootOf(bumpyTypeName);
+          Name flatTypeName = uniqueIn(typeNameMap.values(), flatTypeNameRoot);
+          typeNameMap.put(bumpyTypeName, flatTypeName);
         }
         return;
       case TYPE_PARAMETER:
@@ -510,4 +510,20 @@ final class FlatTypes {
     throw new AssertionError(bumpyTypeName);
   }
 
+  private static Name flatRootOf(Name bumpyTypeName) {
+    if (bumpyTypeName.parent.type == Name.Type.PACKAGE) {
+      // We're done.  Just record the fact that it exists.
+      return bumpyTypeName;
+    } else {
+      List<String> parts = new ArrayList<>();
+      Name nm = bumpyTypeName;
+      Preconditions.checkState(nm.type == Name.Type.CLASS);
+      for (; nm.type != Name.Type.PACKAGE; nm = nm.parent) {
+        parts.add(nm.identifier);
+      }
+      return nm.child(
+          Joiner.on('$').join(Lists.reverse(parts)),
+          Name.Type.CLASS);
+    }
+  }
 }
