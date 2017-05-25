@@ -207,7 +207,8 @@ public final class ClassNamingPassTest extends TestCase {
       ImmutableList.Builder<String> b = ImmutableList.builder();
 
       for (UnresolvedTypeDeclaration d : declsAndScopes.declarations.values()) {
-        for (MemberInfo mi : d.decl.getDeclaredTypeInfo().declaredMembers) {
+        for (MemberInfo mi
+             : d.decl.getDeclaredTypeInfo().getDeclaredMembers()) {
           String modString = Modifier.toString(mi.modifiers);
           b.add(
               modString + (modString.isEmpty() ? "" : " ")
