@@ -149,8 +149,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           declaringClass, "valueOf");
       CallableInfo valueOf = new CallableInfo(
           Modifier.PUBLIC | Modifier.STATIC,
-          valueOfName,
-          ImmutableList.of(valueOfName.child("name", Name.Type.LOCAL)));
+          valueOfName, ImmutableList.of());
       valueOf.setDescriptor(
           MethodDescriptor.builder()
              .addFormalParameter(JavaLang.JAVA_LANG_STRING.rawName, 0)

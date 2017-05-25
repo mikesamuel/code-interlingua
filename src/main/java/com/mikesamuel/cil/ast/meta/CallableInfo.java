@@ -21,6 +21,10 @@ public final class CallableInfo extends MemberInfo {
       int modifiers, Name canonName, ImmutableList<Name> typeParameters) {
     super(modifiers, canonName);
     Preconditions.checkArgument(canonName.type == Name.Type.METHOD);
+    for (Name typeParameter : typeParameters) {
+      Preconditions.checkArgument(
+          typeParameter.type == Name.Type.TYPE_PARAMETER, typeParameter);
+    }
     this.typeParameters = typeParameters;
   }
 
