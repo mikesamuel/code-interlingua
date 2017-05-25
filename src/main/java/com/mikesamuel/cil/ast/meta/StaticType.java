@@ -526,7 +526,7 @@ public abstract class StaticType {
                 // above, but malformed types like int<String> might.
                 if (logger != null) {
                   logger.severe(
-                      (pos != null ? pos + ": " : "") + " type name "
+                      (pos != null ? pos + ": " : "") + "type name "
                       + ts.rawName + " does not specify a type");
                 }
                 if (!ts.bindings.isEmpty()) {
@@ -543,7 +543,7 @@ public abstract class StaticType {
               if (!tiOpt.isPresent()) {
                 if (logger != null) {
                   logger.severe(
-                      (pos != null ? pos + ": " : "") + " type name "
+                      (pos != null ? pos + ": " : "") + "type name "
                       + ts.rawName + " does not specify a type");
                 }
                 return ERROR_TYPE;
@@ -557,7 +557,7 @@ public abstract class StaticType {
                   if (logger != null) {
                     logger.severe(
                         (pos != null ? pos + ": " : "")
-                        + " type " + ts
+                        + "type " + ts
                         + " has the wrong number of type parameters");
                   }
                   bindingsOk = false;
