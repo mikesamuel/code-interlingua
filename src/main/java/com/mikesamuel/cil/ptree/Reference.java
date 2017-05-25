@@ -461,6 +461,7 @@ final class Reference extends PTParSer {
               System.err.println(
                   indent() + "Same variant " + variant + " failed");
             }
+            err.error(state, "Failed to match " + variant);
             return Optional.absent();
           }
           break;

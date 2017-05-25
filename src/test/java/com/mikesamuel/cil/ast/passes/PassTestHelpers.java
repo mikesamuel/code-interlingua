@@ -221,13 +221,53 @@ public final class PassTestHelpers {
     for (NodeI<?, ?, ?> node : nodes) {
       Iterable<Event> skeleton = SList.forwardIterable(
           Trees.startUnparse(null, (BaseNode<?, ?, ?>) node, decorator));
+
+      class LongestMatchSerialErrorReceiver implements SerialErrorReceiver {
+        SerialState maxState;
+        String maxMessage;
+
+        @Override
+        public void error(SerialState state, String message) {
+          if (maxState == null || state.index > maxState.index) {
+            maxState = state;
+            maxMessage = message;
+          }
+        }
+
+        @Override
+        public String toString() {
+          if (maxState == null) { return "?"; }
+          int minIndex = maxState.index - 3;
+          int maxIndex = maxState.index + 4;
+          boolean truncMin = minIndex >= 0;
+          if (!truncMin) { minIndex = 0; }
+          boolean truncMax = maxIndex < maxState.structure.size();
+          if (!truncMax) { maxIndex = maxState.structure.size(); }
+          StringBuilder s = new StringBuilder();
+          sb.append('!').append(maxMessage).append('\n');
+          s.append('[');
+          if (truncMin) { s.append("..., "); }
+          Joiner.on(", ")
+              .appendTo(s, maxState.structure.subList(minIndex, maxIndex));
+          if (truncMax) { s.append(", ..."); }
+          s.append(']');
+          return s.toString();
+        }
+      }
+
+      LongestMatchSerialErrorReceiver err =
+          new LongestMatchSerialErrorReceiver();
+
       Optional<SerialState> serialized =
           node.getNodeType().getParSer().unparse(
           new SerialState(skeleton),
-          SerialErrorReceiver.DEV_NULL);
-      Assert.assertTrue(
-          node.toAsciiArt(""),
-          serialized.isPresent());
+          err);
+
+      if (!serialized.isPresent()) {
+        throw new AssertionError(
+            err.toString() + "\n" + node.toAsciiArt(""));
+      }
+
       Verified verified = Unparse.verify(
           SList.forwardIterable(serialized.get().output));
       FormattedSource fs = Unparse.format(verified);
