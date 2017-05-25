@@ -43,7 +43,7 @@ public interface TypeNameResolver {
    * A type name that transforms from the bridged namespace.
    *
    * @param typeInfoResolver the resolver for all names that might reach
-   *     the bridge resolver.
+   *     the bridged resolver.
    */
   public TypeNameResolver map(
       MetadataBridge metadataBridge, TypeInfoResolver typeInfoResolver);
