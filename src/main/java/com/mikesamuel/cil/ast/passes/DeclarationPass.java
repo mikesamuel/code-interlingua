@@ -345,11 +345,13 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
           modifiers |= Modifier.STATIC;
         }
       } else if (nodeType == J8NodeType.EnumDeclaration) {
-        modifiers |= Modifier.FINAL;
+        // TODO: per-spec, enums that lack specialized fields are final
+        //modifiers |= Modifier.FINAL;
         if (isInner) {
           modifiers |= Modifier.STATIC;
         }
       }
+      // TODO: should strictness be inherited from outer class?
       for (J8BaseNode child : children) {
         switch (child.getNodeType()) {
           case JavaDocComment:

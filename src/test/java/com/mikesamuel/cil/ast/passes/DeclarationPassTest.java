@@ -797,7 +797,7 @@ public class DeclarationPassTest extends TestCase {
     assertDeclarations(
         new String[][] {
           {
-            "/* public final /E extends /java/lang/Enum</E>"
+            "/* public /E extends /java/lang/Enum</E>"
             + " implements /I contains /E$1 */",
             "public enum E implements I {",
             "  A(-1) , B(2) ,",
