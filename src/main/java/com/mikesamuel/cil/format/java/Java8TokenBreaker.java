@@ -8,6 +8,7 @@ import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.TokenStrings;
 import com.mikesamuel.cil.ast.j8.Tokens;
+import com.mikesamuel.cil.ast.jmin.JminNodeType;
 import com.mikesamuel.cil.format.TokenBreak;
 import com.mikesamuel.cil.format.TokenBreaker;
 import com.mikesamuel.cil.format.java.Java8TokenClassifier.Classification;
@@ -127,7 +128,9 @@ implements TokenBreaker<SList<NodeVariant<?, ?>>> {
           if (leftStack != null) {
             NodeType<?, ?> nt = leftStack.x.getNodeType();
             if (nt == J8NodeType.TypeParameters
+                || nt == JminNodeType.TypeParameters
                 || nt == J8NodeType.TypeArguments
+                || nt == JminNodeType.TypeArguments
                 || nt == J8NodeType.Diamond) {
               return TokenBreak.SHOULD_NOT;
             }
@@ -175,7 +178,9 @@ implements TokenBreaker<SList<NodeVariant<?, ?>>> {
           if (rightStack != null) {
             NodeType<?, ?> nt = rightStack.x.getNodeType();
             if (nt == J8NodeType.TypeParameters
-                || nt == J8NodeType.TypeArguments) {
+                || nt == JminNodeType.TypeParameters
+                || nt == J8NodeType.TypeArguments
+                || nt == JminNodeType.TypeArguments) {
               return TokenBreak.SHOULD_NOT;
             }
           }
@@ -193,15 +198,24 @@ implements TokenBreaker<SList<NodeVariant<?, ?>>> {
   private static boolean inPostfixOperatorContext(
       SList<NodeVariant<?, ?>> stack) {
     if (stack == null || stack.prev == null) { return false; }
-    return stack.prev.x.getNodeType() == J8NodeType.PostExpression;
+    NodeType<?, ?> nt = stack.prev.x.getNodeType();
+    return nt == J8NodeType.PostExpression
+        || nt == JminNodeType.PostExpression;
   }
 
   private static boolean inPrefixOperatorContext(
       SList<NodeVariant<?, ?>> stack) {
     if (stack == null) { return false; }
-    if (stack.x.getNodeType() == J8NodeType.PrefixOperator) { return true; }
-    return stack.prev != null
-        && stack.prev.x.getNodeType() == J8NodeType.PreExpression;
+    NodeType<?, ?> nt = stack.x.getNodeType();
+    if (nt == J8NodeType.PrefixOperator || nt == JminNodeType.PrefixOperator) {
+      return true;
+    }
+    if (stack.prev != null) {
+      NodeType<?, ?> pnt = stack.prev.x.getNodeType();
+      return pnt == J8NodeType.PreExpression
+          || pnt == JminNodeType.PreExpression;
+    }
+    return false;
   }
 
   @Override
@@ -241,7 +255,9 @@ implements TokenBreaker<SList<NodeVariant<?, ?>>> {
           if (leftStack != null) {
             NodeType<?, ?> nt = leftStack.x.getNodeType();
             if (nt == J8NodeType.TryWithResourcesStatement
-                || nt == J8NodeType.BasicForStatement) {
+                || nt == JminNodeType.TryStatement
+                || nt == J8NodeType.BasicForStatement
+                || nt == JminNodeType.BasicForStatement) {
               return TokenBreak.SHOULD_NOT;
             }
           }
