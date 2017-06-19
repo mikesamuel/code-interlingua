@@ -32,6 +32,7 @@ import com.mikesamuel.cil.ast.j8.J8BaseLeafNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.jmin.JminBaseInnerNode;
 import com.mikesamuel.cil.ast.jmin.JminBaseNode;
 import com.mikesamuel.cil.ast.jmin.JminNodeType;
@@ -108,18 +109,6 @@ public final class J8ToJmin {
   J8ToJmin(Logger logger, StaticType.TypePool typePool) {
     this.logger = logger;
     this.typePool = typePool;
-  }
-
-  void error(NodeI<?, ?, ?> src, String msg) {
-    LogUtils.log(logger, Level.SEVERE, src, msg, null);
-  }
-
-  void error(SourcePosition pos, String msg) {
-    LogUtils.log(logger, Level.SEVERE, pos, msg, null);
-  }
-
-  StaticType type(TypeSpecification ts, SourcePosition pos) {
-    return typePool.type(ts, pos, logger);
   }
 
   /** Translates one compilation unit. */
@@ -225,24 +214,69 @@ public final class J8ToJmin {
     {
       // We assume elsewhere that this type maps to itself as when filling
       // in the super-type for class declarations.
-      flatTypes.recordType(JavaLang.JAVA_LANG_OBJECT.rawName);
+      flatTypes.recordType(BName.of(JavaLang.JAVA_LANG_OBJECT.rawName));
     }
 
     private final List<Scope> scopes = Lists.newArrayList();
 
     final class OmniBridge implements MetadataBridge, TypeInfoResolver {
 
+      private final Map<FName, TypeInfo> typeParameterTypeInfo =
+          Maps.newHashMap();
+
+      @SuppressWarnings("synthetic-access")
       @Override
       public Optional<TypeInfo> resolve(Name flatTypeName) {
         if (flatTypeName.type == Name.Type.CLASS) {
-          @SuppressWarnings("synthetic-access")
-          Name bumpyName = flatTypes.getBumpyTypeName(flatTypeName);
-          Optional<TypeInfo> bumpyTi = typePool.r.resolve(bumpyName);
+          BName bumpyName = flatTypes.getBumpyTypeName(FName.of(flatTypeName));
+          Optional<TypeInfo> bumpyTi = typePool.r.resolve(bumpyName.name);
           if (bumpyTi.isPresent()) {
             return Optional.of(bridgeTypeInfo(bumpyTi.get()));
           }
         } else {
-          // TODO: reverse lookup type variables based on the current scope?
+          TypeInfo flatTi = typeParameterTypeInfo.get(flatTypeName);
+          if (flatTi != null) { return Optional.of(flatTi); }
+          FName className = FName.of(flatTypeName.getContainingClass());
+          if (flatTypeName.parent.type == Name.Type.CLASS) {
+            FlatParamInfo fpi = flatTypes.getFlatParamInfo(className);
+            int index = fpi.flatParametersInOrder.indexOf(
+                FName.of(flatTypeName));
+            BName bumpyTypeName = fpi.bumpyParametersInOrder.get(index);
+            Optional<TypeInfo> bumpyTiOpt = typePool.r.resolve(
+                bumpyTypeName.name);
+            if (bumpyTiOpt.isPresent()) {
+              TypeInfo bumpyTi = bumpyTiOpt.get();
+              TypeInfo.Builder b = TypeInfo.builder(flatTypeName);
+              if (bumpyTi.superType.isPresent()) {
+                // TODO: does this bridging need to be done in the context of
+                // className?  Push a scope for className,
+                // and pop it after done?
+                b.superType(Optional.of(
+                    bridgeTypeSpecification(bumpyTi.superType.get())));
+                b.interfaces(
+                    Lists.transform(
+                        bumpyTi.interfaces,
+                        new Function<TypeSpecification, TypeSpecification>() {
+
+                          @Override
+                          public TypeSpecification apply(TypeSpecification t) {
+                            return bridgeTypeSpecification(t);
+                          }
+
+                        }));
+                flatTi = b.build();
+                typeParameterTypeInfo.put(FName.of(flatTypeName), flatTi);
+                return Optional.of(flatTi);
+              }
+            }
+          } else {
+            // Assume method
+            // TODO
+          }
+          // TODO: construct TypeInfo from the bumpy type info, and cache it
+          // TODO: lookup in cache above.
+          // TODO: adjust bridging type info of type parameters to take into
+          // account the scope so that it fits with this.
           throw new AssertionError(flatTypeName);
         }
         return Optional.absent();
@@ -356,9 +390,22 @@ public final class J8ToJmin {
       @Override
       public TypeInfo bridgeTypeInfo(TypeInfo x) {
         if (x == null) { return null; }
+        if (x.canonName.type == Name.Type.TYPE_PARAMETER) {
+          // Type parameters are context dependent.
+          Optional<TypeInfo> flatTiOpt = resolve(bridgeName(x.canonName));
+          Preconditions.checkState(flatTiOpt.isPresent());
+          return flatTiOpt.get();
+        }
         TypeInfo bridged = tis.get(x);
         if (bridged == null) {
-          bridged = Preconditions.checkNotNull(x.map(this));
+          @SuppressWarnings("synthetic-access")
+          FlatParamInfo fpi = flatTypes.getFlatParamInfo(BName.of(x.canonName));
+          bridged = x.map(this)
+              .outerClass(Optional.absent())
+              .innerClasses(ImmutableList.of())
+              .parameters(
+                  Lists.transform(fpi.flatParametersInOrder, FName.NAME_OF))
+              .build();
           tis.put(x, bridged);
         }
         return bridged;
@@ -386,12 +433,19 @@ public final class J8ToJmin {
         return flatType(x);
       }
 
+      TypeBinding bridgeTypeBinding(TypeBinding x) {
+        if (x == null) { return null; }
+        if (x.typeSpec == null) { return x; }
+        TypeSpecification bs = bridgeTypeSpecification(x.typeSpec);
+        return bs == x.typeSpec ? x : new TypeBinding(x.variance, bs);
+      }
+
     }
 
     OmniBridge metadataBridge;
     TypePool bridgedTypePool;
     private final
-    Map<Name, Optional<Name>> bumpyInnerTypeNameToFlatOuterThisFieldName =
+    Map<BName, Optional<FName>> bumpyInnerTypeNameToFlatOuterThisFieldName =
         Maps.newLinkedHashMap();
     private final Multimap<Name, MemberInfo> syntheticMembersStillToAdd =
         ArrayListMultimap.create();
@@ -519,6 +573,21 @@ public final class J8ToJmin {
       }
     }
 
+    void error(NodeI<?, ?, ?> src, String msg) {
+      error(src != null ? src.getSourcePosition() : null, msg);
+    }
+
+    void error(SourcePosition pos, String msg) {
+      LogUtils.log(
+          logger, Level.SEVERE,
+          pos != null ? pos : current,
+          msg, null);
+    }
+
+    StaticType type(TypeSpecification ts, SourcePosition pos) {
+      return typePool.type(ts, pos != null ? pos : current, logger);
+    }
+
     /**
      * Flattens types: {@code foo.bar.Baz<X>.Boo<Y>} &rarr;
      * {@code foo.bar.Baz$Boo<X, T>}.
@@ -532,12 +601,24 @@ public final class J8ToJmin {
     }
 
     PartialTypeSpecification flatType(PartialTypeSpecification bumpyType) {
-      Name bumpyName = bumpyType.getRawName();
-      switch (bumpyName.type) {
+      BName bumpyName = BName.of(bumpyType.getRawName());
+      if (mode == Mode.COLLECT) {
+        flatTypes.recordType(bumpyName);
+      }
+      switch (bumpyName.name.type) {
         case PACKAGE:
           return bumpyType;
-        case TYPE_PARAMETER:
-          throw new Error(); // TDOO: rework using typeParameterContext
+        case TYPE_PARAMETER: {
+          TypeSpecification ts = (TypeSpecification) bumpyType;
+          for (Scope scope : Lists.reverse(scopes)) {
+            FName flatName = scope.flatParamInfo.substMap.get(bumpyName);
+            if (flatName != null) {
+              return TypeSpecification.unparameterized(flatName.name)
+                  .withNDims(ts.nDims);
+            }
+          }
+          throw new AssertionError(bumpyType);
+        }
         case METHOD: {
           MethodTypeContainer m = (MethodTypeContainer) bumpyType;
           TypeSpecification flatParent = flatType(m.parent);
@@ -546,10 +627,13 @@ public final class J8ToJmin {
           ImmutableList<TypeBinding> flatBindings = ImmutableList.of();
           if (!bindings.isEmpty()) {
             Optional<CallableInfo> ciOpt =
-                typePool.r.resolveCallable(bumpyName);
-            Map<Name, TypeBinding> bindingsByName = Maps.newLinkedHashMap();
+                typePool.r.resolveCallable(bumpyName.name);
+            Map<BName, TypeBinding> bindingsByName = Maps.newLinkedHashMap();
             if (ciOpt.isPresent()) {
-              putBindings(ciOpt.get().typeParameters, bindings, bindingsByName);
+              putBindings(
+                  Lists.transform(
+                      ciOpt.get().typeParameters, BName.OF),
+                  bindings, bindingsByName);
             }
             flatBindings = flatBindings(bumpyName, bindingsByName);
           }
@@ -557,13 +641,13 @@ public final class J8ToJmin {
           return new MethodTypeContainer(
               flatParent,
               flatParent.rawName.method(
-                  bumpyName.identifier, bumpyName.variant),
+                  bumpyName.name.identifier, bumpyName.name.variant),
               flatBindings
               );
         }
         case CLASS: {
           TypeSpecification bumpy = (TypeSpecification) bumpyType;
-          Name flatName = flatTypes.getFlatTypeName(bumpyName);
+          FName flatName = flatTypes.getFlatTypeName(bumpyName);
 
           // The package should not change.
           PackageSpecification packageName = null;
@@ -576,10 +660,10 @@ public final class J8ToJmin {
           }
           Preconditions.checkState(
               packageName != null
-              && flatName.parent.equals(packageName.packageName));
+              && flatName.name.parent.equals(packageName.packageName));
 
           // Collect bindings so we can remap them to flat parameter names.
-          Map<Name, TypeBinding> bindingsByName = Maps.newLinkedHashMap();
+          Map<BName, TypeBinding> bindingsByName = Maps.newLinkedHashMap();
           bumpy.withBindings(
               new Function<PartialTypeSpecification,
                            ImmutableList<TypeBinding>>() {
@@ -590,18 +674,20 @@ public final class J8ToJmin {
                     PartialTypeSpecification pts) {
                   ImmutableList<TypeBinding> bindings = pts.bindings();
                   if (!bindings.isEmpty()) {
-                    List<Name> bumpyParams = null;
+                    List<BName> bumpyParams = null;
                     if (pts instanceof TypeSpecification) {
                       Optional<TypeInfo> tiOpt = typePool.r.resolve(
                           pts.getRawName());
                       if (tiOpt.isPresent()) {
-                        bumpyParams = tiOpt.get().parameters;
+                        bumpyParams = Lists.transform(
+                            tiOpt.get().parameters, BName.OF);
                       }
                     } else if (pts instanceof MethodTypeContainer) {
                       Optional<CallableInfo> ciOpt = typePool.r.resolveCallable(
                           pts.getRawName());
                       if (ciOpt.isPresent()) {
-                        bumpyParams = ciOpt.get().typeParameters;
+                        bumpyParams = Lists.transform(
+                            ciOpt.get().typeParameters, BName.OF);
                       }
                     }
                     if (bumpyParams != null) {
@@ -616,8 +702,8 @@ public final class J8ToJmin {
               bumpyName, bindingsByName);
 
           return new TypeSpecification(
-              packageName, flatName.identifier, Name.Type.CLASS,
-              allBindings, bumpy.nDims);
+              Preconditions.checkNotNull(packageName), flatName.name.identifier,
+              Name.Type.CLASS, allBindings, bumpy.nDims);
         }
         case FIELD:
           // A primitive type.
@@ -630,13 +716,12 @@ public final class J8ToJmin {
     }
 
     private void putBindings(
-        List<Name> bumpyParams, List<TypeBinding> bindings,
-        Map<Name, TypeBinding> bindingsByName) {
+        List<BName> bumpyParams, List<TypeBinding> bindings,
+        Map<BName, TypeBinding> bindingsByName) {
       int nParams = bumpyParams.size();
       if (bindings.size() == nParams) {
         for (int i = 0; i < nParams; ++i) {
-          bindingsByName.put(
-              bumpyParams.get(i), bindings.get(i));
+          bindingsByName.put(bumpyParams.get(i), bindings.get(i));
         }
       } else {
         LogUtils.log(
@@ -648,14 +733,23 @@ public final class J8ToJmin {
 
     /** @param bindingsByName maps bumpy parameter names to bumpy bindings. */
     private ImmutableList<TypeBinding> flatBindings(
-        Name bumpyName, Map<Name, TypeBinding> bindingsByName) {
-      Name flatName = flatTypes.getFlatTypeName(bumpyName);
+        BName bumpyName, Map<BName, TypeBinding> bindingsByName) {
+      FName flatName = flatTypes.getFlatTypeName(bumpyName);
       FlatParamInfo paramInfo = flatTypes.getFlatParamInfo(flatName);
       ImmutableList.Builder<TypeBinding> b = ImmutableList.builder();
-      for (Name bumpyParam : paramInfo.bumpyParametersInOrder) {
+      for (BName bumpyParam : paramInfo.bumpyParametersInOrder) {
         TypeBinding untranslatedBinding = bindingsByName.get(bumpyParam);
         if (untranslatedBinding == null) {
-          untranslatedBinding = TypeBinding.WILDCARD;
+          Scope top = scopes.get(scopes.size() - 1);
+          TypeBinding inheritedBinding = top.inheritedBindings.get(bumpyParam);
+          if (inheritedBinding == null) {
+            untranslatedBinding = TypeBinding.WILDCARD;
+          } else {
+            untranslatedBinding = inheritedBinding;
+          }
+        }
+        if (mode == Mode.COLLECT && untranslatedBinding.typeSpec != null) {
+          flatTypes.recordType(BName.of(untranslatedBinding.typeSpec.rawName));
         }
         b.add(untranslatedBinding.subst(
             new Function<Name, TypeBinding>() {
@@ -666,7 +760,7 @@ public final class J8ToJmin {
                 if (nm.type == Name.Type.CLASS) {
                   return new TypeBinding(
                       TypeSpecification.unparameterized(
-                          flatTypes.getFlatTypeName(nm)));
+                          flatTypes.getFlatTypeName(BName.of(nm)).name));
                 } else {
                   Preconditions.checkArgument(
                       nm.type == Name.Type.TYPE_PARAMETER, nm);
@@ -766,6 +860,8 @@ public final class J8ToJmin {
                     .Variant.NormalInterfaceDeclaration
                     .buildNode(nodem)));
             break;
+          case TypeParameter:
+            break;
           default:
             throw new AssertionError(nodem);
         }
@@ -777,14 +873,25 @@ public final class J8ToJmin {
       SourcePosition pos = node8.getSourcePosition();
       if (pos != null) { current = pos; }
       if (node8 instanceof TypeDeclaration) {
-        TypeInfo ti = ((TypeDeclaration<?, ?, ?>) node8).getDeclaredTypeInfo();
-        if (ti != null) {
-          Name flatName = flatTypes.getFlatTypeName(ti.canonName);
+        J8TypeDeclaration td8 = (J8TypeDeclaration) node8;
+        TypeInfo ti = td8.getDeclaredTypeInfo();
+        if (ti != null && ti.canonName.type == Name.Type.CLASS) {
+          BName bumpyName = BName.of(ti.canonName);
+          FName flatName = flatTypes.getFlatTypeName(bumpyName);
+
+          Map<BName, TypeBinding> inheritedBindings = Maps.newLinkedHashMap();
+          int nScopes = scopes.size();
+          if (nScopes != 0) {
+            inheritedBindings.putAll(scopes.get(nScopes - 1).inheritedBindings);
+          }
+          putBindingsInheritedFromSuperType(ti, inheritedBindings);
+
           Scope s = new Scope(
-              ti.canonName, flatName, flatTypes.getFlatParamInfo(flatName));
+              td8, bumpyName, flatName, flatTypes.getFlatParamInfo(flatName),
+              ImmutableMap.copyOf(inheritedBindings));
           // Add all the identifiers from this scope so that we can generate
           // non-conflicting names.
-          s.identifiersUsed.add(flatName.identifier);
+          s.identifiersUsed.add(flatName.name.identifier);
           if (!scopes.isEmpty()) {
             s.identifiersUsed.addAll(
                 scopes.get(scopes.size() - 1).identifiersUsed);
@@ -805,36 +912,163 @@ public final class J8ToJmin {
       return node8;
     }
 
+    private void putBindingsInheritedFromSuperType(
+        TypeInfo ti, Map<BName, TypeBinding> bindings) {
+      Iterable<TypeSpecification> allSts = Iterables.concat(
+          ti.superType.asSet(), ti.interfaces);
+      for (TypeSpecification st : allSts) {
+        while (true) {
+          Optional<TypeInfo> stiOpt = typePool.r.resolve(st.rawName);
+          if (stiOpt.isPresent()) {
+            TypeInfo sti = stiOpt.get();
+            putBindingsInheritedFromSuperType(sti, bindings);
+            int nBindings = st.bindings.size();
+            if (nBindings == sti.parameters.size()) {
+              for (int i = 0; i < nBindings; ++i) {
+                bindings.put(
+                    BName.of(sti.parameters.get(i)), st.bindings.get(i));
+              }
+            }
+          }
+          if (st.parent instanceof TypeSpecification) {
+            st = (TypeSpecification) st.parent;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    /**
+     * Updates the SimpleTypeName of a TypeDeclaration to match the flattened
+     * name.
+     */
+    private void updateSimpleName(
+        TypeDeclaration<JminBaseNode, JminNodeType, JminNodeVariant> node) {
+      com.mikesamuel.cil.ast.jmin.SimpleTypeNameNode nameNode =
+          node.firstChildWithType(
+              com.mikesamuel.cil.ast.jmin.SimpleTypeNameNode.class);
+      com.mikesamuel.cil.ast.jmin.IdentifierNode ident =
+          nameNode.firstChildWithType(
+              com.mikesamuel.cil.ast.jmin.IdentifierNode.class);
+      String flatIdent = node.getDeclaredTypeInfo().canonName.identifier;
+      ident.setValue(flatIdent);
+    }
+
     JminBaseNode after(J8BaseNode node8, JminBaseNode nodem) {
       if (node8 instanceof TypeDeclaration) {
         TypeInfo ti = ((TypeDeclaration<?, ?, ?>) node8).getDeclaredTypeInfo();
-        if (ti != null) {
-          Preconditions.checkState(!scopes.isEmpty());
-          Scope top = scopes.remove(scopes.size() - 1);
-          Preconditions.checkState(top.bumpyName.equals(ti.canonName));
+        if (ti != null && ti.canonName.type == Name.Type.CLASS) {
+          @SuppressWarnings("unchecked")  // By node generator convention.
+          TypeDeclaration<JminBaseNode, JminNodeType, JminNodeVariant> decl =
+              (TypeDeclaration<JminBaseNode, JminNodeType, JminNodeVariant>)
+              nodem;
+          int scopeIndex = scopes.size() - 1;
+          Preconditions.checkState(scopeIndex >= 0);
+          Scope top = scopes.get(scopeIndex);
+          Preconditions.checkState(top.bumpyName.name.equals(ti.canonName));
+          // Fixup the name.
+          updateSimpleName(decl);
+          // Add any outer type variables to the declarations.
+          if (!top.flatParamInfo.flatParametersInOrder.isEmpty()) {
+            com.mikesamuel.cil.ast.jmin.TypeParametersNode tps =
+                nodem.firstChildWithType(
+                    com.mikesamuel.cil.ast.jmin.TypeParametersNode.class);
+            if (tps == null) {
+              tps = com.mikesamuel.cil.ast.jmin.TypeParametersNode.Variant
+                  .LtTypeParameterListGt.buildNode(
+                      com.mikesamuel.cil.ast.jmin.TypeParameterListNode
+                      .Variant.TypeParameterComTypeParameter.buildNode());
+
+              boolean added = false;
+              for (int i = 0, n = nodem.getNChildren(); i < n; ++i) {
+                if (nodem.getChild(i).getNodeType()
+                    == JminNodeType.SimpleTypeName) {
+                  ((JminBaseInnerNode) nodem).add(i + 1, tps);
+                  added = true;
+                  break;
+                }
+              }
+              Preconditions.checkState(added);
+            }
+            com.mikesamuel.cil.ast.jmin.TypeParameterListNode tplist
+                = tps.firstChildWithType(
+                    com.mikesamuel.cil.ast.jmin.TypeParameterListNode.class);
+            Map<FName, com.mikesamuel.cil.ast.jmin.TypeParameterNode> existing
+                = Maps.newLinkedHashMap();
+            for (int i = 0, n = tplist.getNChildren(); i < n; ++i) {
+              com.mikesamuel.cil.ast.jmin.TypeParameterNode tp =
+                  (com.mikesamuel.cil.ast.jmin.TypeParameterNode)
+                  tplist.getChild(i);
+              TypeInfo fpi = tp.getDeclaredTypeInfo();
+              existing.put(FName.of(fpi.canonName), tp);
+            }
+            ImmutableList.Builder<JminBaseNode> fullParams =
+                ImmutableList.builder();
+            Map<BName, com.mikesamuel.cil.ast.j8.TypeParameterNode>
+                bumpyTypeParamDecls = Maps.newLinkedHashMap();
+            FlatParamInfo flatParamInfo = top.flatParamInfo;
+            for (int i = 0, n = flatParamInfo.flatParametersInOrder.size();
+                i < n; ++i) {
+              FName paramName = flatParamInfo.flatParametersInOrder.get(i);
+              com.mikesamuel.cil.ast.jmin.TypeParameterNode tp =
+                  existing.remove(paramName);
+              if (tp == null) {
+                BName origName = flatParamInfo.bumpyParametersInOrder.get(i);
+                if (!bumpyTypeParamDecls.containsKey(origName)) {
+                  BName outerClassName = BName.of(
+                      origName.name.getContainingClass());
+                  Scope outerScope = getScope(outerClassName);
+                  com.mikesamuel.cil.ast.j8.TypeParametersNode ps =
+                      ((J8BaseNode) outerScope.typeDecl).firstChildWithType(
+                          com.mikesamuel.cil.ast.j8.TypeParametersNode.class);
+                  for (com.mikesamuel.cil.ast.j8.TypeParameterNode p :
+                        ps.finder(
+                            com.mikesamuel.cil.ast.j8.TypeParameterNode.class)
+                        .find()) {
+                    TypeInfo pti = p.getDeclaredTypeInfo();
+                    if (pti == null) {
+                      error(p, "Missing type info");
+                    } else {
+                      bumpyTypeParamDecls.put(BName.of(pti.canonName), p);
+                    }
+                  }
+                }
+                com.mikesamuel.cil.ast.j8.TypeParameterNode p8 =
+                    bumpyTypeParamDecls.get(origName);
+                tp = (com.mikesamuel.cil.ast.jmin.TypeParameterNode) xlate(p8);
+              }
+              updateSimpleName(tp);
+              fullParams.add(tp);
+            }
+            tplist.replaceChildren(fullParams.build());
+          }
+
+          scopes.remove(scopeIndex);
         }
       }
       return nodem;
     }
 
-    Optional<Name> getOuterRefName(Name bumpyInnerTypeName) {
+    Optional<FName> getOuterRefName(BName bumpyInnerTypeName) {
       Scope scope = getScope(bumpyInnerTypeName);
-      if (bumpyInnerTypeName.parent.type == Name.Type.PACKAGE) {
+      if (bumpyInnerTypeName.name.parent.type == Name.Type.PACKAGE) {
         return Optional.absent();
       }
-      Optional<Name> fnOpt = bumpyInnerTypeNameToFlatOuterThisFieldName
+      Optional<FName> fnOpt = bumpyInnerTypeNameToFlatOuterThisFieldName
           .get(bumpyInnerTypeName);
       if (fnOpt == null) {
-        Name bumpyOuterTypeName = bumpyInnerTypeName.parent
-            .getContainingClass();
+        BName bumpyOuterTypeName = BName.of(
+            bumpyInnerTypeName.name.parent.getContainingClass());
 
-        Name flatOuterTypeName = flatTypes.getFlatTypeName(bumpyOuterTypeName);
-        Name flatInnerTypeName = flatTypes.getFlatTypeName(bumpyInnerTypeName);
+        FName flatOuterTypeName = flatTypes.getFlatTypeName(bumpyOuterTypeName);
+        FName flatInnerTypeName = flatTypes.getFlatTypeName(bumpyInnerTypeName);
 
         String reservedIdentifier = "$$containingInstance";
 
         // First, reserve an identifier for the outer instance field.
-        Optional<TypeInfo> bumpyTi = typePool.r.resolve(bumpyInnerTypeName);
+        Optional<TypeInfo> bumpyTi = typePool.r.resolve(
+            bumpyInnerTypeName.name);
         Optional<TypeInfo> flatTi = Optional.absent();
         boolean isStaticClass = false;
         if (bumpyTi.isPresent()) {
@@ -861,23 +1095,23 @@ public final class J8ToJmin {
           FlatParamInfo innerParamInfo = flatTypes.getFlatParamInfo(
               flatInnerTypeName);
           FlatParamInfo outerParamInfo = flatTypes.getFlatParamInfo(
-              flatInnerTypeName);
-          for (Name outerParam : outerParamInfo.flatParametersInOrder) {
+              flatOuterTypeName);
+          for (BName outerParam : outerParamInfo.bumpyParametersInOrder) {
             bindings.add(new TypeBinding(TypeSpecification.unparameterized(
-                innerParamInfo.substMap.get(outerParam))));
+                innerParamInfo.substMap.get(outerParam).name)));
           }
           TypeSpecification flatTypeInInnerTypeScope = TypeSpecification
-              .unparameterized(flatOuterTypeName)
+              .unparameterized(flatOuterTypeName.name)
               .withBindings(bindings.build());
 
           // Third, add a field declaration and store the relationship.
-          Name fn = flatInnerTypeName.child(
+          Name fieldName = flatInnerTypeName.name.child(
               reservedIdentifier, Name.Type.FIELD);
-          FieldInfo fi = new FieldInfo(Modifier.FINAL, fn);
+          FieldInfo fi = new FieldInfo(Modifier.FINAL, fieldName);
           registerSyntheticMember(fi);
           fi.setValueType(flatTypeInInnerTypeScope);
 
-          fnOpt = Optional.of(fn);
+          fnOpt = Optional.of(FName.of(fieldName));
         }
 
         bumpyInnerTypeNameToFlatOuterThisFieldName.put(
@@ -891,7 +1125,7 @@ public final class J8ToJmin {
       int nameIndex = -1;
       for (int i = lastIndex; i >= 0; --i) {
         Scope s = scopes.get(i);
-        if (s.bumpyName.equals(bumpyTypeName)) {
+        if (s.bumpyName.name.equals(bumpyTypeName)) {
           nameIndex = i;
           break;
         }
@@ -905,15 +1139,16 @@ public final class J8ToJmin {
           .buildNode();
       for (int i = lastIndex; i > nameIndex; --i) {
         Scope s = scopes.get(i);
-        Optional<Name> outerRef = getOuterRefName(s.bumpyName);
+        Optional<FName> outerRefOpt = getOuterRefName(s.bumpyName);
 
-        if (outerRef.isPresent()) {
+        if (outerRefOpt.isPresent()) {
+          FName outerRef = outerRefOpt.get();
           com.mikesamuel.cil.ast.jmin.IdentifierNode ident =
-              toIdent(outerRef.get());
+              toIdent(outerRef.name);
           com.mikesamuel.cil.ast.jmin.FieldNameNode fieldName =
               com.mikesamuel.cil.ast.jmin.FieldNameNode.Variant.Identifier
               .buildNode(ident);
-          fieldName.setReferencedExpressionName(outerRef.get());
+          fieldName.setReferencedExpressionName(outerRef.name);
           primary = com.mikesamuel.cil.ast.jmin.PrimaryNode.Variant.FieldAccess
               .buildNode(primary, fieldName);
         } else {
@@ -930,13 +1165,23 @@ public final class J8ToJmin {
     }
 
     Scope getScope(int delta) {
-      return scopes.get(scopes.size() + delta);
+      return scopes.get(delta >= 0 ? delta : scopes.size() + delta);
     }
 
-    Scope getScope(Name bumpyTypeName) {
+    Scope getScope(BName bumpyTypeName) {
       for (int i = scopes.size(); --i >= 0;) {
         Scope s = scopes.get(i);
         if (s.bumpyName.equals(bumpyTypeName)) {
+          return s;
+        }
+      }
+      return null;
+    }
+
+    Scope getScope(FName flatTypeName) {
+      for (int i = scopes.size(); --i >= 0;) {
+        Scope s = scopes.get(i);
+        if (s.flatName.equals(flatTypeName)) {
           return s;
         }
       }
@@ -997,7 +1242,7 @@ public final class J8ToJmin {
           .Variant.PackageNameDotAnnotationIdentifierTypeArguments
           .buildNode(b.build());
 
-      t.setStaticType(bridgedTypePool.type(flat, null, logger));
+      t.setStaticType(bridgedTypePool.type(flat, current, logger));
       Optional<TypeInfo> ti = metadataBridge.resolve(flat.rawName);
       if (ti.isPresent()) {
         t.setReferencedTypeInfo(ti.get());
@@ -1005,32 +1250,68 @@ public final class J8ToJmin {
       return t;
     }
 
-    com.mikesamuel.cil.ast.jmin.TypeNode toType(TypeSpecification flat) {
-      if (flat.nDims != 0) {
-        throw new Error("TODO");  // TODO
-      }
+    com.mikesamuel.cil.ast.jmin.ArrayTypeNode toArrayType(
+        TypeSpecification flatElementType) {
+      return com.mikesamuel.cil.ast.jmin.ArrayTypeNode
+          .Variant.TypeAnnotationDim
+          .buildNode(
+              toType(flatElementType),
+              com.mikesamuel.cil.ast.jmin.DimNode.Variant.LsRs.buildNode())
+          .setStaticType(
+              bridgedTypePool.type(flatElementType.arrayOf(), null, logger));
+    }
 
-      com.mikesamuel.cil.ast.jmin.TypeNode elementType;
+    com.mikesamuel.cil.ast.jmin.ReferenceTypeNode toReferenceType(
+        TypeSpecification flat) {
+      if (flat.nDims != 0) {
+        com.mikesamuel.cil.ast.jmin.ArrayTypeNode arrType =
+            toArrayType(flat.withNDims(flat.nDims - 1));
+        return com.mikesamuel.cil.ast.jmin.ReferenceTypeNode.Variant.ArrayType
+            .buildNode(arrType)
+            .setStaticType(arrType.getStaticType());
+      }
       switch (flat.rawName.type) {
-        case FIELD:  throw new Error("TODO");  // TODO
-        case TYPE_PARAMETER: throw new Error("TODO");  // TODO
-        case CLASS:
+        case TYPE_PARAMETER: {
+          com.mikesamuel.cil.ast.jmin.TypeVariableNode tv =
+              com.mikesamuel.cil.ast.jmin.TypeVariableNode.Variant
+              .AnnotationIdentifier.buildNode(toIdent(flat.rawName));
+          Optional<TypeInfo> tiOpt = metadataBridge.resolve(flat.rawName);
+          if (tiOpt.isPresent()) {
+            tv.setReferencedTypeInfo(tiOpt.get());
+          }
+          com.mikesamuel.cil.ast.jmin.ReferenceTypeNode refType =
+              com.mikesamuel.cil.ast.jmin.ReferenceTypeNode.Variant
+              .TypeVariable.buildNode(tv);
+          refType.setStaticType(bridgedTypePool.type(flat, null, logger));
+          return refType;
+        }
+        case CLASS: {
           com.mikesamuel.cil.ast.jmin.ClassOrInterfaceTypeNode ct =
               toClassOrInterfaceType(flat);
           com.mikesamuel.cil.ast.jmin.ReferenceTypeNode refType =
               com.mikesamuel.cil.ast.jmin.ReferenceTypeNode.Variant
               .ClassOrInterfaceType.buildNode(ct);
           refType.setStaticType(ct.getStaticType());
-          elementType = com.mikesamuel.cil.ast.jmin.TypeNode
-              .Variant.ReferenceType.buildNode(refType);
-          return elementType;
+          return refType;
+        }
         case AMBIGUOUS:
+        case FIELD:
         case LOCAL:
         case METHOD:
         case PACKAGE:
           break;
       }
       throw new AssertionError(flat);
+
+    }
+
+    com.mikesamuel.cil.ast.jmin.TypeNode toType(TypeSpecification flat) {
+      if (flat.nDims != 0 || flat.rawName.type != Name.Type.FIELD) {
+        return com.mikesamuel.cil.ast.jmin.TypeNode
+            .Variant.ReferenceType.buildNode(toReferenceType(flat));
+      } else {
+        throw new Error("TODO");  // TODO primitive type
+      }
     }
 
     com.mikesamuel.cil.ast.jmin.UnannTypeNode toUnannType(
@@ -1049,8 +1330,62 @@ public final class J8ToJmin {
     com.mikesamuel.cil.ast.jmin.TypeArgumentsNode toTypeArguments(
         Iterable<? extends TypeBinding> bindings) {
       if (Iterables.isEmpty(bindings)) { return null; }
-      System.err.println(bindings);
-      throw new Error("TODO");
+
+      ImmutableList.Builder<JminBaseNode> typeArguments =
+          ImmutableList.builder();
+      for (TypeBinding binding : bindings) {
+        com.mikesamuel.cil.ast.jmin.ReferenceTypeNode refType =
+            binding.typeSpec != null
+            ? toReferenceType(binding.typeSpec)
+            : null;
+        if (binding.typeSpec == null) {
+          throw new AssertionError(binding);
+        }
+        com.mikesamuel.cil.ast.jmin.TypeArgumentNode typeArgument = null;
+        com.mikesamuel.cil.ast.jmin.WildcardBoundsNode wildcardBounds = null;
+        switch (binding.variance) {
+          case EXTENDS: {
+            com.mikesamuel.cil.ast.jmin.WildcardNode wildcard;
+            if (refType != null) {
+              wildcardBounds = com.mikesamuel.cil.ast.jmin.WildcardBoundsNode
+                  .Variant.ExtendsReferenceType
+                  .buildNode(refType);
+              wildcard = com.mikesamuel.cil.ast.jmin.WildcardNode
+                  .Variant.AnnotationQmWildcardBounds.buildNode(wildcardBounds);
+            } else {
+              wildcard = com.mikesamuel.cil.ast.jmin.WildcardNode
+                  .Variant.AnnotationQmWildcardBounds.buildNode();
+            }
+            typeArgument = com.mikesamuel.cil.ast.jmin.TypeArgumentNode
+                .Variant.Wildcard.buildNode(wildcard);
+            break;
+          }
+          case INVARIANT:
+            typeArgument = com.mikesamuel.cil.ast.jmin.TypeArgumentNode
+                .Variant.ReferenceType.buildNode(
+                    Preconditions.checkNotNull(refType));
+            break;
+          case SUPER: {
+            wildcardBounds = com.mikesamuel.cil.ast.jmin.WildcardBoundsNode
+                .Variant.SuperReferenceType.buildNode(
+                    Preconditions.checkNotNull(refType));
+            com.mikesamuel.cil.ast.jmin.WildcardNode wildcard =
+                com.mikesamuel.cil.ast.jmin.WildcardNode
+                .Variant.AnnotationQmWildcardBounds.buildNode(wildcardBounds);
+            typeArgument = com.mikesamuel.cil.ast.jmin.TypeArgumentNode
+                .Variant.Wildcard.buildNode(wildcard);
+            break;
+          }
+        }
+        typeArguments.add(Preconditions.checkNotNull(typeArgument));
+      }
+
+      com.mikesamuel.cil.ast.jmin.TypeArgumentListNode typeArgumentList =
+          com.mikesamuel.cil.ast.jmin.TypeArgumentListNode.Variant
+          .TypeArgumentComTypeArgument
+          .buildNode(typeArguments.build());
+      return com.mikesamuel.cil.ast.jmin.TypeArgumentsNode
+          .Variant.LtTypeArgumentListGt.buildNode(typeArgumentList);
     }
 
   }
@@ -1192,29 +1527,42 @@ public final class J8ToJmin {
                   (com.mikesamuel.cil.ast.jmin.ConstructorDeclarationNode)
                   builder.apply(childrenSupplier.get());
 
+              com.mikesamuel.cil.ast.jmin.ConstructorDeclaratorNode declarator
+                  = ctor.firstChildWithType(
+                      com.mikesamuel.cil.ast.jmin.ConstructorDeclaratorNode
+                      .class);
+              Scope s = xlator.getScope(-1);
+              {
+                com.mikesamuel.cil.ast.jmin.SimpleTypeNameNode nameNode =
+                    declarator.firstChildWithType(
+                        com.mikesamuel.cil.ast.jmin.SimpleTypeNameNode.class);
+                com.mikesamuel.cil.ast.jmin.IdentifierNode ctorName =
+                    nameNode.firstChildWithType(
+                        com.mikesamuel.cil.ast.jmin.IdentifierNode.class);
+                ctorName.setValue(s.flatName.name.identifier);
+              }
+
               CallableInfo ctorInfo = (CallableInfo)
                   xlator.metadataBridge.bridgeMemberInfo(
                       ctor8.getMemberInfo());
               if (ctorInfo == null) {
-                xlator.getMinner().error(
+                xlator.error(
                     n8, "Missing info for constructor "
                     + ctor.getMethodVariant());
                 return ctor;
               }
 
-              Scope s = xlator.getScope(-1);
-              Optional<Name> outerRef = xlator.getOuterRefName(s.bumpyName);
+              Optional<FName> outerRefOpt = xlator.getOuterRefName(s.bumpyName);
               Optional<TypeInfo> tiOpt = xlator.getMinner().typePool.r.resolve(
-                  s.bumpyName);
+                  s.bumpyName.name);
               if (!tiOpt.isPresent()) {
-                xlator.getMinner().error(
-                    n8, "Missing type info for " + s.bumpyName);
+                xlator.error(n8, "Missing type info for " + s.bumpyName);
                 return ctor;
               }
               TypeInfo ti = tiOpt.get();
-              Optional<Name> superOuterRef = xlator.getOuterRefName(
-                  ti.superType.get().rawName);
-              if (!(outerRef.isPresent() || superOuterRef.isPresent())) {
+              Optional<FName> superOuterRef = xlator.getOuterRefName(
+                  BName.of(ti.superType.get().rawName));
+              if (!(outerRefOpt.isPresent() || superOuterRef.isPresent())) {
                 return ctor;
               }
 
@@ -1236,10 +1584,6 @@ public final class J8ToJmin {
               //       chaining call is a this(...) call.
               // III.If the chaining call is a super(...) call and the class
               // has an outer reference then we add a statement that assigns it.
-              com.mikesamuel.cil.ast.jmin.ConstructorDeclaratorNode declarator
-                  = ctor.firstChildWithType(
-                      com.mikesamuel.cil.ast.jmin.ConstructorDeclaratorNode
-                      .class);
               com.mikesamuel.cil.ast.jmin.ConstructorBodyNode body
                   = ctor.firstChildWithType(
                       com.mikesamuel.cil.ast.jmin.ConstructorBodyNode.class);
@@ -1259,12 +1603,12 @@ public final class J8ToJmin {
               }
 
               SourcePosition pos = ctor.getSourcePosition();
-              if (outerRef.isPresent()) {
-                Name fieldName = outerRef.get();
+              if (outerRefOpt.isPresent()) {
+                FName fieldName = outerRefOpt.get();
                 TypeSpecification type = fieldType(ctor, xlator, fieldName);
                 Name paramName = addFormalParameter(
                     xlator, ctorInfo.canonName, declarator,
-                    type, fieldName.identifier, 0);
+                    type, fieldName.name.identifier, 0);
                 com.mikesamuel.cil.ast.jmin.ExpressionNode ref =
                     localReference(xlator, pos, type, paramName);
                 if (callsSuper) {
@@ -1280,11 +1624,13 @@ public final class J8ToJmin {
                 }
               }
               if (superOuterRef.isPresent()) {
-                Name fieldName = superOuterRef.get();
+                FName fieldName = superOuterRef.get();
                 TypeSpecification type = fieldType(ctor, xlator, fieldName);
                 Name paramName = addFormalParameter(
                     xlator, ctorInfo.canonName, declarator,
-                    type, fieldName.identifier, 0);
+                    type,
+                    s.nonConflictingIdentifier("$$superContainingInstance"),
+                    0);
                 com.mikesamuel.cil.ast.jmin.ExpressionNode ref =
                     localReference(xlator, pos, type, paramName);
                 ref.setStaticType(
@@ -1299,7 +1645,7 @@ public final class J8ToJmin {
             private void addAssignment(
                 com.mikesamuel.cil.ast.jmin.ConstructorBodyNode body,
                 com.mikesamuel.cil.ast.jmin.ExpressionAtomNode obj,
-                Name fieldName,
+                FName fieldName,
                 com.mikesamuel.cil.ast.jmin.ExpressionNode rhs, int index) {
               StaticType t = rhs.getStaticType();
               com.mikesamuel.cil.ast.jmin.AssignmentNode assign =
@@ -1312,7 +1658,7 @@ public final class J8ToJmin {
                               obj,
                               com.mikesamuel.cil.ast.jmin
                               .FieldNameNode.Variant.Identifier.buildNode(
-                                  toIdent(fieldName))
+                                  toIdent(fieldName.name))
                               )
                               .setStaticType(t)
                           ),
@@ -1370,19 +1716,41 @@ public final class J8ToJmin {
             }
 
             TypeSpecification fieldType(
-                JminBaseNode context, Translator xlator, Name fieldName) {
+                JminBaseNode context, Translator xlator, FName fieldName) {
               Optional<FieldInfo> fi = xlator.metadataBridge.resolveField(
-                  fieldName);
+                  fieldName.name);
               if (fi.isPresent()) {
                 TypeSpecification type = fi.get().getValueType();
                 if (type != null) {
+                  Scope scope = xlator.getScope(-1);
+                  if (!scope.inheritedBindings.isEmpty()) {
+                    type = type.subst(
+                        new Function<Name, TypeBinding>() {
+
+                          @Override
+                          public TypeBinding apply(Name flatTypeName) {
+                            FName typeName = FName.of(flatTypeName);
+                            @SuppressWarnings("synthetic-access")
+                            BName bumpyTypeName = xlator.flatTypes
+                                .getBumpyTypeName(typeName);
+                            TypeBinding bumpyBinding = scope.inheritedBindings
+                                .get(bumpyTypeName);
+                            if (bumpyBinding != null) {
+                              return xlator.metadataBridge.bridgeTypeBinding(
+                                  bumpyBinding);
+                            }
+                            return null;
+                          }
+
+                        });
+                  }
                   return type;
                 } else {
-                  xlator.getMinner().error(
+                  xlator.error(
                       context, "Missing type for field " + fieldName);
                 }
               } else {
-                xlator.getMinner().error(
+                xlator.error(
                     context, "No info for field " + fieldName);
               }
               return JavaLang.JAVA_LANG_OBJECT;
@@ -1492,12 +1860,12 @@ public final class J8ToJmin {
                   (com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode) n8;
               StaticType t = t8.getStaticType();
               if (!(t instanceof StaticType.TypePool.ClassOrInterfaceType)) {
-                xlator.getMinner().error(
+                xlator.error(
                     n8,
                     t == null
                     ? "Missing type information for " + t8
                     : t + " is not a class or interface type");
-                t = xlator.getMinner().type(
+                t = xlator.type(
                     JavaLang.JAVA_LANG_OBJECT, n8.getSourcePosition());
               }
               TypeSpecification flat = xlator.flatType(
@@ -1617,16 +1985,16 @@ public final class J8ToJmin {
                     }
                     return thisRef;
                   } else {
-                    xlator.getMinner().error(
+                    xlator.error(
                         n8,
                         "Qualified `this` out of scope: "
-                            + outerType.getTextContent("."));
+                        + outerType.getTextContent("."));
                   }
                 } else {
-                  xlator.getMinner().error(
+                  xlator.error(
                       n8,
                       "Missing type info for qualified `this`: "
-                          + outerType.getTextContent("."));
+                      + outerType.getTextContent("."));
                 }
               }
               return com.mikesamuel.cil.ast.jmin.ExpressionAtomNode.Variant
@@ -1796,20 +2164,21 @@ public final class J8ToJmin {
                 Supplier<ImmutableList<JminBaseNode>> childrenSupplier) {
               ImmutableList<JminBaseNode> children = childrenSupplier.get();
               for (int i = 0, n = children.size(); i < n; ++i) {
-                if (JminNodeType.SimpleTypeName
-                    == children.get(i).getNodeType()) {
-                  if (JminNodeType.Superclass
-                      != children.get(i+1).getNodeType()) {
-                    com.mikesamuel.cil.ast.jmin.SuperclassNode extendsObject =
-                        com.mikesamuel.cil.ast.jmin.SuperclassNode.Variant
-                        .ExtendsClassType.buildNode(
-                            xlator.toClassType(JavaLang.JAVA_LANG_OBJECT));
-                    children = ImmutableList.<JminBaseNode>builder()
-                        .addAll(children.subList(0, i + 1))
-                        .add(extendsObject)
-                        .addAll(children.subList(i + 1, n))
-                        .build();
-                  }
+                JminNodeType nt = children.get(i).getNodeType();
+                if (nt == JminNodeType.Superclass) { break; }
+                if (nt != JminNodeType.JavaDocComment
+                    && nt != JminNodeType.Modifier
+                    && nt != JminNodeType.SimpleTypeName
+                    && nt != JminNodeType.TypeParameters) {
+                  com.mikesamuel.cil.ast.jmin.SuperclassNode extendsObject =
+                      com.mikesamuel.cil.ast.jmin.SuperclassNode.Variant
+                      .ExtendsClassType.buildNode(
+                          xlator.toClassType(JavaLang.JAVA_LANG_OBJECT));
+                  children = ImmutableList.<JminBaseNode>builder()
+                      .addAll(children.subList(0, i))
+                      .add(extendsObject)
+                      .addAll(children.subList(i, n))
+                      .build();
                   break;
                 }
               }
@@ -1857,7 +2226,7 @@ public final class J8ToJmin {
               com.mikesamuel.cil.ast.jmin.IdentifierNode ident =
                   (com.mikesamuel.cil.ast.jmin.IdentifierNode) children.get(0);
               if (children.size() != 1) {
-                xlator.getMinner().error(
+                xlator.error(
                     n8, "Trailing [] in variable declaration."
                     + "  Did you forget to run the defragment types pass?");
               }
@@ -1960,16 +2329,27 @@ public final class J8ToJmin {
    * Information about the scope in which we're xlating fragments.
    */
   static final class Scope {
-    final Name bumpyName;
-    final Name flatName;
+    final J8TypeDeclaration typeDecl;
+    final BName bumpyName;
+    final FName flatName;
     final FlatParamInfo flatParamInfo;
     final Set<String> identifiersUsed;
+    /**
+     * Inherited bindings that are implied by class nesting but must be
+     * made explicit in flattened inner classes.
+     */
+    final ImmutableMap<BName, TypeBinding> inheritedBindings;
 
-    Scope(Name bumpyName, Name flatName, FlatParamInfo flatParamInfo) {
+    Scope(
+        J8TypeDeclaration typeDecl,
+        BName bumpyName, FName flatName, FlatParamInfo flatParamInfo,
+        ImmutableMap<BName, TypeBinding> inheritedBindings) {
+      this.typeDecl = typeDecl;
       this.bumpyName = bumpyName;
       this.flatName = flatName;
       this.flatParamInfo = flatParamInfo;
       this.identifiersUsed = Sets.newHashSet();
+      this.inheritedBindings = inheritedBindings;
     }
 
     /**

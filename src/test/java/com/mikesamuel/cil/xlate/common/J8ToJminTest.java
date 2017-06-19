@@ -30,6 +30,7 @@ public final class J8ToJminTest extends TestCase {
 
           @Override
           public ImmutableList<? extends JminBaseNode> run(Logger logger) {
+logger.setUseParentHandlers(true);
             ImmutableList<J8FileNode> unprocessed =
                 PassTestHelpers.parseCompilationUnits(inputLines);
             CommonPassRunner commonPasses = new CommonPassRunner(logger);
@@ -176,13 +177,13 @@ if (false)  // TODO
           {
             "package foo;",
             "",
-            "class Inner extends java.lang.Object {",
+            "class Outer$Inner extends java.lang.Object {",
             "  final foo.Outer $$containingInstance;",
             "  int x = 2;",
             "  {",
             "    System.err.println((this.$$containingInstance).x);",
             "  }",
-            "  public Inner(foo.Outer $$containingInstance) {",
+            "  public Outer$Inner(foo.Outer $$containingInstance) {",
             "    super();",
             "    this.$$containingInstance = $$containingInstance;",
             "  }",
@@ -212,6 +213,81 @@ if (false)  // TODO
             "}",
           },
         });
+  }
+
+  @Test
+  public static void testInnerClassSubtypes() throws Exception {
+    assertTranslated(
+        new String[][] {
+          {
+            "package base;",
+            "",
+            "class Outer$Inner<T_0, T> extends java.lang.Object {",
+            "  final base.Outer<T_0> $$containingInstance;",
+            "  public Outer$Inner(base.Outer<T_0> $$containingInstance) {",
+            "    super();",
+            "    this.$$containingInstance = $$containingInstance;",
+            "  }",
+            "}",
+          },
+          {
+            "package base;",
+            "",
+            "class Outer<T> extends java.lang.Object {",
+            "  public Outer() {",
+            "    super();",
+            "  }",
+            "}",
+          },
+          {
+            "package sub;",
+            "",
+            "class Outer$Inner extends"
+            + " base.Outer$Inner<java.lang.Integer, java.lang.String> {",
+            "  final sub.Outer $$containingInstance;",
+            "  int x = 2;",
+            "  { System.err.println((this.$$containingInstance).x); }",
+            "  public Outer$Inner("
+            +      "base.Outer<java.lang.Integer> $$superContainingInstance, "
+            +      "sub.Outer $$containingInstance) {",
+            "    super($$superContainingInstance);",
+            "    this.$$containingInstance = $$containingInstance;",
+            "  }",
+            "}",
+          },
+          {
+            "package sub;",
+            "",
+            "class Outer extends base.Outer<java.lang.Integer> {",
+            "  int x = 1;",
+            "  public Outer() {",
+            "    super();",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "package base;",
+            "",
+            "class Outer<T> {",
+            "  class Inner<T> {",
+            "  }",
+            "}",
+          },
+          {
+            "package sub;",
+            "",
+            "class Outer extends base.Outer<Integer> {",
+            "  int x = 1;",
+            "  class Inner extends base.Outer.Inner<String> {",
+            "    int x = 2;",
+            "    { System.err.println(Outer.this.x); }",
+            "  }",
+            "}",
+          },
+        }
+        );
   }
 
 

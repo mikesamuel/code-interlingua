@@ -114,7 +114,7 @@ public final class TypeInfo extends AccessibleInfo {
                       .transitiveMembers(superTypeResolver).iterator();
                 }
               }
-              if (superTypeMembers != null && superTypeMembers.hasNext()) {
+              if (superTypeMembers.hasNext()) {
                 pending = Preconditions.checkNotNull(superTypeMembers.next());
               }
             }
@@ -239,20 +239,20 @@ public final class TypeInfo extends AccessibleInfo {
       this.superType = newSuperType;
       return this;
     }
-    public Builder interfaces(ImmutableList<TypeSpecification> newInterfaces) {
-      this.interfaces = newInterfaces;
+    public Builder interfaces(Iterable<TypeSpecification> newInterfaces) {
+      this.interfaces = ImmutableList.copyOf(newInterfaces);
       return this;
     }
-    public Builder parameters(ImmutableList<Name> newParameters) {
-      this.parameters = newParameters;
+    public Builder parameters(Iterable<? extends Name> newParameters) {
+      this.parameters = ImmutableList.copyOf(newParameters);
       return this;
     }
     public Builder outerClass(Optional<Name> newOuterClass) {
       this.outerClass = newOuterClass;
       return this;
     }
-    public Builder innerClasses(ImmutableList<Name> newInnerClasses) {
-      this.innerClasses = newInnerClasses;
+    public Builder innerClasses(Iterable<? extends Name> newInnerClasses) {
+      this.innerClasses = ImmutableList.copyOf(newInnerClasses);
       return this;
     }
     public Builder declaredMembers(
@@ -274,7 +274,7 @@ public final class TypeInfo extends AccessibleInfo {
   /**
    * Translate type info based on the given bridge.
    */
-  public TypeInfo map(MetadataBridge metadataBridge) {
+  public TypeInfo.Builder map(MetadataBridge metadataBridge) {
     Function<TypeSpecification, TypeSpecification> bridgeType =
         new Function<TypeSpecification, TypeSpecification>() {
       @Override
@@ -291,29 +291,21 @@ public final class TypeInfo extends AccessibleInfo {
       }
     };
 
-    return new TypeInfo(
-        modifiers,
-        bridgeTypeName.apply(canonName),
-        isAnonymous,
-
-        superType.isPresent()
-        ? Optional.of(bridgeType.apply(superType.get()))
-        : Optional.absent(),
-
-        ImmutableList.copyOf(
-            Lists.transform(interfaces, bridgeType)),
-
-        ImmutableList.copyOf(
-            Lists.transform(parameters, bridgeTypeName)),
-
-        outerClass.isPresent()
-        ? Optional.of(bridgeTypeName.apply(outerClass.get()))
-        : Optional.absent(),
-
-        ImmutableList.copyOf(
-            Lists.transform(innerClasses, bridgeTypeName)),
-
-        ImmutableList.copyOf(
+    return TypeInfo.builder(bridgeTypeName.apply(canonName))
+        .modifiers(modifiers)
+        .isAnonymous(isAnonymous)
+        .superType(
+            superType.isPresent()
+            ? Optional.of(bridgeType.apply(superType.get()))
+            : Optional.absent())
+        .interfaces(Lists.transform(interfaces, bridgeType))
+        .outerClass(
+            outerClass.isPresent()
+            ? Optional.of(bridgeTypeName.apply(outerClass.get()))
+            : Optional.absent())
+        .parameters(Lists.transform(parameters, bridgeTypeName))
+        .innerClasses(Lists.transform(innerClasses, bridgeTypeName))
+        .declaredMembers(
             Lists.transform(
                 declaredMembers,
                 new Function<MemberInfo, MemberInfo>() {
@@ -323,7 +315,6 @@ public final class TypeInfo extends AccessibleInfo {
                     return metadataBridge.bridgeMemberInfo(x);
                   }
 
-                }))
-        );
+                }));
   }
 }

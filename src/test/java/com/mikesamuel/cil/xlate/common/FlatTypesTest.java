@@ -52,7 +52,7 @@ public final class FlatTypesTest extends TestCase {
             ImmutableSet<Name> namesDeclared = getDeclaredTypes(cus);
             // TODO: shuffle
             for (Name nameDeclared : namesDeclared) {
-              fts.recordType(nameDeclared);
+              fts.recordType(BName.of(nameDeclared));
             }
             fts.disambiguate();
             return fts;
@@ -84,13 +84,13 @@ public final class FlatTypesTest extends TestCase {
 
     Name cdFlat = comExample.child("C$D", Name.Type.CLASS);
 
-    assertEquals(c, fts.getFlatTypeName(c));
-    assertEquals(cdFlat, fts.getFlatTypeName(cd));
+    assertEquals(FName.of(c), fts.getFlatTypeName(BName.of(c)));
+    assertEquals(FName.of(cdFlat), fts.getFlatTypeName(BName.of(cd)));
     ImmutableList<Name> params = ImmutableList.of(c_a, cd_a, cd_b);
     ImmutableList.Builder<Name> errored = ImmutableList.builder();
     for (Name param : params) {
       try {
-        fts.getFlatTypeName(param);
+        fts.getFlatTypeName(BName.of(param));
         continue;
       } catch (@SuppressWarnings("unused") IllegalArgumentException e) {
         errored.add(param);
@@ -100,34 +100,34 @@ public final class FlatTypesTest extends TestCase {
 
     // flat C has one type parameter
     assertEquals(
-        ImmutableMap.of(c_a, c_a),
-        fts.getFlatParamInfo(c).substMap);
+        ImmutableMap.of(BName.of(c_a), FName.of(c_a)),
+        fts.getFlatParamInfo(BName.of(c)).substMap);
     assertEquals(
-        ImmutableList.of(c_a),
-        fts.getFlatParamInfo(c).bumpyParametersInOrder);
+        ImmutableList.of(BName.of(c_a)),
+        fts.getFlatParamInfo(BName.of(c)).bumpyParametersInOrder);
     assertEquals(
-        ImmutableList.of(c_a),
-        fts.getFlatParamInfo(c).flatParametersInOrder);
+        ImmutableList.of(FName.of(c_a)),
+        fts.getFlatParamInfo(BName.of(c)).flatParametersInOrder);
 
     // C.D has two type parameters and one inherited one
     assertEquals(
         ImmutableList.of(
-            c_a,
-            cd_a,
-            cd_b),
-        fts.getFlatParamInfo(cd).bumpyParametersInOrder);
+            BName.of(c_a),
+            BName.of(cd_a),
+            BName.of(cd_b)),
+        fts.getFlatParamInfo(BName.of(cd)).bumpyParametersInOrder);
     assertEquals(
         ImmutableList.of(
-            cdFlat.child("A_0", Name.Type.TYPE_PARAMETER),
-            cdFlat.child("A", Name.Type.TYPE_PARAMETER),
-            cdFlat.child("B", Name.Type.TYPE_PARAMETER)),
-        fts.getFlatParamInfo(cd).flatParametersInOrder);
+            FName.of(cdFlat.child("A_0", Name.Type.TYPE_PARAMETER)),
+            FName.of(cdFlat.child("A", Name.Type.TYPE_PARAMETER)),
+            FName.of(cdFlat.child("B", Name.Type.TYPE_PARAMETER))),
+        fts.getFlatParamInfo(BName.of(cd)).flatParametersInOrder);
     assertEquals(
         ImmutableMap.of(
-            c_a, cdFlat.child("A_0", Name.Type.TYPE_PARAMETER),
-            cd_a, cdFlat.child("A", Name.Type.TYPE_PARAMETER),
-            cd_b, cdFlat.child("B", Name.Type.TYPE_PARAMETER)),
-        fts.getFlatParamInfo(cd).substMap);
+            BName.of(c_a), FName.of(cdFlat.child("A_0", Name.Type.TYPE_PARAMETER)),
+            BName.of(cd_a), FName.of(cdFlat.child("A", Name.Type.TYPE_PARAMETER)),
+            BName.of(cd_b), FName.of(cdFlat.child("B", Name.Type.TYPE_PARAMETER))),
+        fts.getFlatParamInfo(BName.of(cd)).substMap);
   }
 
   @Test
@@ -146,18 +146,21 @@ public final class FlatTypesTest extends TestCase {
 
     assertEquals(
         "/C",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)))
         .toString());
     assertEquals(
         "/C\\$D_1",
         fts
             .getFlatTypeName(
-                Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
-                .child("D", Name.Type.CLASS))
+                BName.of(
+                    Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
+                    .child("D", Name.Type.CLASS)))
             .toString());
     assertEquals(
         "/C\\$D",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS)))
         .toString());
   }
 
@@ -177,18 +180,21 @@ public final class FlatTypesTest extends TestCase {
 
     assertEquals(
         "/C",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)))
         .toString());
     assertEquals(
         "/C\\$D",
         fts
             .getFlatTypeName(
-                Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
-                .child("D", Name.Type.CLASS))
+                BName.of(
+                    Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
+                    .child("D", Name.Type.CLASS)))
             .toString());
     assertEquals(
         "/C\\$D_1",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS)))
         .toString());
   }
 
@@ -208,18 +214,21 @@ public final class FlatTypesTest extends TestCase {
 
     assertEquals(
         "/C",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)))
         .toString());
     assertEquals(
         "/C\\$D_1",
         fts
             .getFlatTypeName(
-                Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
-                .child("D", Name.Type.CLASS))
+                BName.of(
+                    Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
+                    .child("D", Name.Type.CLASS)))
             .toString());
     assertEquals(
         "/C\\$D",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS)))
         .toString());
   }
 
@@ -242,18 +251,21 @@ public final class FlatTypesTest extends TestCase {
 
     assertEquals(
         "/C",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)))
         .toString());
     assertEquals(
         "/C\\$D_1",
         fts
             .getFlatTypeName(
-                Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
-                .child("D", Name.Type.CLASS))
+                BName.of(
+                    Name.DEFAULT_PACKAGE.child("C", Name.Type.CLASS)
+                    .child("D", Name.Type.CLASS)))
             .toString());
     assertEquals(
         "/C\\$D",
-        fts.getFlatTypeName(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS))
+        fts.getFlatTypeName(
+            BName.of(Name.DEFAULT_PACKAGE.child("C$D", Name.Type.CLASS)))
         .toString());
   }
 
@@ -285,30 +297,32 @@ public final class FlatTypesTest extends TestCase {
     Name cdeFlat = Name.DEFAULT_PACKAGE.child("C$D$E", Name.Type.CLASS);
     Name fFlat = cdeFlat.method("f", 1);
 
-    FlatParamInfo cdeInfo = fts.getFlatParamInfo(cde);
+    FlatParamInfo cdeInfo = fts.getFlatParamInfo(BName.of(cde));
     assertEquals(
         ImmutableList.of(
-            c.child("X", Name.Type.TYPE_PARAMETER),
-            cd.child("X", Name.Type.TYPE_PARAMETER)),
+            BName.of(c.child("X", Name.Type.TYPE_PARAMETER)),
+            BName.of(cd.child("X", Name.Type.TYPE_PARAMETER))),
         cdeInfo.bumpyParametersInOrder);
     assertEquals(
         ImmutableList.of(
             // Not X_0 since that is used by f().
-            cdeFlat.child("X_1", Name.Type.TYPE_PARAMETER),
-            cdeFlat.child("X", Name.Type.TYPE_PARAMETER)),
+            FName.of(cdeFlat.child("X_1", Name.Type.TYPE_PARAMETER)),
+            FName.of(cdeFlat.child("X", Name.Type.TYPE_PARAMETER))),
         cdeInfo.flatParametersInOrder);
 
-    FlatParamInfo fInfo = fts.getFlatParamInfo(f);
+    FlatParamInfo fInfo = fts.getFlatParamInfo(BName.of(f));
     assertEquals(
-        ImmutableList.of(f.child("X_0", Name.Type.TYPE_PARAMETER)),
+        ImmutableList.of(
+            BName.of(f.child("X_0", Name.Type.TYPE_PARAMETER))),
         fInfo.bumpyParametersInOrder);
     assertEquals(
-        ImmutableList.of(fFlat.child("X_0", Name.Type.TYPE_PARAMETER)),
+        ImmutableList.of(
+            FName.of(fFlat.child("X_0", Name.Type.TYPE_PARAMETER))),
         fInfo.flatParametersInOrder);
     assertEquals(
         ImmutableMap.of(
-            f.child("X_0", Name.Type.TYPE_PARAMETER),
-            fFlat.child("X_0", Name.Type.TYPE_PARAMETER)),
+            BName.of(f.child("X_0", Name.Type.TYPE_PARAMETER)),
+            FName.of(fFlat.child("X_0", Name.Type.TYPE_PARAMETER))),
         fInfo.substMap);
   }
 

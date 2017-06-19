@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.TreeMultimap;
@@ -71,31 +72,37 @@ final class FlatTypes {
    * <p>
    * This is advisory until disambiguation but is guaranteed to be 1:1.
    */
-  private final BiMap<Name, Name> typeNameMap = HashBiMap.create();
+  private final BiMap<BName, FName> typeNameMap = HashBiMap.create();
 
 
   /** Maps bumpy class names to info about their type parameters. */
-  private final Map<Name, FlatParamInfo> paramInfo = new LinkedHashMap<>();
+  private final Map<FName, FlatParamInfo> paramInfo = new LinkedHashMap<>();
 
   /**
    * Types that may not be in a substitution map for substMaps.
    */
-  private final Set<Name> unprocessedBumpyTypeParameters =
+  private final Set<BName> unprocessedBumpyTypeParameters =
       Sets.newLinkedHashSet();
 
-  private final Set<Name> processedBumpyTypeParameters =
+  private final Set<BName> processedBumpyTypeParameters =
       Sets.newLinkedHashSet();
+
+  /**
+   * Maps the names of flat type parameter names to bumpy ones.
+   */
+  private final Map<FName, BName> flatToBumpyTypeParameterNames =
+      Maps.newLinkedHashMap();
 
   /**
    * The flat type name corresponding to the given bumpy name.
    * This is not guaranteed stable after {@link #disambiguate()}.
    */
-  Name getFlatTypeName(Name bumpyTypeName) {
+  FName getFlatTypeName(BName bumpyTypeName) {
     // Type parameters need to be renamed in a way that takes into account
     // the context that allows outer type parameters to be wedged among an
     // inner types parameters.
-    Preconditions.checkArgument(bumpyTypeName.type == Name.Type.CLASS);
-    Name flatTypeName = typeNameMap.get(bumpyTypeName);
+    Preconditions.checkArgument(bumpyTypeName.name.type == Name.Type.CLASS);
+    FName flatTypeName = typeNameMap.get(bumpyTypeName);
     if (flatTypeName == null) {
       if (recording) {
         recordType(bumpyTypeName);
@@ -107,24 +114,55 @@ final class FlatTypes {
     return flatTypeName;
   }
 
-  Name getBumpyTypeName(Name flatTypeName) {
-    return Preconditions.checkNotNull(
-        typeNameMap.inverse().get(flatTypeName), flatTypeName);
+  FName getFlatContextName(BName bumpyContextName) {
+    switch (bumpyContextName.name.type) {
+      case CLASS:
+        return getFlatTypeName(bumpyContextName);
+      case METHOD:
+        return FName.of(
+            getFlatTypeName(bumpyContextName.parent()).name
+            .method(
+                bumpyContextName.name.identifier,
+                bumpyContextName.name.variant));
+      case FIELD: case LOCAL:
+        return FName.of(
+            getFlatContextName(bumpyContextName.parent()).name
+            .child(
+                bumpyContextName.name.identifier,
+                bumpyContextName.name.type));
+      case AMBIGUOUS:
+      case PACKAGE:
+      case TYPE_PARAMETER:
+        break;
+    }
+    throw new AssertionError(bumpyContextName);
+  }
+
+  BName getBumpyTypeName(FName flatTypeName) {
+    if (flatTypeName.name.type == Name.Type.CLASS) {
+      return Preconditions.checkNotNull(
+          typeNameMap.inverse().get(flatTypeName), flatTypeName);
+    } else {
+      Preconditions.checkArgument(
+          flatTypeName.name.type == Name.Type.TYPE_PARAMETER);
+      processAllBumpyTypeParameters();
+      return flatToBumpyTypeParameterNames.get(flatTypeName);
+    }
   }
 
   static final class FlatParamInfo {
-    final ImmutableList<Name> flatParametersInOrder;
-    final ImmutableList<Name> bumpyParametersInOrder;
+    final ImmutableList<FName> flatParametersInOrder;
+    final ImmutableList<BName> bumpyParametersInOrder;
     /**
      * Maps from type parameters in scope inside a particular bumpy
      * type to flat type parameter names in scope in the equivalent flat type.
      */
-    final ImmutableMap<Name, Name> substMap;
+    final ImmutableMap<BName, FName> substMap;
 
     FlatParamInfo(
-        ImmutableList<Name> bumpyParametersInOrder,
-        ImmutableList<Name> flatParametersInOrder,
-        ImmutableMap<Name, Name> substMap) {
+        ImmutableList<BName> bumpyParametersInOrder,
+        ImmutableList<FName> flatParametersInOrder,
+        ImmutableMap<BName, FName> substMap) {
       this.flatParametersInOrder = flatParametersInOrder;
       this.bumpyParametersInOrder = bumpyParametersInOrder;
       this.substMap = substMap;
@@ -138,76 +176,95 @@ final class FlatTypes {
   static final FlatParamInfo EMPTY_FLAT_PARAM_INFO = new FlatParamInfo(
       ImmutableList.of(), ImmutableList.of(), ImmutableMap.of());
 
+  FlatParamInfo getFlatParamInfo(BName contextName) {
+    return getFlatParamInfo(getFlatContextName(contextName));
+  }
+
   /**
    * Information about the type parameters present on a flattened type or method
    * declaration.
    */
-  FlatParamInfo getFlatParamInfo(Name contextName) {
+  FlatParamInfo getFlatParamInfo(FName contextName) {
     Preconditions.checkArgument(
-        contextName.type == Name.Type.CLASS
-        || contextName.type == Name.Type.METHOD);
+        contextName.name.type == Name.Type.CLASS
+        && contextName.name.parent.type == Name.Type.PACKAGE
+        || contextName.name.type == Name.Type.METHOD);
+
+    processAllBumpyTypeParameters();
+
+    FlatParamInfo info = paramInfo.get(contextName);
+    return info != null ? info : EMPTY_FLAT_PARAM_INFO;
+  }
+
+
+  private void processAllBumpyTypeParameters() {
     if (!unprocessedBumpyTypeParameters.isEmpty()) {
       // Return to zero state.
       unprocessedBumpyTypeParameters.addAll(processedBumpyTypeParameters);
       processedBumpyTypeParameters.clear();
       paramInfo.clear();
 
-      ImmutableSet<Name> sortedBumpyTypeNames = ImmutableSortedSet.copyOf(
+      ImmutableSet<BName> sortedBumpyTypeNames = ImmutableSortedSet.copyOf(
           typeNameMap.keySet());
 
       ParameterFlattener pf = new ParameterFlattener(
           sortedBumpyTypeNames,
           unprocessedBumpyTypeParameters);
-      paramInfo.putAll(pf.flatten());
+      ImmutableMap<FName, FlatParamInfo> justProcessed = pf.flatten();
+      paramInfo.putAll(justProcessed);
+      for (FlatParamInfo fpi : justProcessed.values()) {
+        for (int i = 0, n = fpi.bumpyParametersInOrder.size(); i < n; ++i) {
+          flatToBumpyTypeParameterNames.put(
+              fpi.flatParametersInOrder.get(i),
+              fpi.bumpyParametersInOrder.get(i));
+        }
+      }
 
       processedBumpyTypeParameters.addAll(unprocessedBumpyTypeParameters);
       unprocessedBumpyTypeParameters.clear();
     }
-
-    FlatParamInfo info = paramInfo.get(contextName);
-    return info != null ? info : EMPTY_FLAT_PARAM_INFO;
   }
 
   private final class ParameterFlattener {
-    final Map<Name, Builder> containerToBuilder = new LinkedHashMap<>();
-    final Set<Name> haveParent = new TreeSet<>();
+    final Map<BName, Builder> containerToBuilder = new LinkedHashMap<>();
+    final Set<BName> haveParent = new TreeSet<>();
 
     ParameterFlattener(
-        Iterable<? extends Name> types,
-        Iterable<? extends Name> typeParameters) {
+        Iterable<? extends BName> types,
+        Iterable<? extends BName> typeParameters) {
       // Map a parent to its type parameters.
-      for (Name typ : types) {
+      for (BName typ : types) {
         if (!containerToBuilder.containsKey(typ)) {
           containerToBuilder.put(typ, new Builder());
         }
       }
-      for (Name tp : typeParameters) {
-        Preconditions.checkState(tp.type == Name.Type.TYPE_PARAMETER);
-        if (!containerToBuilder.containsKey(tp.parent)) {
-          containerToBuilder.put(tp.parent, new Builder());
+      for (BName tp : typeParameters) {
+        Preconditions.checkState(tp.name.type == Name.Type.TYPE_PARAMETER);
+        BName parent = tp.parent();
+        if (!containerToBuilder.containsKey(parent)) {
+          containerToBuilder.put(parent, new Builder());
         }
       }
 
-      for (Name containerName :
+      // For each class, compile FlatParamInfo, renaming parameter names to
+      // avoid duplication, and making sure to avoid introducing new conflicts
+      // with methods.
+      for (BName containerName :
            ImmutableList.copyOf(containerToBuilder.keySet())) {
         requireHaveParent(containerName);
       }
-
-      // For each class, compile FlatParamInfo, renaming parameter names to avoid
-      // duplication, and making sure to avoid introducing new conflicts with
-      // methods.
     }
 
-    ImmutableMap<Name, FlatParamInfo> flatten() {
-      ImmutableMap.Builder<Name, FlatParamInfo> b = ImmutableMap.builder();
-      for (Map.Entry<Name, Builder> e : containerToBuilder.entrySet()) {
-        Name nm = e.getKey();
-        b.put(nm, e.getValue().build(nm));
+    ImmutableMap<FName, FlatParamInfo> flatten() {
+      ImmutableMap.Builder<FName, FlatParamInfo> b = ImmutableMap.builder();
+      for (Map.Entry<BName, Builder> e : containerToBuilder.entrySet()) {
+        BName nm = e.getKey();
+        b.put(getFlatContextName(nm), e.getValue().build(nm));
       }
       return b.build();
     }
 
-    private void requireHaveParent(Name containerName) {
+    private void requireHaveParent(BName containerName) {
       if (!haveParent.add(containerName)) { return; }
 
       Builder b = containerToBuilder.get(containerName);
@@ -215,9 +272,9 @@ final class FlatTypes {
         containerToBuilder.put(containerName, b = new Builder());
       }
 
-      switch (containerName.type) {
+      switch (containerName.name.type) {
         case CLASS:
-          Optional<TypeInfo> lastClass = r.resolve(containerName);
+          Optional<TypeInfo> lastClass = r.resolve(containerName.name);
           if (!lastClass.isPresent()) {
             LogUtils.log(
                 logger, Level.WARNING, (SourcePosition) null,
@@ -226,8 +283,9 @@ final class FlatTypes {
           }
           b.prependParameters(lastClass.get().parameters);
           ancestor_loop:
-          for (Name anc = containerName.parent; anc != null; anc = anc.parent) {
-            switch (anc.type) {
+          for (BName anc = containerName.parent();
+               anc != null; anc = anc.parent()) {
+            switch (anc.name.type) {
               case PACKAGE:
                 break ancestor_loop;
               case CLASS:
@@ -235,20 +293,20 @@ final class FlatTypes {
                   TypeInfo ti = lastClass.get();
                   if (!Modifier.isStatic(ti.modifiers)) {
                     requireHaveParent(anc);
-                    lastClass = r.resolve(anc);
+                    lastClass = r.resolve(anc.name);
                     if (lastClass.isPresent()) {
                       b.prependParameters(lastClass.get().parameters);
                     }
                     continue;
                   }
-                  }
+                }
 
                 break ancestor_loop;
               case METHOD:
                 // If it's static, then it's just because the containing method
                 // is static, but the method's type parameter's are still in
                 // scope.
-                Optional<CallableInfo> ciOpt = r.resolveCallable(anc);
+                Optional<CallableInfo> ciOpt = r.resolveCallable(anc.name);
                 if (ciOpt.isPresent()) {
                   CallableInfo ci = ciOpt.get();
                   b.prependParameters(ci.typeParameters);
@@ -263,11 +321,11 @@ final class FlatTypes {
               case TYPE_PARAMETER:
                 break;
             }
-            throw new AssertionError(anc.type);
+            throw new AssertionError(anc);
           }
           return;
         case METHOD:
-          Optional<CallableInfo> ciOpt = r.resolveCallable(containerName);
+          Optional<CallableInfo> ciOpt = r.resolveCallable(containerName.name);
           if (ciOpt.isPresent()) {
             b.prependParameters(ciOpt.get().typeParameters);
           }
@@ -284,30 +342,33 @@ final class FlatTypes {
 
     final class Builder {
       /** Bumpy parameters. */
-      private final List<Name> params = new LinkedList<>();
+      private final List<BName> params = new LinkedList<>();
 
       void prependParameters(List<? extends Name> typeParameters) {
-        params.addAll(0, typeParameters);
+        params.addAll(
+            0, Lists.transform(typeParameters, BName.OF));
       }
 
-      FlatParamInfo build(Name bumpyContainerName) {
+      FlatParamInfo build(BName bumpyContainerName) {
         if (params.isEmpty()) {
           return EMPTY_FLAT_PARAM_INFO;
         }
 
-        if (bumpyContainerName.type == Name.Type.METHOD) {
+        if (bumpyContainerName.name.type == Name.Type.METHOD) {
           // Just rebase.  No need to flatten.
-          ImmutableList.Builder<Name> flatNames =
+          ImmutableList.Builder<FName> flatNames =
               ImmutableList.builder();
-          ImmutableMap.Builder<Name, Name> bumpyNameToFlatName =
+          ImmutableMap.Builder<BName, FName> bumpyNameToFlatName =
               ImmutableMap.builder();
-          Name flatMethodName = getFlatTypeName(bumpyContainerName.parent)
+          FName flatMethodName = FName.of(
+              getFlatTypeName(bumpyContainerName.parent()).name
               .method(
-                  bumpyContainerName.identifier,
-                  bumpyContainerName.variant);
-          for (Name param : params) {
-            Preconditions.checkState(param.parent.equals(bumpyContainerName));
-            Name flatName = flatMethodName.child(param.identifier, param.type);
+                  bumpyContainerName.name.identifier,
+                  bumpyContainerName.name.variant));
+          for (BName param : params) {
+            Preconditions.checkState(param.parent().equals(bumpyContainerName));
+            FName flatName = FName.of(flatMethodName.name.child(
+                param.name.identifier, param.name.type));
             flatNames.add(flatName);
             bumpyNameToFlatName.put(param, flatName);
           }
@@ -316,7 +377,8 @@ final class FlatTypes {
               flatNames.build(),
               bumpyNameToFlatName.build());
         }
-        Preconditions.checkArgument(bumpyContainerName.type == Name.Type.CLASS);
+        Preconditions.checkArgument(
+            bumpyContainerName.name.type == Name.Type.CLASS);
 
         // Make sure that no parameter name masks another parameter name.
         // We have a second constraint besides duplicate identifiers.
@@ -344,7 +406,7 @@ final class FlatTypes {
         //    <X1 super X1>
 
         Set<String> exclusions = Sets.newHashSet();
-        Optional<TypeInfo> tiOpt = r.resolve(bumpyContainerName);
+        Optional<TypeInfo> tiOpt = r.resolve(bumpyContainerName.name);
         assert tiOpt.isPresent();
         for (MemberInfo mi : tiOpt.get().getDeclaredMembers()) {
           if (mi instanceof CallableInfo && !Modifier.isStatic(mi.modifiers)) {
@@ -355,29 +417,29 @@ final class FlatTypes {
           }
         }
 
-        Name flatContainerName = getFlatTypeName(bumpyContainerName);
+        FName flatContainerName = getFlatTypeName(bumpyContainerName);
         // We've flattened the class.  Don't allow a renamed type parameter to
         // mask the class name.
-        exclusions.add(flatContainerName.identifier);
+        exclusions.add(flatContainerName.name.identifier);
 
 
         // Now that we know what not to rename to, rename.
-        ImmutableList.Builder<Name> flatNamesInReverse =
+        ImmutableList.Builder<FName> flatNamesInReverse =
             ImmutableList.builder();
-        ImmutableMap.Builder<Name, Name> bumpyNameToFlatName =
+        ImmutableMap.Builder<BName, FName> bumpyNameToFlatName =
             ImmutableMap.builder();
         // By building in reverse, we preserve the innermost names where
         // possible which are most-often used.
         for (int i = params.size(); --i >= 0;) {
-          Name bumpyParamName = params.get(i);
+          BName bumpyParamName = params.get(i);
           int counter = 0;
-          String flatIdentifier = bumpyParamName.identifier;
+          String flatIdentifier = bumpyParamName.name.identifier;
           while (exclusions.contains(flatIdentifier)) {
-            flatIdentifier = bumpyParamName.identifier + "_" + counter++;
+            flatIdentifier = bumpyParamName.name.identifier + "_" + counter++;
           }
           exclusions.add(flatIdentifier);
-          Name flatParamName = flatContainerName.child(
-              flatIdentifier, bumpyParamName.type);
+          FName flatParamName = FName.of(flatContainerName.name.child(
+              flatIdentifier, bumpyParamName.name.type));
           flatNamesInReverse.add(flatParamName);
           bumpyNameToFlatName.put(bumpyParamName, flatParamName);
         }
@@ -393,23 +455,23 @@ final class FlatTypes {
   void disambiguate() {
     // Construct a 1:1 map that gives preference to identity mappings for
     // public types.
-    BiMap<Name, Name> unambiguous = HashBiMap.create();
+    BiMap<BName, FName> unambiguous = HashBiMap.create();
 
-    ImmutableSet<Name> sortedBumpyTypeNames = ImmutableSortedSet.copyOf(
+    ImmutableSet<BName> sortedBumpyTypeNames = ImmutableSortedSet.copyOf(
         typeNameMap.keySet());
 
     // Reverse the mapping
-    SetMultimap<Name, Name> flatToBumpy = TreeMultimap.create();
-    for (Name bumpy : sortedBumpyTypeNames) {
-      Name flat = flatRootOf(bumpy);
+    SetMultimap<FName, BName> flatToBumpy = TreeMultimap.create();
+    for (BName bumpy : sortedBumpyTypeNames) {
+      FName flat = flatRootOf(bumpy);
       boolean added = flatToBumpy.put(flat, bumpy);
       Preconditions.checkState(added);  // hash should be equiv to cmp
     }
 
-    for (Name possibleFlatName : flatToBumpy.keySet()) {
-      Set<Name> bumpyNames = flatToBumpy.get(possibleFlatName);
+    for (FName possibleFlatName : flatToBumpy.keySet()) {
+      Set<BName> bumpyNames = flatToBumpy.get(possibleFlatName);
       if (bumpyNames.size() == 1) {
-        Name dupe = unambiguous.put(
+        FName dupe = unambiguous.put(
             Iterables.getOnlyElement(bumpyNames), possibleFlatName);
         Preconditions.checkState(dupe == null);
         continue;
@@ -418,9 +480,10 @@ final class FlatTypes {
       // Choose unambiguous names for each.
       // First, see if there is at most one public type so that we can
       // preserve public names.
-      Name unqualifiedBumpyName = null;
-      for (Name bumpyName : bumpyNames) {
-        Optional<TypeInfo> tiOpt = r.resolve(bumpyName.getContainingClass());
+      BName unqualifiedBumpyName = null;
+      for (BName bumpyName : bumpyNames) {
+        Optional<TypeInfo> tiOpt = r.resolve(
+            bumpyName.name.getContainingClass());
         if (tiOpt.isPresent() && Modifier.isPublic(tiOpt.get().modifiers)) {
           if (unqualifiedBumpyName == null) {
             unqualifiedBumpyName = bumpyName;
@@ -440,8 +503,8 @@ final class FlatTypes {
 
       // Now make sure that all bumpyNames appear as keys in unambiguous,
       // qualifying names as necessary.
-      for (Name bumpyName : bumpyNames) {
-        Name flatName;
+      for (BName bumpyName : bumpyNames) {
+        FName flatName;
         if (unqualifiedBumpyName.equals(bumpyName)) {
           flatName = possibleFlatName;
         } else {
@@ -466,16 +529,18 @@ final class FlatTypes {
     paramInfo.clear();
     unprocessedBumpyTypeParameters.addAll(processedBumpyTypeParameters);
     processedBumpyTypeParameters.clear();
-    // Next call to getSubstMap will rebuild the substitution maps with the
-    // right containing type names.
+    flatToBumpyTypeParameterNames.clear();
+    // Next call to processAllBumpyTypeParameters will rebuild the substitution
+    // maps with the right containing type names.
   }
 
-  private static Name uniqueIn(Set<? super Name> s, Name root) {
+  private static FName uniqueIn(Set<? super FName> s, FName root) {
     int counter = 1;
-    Name candidate = root;
+    FName candidate = root;
     while (s.contains(candidate)) {
-      candidate = root.parent
-          .child(root.identifier + "_" + counter, root.type);
+      candidate = FName.of(
+          root.name.parent
+          .child(root.name.identifier + "_" + counter, root.name.type));
       ++counter;
     }
     return candidate;
@@ -485,13 +550,29 @@ final class FlatTypes {
    * Flattens types: {@code foo.bar.Baz<X>.Boo<Y>} &rarr;
    * {@code foo.bar.Baz$Boo<X, T>}.
    */
-  void recordType(Name bumpyTypeName) {
-    switch (bumpyTypeName.type) {
+  void recordType(BName bumpyTypeName) {
+    switch (bumpyTypeName.name.type) {
       case CLASS:
         if (!typeNameMap.containsKey(bumpyTypeName)) {
-          Name flatTypeNameRoot = flatRootOf(bumpyTypeName);
-          Name flatTypeName = uniqueIn(typeNameMap.values(), flatTypeNameRoot);
+          FName flatTypeNameRoot = flatRootOf(bumpyTypeName);
+          FName flatTypeName = uniqueIn(typeNameMap.values(), flatTypeNameRoot);
           typeNameMap.put(bumpyTypeName, flatTypeName);
+
+          Optional<TypeInfo> tiOpt = r.resolve(bumpyTypeName.name);
+          if (tiOpt.isPresent()) {
+            TypeInfo ti = tiOpt.get();
+            for (Name bumpyTypeParam : ti.parameters) {
+              recordType(BName.of(bumpyTypeParam));
+            }
+            for (MemberInfo mi : ti.getDeclaredMembers()) {
+              if (mi instanceof CallableInfo) {
+                CallableInfo ci = (CallableInfo) mi;
+                for (Name bumpyTypeParam : ci.typeParameters) {
+                  recordType(BName.of(bumpyTypeParam));
+                }
+              }
+            }
+          }
         }
         return;
       case TYPE_PARAMETER:
@@ -499,8 +580,9 @@ final class FlatTypes {
           unprocessedBumpyTypeParameters.add(bumpyTypeName);
         }
         return;
+      case FIELD:  // Primitive type
+        return;
       case AMBIGUOUS:
-      case FIELD:
       case LOCAL:
       case METHOD:
       case PACKAGE:
@@ -510,20 +592,20 @@ final class FlatTypes {
     throw new AssertionError(bumpyTypeName);
   }
 
-  private static Name flatRootOf(Name bumpyTypeName) {
-    if (bumpyTypeName.parent.type == Name.Type.PACKAGE) {
+  private static FName flatRootOf(BName bumpyTypeName) {
+    if (bumpyTypeName.name.parent.type == Name.Type.PACKAGE) {
       // We're done.  Just record the fact that it exists.
-      return bumpyTypeName;
+      return FName.of(bumpyTypeName.name);
     } else {
       List<String> parts = new ArrayList<>();
-      Name nm = bumpyTypeName;
+      Name nm = bumpyTypeName.name;
       Preconditions.checkState(nm.type == Name.Type.CLASS);
       for (; nm.type != Name.Type.PACKAGE; nm = nm.parent) {
         parts.add(nm.identifier);
       }
-      return nm.child(
+      return FName.of(nm.child(
           Joiner.on('$').join(Lists.reverse(parts)),
-          Name.Type.CLASS);
+          Name.Type.CLASS));
     }
   }
 }
