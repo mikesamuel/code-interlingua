@@ -2,6 +2,7 @@ package com.mikesamuel.cil.ast.meta;
 
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
     .DeclarationPositionMarker;
+import com.mikesamuel.cil.ast.meta.Name.Type;
 
 /**
  * Transforms node metadata when copying from a source to a destination.
@@ -118,6 +119,75 @@ public interface MetadataBridge {
       public TypeSpecification bridgeTypeSpecification(TypeSpecification x) {
         return x;
       }
+    };
+
+    /**
+     * A bridge that maps all non-parse metadata to the zero value for the type.
+     */
+    public static final MetadataBridge ZERO = new MetadataBridge() {
+
+      @Override
+      public DeclarationPositionMarker bridgeDeclarationPositionMarker(
+          DeclarationPositionMarker x) {
+        return null;
+      }
+
+      @Override
+      public Name bridgeDeclaredExpressionName(Name x) {
+        return null;
+      }
+
+      @Override
+      public ExpressionNameResolver bridgeExpressionNameResolver(
+          ExpressionNameResolver x) {
+        return null;
+      }
+
+      @Override
+      public MemberInfo bridgeMemberInfo(MemberInfo x) {
+        return null;
+      }
+
+      @Override
+      public MethodDescriptor bridgeMethodDescriptor(MethodDescriptor x) {
+        return null;
+      }
+
+      @Override
+      public int bridgeMethodVariant(int x) {
+        return 0;
+      }
+
+      @Override
+      public Type bridgeNamePartType(Type x) {
+        return null;
+      }
+
+      @Override
+      public Name bridgeReferencedExpressionName(Name x) {
+        return null;
+      }
+
+      @Override
+      public StaticType bridgeStaticType(StaticType x) {
+        return null;
+      }
+
+      @Override
+      public TypeInfo bridgeTypeInfo(TypeInfo x) {
+        return null;
+      }
+
+      @Override
+      public TypeNameResolver bridgeTypeNameResolver(TypeNameResolver x) {
+        return null;
+      }
+
+      @Override
+      public TypeSpecification bridgeTypeSpecification(TypeSpecification x) {
+        return null;
+      }
+
     };
   }
 
