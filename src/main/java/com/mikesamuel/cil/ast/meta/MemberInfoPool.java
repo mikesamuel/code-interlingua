@@ -49,7 +49,7 @@ public final class MemberInfoPool {
     if (!cancels.containsKey(mi.canonName)) {
       if (mi instanceof CallableInfo) {
         CallableInfo ci = (CallableInfo) mi;
-        if (!CallableInfo.isSpecialMethodName(ci.canonName.identifier)) {
+        if (!Name.isSpecialMethodIdentifier(ci.canonName.identifier)) {
           // constructors are not inherited.
           Set<Name> ob = overriddenBy(ci);
           cancels.putAll(ci.canonName, ob);
@@ -63,7 +63,12 @@ public final class MemberInfoPool {
     return Collections.unmodifiableCollection(cancels.get(mi.canonName));
   }
 
-  private ImmutableSet<Name> overriddenBy(CallableInfo ci) {
+  /**
+   * Names of methods in super-types that are overridden by the given one.
+   * This includes methods that are transitively overridden, and includes
+   * implementations of interface methods.
+   */
+  public ImmutableSet<Name> overriddenBy(CallableInfo ci) {
     try {
       return overriddenBy.get(ci);
     } catch (ExecutionException ex) {
@@ -244,7 +249,7 @@ public final class MemberInfoPool {
           }
         }
         if (memberType == CallableInfo.class
-            && CallableInfo.isSpecialMethodName(memberName)) {
+            && Name.isSpecialMethodIdentifier(memberName)) {
           // Special methods are not inherited from super-types.
           return;
         }
