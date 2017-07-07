@@ -11,7 +11,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.j8.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.j8.AdditiveOperatorNode;
 import com.mikesamuel.cil.ast.j8.ArgumentListNode;
@@ -78,6 +77,7 @@ import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
+import com.mikesamuel.cil.parser.Positioned;
 import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.util.LogUtils;
 import com.mikesamuel.cil.util.TriState;
@@ -136,19 +136,19 @@ public final class Interpreter<VALUE> {
   }
 
   protected final void log(
-      Level level, @Nullable NodeI<?, ?, ?> node, String message,
+      Level level, @Nullable Positioned p, String message,
       @Nullable Throwable cause) {
-    SourcePosition pos = node != null ? node.getSourcePosition() : null;
-    if (pos == null) { pos = currentSourcePosition; }
-    LogUtils.log(context.getLogger(), level, pos, message, cause);
+    LogUtils.log(
+        context.getLogger(), level, p != null ? p : currentSourcePosition,
+        message, cause);
   }
 
-  protected final void error(@Nullable NodeI<?, ?, ?> node, String message) {
-    log(Level.SEVERE, node, message, null);
+  protected final void error(@Nullable Positioned p, String message) {
+    log(Level.SEVERE, p, message, null);
   }
 
-  protected final void warn(@Nullable NodeI<?, ?, ?> node, String message) {
-    log(Level.WARNING, node, message, null);
+  protected final void warn(@Nullable Positioned p, String message) {
+    log(Level.WARNING, p, message, null);
   }
 
   /** Interprets the given AST fragment. */
@@ -1498,7 +1498,8 @@ public final class Interpreter<VALUE> {
         }
         TypeInfo typeInfo = ((ClassOrInterfaceType) typeToInstantiate).info;
         Optional<CallableInfo> ctor = callableForType(
-            typeInfo, "<init>", ctorDescriptor);
+            typeInfo, Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME,
+            ctorDescriptor);
         if (!ctor.isPresent()) {
           error(e, "Cannot resolve constructor " + typeSpecToInstantiate + " "
               + ctorDescriptor);

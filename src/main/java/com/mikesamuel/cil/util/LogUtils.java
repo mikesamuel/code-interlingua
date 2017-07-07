@@ -6,7 +6,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableSet;
-import com.mikesamuel.cil.ast.NodeI;
+import com.mikesamuel.cil.parser.Positioned;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -21,16 +21,7 @@ public class LogUtils {
    * Emits a log message.
    */
   public static void log(
-      Logger logger, Level level, NodeI<?, ?, ?> node,
-      String msg, Throwable th) {
-    log(logger, level, node != null ? node.getSourcePosition() : null, msg, th);
-  }
-
-  /**
-   * Emits a log message.
-   */
-  public static void log(
-      Logger logger, Level level, SourcePosition pos, String message,
+      Logger logger, Level level, @Nullable Positioned pos, String message,
       Throwable th) {
     String fullMessage = fullMessage(pos, message);
     StackTraceElement[] trace = Thread.currentThread().getStackTrace();
@@ -50,7 +41,8 @@ public class LogUtils {
   }
 
   private static String fullMessage(
-      @Nullable SourcePosition pos, String message) {
+      @Nullable Positioned p, String message) {
+    SourcePosition pos = p != null ? p.getSourcePosition() : null;
     return pos != null ? pos + ": " + message : message;
   }
 }

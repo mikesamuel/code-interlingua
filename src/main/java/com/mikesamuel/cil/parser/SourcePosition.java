@@ -7,7 +7,7 @@ import com.google.common.base.Preconditions;
  * <p>
  * Starts are inclusive, ends are exclusive.
  */
-public final class SourcePosition {
+public final class SourcePosition implements Positioned {
   private final LineStarts starts;
   private final int startCharInFile;
   private final int endCharInFile;
@@ -155,5 +155,10 @@ public final class SourcePosition {
       return false;
     }
     return true;
+  }
+
+  @Override
+  public SourcePosition getSourcePosition() {
+    return this;
   }
 }

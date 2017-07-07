@@ -8,6 +8,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Strings;
 import com.mikesamuel.cil.ast.meta.MetadataBridge;
+import com.mikesamuel.cil.parser.Positioned;
 import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
@@ -16,7 +17,8 @@ import com.mikesamuel.cil.parser.SourcePosition;
 public interface NodeI<
     BASE_NODE extends BaseNode<BASE_NODE, NODE_TYPE, NODE_VARIANT>,
     NODE_TYPE extends Enum<NODE_TYPE> & NodeType<BASE_NODE, NODE_TYPE>,
-    NODE_VARIANT extends NodeVariant<BASE_NODE, NODE_TYPE>> {
+    NODE_VARIANT extends NodeVariant<BASE_NODE, NODE_TYPE>>
+extends Positioned {
 
   /**
    * Copies metadata from the source node.
@@ -40,7 +42,7 @@ public interface NodeI<
   /**
    * The source position of the node if known.
    */
-  @Nullable SourcePosition getSourcePosition();
+  @Nullable @Override SourcePosition getSourcePosition();
 
   /**
    * @see #getSourcePosition()

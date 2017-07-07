@@ -27,7 +27,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.j8.J8BaseLeafNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
@@ -59,6 +58,7 @@ import com.mikesamuel.cil.ast.meta.TypeNameResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.mixins.TypeDeclaration;
+import com.mikesamuel.cil.parser.Positioned;
 import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.util.LogUtils;
 import com.mikesamuel.cil.xlate.common.FlatTypes.FlatParamInfo;
@@ -573,14 +573,10 @@ public final class J8ToJmin {
       }
     }
 
-    void error(NodeI<?, ?, ?> src, String msg) {
-      error(src != null ? src.getSourcePosition() : null, msg);
-    }
-
-    void error(SourcePosition pos, String msg) {
+    void error(Positioned p, String msg) {
       LogUtils.log(
           logger, Level.SEVERE,
-          pos != null ? pos : current,
+          p != null ? p : current,
           msg, null);
     }
 
