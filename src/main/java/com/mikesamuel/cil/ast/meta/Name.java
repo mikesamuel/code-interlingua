@@ -41,6 +41,25 @@ public final class Name implements Comparable<Name> {
    */
   public static final Name DEFAULT_PACKAGE = new Name(
       null, "", 0, Type.PACKAGE);
+  /**
+   * "{@code <init>}" reserved for use by the JVM spec as the name for
+   * special methods that are invoked to initialize an instance.
+   */
+  public static final String CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME = "<init>";
+  /**
+   * "{@code <clinit>}" reserved for use by the JVM spec as the name for
+   * the special method that are invoked during class initialization.
+   */
+  public static final String STATIC_INITIALIZER_SPECIAL_NAME = "<clinit>";
+
+  /**
+   * True if identifier is a special method name reserved for code invoked via
+   * the <i>invokespecial</i> bytecode.
+   */
+  public static boolean isSpecialMethodIdentifier(String identifier) {
+    return CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME.equals(identifier)
+        || STATIC_INITIALIZER_SPECIAL_NAME.equals(identifier);
+  }
 
   private Name(
       @Nullable Name parent, String identifier,
@@ -429,7 +448,7 @@ public final class Name implements Comparable<Name> {
   }
 
   private static void appendBinaryName(Name name, StringBuilder sb) {
-    if (!Name.DEFAULT_PACKAGE.equals(name.parent)) {
+    if (!(name.parent == null || Name.DEFAULT_PACKAGE.equals(name.parent))) {
       appendBinaryName(name.parent, sb);
       switch (name.parent.type) {
         case PACKAGE:

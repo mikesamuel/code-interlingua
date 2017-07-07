@@ -15,17 +15,27 @@ public final class CallableInfo extends MemberInfo {
   private boolean isVariadic;
   private boolean isSynthetic;
   private boolean isBridge;
+  /**
+   * True for class and instance initializers but not for constructors
+   * or methods.
+   */
+  public final boolean isInitializer;
 
   /** */
   public CallableInfo(
-      int modifiers, Name canonName, ImmutableList<Name> typeParameters) {
+      int modifiers, Name canonName, Iterable<? extends Name> typeParameters,
+      boolean isInitializer) {
     super(modifiers, canonName);
     Preconditions.checkArgument(canonName.type == Name.Type.METHOD);
+    Preconditions.checkArgument(
+        !isInitializer
+        || Name.isSpecialMethodIdentifier(canonName.identifier));
     for (Name typeParameter : typeParameters) {
       Preconditions.checkArgument(
           typeParameter.type == Name.Type.TYPE_PARAMETER, typeParameter);
     }
-    this.typeParameters = typeParameters;
+    this.typeParameters = ImmutableList.copyOf(typeParameters);
+    this.isInitializer = isInitializer;
   }
 
   /**
@@ -135,15 +145,6 @@ public final class CallableInfo extends MemberInfo {
     }
   }
 
-  /**
-   * True if the name is one of the names invoked via the invokespecial
-   * bytecode.
-   */
-  public static boolean isSpecialMethodName(String memberName) {
-    return "<init>".equals(memberName) || "<clinit>".equals(memberName);
-  }
-
-
   @Override
   public MemberInfo map(MetadataBridge b) {
     if (b == MetadataBridge.Bridges.IDENTITY) { return this; }
@@ -161,7 +162,8 @@ public final class CallableInfo extends MemberInfo {
                     .rawName;
               }
 
-            })));
+            })),
+        isInitializer);
     if (descriptor != null) {
       bridged.setDescriptor(b.bridgeMethodDescriptor(descriptor));
     }

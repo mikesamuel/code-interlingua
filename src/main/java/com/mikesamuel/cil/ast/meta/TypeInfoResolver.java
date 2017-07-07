@@ -178,7 +178,8 @@ public interface TypeInfoResolver {
                       Name canonName = className.method(mname, index);
                       CallableInfo ci = new CallableInfo(
                           mods, canonName,
-                          typeVars(canonName, m.getTypeParameters()));
+                          typeVars(canonName, m.getTypeParameters()),
+                          false);
                       ImmutableList.Builder<TypeSpecification> formalTypes =
                           ImmutableList.builder();
                       for (Type t : m.getGenericParameterTypes()) {
@@ -198,10 +199,12 @@ public interface TypeInfoResolver {
                     int mods = c.getModifiers();
                     if (!Modifier.isPrivate(mods)) {
                       int index = Arrays.asList(ctors).indexOf(c) + 1;
-                      Name canonName = className.method("<init>", index);
+                      Name canonName = className.method(
+                          Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, index);
                       CallableInfo ci = new CallableInfo(
                           mods, canonName,
-                          typeVars(canonName, c.getTypeParameters()));
+                          typeVars(canonName, c.getTypeParameters()),
+                          false);
                       ImmutableList.Builder<TypeSpecification> formalTypes =
                           ImmutableList.builder();
                       for (Type t : c.getGenericParameterTypes()) {
@@ -333,7 +336,8 @@ public interface TypeInfoResolver {
           Class<?> dc = c.getDeclaringClass();
           int index = Arrays.asList(dc.getDeclaredConstructors())
               .indexOf(c) + 1;
-          parentName = ReflectionUtils.nameForClass(dc).method("<init>", index);
+          parentName = ReflectionUtils.nameForClass(dc).method(
+              Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, index);
         } else {
           throw new AssertionError(d + " : " + d.getClass().getName());
         }

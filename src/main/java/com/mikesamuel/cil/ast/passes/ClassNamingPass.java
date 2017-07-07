@@ -135,7 +135,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       CallableInfo values = new CallableInfo(
           Modifier.PUBLIC | Modifier.STATIC,
           methodVariantPool.allocateVariant(declaringClass, "values"),
-          ImmutableList.of());
+          ImmutableList.of(), false);
       values.setDescriptor(
           MethodDescriptor.builder()
               .withReturnType(declaringClass, 1)
@@ -149,7 +149,8 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
           declaringClass, "valueOf");
       CallableInfo valueOf = new CallableInfo(
           Modifier.PUBLIC | Modifier.STATIC,
-          valueOfName, ImmutableList.of());
+          valueOfName, ImmutableList.of(),
+          false);
       valueOf.setDescriptor(
           MethodDescriptor.builder()
              .addFormalParameter(JavaLang.JAVA_LANG_STRING.rawName, 0)
@@ -211,8 +212,9 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
             mods,
             declaringClass.method(
                 Mixins.getMethodName(cd), cd.getMethodVariant()),
-            typeParametersList.build()
-            ));
+            typeParametersList.build(),
+            nt == J8NodeType.InstanceInitializer
+            || nt == J8NodeType.StaticInitializer));
         break;
       }
       case FieldDeclaration:
