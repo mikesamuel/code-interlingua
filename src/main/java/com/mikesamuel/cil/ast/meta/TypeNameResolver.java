@@ -472,21 +472,32 @@ public interface TypeNameResolver {
         TypeNameResolver a, TypeNameResolver... rest) {
       ImmutableList.Builder<TypeNameResolver> b =
           ImmutableList.builder();
-      if (a instanceof EitherOr) {
-        b.addAll(((EitherOr) a).resolvers);
-      } else {
-        b.add(a);
-      }
+      addTo(a, b);
       for (TypeNameResolver r : rest) {
-        if (r instanceof EitherOr) {
-          b.addAll(((EitherOr) r).resolvers);
-        } else {
-          b.add(r);
-        }
+        addTo(r, b);
       }
       ImmutableList<TypeNameResolver> resolvers = b.build();
       if (resolvers.size() == 1) { return resolvers.get(0); }
       return new EitherOr(resolvers);
+    }
+
+    private static void addTo(
+        TypeNameResolver a, ImmutableList.Builder<TypeNameResolver> b) {
+      if (a instanceof EitherOr) {
+        for (TypeNameResolver r : ((EitherOr) a).resolvers) {
+          addTo(r, b);
+        }
+      } else {
+        boolean isEmpty = false;
+        if (a instanceof UnqualifiedNameResolver) {
+          isEmpty = ((UnqualifiedNameResolver) a).identifierToName.isEmpty();
+        } else if (a instanceof WildcardLookup) {
+          isEmpty = ((WildcardLookup) a).packagesAndOuterTypes.isEmpty();
+        }
+        if (!isEmpty) {
+          b.add(a);
+        }
+      }
     }
 
     static final class EitherOr implements TypeNameResolver {
