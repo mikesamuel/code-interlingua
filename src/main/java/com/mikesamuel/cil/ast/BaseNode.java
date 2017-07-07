@@ -100,6 +100,20 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     }
   }
 
+  /**
+   * Uses the bridge to transform all metadata.
+   * @param transitive true to perform the same operation on all children.
+   */
+  public final void transformMetadata(
+      MetadataBridge bridge, boolean transitive) {
+    this.copyMetadataFrom(this, bridge);
+    if (transitive) {
+      for (int i = 0, n = getNChildren(); i < n; ++i) {
+        getChild(i).transformMetadata(bridge, true);
+      }
+    }
+  }
+
   protected static
   <BASE_NODE extends BaseNode<BASE_NODE, ?, ?>, T extends BASE_NODE>
   T deepCopyChildren(T node) {
@@ -239,6 +253,15 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     }
 
     /**
+     * Indicates that the search should not recurse into ancestors, but just
+     * search the child list.
+     */
+    public Finder<T> noDescend() {
+      doNotEnter = Predicates.alwaysTrue();
+      return this;
+    }
+
+    /**
      * Sets whether the finder will recurse into
      * {@linkplain NodeType#isNonStandard nonstandard} productions.
      * Defaults to false.
@@ -285,6 +308,20 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
           find(child, results);
         }
       }
+    }
+
+    /**
+     * The index of the first matching child in a left-to-right scan.
+     * Always acts as if {@link #noDescend()} had been called.
+     */
+    public int indexOf() {
+      for (int i = 0, n = root.getNChildren(); i < n; ++i) {
+        BaseNode<?, ?, ?> child = root.getChild(i);
+        if (match.apply(child)) {
+          return i;
+        }
+      }
+      return -1;
     }
   }
 
