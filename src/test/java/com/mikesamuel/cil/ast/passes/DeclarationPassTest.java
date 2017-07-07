@@ -758,8 +758,11 @@ public class DeclarationPassTest extends TestCase {
 
   @Test
   public static void testTypeParameters() {
-    List<J8FileNode> files =
-        PassTestHelpers.parseCompilationUnits(
+    Logger logger = Logger.getAnonymousLogger();
+    logger.setUseParentHandlers(false);  // Ignore missing ambiguous type "Foo"
+
+    List<J8FileNode> files = PassTestHelpers.parseCompilationUnits(
+        logger,
         new String[][] {
           {
             "package foo.bar;",
@@ -770,10 +773,9 @@ public class DeclarationPassTest extends TestCase {
             "}",
           },
         });
-    Logger logger = Logger.getAnonymousLogger();
-    logger.setUseParentHandlers(false);  // Ignore missing ambiguous type "Foo"
+
     DeclarationPass dp = new DeclarationPass(logger);
-    TypeInfoResolver r = dp.run(files);
+    TypeInfoResolver r = dp.run(files).typeInfoResolver;
 
     Name bazName = Name.DEFAULT_PACKAGE
         .child("foo", Name.Type.PACKAGE)
@@ -800,8 +802,8 @@ public class DeclarationPassTest extends TestCase {
             "/* public /E extends /java/lang/Enum</E>"
             + " implements /I contains /E$1 */",
             "public enum E implements I {",
-            "  A(-1) , B(2) ,",
-            "  /* final anonymous /E$1 extends /java/lang/Object in /E */",
+            "  A(-1), B(2),",
+            "  /* final anonymous /E$1 extends /E in /E */",
             "  C(3) { @Override public String toString() { return\"c\"; } }",
             "  ,;",
             "  final int x;",

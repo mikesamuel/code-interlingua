@@ -17,15 +17,16 @@ public final class DefragmentTypesPassTest extends TestCase {
 
   private void assertRewritten(String want, String input, String... errors) {
     ImmutableList<J8FileNode> wantedFiles =
-        PassTestHelpers.parseCompilationUnits(new String[] { want });
+        PassTestHelpers.parseCompilationUnits(null, new String[] { want });
 
     ImmutableList<J8FileNode> gotFiles = PassTestHelpers.expectErrors(
         new LoggableOperation<ImmutableList<J8FileNode>>() {
           @Override
           public ImmutableList<J8FileNode> run(Logger logger) {
             ImmutableList<J8FileNode> inputCus =
-                PassTestHelpers.parseCompilationUnits(new String[] {
-                    "//" + getName(), input });
+                PassTestHelpers.parseCompilationUnits(
+                    logger,
+                    new String[] { "//" + getName(), input });
 
             return new DefragmentTypesPass(logger).run(inputCus);
           }

@@ -57,7 +57,7 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
  * body, which field, method, and type parameter names are available, and
  * in which class they are declared.
  */
-class DeclarationPass extends AbstractPass<TypeInfoResolver> {
+class DeclarationPass extends AbstractPass<DeclarationPass.Result> {
 
   static final boolean DEBUG = false;
 
@@ -74,11 +74,25 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     return TypeInfoResolver.Resolvers.forClassLoader(cl);
   }
 
+
+  static final class Result {
+    final TypeInfoResolver typeInfoResolver;
+    final MethodVariantPool methodVariantPool;
+
+    Result(
+        TypeInfoResolver typeInfoResolver,
+        MethodVariantPool methodVariantPool) {
+      this.typeInfoResolver = typeInfoResolver;
+      this.methodVariantPool = methodVariantPool;
+    }
+  }
+
+
   /**
    * @return a TypeInfoResolver that resolves canonical names.
    */
   @Override
-  public TypeInfoResolver run(Iterable<? extends J8FileNode> fileNodes) {
+  public Result run(Iterable<? extends J8FileNode> fileNodes) {
     // To properly map type names to canonical type names, we need four things:
     // 1. The set of internally defined types.
     // 2. The set of external types.
@@ -90,10 +104,13 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
 
     ImmutableList<J8FileNode> files = ImmutableList.copyOf(fileNodes);
     // (1)
+    ClassNamingPass classNamingPass = new ClassNamingPass(logger);
     ClassNamingPass.DeclarationsAndScopes declarationsAndScopes =
-        new ClassNamingPass(logger).run(files);
+        classNamingPass.run(files);
     // (2)
     TypeInfoResolver externalTypeInfoResolver = getFallbackTypeInfoResolver();
+    MethodVariantPool methodVariantPool =
+        classNamingPass.getMethodVariantPool();
 
     ScopeResolver sr = new ScopeResolver(
         declarationsAndScopes,
@@ -101,7 +118,7 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
     // (3) on demand for (4)
     sr.resolveAll();
 
-    return sr.typeInfoResolver;
+    return new Result(sr.typeInfoResolver, methodVariantPool);
   }
 
   final class ScopeResolver {
@@ -515,8 +532,11 @@ class DeclarationPass extends AbstractPass<TypeInfoResolver> {
               new TypeBinding(TypeSpecification.unparameterized(typeName))));
           break;
         case UnqualifiedClassInstanceCreationExpression:
+          isAnonymous = true;
+          break;
         case EnumConstant:
           isAnonymous = true;
+          superTypeSpec = TypeSpecification.unparameterized(typeName.parent);
           break;
         default:
           throw new AssertionError(node.getNodeType());

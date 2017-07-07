@@ -32,10 +32,12 @@ import com.mikesamuel.cil.parser.ParseState;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SerialErrorReceiver;
 import com.mikesamuel.cil.parser.SerialState;
+import com.mikesamuel.cil.parser.SourcePosition;
 import com.mikesamuel.cil.parser.Unparse;
 import com.mikesamuel.cil.parser.Unparse.UnparseVerificationException;
 import com.mikesamuel.cil.parser.Unparse.Verified;
 import com.mikesamuel.cil.ptree.PTree;
+import com.mikesamuel.cil.util.LogUtils;
 
 /** Utilities for testing AST processing passes. */
 public final class PassTestHelpers {
@@ -46,9 +48,9 @@ public final class PassTestHelpers {
    * @param linesPerFile {@code linesPerFile[f][i]} is line i (zero-indexed)
    *   in the f-th file.
    */
-  public static ImmutableList<J8FileNode> parseCompilationUnits(
-      String[]... linesPerFile) {
-    return maybeParseCompilationUnits(linesPerFile).get();
+  static ImmutableList<J8FileNode> parseCompilationUnits(
+      Logger logger, String[]... linesPerFile) {
+    return maybeParseCompilationUnits(logger, linesPerFile).get();
   }
 
   /**
@@ -59,6 +61,7 @@ public final class PassTestHelpers {
    * @return absent if there was a parse failure.
    */
   public static Optional<ImmutableList<J8FileNode>> maybeParseCompilationUnits(
+      @Nullable Logger logger,
       String[]... linesPerFile) {
     ImmutableList.Builder<J8FileNode> b = ImmutableList.builder();
     for (String[] lines : linesPerFile) {
@@ -68,11 +71,34 @@ public final class PassTestHelpers {
         inputBuilder.source(lines[0]);
       }
       Input inp = inputBuilder.build();
+
+      class CapturingParseErrorReceiver implements ParseErrorReceiver {
+        SourcePosition sourcePos;
+        int maxPos = -1;
+        String message;
+
+        @Override
+        public void error(ParseState state, String errorMessage) {
+          if (state.index > maxPos) {
+            this.maxPos = state.index;
+            this.message = errorMessage;
+            this.sourcePos = state.input.getSourcePosition(state.index);
+          }
+        }
+
+        void maybeLog() {
+          if (logger != null && maxPos >= 0) {
+            LogUtils.log(logger, Level.SEVERE, sourcePos, message, null);
+          }
+        }
+      }
+      CapturingParseErrorReceiver err = new CapturingParseErrorReceiver();
+
       ParseResult result =
-          PTree.complete(J8NodeType.CompilationUnit).getParSer()
-          .parse(new ParseState(inp), new LeftRecursion(),
-              ParseErrorReceiver.DEV_NULL);
+          PTree.complete(J8NodeType.CompilationUnit).getParSer().parse(
+              new ParseState(inp), new LeftRecursion(), err);
       if (ParseResult.Synopsis.SUCCESS != result.synopsis) {
+        err.maybeLog();
         return Optional.absent();
       }
       ParseState afterParse = result.next();
@@ -99,16 +125,27 @@ public final class PassTestHelpers {
         new LoggableOperation<ImmutableList<J8FileNode>>() {
           @Override
           public ImmutableList<J8FileNode> run(Logger logger) {
-            return passRunner.runPasses(
-                logger,
-                parseCompilationUnits(inputLines));
+            Optional<ImmutableList<J8FileNode>> cus =
+                maybeParseCompilationUnits(logger, inputLines);
+            if (cus.isPresent()) {
+              return passRunner.runPasses(logger, cus.get());
+            } else {
+              Assert.fail("Failed to parse compilation units");
+              throw new Error();
+            }
           }
         },
         expectedErrors);
 
     String got = serializeNodes(files, decorator);
 
-    String want = joinExpectedLines(expectedLines);
+    Optional<String> wantOpt =
+        decorator == null
+        ? PassTestHelpers.normalizeCompilationUnitSource(expectedLines)
+        : Optional.absent();
+    String want = wantOpt.isPresent()
+        ? wantOpt.get()
+        : joinExpectedLines(expectedLines);
 
     Assert.assertEquals(want, got);
   }
@@ -161,7 +198,16 @@ public final class PassTestHelpers {
     });
     logger.setLevel(Level.WARNING);
 
-    T result = op.run(logger);
+    T result;
+    try {
+      result = op.run(logger);
+    } catch (Error err) {
+      // Dump any log messages that might indicate the reason for the error.
+      for (LogRecord r : logRecords) {
+        logger.getParent().log(r);
+      }
+      throw err;
+    }
 
     Function<LogRecord, String> getMessage = new Function<LogRecord, String>() {
       @Override
@@ -288,7 +334,7 @@ public final class PassTestHelpers {
       String[][] linesPerFile)
   throws UnparseVerificationException {
     Optional<ImmutableList<J8FileNode>> files =
-        maybeParseCompilationUnits(linesPerFile);
+        maybeParseCompilationUnits(null, linesPerFile);
     return files.isPresent()
         ? Optional.of(serializeNodes(files.get(), null))
         : Optional.absent();

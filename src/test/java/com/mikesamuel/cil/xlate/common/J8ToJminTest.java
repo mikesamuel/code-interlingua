@@ -30,9 +30,9 @@ public final class J8ToJminTest extends TestCase {
 
           @Override
           public ImmutableList<? extends JminBaseNode> run(Logger logger) {
-logger.setUseParentHandlers(true);
-            ImmutableList<J8FileNode> unprocessed =
-                PassTestHelpers.parseCompilationUnits(inputLines);
+            Optional<ImmutableList<J8FileNode>> unprocessedOpt =
+                PassTestHelpers.maybeParseCompilationUnits(logger, inputLines);
+            ImmutableList<J8FileNode> unprocessed = unprocessedOpt.get();
             CommonPassRunner commonPasses = new CommonPassRunner(logger);
             ImmutableList<J8FileNode> processed = commonPasses.run(unprocessed);
             J8ToJmin translator = new J8ToJmin(

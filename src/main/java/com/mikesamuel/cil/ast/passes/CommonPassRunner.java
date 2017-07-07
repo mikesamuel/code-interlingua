@@ -13,6 +13,7 @@ import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.StatementNode;
+import com.mikesamuel.cil.ast.meta.MemberInfoPool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.parser.Input;
@@ -34,6 +35,8 @@ public final class CommonPassRunner {
   private boolean injectCasts;
   private TypeInfoResolver typeInfoResolver;
   private TypePool typePool;
+  private MethodVariantPool methodVariantPool;
+  private MemberInfoPool memberInfoPool;
 
   /** @param logger receives warnings about passes. */
   public CommonPassRunner(Logger logger) {
@@ -60,7 +63,9 @@ public final class CommonPassRunner {
       }
     };
     dp.setErrorLevel(errorLevel);
-    typeInfoResolver = dp.run(cus);
+    DeclarationPass.Result dpResult = dp.run(cus);
+    typeInfoResolver = dpResult.typeInfoResolver;
+    methodVariantPool = dpResult.methodVariantPool;
 
     ExpressionScopePass scopePass = new ExpressionScopePass(
         typeInfoResolver, logger);
@@ -81,6 +86,7 @@ public final class CommonPassRunner {
 
     TypingPass tp = new TypingPass(logger, typePool, injectCasts);
     tp.setErrorLevel(errorLevel);
+    this.memberInfoPool = tp.memberInfoPool;
     return tp.run(cus);
   }
 
@@ -217,5 +223,19 @@ public final class CommonPassRunner {
    */
   public TypePool getTypePool() {
     return typePool;
+  }
+
+  /**
+   * The pool used to allocate method variants.
+   */
+  public MethodVariantPool getMethodVariantPool() {
+    return methodVariantPool;
+  }
+
+  /**
+   * A pool used to amortize the cost of repeated member info computations.
+   */
+  public MemberInfoPool getMemberInfoPool() {
+    return memberInfoPool;
   }
 }

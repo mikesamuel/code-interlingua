@@ -26,8 +26,8 @@ public final class ClassNamingPassTest extends TestCase {
 
   @Test
   public static void testClassFinder() {
-    List<J8FileNode> compilationUnits =
-        PassTestHelpers.parseCompilationUnits(
+    List<J8FileNode> compilationUnits = PassTestHelpers.parseCompilationUnits(
+        null,
         new String[][] {
           {
             "package foo.bar;",

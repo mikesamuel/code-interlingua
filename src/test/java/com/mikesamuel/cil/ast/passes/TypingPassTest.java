@@ -67,9 +67,10 @@ public final class TypingPassTest extends TestCase {
               @Override
               public ImmutableList<J8FileNode> run(Logger logger) {
                 ImmutableList<J8FileNode> files =
-                    PassTestHelpers.parseCompilationUnits(inputs);
+                    PassTestHelpers.parseCompilationUnits(logger, inputs);
                 DeclarationPass dp = new DeclarationPass(logger);
-                TypeInfoResolver typeInfoResolver = dp.run(files);
+                TypeInfoResolver typeInfoResolver =
+                    dp.run(files).typeInfoResolver;
 
                 ExpressionScopePass scopePass = new ExpressionScopePass(
                     typeInfoResolver, logger);
@@ -2051,7 +2052,7 @@ public final class TypingPassTest extends TestCase {
         new String[][] {
           {
             "class Foo {",
-            "  enum E { A() , B() , C() , }",
+            "  enum E { A(), B(), C(), }",
             "  static final E A = E.",
             "  /* /Foo$E.B*/",
             "  B;",

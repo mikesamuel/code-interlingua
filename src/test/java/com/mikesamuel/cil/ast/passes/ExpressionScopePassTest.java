@@ -327,7 +327,7 @@ public final class ExpressionScopePassTest extends TestCase {
           public ImmutableList<J8FileNode> runPasses(
               Logger logger, ImmutableList<J8FileNode> files) {
             DeclarationPass dp = new DeclarationPass(logger);
-            TypeInfoResolver tir = dp.run(files);
+            TypeInfoResolver tir = dp.run(files).typeInfoResolver;
             ExpressionScopePass esp = new ExpressionScopePass(tir, logger);
             esp.run(files);
             return files;

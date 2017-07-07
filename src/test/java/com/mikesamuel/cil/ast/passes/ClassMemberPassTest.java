@@ -33,7 +33,8 @@ public final class ClassMemberPassTest extends TestCase {
           public ImmutableList<J8FileNode> runPasses(
               Logger logger, ImmutableList<J8FileNode> files) {
             DeclarationPass declPass = new DeclarationPass(logger);
-            TypeInfoResolver typeInfoResolver = declPass.run(files);
+            TypeInfoResolver typeInfoResolver =
+                declPass.run(files).typeInfoResolver;
             ExpressionScopePass esp = new ExpressionScopePass(
                 typeInfoResolver, logger);
             esp.run(files);

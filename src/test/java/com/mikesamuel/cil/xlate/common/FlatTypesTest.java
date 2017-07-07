@@ -4,6 +4,7 @@ import java.util.logging.Logger;
 
 import org.junit.Test;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -44,9 +45,13 @@ public final class FlatTypesTest extends TestCase {
 
           @Override
           public FlatTypes run(Logger logger) {
-            ImmutableList<J8FileNode> cus =
-                PassTestHelpers.parseCompilationUnits(inpLines);
+            Optional<ImmutableList<J8FileNode>> cusOpt =
+                PassTestHelpers.maybeParseCompilationUnits(logger, inpLines);
+            if (!cusOpt.isPresent()) {
+              fail("Failed to parse compilation units");
+            }
             CommonPassRunner runner = new CommonPassRunner(logger);
+            ImmutableList<J8FileNode> cus = cusOpt.get();
             cus = runner.run(cus);
             FlatTypes fts = new FlatTypes(logger, runner.getTypeInfoResolver());
             ImmutableSet<Name> namesDeclared = getDeclaredTypes(cus);
