@@ -22,6 +22,7 @@ import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
 import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8TypeReference;
 import com.mikesamuel.cil.ast.j8.J8TypeScope;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
@@ -36,6 +37,7 @@ import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeNameResolver;
+import com.mikesamuel.cil.parser.Positioned;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
 
@@ -91,16 +93,86 @@ final class DisambiguationPass extends AbstractRewritingPass {
       J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     ProcessingStatus result = ProcessingStatus.CONTINUE;
 
-    if (node.getNChildren() == 1) {
-      J8BaseNode child = node.getChild(0);
-      if (child instanceof ContextFreeNamesNode) {
-        result = rewriteContextFreeNames(
-            pathFromRoot, node, (ContextFreeNamesNode) child);
-      }
-    }
     // By inspection of the grammar, context free names
     // never have non-template siblings.
-
+    int cfnIndex = node.finder(ContextFreeNamesNode.class).indexOf();
+    if (cfnIndex >= 0) {
+      result = rewriteContextFreeNames(
+          pathFromRoot, node, (ContextFreeNamesNode) node.getChild(cfnIndex));
+    } else {
+      switch (node.getNodeType()) {
+        case FieldName: {
+          IdentifierNode id = node.firstChildWithType(IdentifierNode.class);
+          id.setNamePartType(Name.Type.FIELD);
+          if (pathFromRoot != null
+              && (ExpressionAtomNode.Variant.FreeField
+                  == pathFromRoot.x.parent.getVariant())) {
+            Optional<Name> nameOpt = expressionNameOf(
+                pathFromRoot, id.getValue());
+            if (nameOpt.isPresent()) {
+              Name name = nameOpt.get();
+              if (name.type == Name.Type.FIELD) {
+                ((FieldNameNode) node).setReferencedExpressionName(name);
+              }
+            }
+          }
+          break;
+        }
+        case LocalName: {
+          IdentifierNode id = node.firstChildWithType(IdentifierNode.class);
+          id.setNamePartType(Name.Type.LOCAL);
+          Optional<Name> nameOpt = expressionNameOf(
+              pathFromRoot, id.getValue());
+          if (nameOpt.isPresent()) {
+            Name name = nameOpt.get();
+            if (name.type == Name.Type.LOCAL) {
+              ((LocalNameNode) node).setReferencedExpressionName(name);
+            }
+          }
+          break;
+        }
+        case MethodName: {
+          IdentifierNode id = node.firstChildWithType(IdentifierNode.class);
+          id.setNamePartType(Name.Type.METHOD);
+          break;
+        }
+        case ClassOrInterfaceType:
+        case PackageOrTypeName:
+        case TypeName:
+        case TypeVariable:
+          if (pathFromRoot != null) {
+            boolean isPartial = false;
+            switch (pathFromRoot.x.parent.getNodeType()) {
+              case ClassOrInterfaceType:
+              case PackageOrTypeName:
+              case TypeImportOnDemandDeclaration:
+              case TypeName:
+                isPartial = true;
+                break;
+              case ClassOrInterfaceTypeToInstantiate:
+                // We skip the type "Inner" in (outer.new Inner(...))
+                // since it is not a complete type.
+                if (pathFromRoot.prev != null && pathFromRoot.prev.prev != null
+                    && (pathFromRoot.prev.x.parent.getNodeType()
+                       == J8NodeType.UnqualifiedClassInstanceCreationExpression)
+                    && (pathFromRoot.prev.prev.x.parent.getVariant()
+                       == PrimaryNode.Variant.InnerClassCreation)) {
+                  isPartial = true;
+                }
+                break;
+              default:
+                break;
+            }
+            if (isPartial) {
+              break;
+            }
+          }
+          resolveContextualizedTypeName(node);
+          break;
+        default:
+          break;
+      }
+    }
     if (node instanceof J8TypeScope) {
       J8TypeScope popped = typeScopes.remove(typeScopes.size() - 1);
       Preconditions.checkState(popped == node);
@@ -111,6 +183,61 @@ final class DisambiguationPass extends AbstractRewritingPass {
     }
 
     return result;
+  }
+
+  private void resolveContextualizedTypeName(J8BaseNode node) {
+    ImmutableList<IdentifierNode> idents =
+        node.finder(IdentifierNode.class)
+        .exclude(J8NodeType.Annotation, J8NodeType.TypeArguments,
+            J8NodeType.TypeParameters)
+        .find();
+    Name name = null;
+    for (IdentifierNode ident : idents) {
+      String identifier = ident.getValue();
+      Name.Type type = ident.getNamePartType();
+      if (type == null) {
+        if (idents.size() == 1
+            && node.getNodeType() == J8NodeType.TypeVariable) {
+          type = Name.Type.TYPE_PARAMETER;
+        } else {
+          type = Name.Type.AMBIGUOUS;
+        }
+      }
+      if (name == null && type == Name.Type.PACKAGE) {
+        name = Name.DEFAULT_PACKAGE;
+      }
+      name = name != null
+          ? name.child(identifier, type)
+          : Name.root(identifier, type);
+
+    }
+    if (name == null) { return; }
+
+    J8TypeScope scope = typeScopes.get(typeScopes.size() - 1);
+    TypeNameResolver resolver = scope.getTypeNameResolver();
+    if (resolver == null) {
+      error(
+          node,
+          "Cannot resolve name " + name
+          + " due to missing scope");
+      return;
+    }
+    Optional<TypeInfo> resolution = resolveName(node, name, resolver);
+    if (resolution.isPresent()) {
+      TypeInfo ti = resolution.get();
+      if (node instanceof J8TypeReference) {
+        ((J8TypeReference) node).setReferencedTypeInfo(ti);
+      }
+      int i = idents.size();
+      Name nm = ti.canonName;
+      for (; --i >= 0 && !Name.DEFAULT_PACKAGE.equals(nm); nm = nm.parent) {
+        IdentifierNode id = idents.get(i);
+        if (!id.getValue().equals(nm.identifier)) {
+          break;
+        }
+        id.setNamePartType(nm.type);
+      }
+    }
   }
 
   private ProcessingStatus rewriteContextFreeNames(
@@ -191,29 +318,13 @@ final class DisambiguationPass extends AbstractRewritingPass {
           buildClassOrInterfaceType(null, allClasses, decomposed, b);
         } else {
           // Decide whether it's a class type or an interface type.
-          ImmutableList<Name> canonNames =
-              resolver.lookupTypeName(decomposed.name);
-          switch (canonNames.size()) {
-            case 1:
-              Name canonName = canonNames.get(0);
-              Optional<TypeInfo> typeInfoOpt =
-                  typeInfoResolver.resolve(canonName);
-              if (typeInfoOpt.isPresent()) {
-                TypeInfo typeInfo = typeInfoOpt.get();
-                b.remove(0);
-                buildClassOrInterfaceType(
-                    typeInfo, canonName, decomposed, b);
-              } else {
-                error(names, "Unrecognized type " + canonName);
-              }
-              break;
-            case 0:
-              error(names, "Cannot resolve name " + decomposed.name);
-              break;
-            default:
-              error(
-                  names, "Ambiguous name " + decomposed.name
-                  + " : " + canonNames);
+          Optional<TypeInfo> resolution = resolveName(
+              b, decomposed.name, resolver);
+          if (resolution.isPresent()) {
+            b.remove(0);
+            TypeInfo typeInfo = resolution.get();
+            buildClassOrInterfaceType(
+                typeInfo, typeInfo.canonName, decomposed, b);
           }
         }
         break;
@@ -233,6 +344,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
             case LOCAL: {
               Preconditions.checkState(seedDecomp.idents.size() == 1);
               IdentifierNode ident = seedDecomp.idents.get(0).identifier;
+              ident.setNamePartType(Name.Type.LOCAL);
               LocalNameNode localName =
                   LocalNameNode.Variant.Identifier.buildNode(ident);
               localName.setSourcePosition(ident.getSourcePosition());
@@ -245,6 +357,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
               FieldNameNode fieldName = FieldNameNode.Variant.Identifier
                   .buildNode(seedDecomp.idents.get(0).identifier);
               IdentifierNode ident = seedDecomp.idents.get(0).identifier;
+              ident.setNamePartType(Name.Type.FIELD);
               fieldName.setSourcePosition(ident.getSourcePosition());
               fieldName.setReferencedExpressionName(seedDecomp.name);
               seed = ExpressionAtomNode.Variant.FreeField.buildNode(fieldName);
@@ -308,6 +421,51 @@ final class DisambiguationPass extends AbstractRewritingPass {
     return ProcessingStatus.BREAK;
   }
 
+  private Optional<TypeInfo> resolveName(
+      Positioned p, Name name, TypeNameResolver resolver) {
+    ImmutableList<Name> canonNames =
+        resolver.lookupTypeName(name);
+    switch (canonNames.size()) {
+      case 1:
+        Name canonName = canonNames.get(0);
+        Optional<TypeInfo> typeInfoOpt =
+            typeInfoResolver.resolve(canonName);
+        if (typeInfoOpt.isPresent()) {
+          return typeInfoOpt;
+        } else {
+          error(p, "Unrecognized type " + canonName);
+        }
+        break;
+      case 0:
+        error(p, "Cannot resolve name " + name);
+        break;
+      default:
+        error(p, "Ambiguous name " + name + " : " + canonNames);
+    }
+    return Optional.absent();
+  }
+
+  private static Optional<Name> expressionNameOf(
+      @Nullable SList<Parent> pathFromRoot, String ident) {
+    DeclarationPositionMarker marker = DeclarationPositionMarker.LATEST;
+    for (SList<Parent> anc = pathFromRoot; anc != null; anc = anc.prev) {
+      if (anc.x.parent instanceof J8ExpressionNameScope) {
+        ExpressionNameResolver r = ((J8ExpressionNameScope) anc.x.parent)
+            .getExpressionNameResolver();
+        if (r == null) { continue; }
+        Optional<Name> canonNameOpt = r.resolveReference(ident, marker);
+        if (canonNameOpt.isPresent()) {
+          return canonNameOpt;
+        }
+        marker = DeclarationPositionMarker.LATEST;  // Passing out of scope.
+      } else if (anc.x.parent instanceof J8LimitedScopeElement) {
+        marker = ((J8LimitedScopeElement) anc.x.parent)
+            .getDeclarationPositionMarker();
+      }
+    }
+    return Optional.absent();
+  }
+
   @SuppressWarnings("synthetic-access")
   private Optional<ImmutableList<Decomposed>> expressionNameOf(
       @Nullable SList<Parent> pathFromRoot, Decomposed d,
@@ -316,21 +474,7 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
     // If the zero-th element matches in an expression name resolver, then
     // mark it up.
-    Optional<Name> canonNameOpt = Optional.absent();
-    DeclarationPositionMarker marker = DeclarationPositionMarker.LATEST;
-    for (SList<Parent> anc = pathFromRoot; anc != null; anc = anc.prev) {
-      if (anc.x.parent instanceof J8ExpressionNameScope) {
-        ExpressionNameResolver r = ((J8ExpressionNameScope) anc.x.parent)
-            .getExpressionNameResolver();
-        if (r == null) { continue; }
-        canonNameOpt = r.resolveReference(ident0, marker);
-        if (canonNameOpt.isPresent()) { break; }
-        marker = DeclarationPositionMarker.LATEST;  // Passing out of scope.
-      } else if (anc.x.parent instanceof J8LimitedScopeElement) {
-        marker = ((J8LimitedScopeElement) anc.x.parent)
-            .getDeclarationPositionMarker();
-      }
-    }
+    Optional<Name> canonNameOpt = expressionNameOf(pathFromRoot, ident0);
     if (canonNameOpt.isPresent()) {
       Name canonName = canonNameOpt.get();
       ImmutableList.Builder<Decomposed> ds = ImmutableList.builder();
@@ -662,16 +806,15 @@ final class DisambiguationPass extends AbstractRewritingPass {
 
     int nIdents = idents.size();
     TypeNameNode newTypeNameNode;
+    IdentifierNode ident = idents.get(nIdents - 1).identifier;
+    ident.setNamePartType(d.name.type);
     if (nIdents == 1) {
-      newTypeNameNode = TypeNameNode.Variant.Identifier.buildNode(
-          idents.get(0).identifier);
+      newTypeNameNode = TypeNameNode.Variant.Identifier.buildNode(ident);
     } else {
       PackageOrTypeNameNode child = buildPackageOrTypeNameNode(
           idents, 0, nIdents - 1);
       newTypeNameNode = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .buildNode(
-              child,
-              idents.get(nIdents - 1).identifier);
+          .buildNode(child, ident);
     }
     newTypeNameNode.copyMetadataFrom(orig);
     ImmutableList<Name> canonNames = resolver.lookupTypeName(d.name);

@@ -1,5 +1,8 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -25,6 +28,7 @@ import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.j8.J8TypeReference;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
+import com.mikesamuel.cil.ast.meta.MetadataBridge;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
@@ -49,7 +53,8 @@ public final class DisambiguationPassTest extends TestCase {
           },
         },
         all(with(J8NodeType.CompilationUnit)),
-        false,
+        Names.SHORT,
+        RinseAndRepeat.ONCE,
         null);
   }
 
@@ -108,7 +113,8 @@ public final class DisambiguationPassTest extends TestCase {
           },
         },
         all(with(J8NodeType.ImportDeclaration)),
-        false,
+        Names.SHORT,
+        RinseAndRepeat.ONCE,
         null);
   }
 
@@ -121,11 +127,11 @@ public final class DisambiguationPassTest extends TestCase {
             "    Primary.FieldAccess",
             "      ExpressionAtom.StaticMember",
             "        TypeName.Identifier : /java/lang/Math",
-            "          Identifier.Builtin Math",
+            "          Identifier.Builtin Math : CLASS",
             "      FieldName.Identifier",
             "        Identifier.Builtin PI : FIELD",
             "    MethodName.Identifier",
-            "      Identifier.Builtin hashCode",
+            "      Identifier.Builtin hashCode : METHOD",
         },
         new String[] {
             "//ExpressionName",
@@ -134,7 +140,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}"
         },
         nth(0, with(J8NodeType.Expression)),
-        false,
+        Names.SHORT,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -151,11 +157,11 @@ public final class DisambiguationPassTest extends TestCase {
             "            PackageOrTypeName.Identifier",
             "              Identifier.Builtin java : PACKAGE",
             "            Identifier.Builtin lang : PACKAGE",
-            "          Identifier.Builtin Math",
+            "          Identifier.Builtin Math : CLASS",
             "      FieldName.Identifier",
             "        Identifier.Builtin PI : FIELD",
             "    MethodName.Identifier",
-            "      Identifier.Builtin hashCode",
+            "      Identifier.Builtin hashCode : METHOD",
         },
         new String[] {
             "//ExpressionName",
@@ -164,7 +170,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}"
         },
         nth(0, with(J8NodeType.Expression)),
-        true,
+        Names.LONG,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -183,14 +189,14 @@ public final class DisambiguationPassTest extends TestCase {
             "                Primary.MethodInvocation",
             "                  ExpressionAtom.FreeField",
             "                    FieldName.Identifier : /java/lang/System.err",
-            "                      Identifier.Builtin err",
+            "                      Identifier.Builtin err : FIELD",
             "                  MethodName.Identifier",
-            "                    Identifier.Builtin println",
+            "                    Identifier.Builtin println : METHOD",
             "                  ArgumentList.ExpressionComExpression",
             "                    Expression.ConditionalExpression",
             "                      ExpressionAtom.FreeField",
             "                        FieldName.Identifier : /C.i",
-            "                          Identifier.Builtin i",
+            "                          Identifier.Builtin i : FIELD",
             "      BlockStatement.LocalVariableDeclarationStatement",
             "        LocalVariableDeclarationStatement.LocalVariableDeclarationSem",
             "          LocalVariableDeclaration.Declaration",
@@ -216,14 +222,14 @@ public final class DisambiguationPassTest extends TestCase {
             "                Primary.MethodInvocation",
             "                  ExpressionAtom.FreeField",
             "                    FieldName.Identifier : /java/lang/System.err",
-            "                      Identifier.Builtin err",
+            "                      Identifier.Builtin err : FIELD",
             "                  MethodName.Identifier",
-            "                    Identifier.Builtin println",
+            "                    Identifier.Builtin println : METHOD",
             "                  ArgumentList.ExpressionComExpression",
             "                    Expression.ConditionalExpression",
             "                      ExpressionAtom.Local",
             "                        LocalName.Identifier : /C.<init>(1):i",
-            "                          Identifier.Builtin i",
+            "                          Identifier.Builtin i : LOCAL",
         },
         new String[] {
             "//testFieldScopes",
@@ -238,7 +244,7 @@ public final class DisambiguationPassTest extends TestCase {
             "}"
         },
         nth(0, with(J8NodeType.InstanceInitializer)),
-        false,
+        Names.SHORT,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -272,7 +278,7 @@ public final class DisambiguationPassTest extends TestCase {
         },
 
         nth(0, with(J8NodeType.FieldDeclaration)),
-        false,
+        Names.SHORT,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -314,7 +320,7 @@ public final class DisambiguationPassTest extends TestCase {
         },
 
         nth(0, with(J8NodeType.FieldDeclaration)),
-        true,
+        Names.LONG,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -332,18 +338,18 @@ public final class DisambiguationPassTest extends TestCase {
             "          PackageOrTypeName.Identifier",
             "            Identifier.Builtin java : PACKAGE",
             "          Identifier.Builtin lang : PACKAGE",
-            "        Identifier.Builtin System",
+            "        Identifier.Builtin System : CLASS",
             "    FieldName.Identifier",
             "      Identifier.Builtin err : FIELD",
             "  MethodName.Identifier",
-            "    Identifier.Builtin println",
+            "    Identifier.Builtin println : METHOD",
             "  ArgumentList.ExpressionComExpression",
             "    Expression.ConditionalExpression",
             "      ExpressionAtom.FreeField",
             //       The X below refers to the X inherited from Baz,
             //       not the one imported from Bar.
             "        FieldName.Identifier : /foo/Baz.X",
-            "          Identifier.Builtin X",
+            "          Identifier.Builtin X : FIELD",
           },
         },
         new String[][] {
@@ -376,7 +382,8 @@ public final class DisambiguationPassTest extends TestCase {
           },
         },
         nth(0, with(PrimaryNode.Variant.MethodInvocation)),
-        true,
+        Names.LONG,
+        RinseAndRepeat.ONCE,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -393,7 +400,7 @@ public final class DisambiguationPassTest extends TestCase {
             "  Primary.FieldAccess",
             "    ExpressionAtom.FreeField",
             "      FieldName.Identifier : /foo/Foo.x",
-            "        Identifier.Builtin x",
+            "        Identifier.Builtin x : FIELD",
             "    FieldName.Identifier",
             "      Identifier.Builtin y : FIELD",
           },
@@ -407,7 +414,7 @@ public final class DisambiguationPassTest extends TestCase {
             "    ExpressionAtom.FreeField",
             // x is resolves to the field, not the inner class.
             "      FieldName.Identifier : /foo/Foo.x",
-            "        Identifier.Builtin x",
+            "        Identifier.Builtin x : FIELD",
             "    FieldName.Identifier",
             "      Identifier.Builtin y : FIELD",
           }
@@ -444,13 +451,14 @@ public final class DisambiguationPassTest extends TestCase {
           },
         },
         all(with(J8NodeType.AdditiveExpression)),
-        false,
+        Names.SHORT,
+        RinseAndRepeat.ONCE,
         TYPE_AND_NAME_DECORATOR);
   }
 
   @Test
   public static void testQualifiedNew() {
-    for (boolean longNames : new boolean[] { false, true }) {
+    for (Names names : Names.values()) {
       assertDisambiguated(
           new String[][] {
             {
@@ -459,7 +467,7 @@ public final class DisambiguationPassTest extends TestCase {
               "    Primary.InnerClassCreation",
               "      ExpressionAtom.FreeField",
               "        FieldName.Identifier : /C.d",
-              "          Identifier.Builtin d",
+              "          Identifier.Builtin d : FIELD",
               "      UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
               "        ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
               "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
@@ -485,14 +493,15 @@ public final class DisambiguationPassTest extends TestCase {
             },
           },
           nth(0, with(J8NodeType.ArgumentList)),
-          longNames,
+          names,
+          RinseAndRepeat.ONCE,
           TYPE_AND_NAME_DECORATOR);
     }
   }
 
   @Test
   public static void testQualifiedNewWithDiamond() {
-    for (boolean longNames : new boolean[] { false, true }) {
+    for (Names names : Names.values()) {
       assertDisambiguated(
           new String[][] {
             {
@@ -501,7 +510,7 @@ public final class DisambiguationPassTest extends TestCase {
               "    Primary.InnerClassCreation",
               "      ExpressionAtom.FreeField",
               "        FieldName.Identifier : /C.d",
-              "          Identifier.Builtin d",
+              "          Identifier.Builtin d : FIELD",
               "      UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
               "        ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
               "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
@@ -528,7 +537,8 @@ public final class DisambiguationPassTest extends TestCase {
             },
           },
           nth(0, with(J8NodeType.ArgumentList)),
-          longNames,
+          names,
+          RinseAndRepeat.ONCE,
           TYPE_AND_NAME_DECORATOR);
     }
   }
@@ -543,7 +553,7 @@ public final class DisambiguationPassTest extends TestCase {
             "    Primary.InnerClassCreation",
             "      ExpressionAtom.FreeField",
             "        FieldName.Identifier : /C.d",
-            "          Identifier.Builtin d",
+            "          Identifier.Builtin d : FIELD",
             "      UnqualifiedClassInstanceCreationExpression.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody",
             "        ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
             "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
@@ -579,7 +589,8 @@ public final class DisambiguationPassTest extends TestCase {
           },
         },
         nth(0, with(J8NodeType.ArgumentList)),
-        true,
+        Names.LONG,
+        RinseAndRepeat.ONCE,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -639,7 +650,8 @@ public final class DisambiguationPassTest extends TestCase {
           },
         },
         nth(0, with(J8NodeType.ClassDeclaration)),
-        true,
+        Names.LONG,
+        RinseAndRepeat.ONCE,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -670,7 +682,7 @@ public final class DisambiguationPassTest extends TestCase {
           "}",
         },
         nth(0, with(J8NodeType.UnqualifiedClassInstanceCreationExpression)),
-        true,
+        Names.LONG,
         TYPE_AND_NAME_DECORATOR);
   }
 
@@ -683,7 +695,7 @@ public final class DisambiguationPassTest extends TestCase {
             "    TypeName.PackageOrTypeNameDotIdentifier : /C$E",
             "      PackageOrTypeName.Identifier",
             "        Identifier.Builtin C : CLASS",
-            "      Identifier.Builtin E",
+            "      Identifier.Builtin E : CLASS",
             "  FieldName.Identifier",
             "    Identifier.Builtin B : FIELD",
         },
@@ -698,49 +710,195 @@ public final class DisambiguationPassTest extends TestCase {
           "}",
         },
         nth(0, with(J8NodeType.Primary)),
-        true,
+        Names.LONG,
         TYPE_AND_NAME_DECORATOR);
+  }
+
+  @Test
+  public static void testDoublePass() {
+    // Make sure that resolving ContextFreeNames, removing metadata, and
+    // rerunning still results in all the metadata required by subsequent
+    // passes.
+    String[][] inputs = {
+      {
+        "//C",
+        "package foo;",
+        "class C {",
+        "  E x = E.A;",
+        "  static {",
+        "    E e;",
+        "    e = x;",
+        "  }",
+        "}",
+      },
+      {
+        "//E",
+        "package foo;",
+        "enum E {",
+        "  A,",
+        "  B,",
+        "}",
+      },
+    };
+    EnumMap<Names, String[][]> goldens = new EnumMap<>(Names.class);
+    goldens.put(
+        Names.SHORT,
+        new String[][] {
+          {
+            "FieldDeclaration.Declaration",
+            "  UnannType.NotAtType",
+            "    Type.ReferenceType",
+            "      ReferenceType.ClassOrInterfaceType",
+            "        ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /foo/E",
+            "          Identifier.Builtin E : CLASS",
+            "  VariableDeclaratorList.VariableDeclaratorComVariableDeclarator",
+            "    VariableDeclarator.VariableDeclaratorIdEqVariableInitializer",
+            "      VariableDeclaratorId.IdentifierDims",
+            "        Identifier.Builtin x",
+            "      VariableInitializer.Expression",
+            "        Expression.ConditionalExpression",
+            "          Primary.FieldAccess",
+            "            ExpressionAtom.StaticMember",
+            "              TypeName.Identifier : /foo/E",
+            "                Identifier.Builtin E : CLASS",
+            "            FieldName.Identifier",
+            "              Identifier.Builtin A : FIELD",
+          },
+          {
+            "Assignment.LeftHandSideAssignmentOperatorExpression",
+            "  LeftHandSide.Ambiguous",
+            "    ExpressionAtom.Local",
+            "      LocalName.Identifier : /foo/C.<clinit>(1):e",
+            "        Identifier.Builtin e : LOCAL",
+            "  AssignmentOperator.Eq",
+            "  Expression.ConditionalExpression",
+            "    ExpressionAtom.FreeField",
+            "      FieldName.Identifier : /foo/C.x",
+            "        Identifier.Builtin x : FIELD",
+          },
+        });
+    goldens.put(
+        Names.LONG,
+        new String[][] {
+          {
+            "FieldDeclaration.Declaration",
+            "  UnannType.NotAtType",
+            "    Type.ReferenceType",
+            "      ReferenceType.ClassOrInterfaceType",
+            "        ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /foo/E",
+            "          ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments",
+            "            Identifier.Builtin foo : PACKAGE",
+            "          Identifier.Builtin E : CLASS",
+            "  VariableDeclaratorList.VariableDeclaratorComVariableDeclarator",
+            "    VariableDeclarator.VariableDeclaratorIdEqVariableInitializer",
+            "      VariableDeclaratorId.IdentifierDims",
+            "        Identifier.Builtin x",
+            "      VariableInitializer.Expression",
+            "        Expression.ConditionalExpression",
+            "          Primary.FieldAccess",
+            "            ExpressionAtom.StaticMember",
+            "              TypeName.PackageOrTypeNameDotIdentifier : /foo/E",
+            "                PackageOrTypeName.Identifier",
+            "                  Identifier.Builtin foo : PACKAGE",
+            "                Identifier.Builtin E : CLASS",
+            "            FieldName.Identifier",
+            "              Identifier.Builtin A : FIELD",
+          },
+          {
+            "Assignment.LeftHandSideAssignmentOperatorExpression",
+            "  LeftHandSide.Ambiguous",
+            "    ExpressionAtom.Local",
+            "      LocalName.Identifier : /foo/C.<clinit>(1):e",
+            "        Identifier.Builtin e : LOCAL",
+            "  AssignmentOperator.Eq",
+            "  Expression.ConditionalExpression",
+            "    ExpressionAtom.FreeField",
+            "      FieldName.Identifier : /foo/C.x",
+            "        Identifier.Builtin x : FIELD",
+          },
+        });
+    for (Names names : Names.values()) {
+      for (RinseAndRepeat rar : RinseAndRepeat.values()) {
+        assertDisambiguated(
+            goldens.get(names),
+            inputs,
+            all(with(J8NodeType.FieldDeclaration, J8NodeType.Assignment)),
+            names,
+            rar,
+            TYPE_AND_NAME_DECORATOR);
+      }
+    }
+  }
+
+  enum Names {
+    LONG,
+    SHORT,
+  }
+
+  enum RinseAndRepeat {
+    ONCE,
+    RUN_CLEAR_RUN,
   }
 
   static void assertDisambiguated(
       String[] want,
       String[] input,
       NodeMatcher nodeMatcher,
-      boolean useLongNames,
+      Names names,
       @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator,
       String... expectedErrors) {
     assertDisambiguated(
         new String[][] { want },
-        new String[][] { input }, nodeMatcher, useLongNames, decorator,
-        expectedErrors);
+        new String[][] { input }, nodeMatcher, names, RinseAndRepeat.ONCE,
+        decorator, expectedErrors);
   }
 
   static void assertDisambiguated(
       String[][] want,
       String[][] inputs,
       NodeMatcher nodeMatcher,
-      boolean useLongNames,
+      Names names,
+      RinseAndRepeat rinseAndRepeat,
       @Nullable Function<? super NodeI<?, ?, ?>, ? extends String> decorator,
       String... expectedErrors) {
     ImmutableList<J8FileNode> disambiguated = PassTestHelpers.expectErrors(
         new PassTestHelpers.LoggableOperation<ImmutableList<J8FileNode>>() {
 
-          @Override
-          public ImmutableList<J8FileNode> run(Logger logger) {
-            ImmutableList<J8FileNode> fileNodes =
-                PassTestHelpers.parseCompilationUnits(inputs);
-
+          ImmutableList<J8FileNode> runOne(
+              Logger logger,
+              ImmutableList<J8FileNode> fileNodes) {
             DeclarationPass declarationPass = new DeclarationPass(logger);
             TypeInfoResolver typeInfoResolver =
-                declarationPass.run(fileNodes);
+                declarationPass.run(fileNodes).typeInfoResolver;
 
             ExpressionScopePass scopePass = new ExpressionScopePass(
                 typeInfoResolver, logger);
             scopePass.run(fileNodes);
 
             return new DisambiguationPass(
-                typeInfoResolver, logger, useLongNames)
+                typeInfoResolver, logger, Names.LONG == names)
                 .run(fileNodes);
+          }
+
+          @Override
+          public ImmutableList<J8FileNode> run(Logger logger) {
+            ImmutableList<J8FileNode> fileNodes =
+                PassTestHelpers.parseCompilationUnits(logger, inputs);
+            fileNodes = runOne(logger, fileNodes);
+            switch (rinseAndRepeat) {
+              case ONCE:
+                break;
+              case RUN_CLEAR_RUN:
+                // Rinse
+                for (J8FileNode f : fileNodes) {
+                  ((J8BaseNode) f).transformMetadata(
+                      MetadataBridge.Bridges.ZERO, true);
+                }
+                // Repeat
+                fileNodes = runOne(logger, fileNodes);
+                break;
+            }
+            return fileNodes;
           }
 
         },
@@ -768,6 +926,7 @@ public final class DisambiguationPassTest extends TestCase {
     }
 
     assertEquals(
+        "names=" + names + ", r&r=" + rinseAndRepeat,
         wantJoined.toString(),
         got.toString());
 
@@ -819,12 +978,17 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static Predicate<NodeI<?, ?, ?>> with(J8NodeType nt) {
+  static Predicate<NodeI<?, ?, ?>> with(J8NodeType nt, J8NodeType... nts) {
     return new Predicate<NodeI<?, ?, ?>>() {
+      EnumSet<J8NodeType> types = EnumSet.noneOf(J8NodeType.class);
+      {
+        types.add(nt);
+        types.addAll(Arrays.asList(nts));
+      }
 
       @Override
       public boolean apply(NodeI<?, ?, ?> node) {
-        return node.getNodeType() == nt;
+        return types.contains(node.getNodeType());
       }
 
     };
