@@ -2,6 +2,9 @@ package com.mikesamuel.cil.ast.j8;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Optional;
+import com.mikesamuel.cil.ast.meta.Name;
+
 /**
  * Some utilities for dealing with mixins.  These used to be part of the mixins
  * but since they deal with grammar specific node types they've moved here.
@@ -21,9 +24,9 @@ public final class Mixins {
     switch (d.getNodeType()) {
       case ConstructorDeclaration:
       case InstanceInitializer:
-        return "<init>";
+        return Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME;
       case StaticInitializer:
-        return "<clinit>";
+        return Name.STATIC_INITIALIZER_SPECIAL_NAME;
       default:
         break;
     }
@@ -117,4 +120,51 @@ public final class Mixins {
     return null;
   }
 
+  /**
+   * If the given declaration is of a type, return the declaration.
+   */
+  public static Optional<J8TypeDeclaration> getInnerTypeDeclaration(
+      ClassBodyDeclarationNode cbd) {
+    if (ClassBodyDeclarationNode.Variant.ClassMemberDeclaration
+        == cbd.getVariant()) {
+      ClassMemberDeclarationNode member = cbd.firstChildWithType(
+          ClassMemberDeclarationNode.class);
+      if (member != null) {
+        return getInnerTypeDeclaration(member);
+      }
+    }
+    return Optional.absent();
+  }
+
+  /**
+   * If the given declaration is of a type, return the declaration.
+   */
+  public static Optional<J8TypeDeclaration> getInnerTypeDeclaration(
+      ClassMemberDeclarationNode member) {
+    switch (member.getVariant()) {
+      case ClassDeclaration:
+      case InterfaceDeclaration:
+        return member.finder(J8TypeDeclaration.class)
+            .exclude(
+                J8NodeType.AnnotationTypeBody,
+                J8NodeType.ClassBody,
+                J8NodeType.EnumBody,
+                J8NodeType.InterfaceBody,
+                J8NodeType.TypeParameter,
+                J8NodeType.TypeParameters)
+            .findOne();
+      case FieldDeclaration:
+      case MethodDeclaration:
+      case Sem:
+        return Optional.absent();
+    }
+    throw new AssertionError(member);
+  }
+
+  /** The simple name of the declared type. */
+  public static Optional<SimpleTypeNameNode> getDeclaredTypeName(
+      J8TypeDeclaration d) {
+    return Optional.fromNullable(
+        ((J8BaseNode) d).firstChildWithType(SimpleTypeNameNode.class));
+  }
 }
