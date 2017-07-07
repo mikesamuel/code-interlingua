@@ -996,7 +996,9 @@ implements InterpretationContext<Object> {
                 }
                 for (Constructor<?> c
                      : declaringClass.get().getDeclaredConstructors()) {
-                  b.put("<init>", ReflectionUtils.descriptorFor(c), c);
+                  b.put(
+                      Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME,
+                      ReflectionUtils.descriptorFor(c), c);
                 }
               }
               return b.build();
