@@ -76,7 +76,7 @@ implements TokenBreaker<SList<NodeVariant<?, ?>>> {
         case "(": return TokenBreak.SHOULD_NOT;
         case ")":
           if (";".equals(right) || ")".equals(right) || ".".equals(right)
-              || "]".equals(right)) {
+              || "]".equals(right) || ",".equals(right)) {
             return TokenBreak.SHOULD_NOT;
           }
           return TokenBreak.SHOULD;
