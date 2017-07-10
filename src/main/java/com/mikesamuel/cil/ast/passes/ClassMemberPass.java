@@ -431,7 +431,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
                 break;
             }
         }
-        throw new AssertionError(v);
+        break;
       }
       case ArrayType: {
         TypeNode elementTypeNode = node.firstChildWithType(TypeNode.class);
