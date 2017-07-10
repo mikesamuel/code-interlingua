@@ -64,6 +64,7 @@ import com.mikesamuel.cil.ast.j8.Intermediates;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8BinaryOp;
+import com.mikesamuel.cil.ast.j8.J8ExpressionNameReference;
 import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
 import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
 import com.mikesamuel.cil.ast.j8.J8LocalDeclaration;
@@ -449,9 +450,11 @@ final class TypingPass extends AbstractRewritingPass {
                       UnqualifiedClassInstanceCreationExpressionNode.class);
               Optional<ClassOrInterfaceTypeNode> type = node.finder(
                   ClassOrInterfaceTypeNode.class)
-                  .exclude(J8NodeType.TypeArguments)
-                  .exclude(J8NodeType.ArgumentList)
-                  .exclude(J8NodeType.ClassBody)
+                  .exclude(
+                      J8NodeType.ArgumentList,
+                      J8NodeType.ClassBody,
+                      J8NodeType.ClassOrInterfaceType,
+                      J8NodeType.TypeArguments)
                   .findOne();
               if (type.isPresent()) {
                 exprType = type.get().getStaticType();
@@ -1706,6 +1709,10 @@ final class TypingPass extends AbstractRewritingPass {
     // Associate method descriptor with invokedMethod.
     descriptorRef.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
     descriptorRef.setMethodDeclaringType(invokedMethod.m.declaringType);
+    if (descriptorRef instanceof J8ExpressionNameReference) {
+      ((J8ExpressionNameReference) descriptorRef)
+          .setReferencedExpressionName(invokedMethod.m.member.canonName);
+    }
 
     // Inject casts for actual parameters.
     if (this.injectCasts && actuals != null) {

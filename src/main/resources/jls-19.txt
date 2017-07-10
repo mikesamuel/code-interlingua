@@ -363,7 +363,7 @@ Label:
      Identifier
 LocalName: (@mixin=ExpressionNameReference)
      Identifier
-MethodName: (@mixin=MethodDescriptorReference)
+MethodName: (@mixin=ExpressionNameReference,MethodDescriptorReference)
      Identifier
 SimpleTypeName:
      Identifier
