@@ -491,7 +491,7 @@ ClassLiteral: (@mixin=Typed)
      "boolean" {Dim} "." "class"
      "void" "." "class"
 UnqualifiedClassInstanceCreationExpression: (@mixin=MethodDescriptorReference)
-     "new" [TypeArguments] ClassOrInterfaceType "(" [ArgumentList] ")"
+     "new" [TypeArguments] ClassOrInterfaceType "(" [ArgumentList] ")"   (@name=New)
 ArgumentList:
      Expression {"," Expression}
 ArrayCreationExpression: (@mixin=Typed)

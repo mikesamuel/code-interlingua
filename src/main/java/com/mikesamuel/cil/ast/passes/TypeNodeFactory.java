@@ -13,11 +13,13 @@ import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.NumericTypeNode;
+import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
+import com.mikesamuel.cil.ast.j8.TypeNameNode;
 import com.mikesamuel.cil.ast.j8.TypeNode;
 import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.j8.WildcardNode;
@@ -206,6 +208,45 @@ class TypeNodeFactory {
       return TypeNode.Variant.ReferenceType.buildNode(
           toReferenceTypeNode((ReferenceType) typ));
     }
+  }
+
+  static TypeNameNode toTypeNameNode(Name typeName) {
+    Preconditions.checkArgument(typeName.type == Name.Type.CLASS);
+    TypeNameNode result;
+    if (typeName.parent == null
+        || Name.DEFAULT_PACKAGE.equals(typeName.parent)) {
+      result = TypeNameNode.Variant.Identifier.buildNode(
+          toIdentifierNode(typeName));
+    } else {
+      result = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
+          .buildNode(
+              toPackageOrTypeNameNode(typeName.parent),
+              toIdentifierNode(typeName));
+    }
+    return result;
+  }
+
+  static PackageOrTypeNameNode toPackageOrTypeNameNode(
+      Name typeOrPackageName) {
+    PackageOrTypeNameNode result;
+    if (typeOrPackageName.parent == null
+        || Name.DEFAULT_PACKAGE.equals(typeOrPackageName.parent)) {
+      result = PackageOrTypeNameNode.Variant.Identifier.buildNode(
+          toIdentifierNode(typeOrPackageName));
+    } else {
+      result = PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
+          .buildNode(
+              toPackageOrTypeNameNode(typeOrPackageName.parent),
+              toIdentifierNode(typeOrPackageName));
+    }
+    return result;
+  }
+
+  static IdentifierNode toIdentifierNode(Name nm) {
+    IdentifierNode node = IdentifierNode.Variant.Builtin
+        .buildNode(nm.identifier);
+    node.setNamePartType(nm.type);
+    return node;
   }
 
 }

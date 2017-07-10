@@ -69,7 +69,7 @@ public final class StatementExpressionNodeTest extends AbstractParSerTestCase {
         push(StatementExpressionNode.Variant.ClassInstanceCreationExpression),
         push(ClassInstanceCreationExpressionNode.Variant.UnqualifiedClassInstanceCreationExpression),
         push(ExpressionAtomNode.Variant.UnqualifiedClassInstanceCreationExpression),
-        push(UnqualifiedClassInstanceCreationExpressionNode.Variant.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody),
+        push(UnqualifiedClassInstanceCreationExpressionNode.Variant.New),
         token("new", -1),
         push(ClassOrInterfaceTypeToInstantiateNode.Variant.ClassOrInterfaceTypeDiamond),
         push(ClassOrInterfaceTypeNode.Variant.ContextFreeNames),

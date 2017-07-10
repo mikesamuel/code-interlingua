@@ -3787,7 +3787,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testUnqualifiedClassInstanceCreationExpressionNewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody() {
     parseSanityCheck(
-        UnqualifiedClassInstanceCreationExpressionNode.Variant.NewTypeArgumentsClassOrInterfaceTypeToInstantiateLpArgumentListRpClassBody,
+        UnqualifiedClassInstanceCreationExpressionNode.Variant.New,
         "new <X>MyClass(1, 2)"
         );
   }

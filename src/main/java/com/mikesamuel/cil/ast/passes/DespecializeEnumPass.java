@@ -27,6 +27,7 @@ import com.mikesamuel.cil.ast.j8.CaseValueNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
 import com.mikesamuel.cil.ast.j8.ClassMemberDeclarationNode;
+import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeToInstantiateNode;
 import com.mikesamuel.cil.ast.j8.EnumBodyDeclarationsNode;
 import com.mikesamuel.cil.ast.j8.EnumBodyNode;
 import com.mikesamuel.cil.ast.j8.EnumConstantNameNode;
@@ -44,6 +45,7 @@ import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.MarkerAnnotationNode;
@@ -55,7 +57,6 @@ import com.mikesamuel.cil.ast.j8.MethodInvocationNode;
 import com.mikesamuel.cil.ast.j8.MethodNameNode;
 import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.ModifierNode;
-import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.j8.ResultNode;
@@ -69,17 +70,15 @@ import com.mikesamuel.cil.ast.j8.SwitchBlockStatementGroupNode;
 import com.mikesamuel.cil.ast.j8.SwitchLabelNode;
 import com.mikesamuel.cil.ast.j8.SwitchLabelsNode;
 import com.mikesamuel.cil.ast.j8.SwitchStatementNode;
+import com.mikesamuel.cil.ast.j8.ThrowStatementNode;
 import com.mikesamuel.cil.ast.j8.ThrowsNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
-import com.mikesamuel.cil.ast.j8.TypeBoundNode;
 import com.mikesamuel.cil.ast.j8.TypeNameNode;
-import com.mikesamuel.cil.ast.j8.TypeParameterListNode;
-import com.mikesamuel.cil.ast.j8.TypeParameterNode;
-import com.mikesamuel.cil.ast.j8.TypeParametersNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
 import com.mikesamuel.cil.ast.j8.UnannTypeNode;
+import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.FieldInfo;
@@ -262,6 +261,104 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         }
       }
     }
+    switch (node.getNodeType()) {
+      case Primary:
+      case ExpressionAtom: {
+        int nEnumStates = enumStates.size();
+        if (nEnumStates == 0) { break; }
+        EnumState es = enumStates.get(nEnumStates - 1);
+
+        J8NodeVariant v = node.getVariant();
+        if (v == ExpressionAtomNode.Variant.FreeField
+            || v == PrimaryNode.Variant.FieldAccess) {
+          FieldNameNode nameNode =
+              node.firstChildWithType(FieldNameNode.class);
+          if (nameNode != null) {
+            Name name = nameNode.getReferencedExpressionName();
+            Name unspecialized = es.specializedNameToUnspecialized.get(name);
+            if (unspecialized != null) {
+              IdentifierNode id = nameNode.firstChildWithType(
+                  IdentifierNode.class);
+              if (id == null) {
+                error(
+                    nameNode,
+                    "Missing identifier for field access " + node);
+                break;
+              }
+              id.setValue(unspecialized.identifier);
+              if (v == PrimaryNode.Variant.FieldAccess) {
+                // Turn it into a free field access so that we can
+                ExpressionAtomNode atom =
+                    ExpressionAtomNode.Variant.FreeField.buildNode(nameNode);
+                atom.setSourcePosition(node.getSourcePosition());
+                return ProcessingStatus.replace(atom);
+              }
+            }
+          }
+        } else if (v == ExpressionAtomNode.Variant.MethodInvocation
+                   || v == PrimaryNode.Variant.MethodInvocation) {
+          MethodNameNode nameNode =
+              node.firstChildWithType(MethodNameNode.class);
+          if (nameNode != null) {
+            Name name = nameNode.getReferencedExpressionName();
+            Name unspecialized = es.specializedNameToUnspecialized.get(name);
+            if (unspecialized != null) {
+              IdentifierNode id = nameNode.firstChildWithType(
+                  IdentifierNode.class);
+              if (id == null) {
+                error(
+                    nameNode,
+                    "Missing identifier for field access " + node);
+                break;
+              }
+              id.setValue(unspecialized.identifier);
+                if (v == PrimaryNode.Variant.MethodInvocation) {
+                  // Make sure that the target is the outer class.
+                  // This preserves any explicit type parameters.
+                  int index = node.finder(J8BaseNode.class).indexOf();
+                  J8BaseNode target = node.getChild(index);
+                  if (target.getNodeType() == J8NodeType.ExpressionAtom
+                      || target.getNodeType() == J8NodeType.Primary) {
+                    // Since it is static, rewrite `this` to the enum name.
+                    ExpressionAtomNode staticReceiver =
+                        ExpressionAtomNode.Variant.StaticMember
+                        .buildNode(
+                            TypeNodeFactory.toTypeNameNode(es.ti.canonName));
+                    ((PrimaryNode) node).replace(index, staticReceiver);
+                  }
+                }
+            }
+          }
+        } else if (v == ExpressionAtomNode.Variant.This
+                   && node.getNChildren() == 0) {
+          // Unqualified this.
+          int nTypesInScope = typesInScope.size();
+          if (nTypesInScope != 0) {
+            TypeInfo type = typesInScope.get(nTypesInScope - 1);
+            if (type.superType.isPresent() && type.superType.get().rawName
+                .equals(es.ti.canonName)) {
+              // This refers to a specialized constant.
+              // TODO: this is almost certainly wrong.  Keep a map from anonymous
+              // class names to special constants in EnumState.
+              SpecialConstant sc = es.specialConstantForClass(type.canonName);
+              ExpressionAtomNode e = (ExpressionAtomNode) node;
+              e.setVariant(ExpressionAtomNode.Variant.Parenthesized);
+              e.add(
+                  ExpressionNode.Variant.ConditionalExpression.buildNode(
+                      PrimaryNode.Variant.FieldAccess.buildNode(
+                          ExpressionAtomNode.Variant.StaticMember.buildNode(
+                              TypeNodeFactory.toTypeNameNode(es.ti.canonName)),
+                          FieldNameNode.Variant.Identifier.buildNode(
+                              sc.name.deepClone()))));
+            }
+          }
+        }
+        break;
+      }
+      // TODO: rewrite super calls.
+      default:
+        break;
+    }
     return ProcessingStatus.CONTINUE;
   }
 
@@ -420,6 +517,9 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
             }
           }
         }
+
+        TypeNameNode outerEnumTypeName = TypeNodeFactory.toTypeNameNode(
+            es.ti.canonName);
         for (MethodNodeAndMetadata mmd : overrides.allMethods()) {
           MethodDeclarationNode decl = mmd.declNode;
           Optional<FormalParameterListNode> formalsOpt =
@@ -434,40 +534,39 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
           if (formalsOpt.isPresent()) {
             ImmutableList<VariableDeclaratorIdNode> formalNames = formalsOpt
                 .get().finder(VariableDeclaratorIdNode.class).find();
-
             argumentList = ArgumentListNode.Variant.ExpressionComExpression
                 .buildNode(Lists.transform(
                     formalNames,
-                    new Function<VariableDeclaratorIdNode, ExpressionNode>() {
-
-                      @Override
-                      public ExpressionNode apply(
-                          VariableDeclaratorIdNode formal) {
-                        return ExpressionNode.Variant
-                            .ConditionalExpression.buildNode(
-                                ExpressionAtomNode.Variant.Local.buildNode(
-                                    LocalNameNode.Variant.Identifier.buildNode(
-                                        toIdentifierNode(
-                                            formal.getDeclaredExpressionName())
-                                        )));
-                      }
-                    }));
+                    VARIABLE_DECLARATOR_TO_REFERENCE));
+          }
+          TypeArgumentsNode typeArguments = null;
+          if (!mmd.callableInfo.typeParameters.isEmpty()) {
+            typeArguments = TypeArgumentsNode.Variant.LtTypeArgumentListGt
+                .buildNode(
+                    TypeArgumentListNode.Variant.TypeArgumentComTypeArgument
+                    .buildNode(
+                        Lists.transform(
+                            mmd.callableInfo.typeParameters,
+                            TYPE_PARAMETER_NAME_TO_TYPE_ARGUMENT_NODE)));
           }
 
           // Craft a switch
           ImmutableList.Builder<J8BaseNode> cases = ImmutableList.builder();
           for (ConstantAndMigratedName cmn : mmd.specialConstantsOverriding) {
             List<J8BaseNode> callAndReturnStatements;
-            ExpressionAtomNode specializedCall =
-                ExpressionAtomNode.Variant.MethodInvocation
-                .buildNode(
-                    MethodNameNode.Variant.Identifier.buildNode(
-                        IdentifierNode.Variant.Builtin.buildNode(
-                            cmn.migratedName.identifier)));
+            PrimaryNode specializedCall =
+                PrimaryNode.Variant.MethodInvocation.buildNode(
+                    ExpressionAtomNode.Variant.StaticMember.buildNode(
+                        outerEnumTypeName));
+            if (typeArguments != null) {
+              specializedCall.add(typeArguments.deepClone());
+            }
+            specializedCall.add(
+                MethodNameNode.Variant.Identifier.buildNode(
+                    IdentifierNode.Variant.Builtin.buildNode(
+                        cmn.migratedName.identifier)));
             if (argumentList != null) {
-              specializedCall.add(
-                  ArgumentListNode.Variant.ExpressionComExpression
-                  .buildNode(argumentList.deepClone()));
+              specializedCall.add(argumentList.deepClone());
             }
 
             if (isVoid) {
@@ -529,9 +628,48 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
               .exclude(BlockStatementsNode.class)
               .findOne();
           if (!methodBodyBlockOpt.isPresent()) {
-            // TODO: handle case where method is abstract in enum and overridden
-            // in every constant.
-            continue;
+            if (MethodBodyNode.Variant.Sem == methodBody.getVariant()) {
+              methodBody.setVariant(MethodBodyNode.Variant.Block);
+              removeModifiers(decl, Modifier.ABSTRACT);
+              TypeNodeFactory tf = new TypeNodeFactory(
+                  logger, infoPool.typePool);
+
+              UnqualifiedClassInstanceCreationExpressionNode newError =
+                  UnqualifiedClassInstanceCreationExpressionNode.Variant.New
+                  .buildNode(
+                      ClassOrInterfaceTypeToInstantiateNode
+                      .Variant.ClassOrInterfaceTypeDiamond.buildNode(
+                          tf.toClassOrInterfaceTypeNode(
+                              JAVA_LANG_ASSERTIONERROR)),
+                      ArgumentListNode.Variant.ExpressionComExpression
+                      .buildNode(
+                          ExpressionNode.Variant.ConditionalExpression
+                          .buildNode(
+                              ExpressionAtomNode.Variant.This.buildNode())));
+
+              ThrowStatementNode throwStatement =
+                  ThrowStatementNode.Variant.ThrowExpressionSem.buildNode(
+                      ExpressionNode.Variant.ConditionalExpression.buildNode(
+                          ExpressionAtomNode.Variant
+                          .UnqualifiedClassInstanceCreationExpression
+                          .buildNode(newError)));
+
+              methodBodyBlockOpt = Optional.of(
+                  BlockStatementsNode.Variant
+                  .BlockStatementBlockStatementBlockTypeScope
+                  .buildNode(
+                      BlockStatementNode.Variant.Statement.buildNode(
+                          StatementNode.Variant.ThrowStatement.buildNode(
+                              throwStatement))));
+              methodBody.add(
+                  BlockNode.Variant.LcBlockStatementsRc.buildNode(
+                      methodBodyBlockOpt.get()));
+            } else {
+              error(
+                  methodBody,
+                  "cannot despecialize method " + mmd.callableInfo.canonName);
+              continue;
+            }
           }
           BlockStatementsNode methodBodyBlock = methodBodyBlockOpt.get();
           switch (methodBodyBlock.getVariant()) {
@@ -549,16 +687,26 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
               break;
           }
         }
-
         break;
       }
-      // TODO: rewrite free fields and this.field uses
-      // TODO: rewrite method uses.  private methods become statics.
-      // TODO: rewrite super calls.
       default:
         break;
     }
     return ProcessingStatus.CONTINUE;
+  }
+
+  private static void removeModifiers(
+      MethodDeclarationNode decl, int modifiers) {
+    for (int i = decl.getNChildren(); --i >= 0;) {
+      J8BaseNode child = decl.getChild(i);
+      if (child instanceof ModifierNode) {
+        int bit = ModifierNodes.modifierBits(
+            ((ModifierNode) child).getVariant());
+        if ((bit & modifiers) != 0) {
+          decl.remove(i);
+        }
+      }
+    }
   }
 
   @Override
@@ -593,6 +741,13 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
 
     EnumState(TypeInfo ti) {
       this.ti = ti;
+    }
+
+    public SpecialConstant specialConstantForClass(Name canonName) {
+      for (SpecialConstant sc : specialConstants) {
+        if (canonName.equals(sc.ti.canonName)) { return sc; }
+      }
+      throw new IllegalArgumentException(canonName.toString());
     }
 
     @SuppressWarnings("synthetic-access")
@@ -641,15 +796,16 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         CallableInfo staticPrivateCallable = new CallableInfo(
             staticPrivateModifiers,
             methodName,
-            // HACK: We're translating parameters without creating type entries.
-            // TODO: document the passes we need to rerun after this one
-            // because of this dodginess.
             Lists.transform(
                 ci.typeParameters,
                 new Function<Name, Name>() {
 
                   @Override
                   public Name apply(Name paramOnSpecializedType) {
+                    // We're translating parameters without creating types in
+                    // the type info resolver.
+                    // Since we blow away metadata at the end of the run, this
+                    // shouldn't affect other passes.
                     return methodName.child(
                         paramOnSpecializedType.identifier,
                         paramOnSpecializedType.type);
@@ -657,14 +813,6 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                 }),
             ci.isInitializer
             );
-        // TODO: If we're just going to blow away name and type metadata,
-        // can we skip this?
-        staticPrivateCallable.setVariadic(ci.isVariadic());
-        staticPrivateCallable.setSynthetic(ci.isSynthetic());
-        staticPrivateCallable.setIsBridge(ci.isBridge());
-        // We shouldn't need to worry about the specialized type showing
-        // up in the return type or parameter types, since that type is
-        // unmentionable.
         staticPrivateCallable.setFormalTypes(ci.getFormalTypes());
         staticPrivateCallable.setDescriptor(ci.getDescriptor());
         staticPrivateCallable.setReturnType(ci.getReturnType());
@@ -724,7 +872,6 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
     Migration(EnumState enumState) {
       this.enumState = enumState;
     }
-    // TODO: use a bridge to clear out type and name metadata.
 
     ClassBodyDeclarationNode migrate(
         ClassBodyDeclarationNode toImport) {
@@ -948,6 +1095,42 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
 
   static final Name JAVA_LANG_OVERRIDE = JavaLang.JAVA_LANG.child(
       "Override", Name.Type.CLASS);
+  static final TypeSpecification JAVA_LANG_ASSERTIONERROR =
+      TypeSpecification.unparameterized(
+          JavaLang.JAVA_LANG.child(
+              "AssertionError", Name.Type.CLASS));
+
+  private static final Function<? super Name, ? extends J8BaseNode>
+  TYPE_PARAMETER_NAME_TO_TYPE_ARGUMENT_NODE =
+      new Function<Name, TypeArgumentNode>() {
+        @Override
+        public TypeArgumentNode apply(Name typeParamName) {
+          return TypeArgumentNode.Variant.ReferenceType
+              .buildNode(
+                  ReferenceTypeNode.Variant.TypeVariable
+                  .buildNode(
+                      TypeVariableNode.Variant
+                      .AnnotationIdentifier.buildNode(
+                          TypeNodeFactory.
+                          toIdentifierNode(typeParamName))));
+        }
+      };
+
+  private static final Function<VariableDeclaratorIdNode, ExpressionNode>
+  VARIABLE_DECLARATOR_TO_REFERENCE =
+      new Function<VariableDeclaratorIdNode, ExpressionNode>() {
+        @Override
+        public ExpressionNode apply(VariableDeclaratorIdNode d) {
+          IdentifierNode identNode = d.firstChildWithType(IdentifierNode.class);
+          return ExpressionNode.Variant
+              .ConditionalExpression.buildNode(
+                  ExpressionAtomNode.Variant.Local.buildNode(
+                      LocalNameNode.Variant.Identifier.buildNode(
+                          IdentifierNode.Variant.Builtin
+                              .buildNode(identNode.getValue())
+                              .setNamePartType(Name.Type.LOCAL))));
+        }
+      };
 
   static final class CollectedOverrides {
 
@@ -1037,7 +1220,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         ModifierNode.Variant.Annotation.buildNode(
             AnnotationNode.Variant.MarkerAnnotation.buildNode(
                 MarkerAnnotationNode.Variant.AtTypeName.buildNode(
-                    toTypeNameNode(JAVA_LANG_OVERRIDE)))));
+                    TypeNodeFactory.toTypeNameNode(JAVA_LANG_OVERRIDE)))));
     for (int mods = ci.modifiers, bit; mods != 0; mods &= ~bit) {
       bit = mods & -mods;
       ModifierNode.Variant v = ModifierNodes.modifierVariant(bit);
@@ -1071,43 +1254,18 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
               .buildNode(
                   Lists.<Name, J8BaseNode>transform(
                       ci.typeParameters,
-                      new Function<Name, TypeArgumentNode>() {
-                        @Override
-                        public TypeArgumentNode apply(Name typeParamName) {
-                          return TypeArgumentNode.Variant.ReferenceType
-                              .buildNode(
-                                  ReferenceTypeNode.Variant.TypeVariable
-                                  .buildNode(
-                                      TypeVariableNode.Variant
-                                      .AnnotationIdentifier.buildNode(
-                                          toIdentifierNode(typeParamName))));
-                        }
-                      }))));
+                      TYPE_PARAMETER_NAME_TO_TYPE_ARGUMENT_NODE))));
     }
     callChildren.add(
         MethodNameNode.Variant.Identifier.buildNode(
-            toIdentifierNode(ci.canonName)));
+            TypeNodeFactory.toIdentifierNode(ci.canonName)));
     if (!exFormalNames.isEmpty()) {
       callChildren.add(
           ArgumentListNode.Variant.ExpressionComExpression
           .buildNode(
               Lists.<VariableDeclaratorIdNode, ExpressionNode>transform(
                   exFormalNames,
-                  new Function<VariableDeclaratorIdNode, ExpressionNode>() {
-                    @Override
-                    public ExpressionNode apply(VariableDeclaratorIdNode d) {
-                      IdentifierNode id = d.firstChildWithType(
-                          IdentifierNode.class);
-                      return ExpressionNode.Variant.ConditionalExpression
-                          .buildNode(
-                              ExpressionAtomNode.Variant.Local.buildNode(
-                                  LocalNameNode.Variant.Identifier.buildNode(
-                                      IdentifierNode.Variant.Builtin.buildNode(
-                                          id.getValue())
-                                      .setNamePartType(Name.Type.LOCAL))
-                                  ));
-                    }
-                  })));
+                  VARIABLE_DECLARATOR_TO_REFERENCE)));
     }
     PrimaryNode superCall = PrimaryNode.Variant.MethodInvocation.buildNode(
         callChildren.build());
@@ -1135,7 +1293,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         ImmutableList.builder();
     methodDeclaratorParts.add(
         MethodNameNode.Variant.Identifier.buildNode(
-            toIdentifierNode(ci.canonName)));
+            TypeNodeFactory.toIdentifierNode(ci.canonName)));
     if (exFormals != null) {
       // TODO: make sure we use long names so this isn't dependent on
       // imports.
@@ -1148,26 +1306,9 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
 
     ImmutableList.Builder<J8BaseNode> headerParts = ImmutableList.builder();
     if (!ci.typeParameters.isEmpty()) {
-      headerParts.add(
-          TypeParametersNode.Variant.LtTypeParameterListGt
-          .buildNode(
-              TypeParameterListNode.Variant.TypeParameterComTypeParameter
-              .buildNode(
-                  Lists.<Name, TypeParameterNode>transform(
-                      ci.typeParameters,
-                      new Function<Name, TypeParameterNode>() {
-                        @Override
-                        public TypeParameterNode apply(Name paramName) {
-                          // TODO: capture type bound info in CallableInfo
-                          TypeBoundNode typeBound = null;  // TODO
-                          if (true) { throw new AssertionError("TODO"); }
-                          return TypeParameterNode.Variant.TypeParameter
-                              .buildNode(
-                                  SimpleTypeNameNode.Variant.Identifier
-                                  .buildNode(toIdentifierNode(paramName)),
-                                  typeBound);
-                        }
-                      }))));
+      // None of the overridable methods in Object or Enum have type parameters
+      // so we need not handle this case.
+      throw new AssertionError(ci.canonName);
     }
     headerParts.add(result)
         .add(declarator);
@@ -1195,44 +1336,5 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                                 )
                             ))))
             .build());
-  }
-
-  private static TypeNameNode toTypeNameNode(Name typeName) {
-    Preconditions.checkArgument(typeName.type == Name.Type.CLASS);
-    TypeNameNode result;
-    if (typeName.parent == null
-        || Name.DEFAULT_PACKAGE.equals(typeName.parent)) {
-      result = TypeNameNode.Variant.Identifier.buildNode(
-          toIdentifierNode(typeName));
-    } else {
-      result = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .buildNode(
-              toPackageOrTypeNameNode(typeName.parent),
-              toIdentifierNode(typeName));
-    }
-    return result;
-  }
-
-  private static PackageOrTypeNameNode toPackageOrTypeNameNode(
-      Name typeOrPackageName) {
-    PackageOrTypeNameNode result;
-    if (typeOrPackageName.parent == null
-        || Name.DEFAULT_PACKAGE.equals(typeOrPackageName.parent)) {
-      result = PackageOrTypeNameNode.Variant.Identifier.buildNode(
-          toIdentifierNode(typeOrPackageName));
-    } else {
-      result = PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .buildNode(
-              toPackageOrTypeNameNode(typeOrPackageName.parent),
-              toIdentifierNode(typeOrPackageName));
-    }
-    return result;
-  }
-
-  static IdentifierNode toIdentifierNode(Name nm) {
-    IdentifierNode node = IdentifierNode.Variant.Builtin
-        .buildNode(nm.identifier);
-    node.setNamePartType(nm.type);
-    return node;
   }
 }

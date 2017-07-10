@@ -862,7 +862,7 @@ ClassLiteral: (@mixin=Typed)
      "boolean" {Dim} "." "class"
      "void" "." "class"
 UnqualifiedClassInstanceCreationExpression: (@mixin=TypeDeclaration,MethodDescriptorReference)
-     "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]
+     "new" [TypeArguments] ClassOrInterfaceTypeToInstantiate "(" [ArgumentList] ")" [ClassBody]   (@name=New)
 ClassOrInterfaceTypeToInstantiate:
      // Lookahead avoids type arguments then diamond as in (new foo.Bar<T><>())
      // and filters out interstitial arguments as in (new foo.Outer<X>.Bar<Y>()).

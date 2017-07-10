@@ -100,7 +100,7 @@ public final class DespecializeEnumPassTest extends TestCase {
             "  @java.lang.Override public java.lang.String toString() {",
             "    switch (this) {",
             "      case B :"
-            +      " return",
+            +      " return E.",
                   "      /* /E.()Ljava/lang/String;*/",
                   "      B__toString();",
             "    }",
@@ -144,6 +144,215 @@ public final class DespecializeEnumPassTest extends TestCase {
         },
         METHOD_DESCRIPTOR_DECORATOR
         );
+  }
+
+  @Test
+  public static void testFieldAccessesRewritten() throws Exception {
+    // Fields declared within a specialized enum are only accessible
+    // (modulo abuses of reflection) to code within that specialized enum's
+    // class body.  Test that we rewrite field accesses in that scope.
+
+    String[] waysToReferenceEdotBdotx = new String[] {
+      "x",
+      "this.x",
+      // "B.x",        // Not allowed since the static type of B is E, not E$1
+      // "E.B.x",      // ditto
+      // "foo.E.B.x",  // ditto
+    };
+
+    for (String refToX : waysToReferenceEdotBdotx) {
+      String[] input = {
+        "//E:%(ref_to_x)s",
+        "package foo;",
+        "enum E {",
+        "  A,",
+        "  B() {",
+        "    int x;",
+        "    @Override public String toString() {",
+        "      return \"B\" + %(ref_to_x)s;",
+        "    }",
+        "  },",
+        "  C,",
+        "}",
+      };
+
+      for (int i = 0, n = input.length; i < n; ++i) {
+        input[i] = input[i].replace("%(ref_to_x)s", refToX);
+      }
+
+      assertPassOutput(
+          new String[][] {
+            {
+              "package foo;",
+              "enum E {",
+              "  A,",
+              "  B,",
+              "  C,",
+              "  ;",
+              "  private static int B__x;",
+              "  static private String B__toString() { return \"B\" + B__x; }",
+              "  @java.lang.Override public java.lang.String toString() {",
+              "    switch (this) {",
+              "      case B:",
+              "        return foo.E.B__toString();",
+              "    }",
+              "    return super.toString();",
+              "  }",
+              "}",
+            },
+          },
+          new String[][] { input },
+          null
+          );
+    }
+  }
+
+  @Test
+  public static void testMethodCallsRewritten() throws Exception {
+    // Fields declared within a specialized enum are only accessible
+    // (modulo abuses of reflection) to code within that specialized enum's
+    // class body.  Test that we rewrite field accesses in that scope.
+
+    String[] waysToReferenceEdotBdotx = new String[] {
+      "f()", "B__f()",
+      "this.f()", "foo.E.B__f()",
+      // "B.f()",      // Not allowed since the static type of B is E, not E$1
+      // "E.B.f()",    // ditto
+      // "foo.E.B.f()",// ditto
+    };
+
+    for (int j = 0, m = waysToReferenceEdotBdotx.length; j < m; j += 2) {
+      String refToF = waysToReferenceEdotBdotx[j];
+      String refToBF = waysToReferenceEdotBdotx[j + 1];
+      String[] input = {
+        "//E:%(ref_to_f)s",
+        "package foo;",
+        "enum E {",
+        "  A,",
+        "  B() {",
+        "    String f() { return \".f\"; }",
+        "    @Override public String toString() {",
+        "      return \"B\" + %(ref_to_f)s;",
+        "    }",
+        "  },",
+        "  C,",
+        "}",
+      };
+
+      String[] output = {
+        "package foo;",
+        "enum E {",
+        "  A,",
+        "  B,",
+        "  C,",
+        "  ;",
+        "  private static String B__f() {",
+        "    return \".f\";",
+        "  }",
+        "  static private String B__toString()"
+        + " { return \"B\" + %(ref_to_b__f)s; }",
+        "  @java.lang.Override public java.lang.String toString() {",
+        "    switch (this) {",
+        "      case B:",
+        "        return foo.E.B__toString();",
+        "    }",
+        "    return super.toString();",
+        "  }",
+        "}",
+      };
+
+      for (int i = 0, n = input.length; i < n; ++i) {
+        input[i] = input[i].replace("%(ref_to_f)s", refToF);
+      }
+      for (int i = 0, n = output.length; i < n; ++i) {
+        output[i] = output[i].replace("%(ref_to_b__f)s", refToBF);
+      }
+
+      assertPassOutput(
+          new String[][] { output },
+          new String[][] { input },
+          null);
+    }
+  }
+
+  @Test
+  public static void testThisRewrittenInMigratedStatements() throws Exception {
+    assertPassOutput(
+        new String[][] {
+          {
+            "enum E {",
+            "  A(), B(), C(),;",
+            "  private static int A__x = (E.A).ordinal();",
+            "  static {",
+            "    A__x += E.A__f();",
+            "  }",
+            "  private static int A__f() { return A__x; }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "enum E {",
+            "  A() {",
+            "    int x = this.ordinal();",
+            "    { this.x += this.f(); }",
+            "    int f() { return this.x; }",
+            "  },",
+            "  B,",
+            "  C () {};",
+            "}",
+          },
+        },
+        null);
+  }
+
+  public static void testAbstractMethodsMadeConcrete() throws Exception {
+    assertPassOutput(
+        new String[][] {
+          {
+            "package p;",
+            "",
+            "enum E {",
+            "  X(), Y(),;",
+            "",
+            "  <T> int f(T x) {",
+            "    switch (this) {",
+            "      case X:",
+            "        return p.E.<T>X__f(x);",
+            "      case Y:",
+            "        return p.E.<T>Y__f(x);",
+            "    }",
+            "    throw new java.lang.AssertionError(this);",
+            "  }",
+            "  private static <T> int X__f(T x) { return 1; }",
+            "  private static <T> int Y__f(T x) { return 2; }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//E",
+            "package p;",
+            "",
+            "enum E {",
+            "  X() {",
+            "    <T> int f(T x) { return 1; }",
+            "  },",
+            "  Y () {",
+            "    <T> int f(T x) { return 2; }",
+            "  };",
+            "",
+            "  abstract <T> int f(T x);",
+            "}",
+          },
+        },
+        null
+        );
+  }
+
+  public static void testSuperCallsFromSpecializedEnumMethods()
+  throws Exception {
+    fail("TODO");
   }
 
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =
