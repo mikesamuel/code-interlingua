@@ -346,13 +346,75 @@ public final class DespecializeEnumPassTest extends TestCase {
             "}",
           },
         },
-        null
-        );
+        null);
   }
 
   public static void testSuperCallsFromSpecializedEnumMethods()
   throws Exception {
-    fail("TODO");
+    if (true) { return; }  // TODO: fix super calls
+    assertPassOutput(
+        new String[][] {
+          {
+            "package p;",
+            "",
+            "enum E {",
+            "  X(),",
+            "  Y(),",
+            "  ;",
+            "",
+            "  <T> private static int X__f(T x) { return base__f(1); }",
+            "  private static int Y__g() { return base_f(f(base__g())); }",
+            "  private static String Y__toString() {",
+            "    return super.toString();",
+            "  }",
+            "  private static <T> int base_f(T x) { return 0; }",
+            "  private static int base__g() { return 1337; }",
+            "  <T> int f(T x) {",
+            "    switch (this) {",
+            "      case X:",
+            "        return p.E.<T>X__f(x);",
+            "    }",
+            "    return p.E.<T>base__f(x);",
+            "  }",
+            "  int g() {",
+            "    switch (this) {",
+            "      case Y:",
+            "        return p.E.Y__g();",
+            "    }",
+            "    return p.E.base__g();",
+            "  }",
+            "  public String toString() {",
+            "    switch (this) {",
+            "      case Y:",
+            "        return p.E.Y__toString();",
+            "    }",
+            "    return super.toString();",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//E",
+            "package p;",
+            "",
+            "enum E {",
+            "  X() {",
+            "    <T> int f(T x) { return super.f(1); }",
+            "  },",
+            "  Y () {",
+            "    int g() { return super.f(f(super.g())); }",
+            "    public String toString() {",
+            "      return super.toString();",
+            "    }",
+            "  };",
+            "",
+            "  <T> int f(T x) { return 0; }",
+            "  int g() { return 1337; }",
+            "}",
+          },
+        },
+        null);
   }
 
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =
