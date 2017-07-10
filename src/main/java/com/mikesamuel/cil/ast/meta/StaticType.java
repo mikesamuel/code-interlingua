@@ -30,7 +30,7 @@ import com.mikesamuel.cil.ast.j8.NumericTypeNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
-import com.mikesamuel.cil.parser.SourcePosition;
+import com.mikesamuel.cil.parser.Positioned;
 
 import static com.mikesamuel.cil.ast.meta.JavaLang.JAVA_LANG;
 
@@ -503,7 +503,7 @@ public abstract class StaticType {
      */
     public StaticType type(
         TypeSpecification tspec,
-        @Nullable SourcePosition pos, @Nullable Logger logger) {
+        @Nullable Positioned pos, @Nullable Logger logger) {
       return pool.computeIfAbsent(
           tspec.canon(r),
           new Function<TypeSpecification, StaticType>() {
