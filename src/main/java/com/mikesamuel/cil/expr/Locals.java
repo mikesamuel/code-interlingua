@@ -42,7 +42,8 @@ public final class Locals<VALUE> {
         || name.type == Name.Type.AMBIGUOUS
         );
     Preconditions.checkArgument(
-        !identToLocallyDeclaredName.containsKey(name.identifier));
+        !identToLocallyDeclaredName.containsKey(name.identifier),
+        name);
     identToLocallyDeclaredName.put(name.identifier, name);
     coercions.put(name.identifier, coercion);
     VALUE zeroValue = coercion.apply(null);
