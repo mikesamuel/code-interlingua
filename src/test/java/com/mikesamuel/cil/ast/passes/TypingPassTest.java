@@ -2169,6 +2169,104 @@ public final class TypingPassTest extends TestCase {
         null);
   }
 
+  @Test
+  public static final void testSuperMethodResolution() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "package p;",
+            "enum E {",
+            "  A() {",
+            "    public String toString() {",
+            "      return super.",
+            "      /* /p/E()Ljava/lang/String;*/",
+            "      toString() + ':' + super.",
+            "      /* /java/lang/Enum</p/E>()I*/",
+            "      hashCode();",
+            "    }",
+            "  }",
+            "  , B() {}",
+            "  ,;",
+
+            "  public String toString() {",
+            "    return\"E.\" + super.",
+            "    /* /java/lang/Enum</p/E>()Ljava/lang/String;*/",
+            "    toString();",
+            "  }",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//E",
+            "package p;",
+            "enum E {",
+            "  A() {",
+            "    public String toString() {",
+            "      return super.toString() + ':' + super.hashCode();",
+            "    }",
+            "  },",
+            "  B() {",
+            "  }",
+            "  ;",
+            "",
+            "  public String toString() {",
+            "    return \"E.\" + super.toString();",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        new String[] {},
+        DECORATE_METHOD_NAMES_INCL_CONTAINER);
+
+    // TODO: Test Outer.super.foo();
+  }
+
+  @Test
+  public static final void testSuperFieldResolution() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "static class Base { int x = 42; public Base() {} }",
+          },
+          {
+            "static class Sub extends Base {",
+            "  int x = 12;",
+            "  @Override public String toString() {",
+            "    return\"x=\" +",
+            "    /* /Sub.x*/",
+            "    x + \"; super.x=\" + super.",
+            "    /* /Base.x*/",
+            "    x;",
+            "  }",
+            "  public Sub() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "static class Base {",
+            "  int x = 42;",
+            "}",
+          },
+          {
+            "static class Sub extends Base {",
+            "  int x = 12;",
+
+            "  @Override",
+            "  public String toString() {",
+            "    return \"x=\" + x + \"; super.x=\" + super.x;",
+            "  }",
+            "}",
+          },
+        },
+        null,
+        new String[] {},
+        DECORATE_EXPR_NAMES);
+  }
+
+
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 
     @Override

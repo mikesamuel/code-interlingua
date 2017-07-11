@@ -379,7 +379,7 @@ final class TypingPass extends AbstractRewritingPass {
               exprType = passThru(node);
               break type_switch;
             case FreeField:
-              exprType = processFieldAccess(e);
+              exprType = processFieldAccess(e, Optional.absent());
               break type_switch;
             case Literal:
               exprType = passThru(node);
@@ -401,7 +401,7 @@ final class TypingPass extends AbstractRewritingPass {
               break type_switch;
             }
             case MethodInvocation:
-              exprType = processMethodInvocation(e);
+              exprType = processMethodInvocation(e, Optional.absent());
               break type_switch;
             case Parenthesized:
               exprType = passThru(e);
@@ -459,7 +459,7 @@ final class TypingPass extends AbstractRewritingPass {
               if (type.isPresent()) {
                 exprType = type.get().getStaticType();
                 processCallableInvocation(
-                    ctorCall, exprType,
+                    ctorCall, exprType, Optional.absent(),
                     Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, ctorCall);
               } else {
                 error(node, "Class to instantiate unspecified");
@@ -481,7 +481,26 @@ final class TypingPass extends AbstractRewritingPass {
               break type_switch;
 
             case MethodInvocation: {
-              exprType = processMethodInvocation(e);
+              ExpressionAtomNode receiverAtom = e.firstChildWithType(
+                  ExpressionAtomNode.class);
+              Optional<Name> superExclusion = Optional.absent();
+              if (receiverAtom != null
+                  && (receiverAtom.getVariant()
+                      == ExpressionAtomNode.Variant.Super)) {
+                TypeNameNode tnn = e.firstChildWithType(TypeNameNode.class);
+                TypeInfo ti;
+                if (tnn != null) {
+                  ti = tnn.getReferencedTypeInfo();
+                } else {
+                  ti = containingTypes.peekLast();
+                }
+                if (ti != null) {
+                  superExclusion = Optional.of(ti.canonName);
+                } else {
+                  error(tnn, "Missing type info");
+                }
+              }
+              exprType = processMethodInvocation(e, superExclusion);
               break type_switch;
             }
 
@@ -507,7 +526,26 @@ final class TypingPass extends AbstractRewritingPass {
             }
 
             case FieldAccess: {
-              exprType = processFieldAccess(e);
+              ExpressionAtomNode receiverAtom = e.firstChildWithType(
+                  ExpressionAtomNode.class);
+              Optional<Name> superExclusion = Optional.absent();
+              if (receiverAtom != null
+                  && (receiverAtom.getVariant()
+                      == ExpressionAtomNode.Variant.Super)) {
+                TypeNameNode tnn = e.firstChildWithType(TypeNameNode.class);
+                TypeInfo ti;
+                if (tnn != null) {
+                  ti = tnn.getReferencedTypeInfo();
+                } else {
+                  ti = containingTypes.peekLast();
+                }
+                if (ti != null) {
+                  superExclusion = Optional.of(ti.canonName);
+                } else {
+                  error(tnn, "Missing type info");
+                }
+              }
+              exprType = processFieldAccess(e, superExclusion);
               break type_switch;
             }
 
@@ -565,8 +603,9 @@ final class TypingPass extends AbstractRewritingPass {
                       fullInnerTypeSpec, e.getSourcePosition(), logger);
                   Preconditions.checkNotNull(type).setStaticType(exprType);
                   processCallableInvocation(
-                      instantiation, exprType,
-                      Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, instantiation);
+                      instantiation, exprType, Optional.absent(),
+                      Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME,
+                      instantiation);
                   break type_switch;
                 }
               }
@@ -1510,7 +1549,8 @@ final class TypingPass extends AbstractRewritingPass {
     return false;
   }
 
-  private StaticType processFieldAccess(J8BaseNode e) {
+  private StaticType processFieldAccess(
+      J8BaseNode e, Optional<Name> superExclusion) {
     @Nullable J8Typed container = e.firstChildWithType(J8Typed.class);
     StaticType containerType;
     if (container != null) {
@@ -1519,6 +1559,12 @@ final class TypingPass extends AbstractRewritingPass {
         error(container, "Missing type for field container");
         return StaticType.ERROR_TYPE;
       }
+    } else if (superExclusion.isPresent()) {
+      // A reference to super.foo is explicitly specifying the field is a
+      // super type of the narrowest containing class.
+      containerType = typePool.type(
+          TypeSpecification.autoScoped(superExclusion.get(), typePool.r),
+          e, logger);
     } else {
       containerType = null;
     }
@@ -1550,7 +1596,8 @@ final class TypingPass extends AbstractRewritingPass {
                     FieldInfo.class,
                     fieldName,
                     sourceType,
-                    oneContainer);
+                    oneContainer,
+                    superExclusion);
             if (!fieldsFound.isEmpty()) {
               // Implement name shadowing by taking the first that has any
               // accessible with the right name.
@@ -1601,7 +1648,8 @@ final class TypingPass extends AbstractRewritingPass {
     return typePool.type(valueTypeInContext, e.getSourcePosition(), logger);
   }
 
-  private StaticType processMethodInvocation(J8BaseNode e) {
+  private StaticType processMethodInvocation(
+      J8BaseNode e, Optional<Name> superExclusion) {
     J8Typed callee = e.firstChildWithType(J8Typed.class);
 
     MethodNameNode nameNode = e.firstChildWithType(
@@ -1616,21 +1664,29 @@ final class TypingPass extends AbstractRewritingPass {
 
     StaticType calleeType;
     if (callee == null) {
-      // We can't commit to the callee type here because
-      // class C {
-      //   void f() {}
-      //   class D {
-      //     void g() {}
-      //     {
-      //       f();  // callee type is C
-      //       g();  // callee type is D
-      //     }
-      //   }
-      // }
-      // We delay method scope checks and the application of
-      // shadowing rules (JLS 6.4.1) until we've got more info.
+      if (superExclusion.isPresent()) {
+        // A call to super.method is explicitly looking for a method visible
+        // in a super type of the narrowest containing class.
+        calleeType = typePool.type(
+            TypeSpecification.autoScoped(superExclusion.get(), typePool.r),
+            e, logger);
+      } else {
+        // We can't commit to the callee type here because
+        // class C {
+        //   void f() {}
+        //   class D {
+        //     void g() {}
+        //     {
+        //       f();  // callee type is C
+        //       g();  // callee type is D
+        //     }
+        //   }
+        // }
+        // We delay method scope checks and the application of
+        // shadowing rules (JLS 6.4.1) until we've got more info.
 
-      calleeType = null;
+        calleeType = null;
+      }
     } else {
       // There's no need to box callee.  For example:
       //    int i = 0;
@@ -1651,12 +1707,13 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
 
-    return processCallableInvocation(e, calleeType, name, nameNode);
+    return processCallableInvocation(
+        e, calleeType, superExclusion, name, nameNode);
   }
 
   private StaticType processCallableInvocation(
-      J8BaseNode e, StaticType calleeType, String name,
-      J8MethodDescriptorReference descriptorRef) {
+      J8BaseNode e, StaticType calleeType, Optional<Name> superExclusion,
+      String name, J8MethodDescriptorReference descriptorRef) {
     @Nullable TypeArgumentsNode args = e.firstChildWithType(
         TypeArgumentsNode.class);
 
@@ -1697,7 +1754,7 @@ final class TypingPass extends AbstractRewritingPass {
     }
 
     Optional<MethodSearchResult> invokedMethodOpt = pickMethodOverload(
-        e, calleeType, typeArguments.build(), name,
+        e, calleeType, typeArguments.build(), superExclusion, name,
         actualTypes.build());
     if (!invokedMethodOpt.isPresent()) {
       error(e, "Unresolved use of method " + name);
@@ -2313,6 +2370,10 @@ final class TypingPass extends AbstractRewritingPass {
   /**
    * The containers to try in order when looking up a member.
    * <p>
+   * @param superExclusions if present, the class whose declared (not inherited)
+   *     members should be excluded from search results.
+   *     This allows us to implement {@code super}.member uses by excluding the
+   *
    * @param explicitContainerType null if the member use is a free use.
    */
   private <T extends MemberInfo>
@@ -2381,6 +2442,7 @@ final class TypingPass extends AbstractRewritingPass {
       J8BaseNode sourceNode,
       @Nullable StaticType calleeType,
       ImmutableList<TypeBinding> typeArguments,
+      Optional<Name> superExclusion,
       String methodName,
       ImmutableList<StaticType> actualTypes) {
     if (DEBUG) {
@@ -2409,7 +2471,8 @@ final class TypingPass extends AbstractRewritingPass {
                     CallableInfo.class,
                     methodName,
                     sourceType,
-                    oneContainingType);
+                    oneContainingType,
+                    superExclusion);
             if (!methodsFound.isEmpty()) {
               // Non-private field declarations mask all super-type
               // declarations of the same name.

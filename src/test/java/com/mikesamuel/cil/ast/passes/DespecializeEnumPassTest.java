@@ -105,7 +105,7 @@ public final class DespecializeEnumPassTest extends TestCase {
                   "      B__toString();",
             "    }",
             "    return super.",
-            "    /* /E.()Ljava/lang/String;*/",
+            "    /* /java/lang/Enum</E>.()Ljava/lang/String;*/",
             "    toString();",
             "  }",
 
@@ -351,7 +351,7 @@ public final class DespecializeEnumPassTest extends TestCase {
 
   public static void testSuperCallsFromSpecializedEnumMethods()
   throws Exception {
-    if (true) { return; }  // TODO: fix super calls
+    if (true) return;  // TODO: KNOWN FAILURE
     assertPassOutput(
         new String[][] {
           {

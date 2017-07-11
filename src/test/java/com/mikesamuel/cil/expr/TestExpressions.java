@@ -129,6 +129,75 @@ public final class TestExpressions {
     return x.equals(Boolean.TRUE);
   }
 
+  public static class AccessBase {
+    String s = "accessbase";
+
+    String getS() { return s; }
+  }
+
+  @SuppressWarnings({ "hiding", "synthetic-access" })
+  public static final class FieldAccessOuter extends AccessBase {
+    String s = "outer";
+
+    @Override
+    String getS() { return s; }
+
+    class Base {
+      String s = "innerbase";
+
+      String getS() {
+        return s;
+      }
+
+      String[] toStringArray() {
+        return new String[] {
+          "Base",
+          "s=" + s,
+          "getS()=" + getS(),
+          "Outer.this.s=" + FieldAccessOuter.this.s,
+          "Outer.this.getS()=" + FieldAccessOuter.this.getS(),
+        };
+      }
+    }
+
+    class Sub extends Base {
+      String s = "sub";
+
+      @Override
+      String getS() {
+        return s;
+      }
+
+      @Override
+      String[] toStringArray() {
+        return new String[] {
+          "Sub",
+          "s=" + s,
+          "getS()=" + getS(),
+          "FieldAccessOuter.this.s=" + FieldAccessOuter.this.s,
+          "FieldAccessOuter.this.getS()=" + FieldAccessOuter.this.getS(),
+          "super.s=" + super.s,
+          "super.getS()=" + super.getS(),
+          "FieldAccessOuter.super.s=" + FieldAccessOuter.super.s,
+          "FieldAccessOuter.super.getS()=" + FieldAccessOuter.super.getS(),
+        };
+      }
+    }
+
+    String[][] toStringArrayArray() {
+      return new String[][] {
+          new Base().toStringArray(),
+          new Sub().toStringArray(),
+      };
+    }
+  }
+
+  // TODO: I don't think is actually testing what it's supposed to since our
+  // method invocation is done by reflection, not by applying the interpreter
+  // to method bodies.
+  static final String[][] SUPER_ACCESSES =
+      new FieldAccessOuter().toStringArrayArray();
+
   public static void main(String[] argv) {
     // Allow running from the command line so we can easily test that the class
     // initializes properly.

@@ -217,11 +217,15 @@ public final class MemberInfoPool {
   /**
    * Members with the given name that are available on the containing type and
    * visible from scope.
+   *
+   * @param superExclusion the name of a class whose declared members should
+   *    be skipped in favor of those inherited from super types.
    */
   public <MI extends MemberInfo>
   ImmutableList<ParameterizedMember<MI>> getMembers(
       Class<MI> memberType, String memberName, Name scope,
-      TypeSpecification containingType) {
+      TypeSpecification containingType,
+      Optional<Name> superExclusion) {
 
     final class Search {
       Set<Name> typesSeen = Sets.newHashSet();
@@ -238,14 +242,17 @@ public final class MemberInfoPool {
         }
         TypeInfo ti = tio.get();
 
-        for (MemberInfo mi : ti.getDeclaredMembers()) {
-          if (!cancelled.contains(mi.canonName)
-              && memberType.isInstance(mi)
-              && mi.canonName.identifier.equals(memberName)
-              && mi.accessibleFrom(scope, typePool.r)) {
-            out.add(new ParameterizedMember<>(
-                declaringType, memberType.cast(mi)));
-            cancelled.addAll(cancelledBy(mi));
+        if (!(superExclusion.isPresent()
+              && ti.canonName.equals(superExclusion.get()))) {
+          for (MemberInfo mi : ti.getDeclaredMembers()) {
+            if (!cancelled.contains(mi.canonName)
+                && memberType.isInstance(mi)
+                && mi.canonName.identifier.equals(memberName)
+                && mi.accessibleFrom(scope, typePool.r)) {
+              out.add(new ParameterizedMember<>(
+                  declaringType, memberType.cast(mi)));
+              cancelled.addAll(cancelledBy(mi));
+            }
           }
         }
         if (memberType == CallableInfo.class

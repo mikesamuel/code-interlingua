@@ -17,18 +17,22 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.mikesamuel.cil.ast.Trees;
+import com.mikesamuel.cil.ast.j8.ClassBodyNode;
 import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.j8.ExpressionNode;
 import com.mikesamuel.cil.ast.j8.FieldDeclarationNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.j8.MethodBodyNode;
 import com.mikesamuel.cil.ast.j8.MethodDeclarationNode;
+import com.mikesamuel.cil.ast.j8.NormalClassDeclarationNode;
 import com.mikesamuel.cil.ast.j8.StatementNode;
 import com.mikesamuel.cil.ast.j8.UnannTypeNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
@@ -40,6 +44,7 @@ import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ClassOrInterfaceType;
+import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeInfoResolver;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.passes.CommonPassRunner;
@@ -316,9 +321,35 @@ public final class InterpreterTest extends TestCase {
 
     Interpreter<Object> interpreter = new Interpreter<>(ctx);
 
+    Optional<NormalClassDeclarationNode> testExpressionsClassOpt =
+        tc.root
+        .finder(NormalClassDeclarationNode.class)
+        .match(
+            new Predicate<NormalClassDeclarationNode>() {
+
+              @Override
+              public boolean apply(NormalClassDeclarationNode p) {
+                TypeInfo ti = p.getDeclaredTypeInfo();
+                return ti != null
+                    && ti.canonName.identifier.equals(
+                        TestExpressions.class.getSimpleName());
+              }
+
+            })
+        .findOne();
+
+    assertTrue(testExpressionsClassOpt.isPresent());
+
+    ClassBodyNode testExpressionsClassBody = testExpressionsClassOpt
+        .get()
+        .firstChildWithType(ClassBodyNode.class);
+
     List<Runnable> valueTests = Lists.newArrayList();
     for (FieldDeclarationNode decl
-        : tc.root.finder(FieldDeclarationNode.class).find()) {
+        : testExpressionsClassBody
+            .finder(FieldDeclarationNode.class)
+            .exclude(J8TypeDeclaration.class)
+            .find()) {
       UnannTypeNode typeNode = decl.firstChildWithType(UnannTypeNode.class);
       StaticType type = typeNode.getStaticType();
       for (VariableDeclaratorNode declarator

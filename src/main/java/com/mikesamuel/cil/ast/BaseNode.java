@@ -209,14 +209,14 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
   public static final class Finder<T> {
     private final BaseNode<?, ?, ?> root;
     private final Class<? extends T> matchType;
-    private Predicate<? super BaseNode<?, ?, ?>> match;
+    private Predicate<? super T> match;
     private Predicate<? super BaseNode<?, ?, ?>> doNotEnter;
     private boolean allowNonStandard = false;
 
     private Finder(BaseNode<?, ?, ?> root, Class<? extends T> matchType) {
       this.root = root;
       this.matchType = matchType;
-      match = Predicates.instanceOf(matchType);
+      match = Predicates.alwaysTrue();
       doNotEnter = Predicates.alwaysFalse();
     }
 
@@ -226,7 +226,17 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
      * @return {@code this} to enable chaining.
      */
     public Finder<T> match(NodeType<?, ?> nt, NodeType<?, ?>... nts) {
-      match = Predicates.and(match, new HasNodeTypeIn(nt, nts));
+      return match(new HasNodeTypeIn<T>(nt, nts));
+    }
+
+    /**
+     * Restricts matched nodes to those with a node type among those given.
+     *
+     * @return {@code this} to enable chaining.
+     */
+    public
+    Finder<T> match(Predicate<? super T> predicate) {
+      match = Predicates.<T>and(match, predicate);
       return this;
     }
 
@@ -237,7 +247,8 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
      * @return {@code this} to enable chaining.
      */
     public Finder<T> exclude(NodeType<?, ?> nt, NodeType<?, ?>... nts) {
-      doNotEnter = Predicates.or(doNotEnter, new HasNodeTypeIn(nt, nts));
+      doNotEnter = Predicates.or(
+          doNotEnter, new HasNodeTypeIn<BaseNode<?, ?, ?>>(nt, nts));
       return this;
     }
 
@@ -298,8 +309,11 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
 
     private void find(
         BaseNode<?, ?, ?> node, ImmutableList.Builder<T> results) {
-      if (match.apply(node)) {
-        results.add(Preconditions.checkNotNull(matchType.cast(node)));
+      if (matchType.isInstance(node)) {
+        T candidate = matchType.cast(node);
+        if (match.apply(candidate)) {
+          results.add(Preconditions.checkNotNull(candidate));
+        }
       }
       if (!doNotEnter.apply(node)
           && (allowNonStandard || !node.getNodeType().isNonStandard())) {
@@ -317,7 +331,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     public int indexOf() {
       for (int i = 0, n = root.getNChildren(); i < n; ++i) {
         BaseNode<?, ?, ?> child = root.getChild(i);
-        if (match.apply(child)) {
+        if (matchType.isInstance(child) && match.apply(matchType.cast(child))) {
           return i;
         }
       }
@@ -325,8 +339,8 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     }
   }
 
-  private static final class HasNodeTypeIn
-  implements Predicate<BaseNode<?, ?, ?>> {
+  private static final class HasNodeTypeIn<T>
+  implements Predicate<T> {
     private final Set<NodeType<?, ?>> nodeTypes;
 
     HasNodeTypeIn(NodeType<?, ?> nt, NodeType<?, ?>... nts) {
@@ -337,8 +351,9 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     }
 
     @Override
-    public boolean apply(BaseNode<?, ?, ?> node) {
-      return node != null && nodeTypes.contains(node.getNodeType());
+    public boolean apply(T node) {
+      BaseNode<?, ?, ?> bn = (BaseNode<?, ?, ?>) node;
+      return node != null && nodeTypes.contains(bn.getNodeType());
     }
   }
 }
