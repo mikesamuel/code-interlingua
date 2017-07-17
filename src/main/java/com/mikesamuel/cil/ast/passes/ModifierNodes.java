@@ -5,6 +5,7 @@ import java.lang.reflect.Modifier;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.j8.ModifierNode;
 
 final class ModifierNodes {
@@ -45,4 +46,24 @@ final class ModifierNodes {
     }
     throw new IllegalArgumentException(Modifier.toString(bit));
   }
+
+  /**
+   * Modifier bits in standard style order.
+   * @see <a href="https://stackoverflow.com/a/10299123/20394">SO answer</a>
+   */
+  public static final ImmutableList<Integer> ALL_MODIFIER_BITS_IN_ORDER =
+      ImmutableList.of(
+          // Mutually exclusive
+          Modifier.PUBLIC, Modifier.PROTECTED, Modifier.PRIVATE,
+          // Not mutually exclusive for inner classes
+          Modifier.ABSTRACT, Modifier.STATIC,
+
+          Modifier.FINAL,
+          Modifier.TRANSIENT,
+          Modifier.VOLATILE,
+          Modifier.SYNCHRONIZED,
+          Modifier.NATIVE,
+
+          Modifier.STRICT
+          );
 }

@@ -351,39 +351,42 @@ public final class DespecializeEnumPassTest extends TestCase {
 
   public static void testSuperCallsFromSpecializedEnumMethods()
   throws Exception {
-    if (true) return;  // TODO: KNOWN FAILURE
     assertPassOutput(
         new String[][] {
           {
             "package p;",
-            "",
+
             "enum E {",
-            "  X(),",
-            "  Y(),",
-            "  ;",
-            "",
-            "  <T> private static int X__f(T x) { return base__f(1); }",
-            "  private static int Y__g() { return base_f(f(base__g())); }",
-            "  private static String Y__toString() {",
-            "    return super.toString();",
-            "  }",
-            "  private static <T> int base_f(T x) { return 0; }",
-            "  private static int base__g() { return 1337; }",
+            "  X(), Y(),;",
+
             "  <T> int f(T x) {",
             "    switch (this) {",
-            "      case X:",
-            "        return p.E.<T>X__f(x);",
+            "      case X : return p.E.<T> X__f(x);",
             "    }",
-            "    return p.E.<T>base__f(x);",
+            "    return this.<T> base__f(x);",
             "  }",
+
             "  int g() {",
-            "    switch (this) {",
-            "      case Y:",
-            "        return p.E.Y__g();",
-            "    }",
-            "    return p.E.base__g();",
+            "    switch (this) { case Y : return p.E.Y__g(); }",
+            "    return this.base__g();",
             "  }",
-            "  public String toString() {",
+
+            "  private final <T> int base__f(T x) { return 0; }",
+
+            "  private final int base__g() { return 1337; }",
+
+            "  private static <T> int X__f(T x) { return (p.E.X).base__f(1); }",
+
+            "  private static int Y__g() {",
+            "    return (p.E.Y).base__f(f((p.E.Y).base__g()));",
+            "  }",
+
+            "  static private String Y__toString() {",
+            "    return super.toString();",
+            "  }",
+
+            "  @java.lang.Override",
+            "  public java.lang.String toString() {",
             "    switch (this) {",
             "      case Y:",
             "        return p.E.Y__toString();",
@@ -411,6 +414,63 @@ public final class DespecializeEnumPassTest extends TestCase {
             "",
             "  <T> int f(T x) { return 0; }",
             "  int g() { return 1337; }",
+            "}",
+          },
+        },
+        null);
+  }
+
+  @Test
+  public static void testSuperFieldAccess() throws Exception {
+    if (true) { return; }  // TODO: known failure
+    assertPassOutput(
+        new String[][] {
+          {
+            // TODO
+          },
+        },
+        new String[][] {
+          {
+            "enum E {",
+            "  A() {",
+            "    int x = 1;",
+            "    @Override public String toString() {",
+            "      return \"A:\" + (x + super.x);",
+            "    }",
+            "  },",
+            "  ;",
+            "",
+            "  int x = 2;",
+            "}",
+          },
+        },
+        null);
+  }
+
+  @Test
+  public static void testSideEffectingReferenceToConstant() throws Exception {
+    if (true) { return; }  // TODO: known failure
+    assertPassOutput(
+        new String[][] {
+          {
+            // TODO
+          },
+        },
+        new String[][] {
+          {
+            "enum E {",
+            "  A() {",
+            "    int x = 1;",
+            "    @Override public String toString() {",
+            "      return unnecessary(this).name();",
+            "    }",
+            "  },",
+            "  ;",
+            "",
+            "  static <T> T unnecessary(T x) {",
+            "    System.out.println(x);",
+            "    return x;",
+            "  }",
             "}",
           },
         },
