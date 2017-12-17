@@ -401,9 +401,9 @@ public final class TypeSpecification extends PartialTypeSpecification {
       switch (b.variance) {
         case EXTENDS:
         case INVARIANT:
-          return b.typeSpec;
+          return b.typeSpec.withNDims(nDims);
         case SUPER:
-          return JavaLang.JAVA_LANG_OBJECT;
+          return JavaLang.JAVA_LANG_OBJECT.withNDims(nDims);
       }
     }
     ImmutableList.Builder<TypeBinding> substs = null;
@@ -462,6 +462,18 @@ public final class TypeSpecification extends PartialTypeSpecification {
       return this;
     }
     return new TypeSpecification(parent, rawName, newBindings, nDims);
+  }
+
+  @Override
+  public TypeSpecification derive(
+      Iterable<? extends TypeSpecification.TypeBinding> newBindings,
+      PartialTypeSpecification newParent) {
+    return new TypeSpecification(
+        newParent,
+        parent.getRawName().equals(newParent.getRawName())
+        ? rawName
+        : newParent.getRawName().child(rawName.identifier, rawName.type),
+        ImmutableList.copyOf(newBindings), nDims);
   }
 
   /**

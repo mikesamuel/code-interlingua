@@ -15,6 +15,7 @@ import com.mikesamuel.cil.ast.j8.ClassTypeNode;
 import com.mikesamuel.cil.ast.j8.ConstantDeclarationNode;
 import com.mikesamuel.cil.ast.j8.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.j8.EnumConstantNode;
+import com.mikesamuel.cil.ast.j8.ExceptionTypeNode;
 import com.mikesamuel.cil.ast.j8.FieldDeclarationNode;
 import com.mikesamuel.cil.ast.j8.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.j8.FormalParameterListNode;
@@ -38,6 +39,7 @@ import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.j8.ResultNode;
+import com.mikesamuel.cil.ast.j8.ThrowsNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
 import com.mikesamuel.cil.ast.j8.TypeNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
@@ -139,6 +141,10 @@ final class ClassMemberPass extends AbstractPass<Void> {
           paramList = ps;
         }
 
+        Optional<ThrowsNode> thrownOpt = node.finder(ThrowsNode.class)
+            .exclude(J8NodeType.MethodBody, J8NodeType.ConstructorBody)
+            .findOne();
+
         boolean hasErrorType = false;
         MethodDescriptor.Builder descriptor = MethodDescriptor.builder();
         ImmutableList.Builder<TypeSpecification> formalTypes =
@@ -190,6 +196,25 @@ final class ClassMemberPass extends AbstractPass<Void> {
                 staticErasedType.typeSpecification.nDims);
           }
         }
+
+        ImmutableList.Builder<TypeSpecification> thrownTypes =
+            ImmutableList.builder();
+        if (!hasErrorType && thrownOpt.isPresent()) {
+          for (ExceptionTypeNode etn : thrownOpt.get().finder(ExceptionTypeNode.class).find()) {
+            J8WholeType thrownType = findWholeType(etn);
+            StaticType staticType =
+                thrownType != null ? thrownType.getStaticType() : null;
+            if (staticType == null) {
+              staticType = StaticType.ERROR_TYPE;
+            }
+            if (StaticType.ERROR_TYPE.equals(staticType)) {
+              hasErrorType = true;
+              break;
+            }
+            thrownTypes.add(staticType.typeSpecification);
+          }
+        }
+
         if (!hasErrorType) {
           StaticType returnErasedType = returnType.toErasedType();
           if (StaticType.ERROR_TYPE.equals(returnErasedType)) {
@@ -208,6 +233,7 @@ final class ClassMemberPass extends AbstractPass<Void> {
         }
         info.setReturnType(returnType.typeSpecification);
         info.setFormalTypes(formalTypes.build());
+        info.setThrownTypes(thrownTypes.build());
         cd.setMemberInfo(info);
       } else {
         error(node, "Missing member info for " + methodName);

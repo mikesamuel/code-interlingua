@@ -581,6 +581,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                         false);
                     sci.setReturnType(oci.getReturnType());
                     sci.setFormalTypes(oci.getFormalTypes());
+                    sci.setThrownTypes(oci.getThrownTypes());
                     sci.setVariadic(oci.isVariadic());
 
                     MethodDeclarationNode superCallingImpl = callToSuper(
@@ -974,6 +975,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
             ci.isInitializer
             );
         staticPrivateCallable.setFormalTypes(ci.getFormalTypes());
+        staticPrivateCallable.setThrownTypes(ci.getThrownTypes());
         staticPrivateCallable.setDescriptor(ci.getDescriptor());
         staticPrivateCallable.setReturnType(ci.getReturnType());
 
@@ -1007,6 +1009,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
           & ~(Modifier.PROTECTED | Modifier.PUBLIC),
           baseMethodName, ci.typeParameters, false);
       bci.setFormalTypes(ci.getFormalTypes());
+      bci.setThrownTypes(ci.getThrownTypes());
       bci.setReturnType(ci.getReturnType());
       bci.setVariadic(ci.isVariadic());
       bci.setDescriptor(ci.getDescriptor());

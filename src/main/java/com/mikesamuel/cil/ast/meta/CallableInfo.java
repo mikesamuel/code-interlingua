@@ -12,6 +12,7 @@ public final class CallableInfo extends MemberInfo {
   private MethodDescriptor descriptor;
   private TypeSpecification returnType;
   private ImmutableList<TypeSpecification> formalTypes;
+  private ImmutableList<TypeSpecification> thrownTypes;
   private boolean isVariadic;
   private boolean isSynthetic;
   private boolean isBridge;
@@ -83,6 +84,21 @@ public final class CallableInfo extends MemberInfo {
   }
 
   /**
+   * The declared throws clause of the method.
+   *
+   * @return null if not set.  Usually set by the class member pass.
+   */
+  public ImmutableList<TypeSpecification> getThrownTypes() {
+    return thrownTypes;
+  }
+
+  /** @see #getThrownTypes() */
+  public void setThrownTypes(
+      Iterable<? extends TypeSpecification> newThrownTypes) {
+    this.thrownTypes = ImmutableList.copyOf(newThrownTypes);
+  }
+
+  /**
    * True iff the method's last formal parameter is a {@code ...} parameter.
    */
   public boolean isVariadic() {
@@ -148,6 +164,13 @@ public final class CallableInfo extends MemberInfo {
   @Override
   public MemberInfo map(MetadataBridge b) {
     if (b == MetadataBridge.Bridges.IDENTITY) { return this; }
+    Function<TypeSpecification, TypeSpecification> bridgeType =
+        new Function<TypeSpecification, TypeSpecification>() {
+      @Override
+      public TypeSpecification apply(TypeSpecification ft) {
+        return b.bridgeTypeSpecification(ft);
+      }
+    };
     CallableInfo bridged = new CallableInfo(
         modifiers, b.bridgeDeclaredExpressionName(canonName),
         ImmutableList.copyOf(Lists.transform(
@@ -171,17 +194,10 @@ public final class CallableInfo extends MemberInfo {
       bridged.setReturnType(b.bridgeTypeSpecification(returnType));
     }
     if (formalTypes != null) {
-      bridged.setFormalTypes(
-          Lists.transform(
-              formalTypes,
-              new Function<TypeSpecification, TypeSpecification>() {
-
-                @Override
-                public TypeSpecification apply(TypeSpecification ft) {
-                  return b.bridgeTypeSpecification(ft);
-                }
-
-              }));
+      bridged.setFormalTypes(Lists.transform(formalTypes, bridgeType));
+    }
+    if (thrownTypes != null) {
+      bridged.setThrownTypes(Lists.transform(thrownTypes, bridgeType));
     }
     bridged.setVariadic(isVariadic);
     bridged.setSynthetic(isSynthetic);

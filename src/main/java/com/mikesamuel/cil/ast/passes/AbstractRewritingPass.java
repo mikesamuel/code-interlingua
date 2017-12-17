@@ -214,20 +214,47 @@ extends AbstractPass<ImmutableList<J8FileNode>> {
   /**
    * The position of a node in its parent.
    */
-  public static class Parent {
+  public static final class Parent {
     /** Index in parent's child list of the current node. */
     public final int indexInParent;
     /** The parent of the current node. */
     public final J8BaseInnerNode parent;
 
-    Parent(int indexInParent, J8BaseInnerNode parent) {
+    /** */
+    public Parent(int indexInParent, J8BaseInnerNode parent) {
       this.indexInParent = indexInParent;
       this.parent = parent;
+    }
+
+    /** The child referenced. */
+    public J8BaseNode get() {
+      return parent.getChild(indexInParent);
     }
 
     @Override
     public String toString() {
       return "(" + parent.getNodeType() + "#" + indexInParent + ")";
+    }
+
+    @Override
+    public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result + indexInParent;
+      result = prime * result + ((parent == null) ? 0 : parent.hashCode());
+      return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      Parent that = (Parent) obj;
+      return this.indexInParent == that.indexInParent
+          && (this.parent != null
+              ? this.parent.equals(that.parent)
+              : that.parent == null);
     }
   }
 

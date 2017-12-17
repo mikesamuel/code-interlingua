@@ -185,11 +185,17 @@ public interface TypeInfoResolver {
                       for (Type t : m.getGenericParameterTypes()) {
                         formalTypes.add(specForType(t));
                       }
+                      ImmutableList.Builder<TypeSpecification> thrownTypes =
+                          ImmutableList.builder();
+                      for (Type t : m.getGenericExceptionTypes()) {
+                        thrownTypes.add(specForType(t));
+                      }
                       ci.setReturnType(specForType(m.getGenericReturnType()));
                       ci.setVariadic(m.isVarArgs());
                       ci.setSynthetic(m.isSynthetic());
                       ci.setIsBridge(m.isBridge());
                       ci.setFormalTypes(formalTypes.build());
+                      ci.setThrownTypes(thrownTypes.build());
                       ci.setDescriptor(ReflectionUtils.descriptorFor(m));
                       members.add(ci);
                     }
@@ -210,10 +216,16 @@ public interface TypeInfoResolver {
                       for (Type t : c.getGenericParameterTypes()) {
                         formalTypes.add(specForType(t));
                       }
+                      ImmutableList.Builder<TypeSpecification> thrownTypes =
+                          ImmutableList.builder();
+                      for (Type t : c.getGenericExceptionTypes()) {
+                        thrownTypes.add(specForType(t));
+                      }
                       ci.setReturnType(StaticType.T_VOID.typeSpecification);
                       ci.setVariadic(c.isVarArgs());
                       ci.setSynthetic(c.isSynthetic());
                       ci.setFormalTypes(formalTypes.build());
+                      ci.setThrownTypes(thrownTypes.build());
                       ci.setDescriptor(ReflectionUtils.descriptorFor(c));
                       members.add(ci);
                     }

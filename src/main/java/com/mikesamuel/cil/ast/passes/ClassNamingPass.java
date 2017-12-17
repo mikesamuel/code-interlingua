@@ -141,6 +141,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
               .withReturnType(declaringClass, 1)
               .build());
       values.setFormalTypes(ImmutableList.of());
+      values.setThrownTypes(ImmutableList.of());
       values.setReturnType(
           TypeSpecification.unparameterized(declaringClass).withNDims(1));
 
@@ -157,6 +158,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
              .withReturnType(declaringClass, 0)
              .build());
       valueOf.setFormalTypes(ImmutableList.of(JavaLang.JAVA_LANG_STRING));
+      valueOf.setThrownTypes(ImmutableList.of());
       valueOf.setReturnType(TypeSpecification.unparameterized(declaringClass));
 
       b.add(values);

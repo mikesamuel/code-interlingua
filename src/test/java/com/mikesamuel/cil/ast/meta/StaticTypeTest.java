@@ -6,9 +6,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.mikesamuel.cil.ast.meta.StaticType.Cast;
+import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ClassOrInterfaceType;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 
@@ -608,6 +610,27 @@ public final class StaticTypeTest extends TestCase {
         fooNumBarNum,
         fooBarNum,
         Cast.CONFIRM_UNCHECKED);
+  }
+
+  @Test
+  public final void testSuperTypeWithRawName() {
+    ClassOrInterfaceType arrayListString = (ClassOrInterfaceType)
+        type("java.util.ArrayList", is("java.lang.String"));
+    assertEquals(
+        Optional.of(type("java.util.List", is("java.lang.String"))),
+        arrayListString.superTypeWithRawName(spec("java.util.List").rawName));
+    assertEquals(
+        Optional.of(type("java.util.Collection", is("java.lang.String"))),
+        arrayListString.superTypeWithRawName(spec("java.util.Collection").rawName));
+    assertEquals(
+        Optional.of(type("java.lang.Iterable", is("java.lang.String"))),
+        arrayListString.superTypeWithRawName(spec("java.lang.Iterable").rawName));
+    assertEquals(
+        Optional.of(type("java.io.Serializable")),
+        arrayListString.superTypeWithRawName(spec("java.io.Serializable").rawName));
+    assertEquals(
+        Optional.of(type("java.lang.Object")),
+        arrayListString.superTypeWithRawName(spec("java.lang.Object").rawName));
   }
 
 

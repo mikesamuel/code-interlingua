@@ -984,6 +984,12 @@ public abstract class StaticType {
           ? upperBound : JavaLang.JAVA_LANG_OBJECT;
     }
 
+    /** The type that the primitive type boxes to. */
+    public ClassOrInterfaceType box(PrimitiveType s) {
+      return (ClassOrInterfaceType) type(
+          TypeSpecification.unparameterized(s.wrapperType),
+          null, null);
+    }
 
     /** Base type for primitive types. */
     public abstract class ReferenceType extends StaticType {
@@ -1119,6 +1125,17 @@ public abstract class StaticType {
       @Override
       public String toString() {
         return typeSpecification.toString();
+      }
+
+      /**
+       * The super-type of this type with the given name.
+       * For example, if {@code this} represents {@code ArrayList<String>}
+       * then its {@code superTypeWithRawName("/java/util.List")} represents {@code List<String>} and its
+       * {@code superTypeWithRawName("/java/lang/Iterable")} is {@code Iterable<String>}.
+       */
+      public Optional<ClassOrInterfaceType> superTypeWithRawName(Name rawName) {
+        ClassOrInterfaceType st = getSuperTypesTransitive().get(rawName);
+        return Optional.fromNullable(st);
       }
 
       Map<Name, ClassOrInterfaceType> getSuperTypesTransitive() {

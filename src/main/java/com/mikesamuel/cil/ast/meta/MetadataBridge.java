@@ -21,6 +21,11 @@ public interface MetadataBridge {
   ExpressionNameResolver bridgeExpressionNameResolver(ExpressionNameResolver x);
 
   /** Transforms input from a source to that appropriate for a destination. */
+  default CallableInfo bridgeCallableInfo(CallableInfo x) {
+    return (CallableInfo) bridgeMemberInfo(x);
+  }
+
+  /** Transforms input from a source to that appropriate for a destination. */
   MemberInfo bridgeMemberInfo(MemberInfo x);
 
   /** Transforms input from a source to that appropriate for a destination. */
