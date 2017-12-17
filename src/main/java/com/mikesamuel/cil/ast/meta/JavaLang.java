@@ -59,4 +59,16 @@ public final class JavaLang {
   /** */
   public static final TypeSpecification JAVA_LANG_AUTOCLOSEABLE =
       new TypeSpecification(PKG, "AutoCloseable", Name.Type.CLASS);
+
+  /** */
+  public static final TypeSpecification JAVA_LANG_THROWABLE =
+      new TypeSpecification(PKG, "Throwable", Name.Type.CLASS);
+
+  /** */
+  public static final TypeSpecification JAVA_LANG_EXCEPTION =
+      new TypeSpecification(PKG, "Exception", Name.Type.CLASS);
+
+  /** */
+  public static final TypeSpecification JAVA_LANG_RUNTIMEEXCEPTION =
+      new TypeSpecification(PKG, "RuntimeException", Name.Type.CLASS);
 }
