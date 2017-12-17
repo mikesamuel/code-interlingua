@@ -108,9 +108,13 @@ final class GrammarImpl implements Grammar<J8BaseNode, J8NodeType> {
             ParseState afterInterpolation = nonStandardResult.next();
             Optional<NodeType<?, ?>> nodeTypeHint = lookbackForNodeTypeHint(
                 afterInterpolation.output);
-            if (nodeTypeHint.isPresent()
+            boolean passed =
+                nodeTypeHint.isPresent()
                 ? nodeTypeHint.get() == nodeType
-                : !J8NodeTypeTables.NOINTERP.contains(nodeType)) {
+                : !(nodeType instanceof J8NodeType
+                    && J8NodeTypeTables.NOINTERP.contains(
+                        (J8NodeType) nodeType));
+            if (passed) {
               return ParseResult.success(
                   afterInterpolation,
                   nonStandardResult.writeBack,
