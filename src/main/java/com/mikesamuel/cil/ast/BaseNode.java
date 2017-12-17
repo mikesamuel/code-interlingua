@@ -353,7 +353,7 @@ implements NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
     @Override
     public boolean apply(T node) {
       BaseNode<?, ?, ?> bn = (BaseNode<?, ?, ?>) node;
-      return node != null && nodeTypes.contains(bn.getNodeType());
+      return bn != null && nodeTypes.contains(bn.getNodeType());
     }
   }
 }
