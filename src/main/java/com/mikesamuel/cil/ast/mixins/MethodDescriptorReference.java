@@ -4,6 +4,7 @@ import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.MethodDescriptor;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 
@@ -42,4 +43,15 @@ extends NodeI<B, T, V> {
    */
   MethodDescriptorReference<B, T, V> setMethodDeclaringType(
       TypeSpecification newMethodDeclaringType);
+
+  /**
+   * Info for the referenced method.
+   */
+  CallableInfo getCallableInfo();
+
+  /**
+   * Sets info for the referenced method.
+   * @return this
+   */
+  MethodDescriptorReference<B, T, V> setCallableInfo(CallableInfo newCallableInfo);
 }

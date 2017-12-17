@@ -64,9 +64,11 @@
     "MethodDescriptorReference": {
       "state": [
         ["MethodDescriptor", "methodDescriptor"],
-        ["TypeSpecification", "methodDeclaringType"]
+        ["TypeSpecification", "methodDeclaringType"],
+        ["CallableInfo", "callableInfo"]
       ],
       "imports": [
+        "com.mikesamuel.cil.ast.meta.CallableInfo",
         "com.mikesamuel.cil.ast.meta.MethodDescriptor",
         "com.mikesamuel.cil.ast.meta.TypeSpecification"
       ]
