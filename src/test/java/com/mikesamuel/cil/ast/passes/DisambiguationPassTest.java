@@ -978,8 +978,8 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static Predicate<NodeI<?, ?, ?>> with(J8NodeType nt, J8NodeType... nts) {
-    return new Predicate<NodeI<?, ?, ?>>() {
+  static Predicate<NodeI<?, J8NodeType, ?>> with(J8NodeType nt, J8NodeType... nts) {
+    return new Predicate<NodeI<?, J8NodeType, ?>>() {
       EnumSet<J8NodeType> types = EnumSet.noneOf(J8NodeType.class);
       {
         types.add(nt);
@@ -987,7 +987,7 @@ public final class DisambiguationPassTest extends TestCase {
       }
 
       @Override
-      public boolean apply(NodeI<?, ?, ?> node) {
+      public boolean apply(NodeI<?, J8NodeType, ?> node) {
         return types.contains(node.getNodeType());
       }
 
@@ -1005,7 +1005,8 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static NodeMatcher nth(int n, Predicate<? super NodeI<?, ?, ?>> p) {
+  static NodeMatcher nth(
+		  int n, Predicate<? super NodeI<?, J8NodeType, ?>> p) {
     Preconditions.checkArgument(n >= 0);
 
     return new NodeMatcher() {
@@ -1013,10 +1014,10 @@ public final class DisambiguationPassTest extends TestCase {
 
       @Override
       public void match(
-          List<? extends NodeI<?, ?, ?>> nodes,
+          List<? extends NodeI<?, J8NodeType, ?>> nodes,
           ImmutableList.Builder<J8BaseNode> out) {
 
-        for (NodeI<?, ?, ?> node : nodes) {
+        for (NodeI<?, J8NodeType, ?> node : nodes) {
           if (remaining < 0) { break; }
 
           if (p.apply(node)) {
@@ -1033,14 +1034,14 @@ public final class DisambiguationPassTest extends TestCase {
     };
   }
 
-  static NodeMatcher all(Predicate<? super NodeI<?, ?, ?>> p) {
+  static NodeMatcher all(Predicate<? super NodeI<?, J8NodeType, ?>> p) {
     return new NodeMatcher() {
 
       @Override
       public void match(
-          List<? extends NodeI<?, ?, ?>> nodes,
+          List<? extends NodeI<?, J8NodeType, ?>> nodes,
           ImmutableList.Builder<J8BaseNode> out) {
-        for (NodeI<?, ?, ?> node : nodes) {
+        for (NodeI<?, J8NodeType, ?> node : nodes) {
           if (p.apply(node)) {
             out.add((J8BaseNode) node);
           }
@@ -1085,7 +1086,7 @@ public final class DisambiguationPassTest extends TestCase {
 
   interface NodeMatcher {
     void match(
-        List<? extends NodeI<?, ?, ?>> nodes,
+        List<? extends NodeI<?, J8NodeType, ?>> nodes,
         ImmutableList.Builder<J8BaseNode> out);
   }
 }
