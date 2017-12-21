@@ -804,7 +804,7 @@ public class DeclarationPassTest extends TestCase {
             "public enum E implements I {",
             "  A(-1), B(2),",
             "  /* final anonymous /E$1 extends /E in /E */",
-            "  C(3) { @Override public String toString() { return\"c\"; } }",
+            "  C(3) { @Override public String toString() { return \"c\"; } }",
             "  ,;",
             "  final int x;",
             "  E(int x) { this.x = x; }",

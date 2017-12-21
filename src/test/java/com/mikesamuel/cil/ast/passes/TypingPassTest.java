@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -1015,10 +1016,10 @@ public final class TypingPassTest extends TestCase {
             "  void f(int a, int b, int c) {}",
             "  {",
             "    /*([I)V*/f();",
-            "    /*(I[I)V*/f(0);",
-            "    /*(I[I)V*/f(0, 1);",
+            "    /*(I[I)V*/f(0);",  // Or ambiguous
+            "    /*(I[I)V*/f(0, 1);",  // Or ambiguous
             "    /*(III)V*/f(0, 1, 2);",
-            "    /*(I[I)V*/f(0, 1, 2, 3);",
+            "    /*(I[I)V*/f(0, 1, 2, 3);",  // Or ambiguous
             "    /*([I)V*/f(null);",
             "    /*([I)V*/f(new int[] { 1, 2, 3, });",
             "  }",
@@ -1034,12 +1035,12 @@ public final class TypingPassTest extends TestCase {
             "  void f(int a, int... rest) {}",
             "  void f(int a, int b, int c) {}",
             "  {",
-            "    f();",  // ?
+            "    f();",
             "    f(0);",
             "    f(0, 1);",
             "    f(0, 1, 2);",
-            "    f(0, 1, 2, 3);", // ?
-            "    f(null);", // ?
+            "    f(0, 1, 2, 3);",
+            "    f(null);",
             "    f(new int[] { 1, 2, 3 });",
             "  }",
             "}",
@@ -2189,7 +2190,7 @@ public final class TypingPassTest extends TestCase {
             "  ,;",
 
             "  public String toString() {",
-            "    return\"E.\" + super.",
+            "    return \"E.\" + super.",
             "    /* /java/lang/Enum</p/E>()Ljava/lang/String;*/",
             "    toString();",
             "  }",
@@ -2234,7 +2235,7 @@ public final class TypingPassTest extends TestCase {
             "static class Sub extends Base {",
             "  int x = 12;",
             "  @Override public String toString() {",
-            "    return\"x=\" +",
+            "    return \"x=\" +",
             "    /* /Sub.x*/",
             "    x + \"; super.x=\" + super.",
             "    /* /Base.x*/",
@@ -2266,6 +2267,37 @@ public final class TypingPassTest extends TestCase {
         DECORATE_EXPR_NAMES);
   }
 
+  @Test
+  public static final void testTypeParameterInference() throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "//Foo",
+            "package foo;",
+            "import java.util.Arrays;",
+            "class Foo {",
+            "  { Arrays.<String>asList(\"foo\", \"bar\"); }",
+            "  public Foo() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//Foo",
+            "package foo;",
+            "import java.util.Arrays;",
+            "class Foo {",
+            "  { Arrays.asList(\"foo\", \"bar\"); }",
+            "}",
+          },
+        },
+        ExpressionNode.class,
+        new String[] {
+            "\"foo\" : /java/lang/String",
+            "\"bar\" : /java/lang/String",
+        },
+        null);
+  }
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 

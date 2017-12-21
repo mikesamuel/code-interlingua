@@ -98,6 +98,15 @@ public final class Java8TokenBreakerTest extends TestCase {
     assertSpacedTokens(false, "(C<?>)", "(", "C", "<", "?", ">", ")");
   }
 
+  @Test
+  public static void testKeywordBeforeString() {
+    assertSpacedTokens(true, "return \"foo\";", "return", "\"foo\"", ";");
+  }
+
+  @Test
+  public static void testStringConcatenation() {
+    assertSpacedTokens(true, "\"a\" + \"b\"", "\"a\"", "+", "\"b\"");
+  }
 
   @Test
   public static void testConventions() {

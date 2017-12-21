@@ -143,6 +143,12 @@ implements TokenBreaker<SList<NodeVariant<?, ?>>> {
       }
     }
 
+    if (lc == Classification.IDENTIFIER_CHARS) {
+      if (rc == Classification.STRING_LITERAL) {
+        return TokenBreak.SHOULD;
+      }
+    }
+
     if (rc == Classification.PUNCTUATION) {
       switch (right) {
         case ".": return TokenBreak.SHOULD_NOT;

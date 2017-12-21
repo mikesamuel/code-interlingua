@@ -48,7 +48,7 @@ public final class PassTestHelpers {
    * @param linesPerFile {@code linesPerFile[f][i]} is line i (zero-indexed)
    *   in the f-th file.
    */
-  static ImmutableList<J8FileNode> parseCompilationUnits(
+  public static ImmutableList<J8FileNode> parseCompilationUnits(
       Logger logger, String[]... linesPerFile) {
     return maybeParseCompilationUnits(logger, linesPerFile).get();
   }

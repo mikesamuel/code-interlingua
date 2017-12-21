@@ -587,7 +587,7 @@ final class TypingPass extends AbstractRewritingPass {
                   TypeSpecification fullInnerTypeSpec = outerSpec;
                   for (SList<Name> nm = names; nm != null; nm = nm.prev) {
                     TypeArgumentListNode typeArguments =
-                        argumentsPerInnerName.get(nm);
+                        argumentsPerInnerName.get(nm.x);
                     ImmutableList<TypeSpecification.TypeBinding> bindings =
                         typeArguments != null
                         ? AmbiguousNames.bindingsOf(
@@ -1766,6 +1766,7 @@ final class TypingPass extends AbstractRewritingPass {
     // Associate method descriptor with invokedMethod.
     descriptorRef.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
     descriptorRef.setMethodDeclaringType(invokedMethod.m.declaringType);
+    descriptorRef.setCallableInfo(invokedMethod.m.member);
     if (descriptorRef instanceof J8ExpressionNameReference) {
       ((J8ExpressionNameReference) descriptorRef)
           .setReferencedExpressionName(invokedMethod.m.member.canonName);
@@ -1787,6 +1788,17 @@ final class TypingPass extends AbstractRewritingPass {
       }
       if (castNeeded) {
         ArgumentListNode newActuals = actuals.shallowClone();
+        CallableInfo invokedMethodInfo = invokedMethod.m.member;
+        int variadicParamIndex = -1;
+        StaticType formalRestElementType = null;
+        if (invokedMethod.constructsVariadicArray) {
+          variadicParamIndex = invokedMethodInfo.getFormalTypes().size() - 1;
+          formalRestElementType =
+              ((StaticType.TypePool.ArrayType)
+                  invokedMethod.formalTypesInContext.get(variadicParamIndex))
+              .elementType;
+        }
+
         int actualIndex = -1;
         for (int i = 0, n = newActuals.getNChildren(); i < n; ++i) {
           J8BaseNode actual = newActuals.getChild(i);
@@ -1794,12 +1806,16 @@ final class TypingPass extends AbstractRewritingPass {
             ++actualIndex;
             ExpressionNode actualExpr = (ExpressionNode) actual;
             StaticType actualType =  actualExpr.getStaticType();
-            StaticType formalType = invokedMethod.formalTypesInContext
-                .get(actualIndex);
-            if (Compatibility.of(
-                    invokedMethod.actualToFormalCasts
-                    .get(actualIndex))
-                == Compatibility.IMPLICIT_CAST) {
+            StaticType formalType;
+            if (formalRestElementType != null
+                && actualIndex >= variadicParamIndex) {
+              formalType = formalRestElementType;
+            } else {
+              formalType = invokedMethod.formalTypesInContext.get(actualIndex);
+            }
+            if (Compatibility.IMPLICIT_CAST
+                == Compatibility.of(
+                    invokedMethod.actualToFormalCasts.get(actualIndex))) {
               Operand op = new Operand(
                   newActuals, actualIndex, J8NodeType.Expression);
               op.cast(actualType, formalType);
@@ -2033,7 +2049,8 @@ final class TypingPass extends AbstractRewritingPass {
       b.put(pt.wrapperType, pt);
       if (pt instanceof NumericType) {
         Preconditions.checkState(
-            TypeNodeFactory.NUMERIC_TYPE_TO_VARIANT.containsKey(pt));
+            TypeNodeFactory.NUMERIC_TYPE_TO_VARIANT
+            .containsKey((NumericType) pt));
       }
     }
     TO_WRAPPED = b.build();
