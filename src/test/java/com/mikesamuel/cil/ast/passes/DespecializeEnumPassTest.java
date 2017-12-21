@@ -96,7 +96,7 @@ public final class DespecializeEnumPassTest extends TestCase {
             "enum E {",
             "  A(), B(), C(),;",
 
-            "  static private String B__toString() { return\"B!\"; }",
+            "  static private String B__toString() { return \"B!\"; }",
             "  @java.lang.Override public java.lang.String toString() {",
             "    switch (this) {",
             "      case B :"
@@ -453,16 +453,39 @@ public final class DespecializeEnumPassTest extends TestCase {
     assertPassOutput(
         new String[][] {
           {
-            // TODO
+            "enum E {",
+            "  A(),",
+            "  ;",
+            "",
+            "  static <T> T unnecessary(T x) {",
+            "    System.out.println(x);",
+            "    return x;",
+            "  }",
+            "  private static String A__f() {",
+            "    return \"bar\";",
+            "  }",
+            "  static private String A__toString() {",
+            "    return unnecessary((E.A)).A__f();",
+            "  }",
+            "  @java.lang.Override public java.lang.String toString() {",
+            "    switch (this) {",
+            "      case A:",
+            "        return E.A__toString();",
+            "    }",
+            "    return super.toString();",
+            "  }",
+            "}",
           },
         },
         new String[][] {
           {
             "enum E {",
             "  A() {",
-            "    int x = 1;",
+            "    String f() {",
+            "      return \"bar\";",
+            "    }",
             "    @Override public String toString() {",
-            "      return unnecessary(this).name();",
+            "      return unnecessary(this).f();",
             "    }",
             "  },",
             "  ;",
@@ -474,7 +497,9 @@ public final class DespecializeEnumPassTest extends TestCase {
             "}",
           },
         },
-        null);
+        null,
+        "",  // HACK DO NOT SUBMIT
+        "");
   }
 
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =
