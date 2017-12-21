@@ -234,7 +234,7 @@ public final class J8ToJmin {
             return Optional.of(bridgeTypeInfo(bumpyTi.get()));
           }
         } else {
-          TypeInfo flatTi = typeParameterTypeInfo.get(flatTypeName);
+          TypeInfo flatTi = typeParameterTypeInfo.get(FName.of(flatTypeName));
           if (flatTi != null) { return Optional.of(flatTi); }
           FName className = FName.of(flatTypeName.getContainingClass());
           if (flatTypeName.parent.type == Name.Type.CLASS) {
