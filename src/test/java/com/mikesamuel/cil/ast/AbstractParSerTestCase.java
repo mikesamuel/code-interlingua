@@ -79,7 +79,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
 
   protected void assertParsePasses(
       Grammar<?, ?> g, ParSerable ps,
-      @Nullable Set<? extends NodeType<?, ?>> relevant,
+      @Nullable Set<? super NodeType<?, ?>> relevant,
       String content, Event... expected) {
     assertParsePasses(
         g, ps, content,
@@ -287,7 +287,7 @@ public abstract class AbstractParSerTestCase extends TestCase {
   }
 
   protected static ImmutableList<Event> filterEvents(
-      @Nullable Set<? extends NodeType<?, ?>> relevant,
+      @Nullable Set<? super NodeType<?, ?>> relevant,
       Iterable<? extends Event> events) {
     int depth = 0;
     BitSet included = new BitSet();  // Per depth, whether to include the pop
