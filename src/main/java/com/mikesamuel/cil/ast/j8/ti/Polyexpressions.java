@@ -22,7 +22,8 @@ import com.mikesamuel.cil.ast.passes.AbstractRewritingPass;
 import com.mikesamuel.cil.ast.passes.AbstractRewritingPass.Parent;
 import com.mikesamuel.cil.parser.SList;
 
-final class Polyexpressions {
+/** Utilities for identifying poly-expressions. */
+public final class Polyexpressions {
 
   static boolean isStandaloneExpression(
       SList<AbstractRewritingPass.Parent> pathFromRoot) {
@@ -31,7 +32,8 @@ final class Polyexpressions {
   }
 
 
-  static boolean isPolyExpression(
+  /** True if the referenced node is a poly expression. */
+  public static boolean isPolyExpression(
       SList<AbstractRewritingPass.Parent> pathFromRoot) {
     if (pathFromRoot == null) { return false; }
     J8BaseNode expr = pathFromRoot.x.get();

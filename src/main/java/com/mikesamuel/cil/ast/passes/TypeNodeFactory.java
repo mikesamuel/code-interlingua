@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.mikesamuel.cil.ast.j8.ArrayTypeNode;
 import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.DimNode;
@@ -35,6 +36,7 @@ import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.parser.Positioned;
 
 class TypeNodeFactory {
   final Logger logger;
@@ -247,6 +249,33 @@ class TypeNodeFactory {
         .buildNode(nm.identifier);
     node.setNamePartType(nm.type);
     return node;
+  }
+
+  TypeArgumentsNode toTypeArgumentsNode(
+      Positioned pos,
+      Iterable<? extends TypeBinding> typeActuals) {
+    Preconditions.checkArgument(!Iterables.isEmpty(typeActuals));
+    ImmutableList.Builder<TypeArgumentNode> typeArguments =
+        ImmutableList.builder();
+    for (TypeBinding b : typeActuals) {
+      StaticType t = typePool.type(b.typeSpec, pos, logger);
+      ReferenceTypeNode rtNode = toReferenceTypeNode((ReferenceType) t);
+      if (t instanceof ReferenceType) {
+        typeArguments.add(
+            (b.variance == TypeSpecification.Variance.INVARIANT
+            ? TypeArgumentNode.Variant.ReferenceType.buildNode(rtNode)
+            : TypeArgumentNode.Variant.Wildcard.buildNode(
+                WildcardNode.Variant.AnnotationQmWildcardBounds.buildNode(
+                    (b.variance == TypeSpecification.Variance.EXTENDS
+                    ? WildcardBoundsNode.Variant.ExtendsReferenceType
+                        : WildcardBoundsNode.Variant.SuperReferenceType)
+                    .buildNode(rtNode)))));
+      }
+    }
+    return TypeArgumentsNode.Variant.LtTypeArgumentListGt
+        .buildNode(
+            TypeArgumentListNode.Variant.TypeArgumentComTypeArgument
+            .buildNode(typeArguments.build()));
   }
 
 }

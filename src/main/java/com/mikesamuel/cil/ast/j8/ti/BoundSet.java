@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -19,6 +20,7 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.StaticType.PrimitiveType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
+import com.mikesamuel.cil.util.LogUtils;
 
 /**
  * Maps inference variables to upper and lower bounds on other type variables
@@ -97,7 +99,7 @@ final class BoundSet {
     return Optional.of(b.build());
   }
 
-  BoundSet resolve(TypePool thetaTypePool) {
+  BoundSet resolve(Theta theta) {
     // https://docs.oracle.com/javase/specs/jls/se8/html/jls-18.html#jls-18.4
     // Given a bound set that does not contain the bound false, a subset of
     // the inference variables mentioned by the bound set may be resolved.
@@ -108,7 +110,7 @@ final class BoundSet {
     BoundSet bs = this;
     for (;;) {
       ImmutableMap<InferenceVariable, ReferenceType> insts =
-          bs.instantiateSome(thetaTypePool);
+          bs.instantiateSome(theta);
       if (insts == null) {
         // incorporate false
         return new BoundSet(bs.bounds, false, bs.thrown);
@@ -129,7 +131,7 @@ final class BoundSet {
   }
 
   private ImmutableMap<InferenceVariable, ReferenceType> instantiateSome(
-      TypePool thetaTypePool) {
+      Theta theta) {
     if (!isBoundable) {
       return null;
     }
@@ -138,10 +140,11 @@ final class BoundSet {
       ResolutionOrder.Builder orderBuilder = ResolutionOrder.builder(this);
       for (Bound b : this.bounds) {
         b.buildResolutionOrderGraph(orderBuilder);
-        System.err.println("Built order from " + b);
       }
       order = orderBuilder.build();
     }
+
+    TypePool thetaTypePool = theta.thetaTypePool;
 
     Multimap<InferenceVariable, Bound> boundsByMention =
         LinkedHashMultimap.create();
@@ -192,20 +195,22 @@ final class BoundSet {
               SimpleBound sb = (SimpleBound) b;
               if (sb.right.equals(var) && sb.left instanceof NominalType) {
                 StaticType t = ((NominalType) sb.left).t;
-                if (InferenceVariable.isProperType(t)) {
+                if (InferenceVariable.isProperType(t)
+                    && !thetaTypePool.T_NULL.equals(t)) {
                   lowerBounds.add(maybeBox(t, thetaTypePool));
                 }
               } else if (sb.left.equals(var)
                          && sb.right instanceof NominalType) {
                 StaticType t = ((NominalType) sb.right).t;
-                if (InferenceVariable.isProperType(t)) {
+                if (InferenceVariable.isProperType(t)
+                    && !thetaTypePool.T_NULL.equals(t)) {
                   upperBounds.add(maybeBox(t, thetaTypePool));
                 }
               }
             }
           }
 
-          ReferenceType r;
+          StaticType r;
           if (!lowerBounds.isEmpty()) {
             // If αi has one or more proper lower bounds, L1, ..., Lk, then
             // Ti = lub(L1, ..., Lk) (§4.10.4).
@@ -216,15 +221,32 @@ final class BoundSet {
           // Object, then Ti = RuntimeException.
           else if (thrown.contains(var)
                    && onlyContainsExceptionOrSuperTypes(upperBounds)) {
-            r = (ReferenceType) thetaTypePool.type(
-                JavaLang.JAVA_LANG_RUNTIMEEXCEPTION, null, null);
+            r = thetaTypePool.type(
+                JavaLang.JAVA_LANG_RUNTIMEEXCEPTION, theta.pos, theta.logger);
           }
           // Otherwise, where αi has proper upper bounds U1, ..., Uk,
           // Ti = glb(U1, ..., Uk) (§5.1.10).
-          else {
-            throw new Error("TODO " + upperBounds);
+          else if (!upperBounds.isEmpty()) {
+            TypeSpecification ts = upperBounds.get(0).typeSpecification;
+            for (int i = 1, n = upperBounds.size(); i < n; ++i) {
+              ts = thetaTypePool.glb(ts, upperBounds.get(i).typeSpecification);
+            }
+            r = thetaTypePool.type(ts, theta.pos, theta.logger);
+          } else {
+            LogUtils.log(
+                theta.logger, Level.SEVERE, theta.pos,
+                "Cannot compute bounds for " + var + " : "
+                + theta.reverse.get(var), null);
+            continue;
           }
-          instantiations.put(var, r);
+          if (r instanceof ReferenceType) {
+            instantiations.put(var, (ReferenceType) r);
+          } else {
+            LogUtils.log(
+                theta.logger, Level.SEVERE, theta.pos,
+                "Cannot bind " + var + " : " + theta.reverse.get(var)
+                + " to non reference type " + r, null);
+          }
         }
         break;
       } else {

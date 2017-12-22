@@ -1,25 +1,36 @@
 package com.mikesamuel.cil.ast.j8.ti;
 
 import java.util.Map;
+import java.util.logging.Logger;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.PartialTypeSpecification;
+import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
+import com.mikesamuel.cil.parser.SourcePosition;
 
 /**
  * The mapping between callee type parameters and inference variable
  * placeholders.
  */
 final class Theta {
+  final Logger logger;
+  final SourcePosition pos;
+  final TypePool thetaTypePool;
   /** Maps the callee's type parameters to placeholders used in bounds. */
   final ImmutableMap<Name, InferenceVariable> theta;
   final ImmutableMap<InferenceVariable, Name> reverse;
 
-  Theta(ImmutableMap<Name, InferenceVariable> theta) {
+  Theta(
+      Logger logger, SourcePosition pos, TypePool thetaTypePool,
+      ImmutableMap<Name, InferenceVariable> theta) {
+    this.logger = logger;
+    this.pos = pos;
+    this.thetaTypePool = thetaTypePool;
     this.theta = theta;
 
     ImmutableMap.Builder<InferenceVariable, Name> b = ImmutableMap.builder();

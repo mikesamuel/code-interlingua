@@ -250,7 +250,7 @@ public final class MemberInfoPool {
                 && mi.canonName.identifier.equals(memberName)
                 && mi.accessibleFrom(scope, typePool.r)) {
               out.add(new ParameterizedMember<>(
-                  declaringType, memberType.cast(mi)));
+                  containingType, declaringType, memberType.cast(mi)));
               cancelled.addAll(cancelledBy(mi));
             }
           }
@@ -287,12 +287,38 @@ public final class MemberInfoPool {
    * Bundles a member with the type bindings of its declaring type in context.
    */
   public static final class ParameterizedMember<MI extends MemberInfo> {
+    /**
+     * The source type.
+     * <p>
+     * For a member access like {@code foo.bar()} this is the static
+     * type of {@code foo}.
+     * <p>
+     * For a bare member access like {@code bar()} this is the type of
+     * the implicit left hand side.
+     * For static members, if sourceType is {@code pkg.SourceType},
+     * {@code pkg.SourceType.bar()} would be equivalent
+     * assuming no shadowing of {@code pkg}.
+     * For non-static members, {@code pkg.SourceType.this.bar()} would be
+     * equivalent, again assuming no name shadowing.
+     * <p>
+     * For a member reached via containment (because it is declared
+     * on a type whose declaration contains the use or contains a subtype of
+     * the use) it is the containing type.
+     * <p>
+     * For a bare static member reached via "import static", it is the imported
+     * type.
+     */
+    public final TypeSpecification sourceType;
     /** The parameterized type that contains the member. */
     public final TypeSpecification declaringType;
     /** A member declared in declaringType.canonName. */
     public final MI member;
 
-    ParameterizedMember(TypeSpecification declaringType, MI member) {
+    /** */
+    public ParameterizedMember(
+        TypeSpecification sourceType, TypeSpecification declaringType,
+        MI member) {
+      this.sourceType = sourceType;
       this.declaringType = declaringType;
       this.member = member;
     }

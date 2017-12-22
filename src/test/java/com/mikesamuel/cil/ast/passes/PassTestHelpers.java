@@ -203,7 +203,7 @@ public final class PassTestHelpers {
       result = op.run(logger);
     } catch (Error err) {
       // Dump any log messages that might indicate the reason for the error.
-      for (LogRecord r : logRecords) {
+      for (LogRecord r : ImmutableList.copyOf(logRecords)) {
         logger.getParent().log(r);
       }
       throw err;

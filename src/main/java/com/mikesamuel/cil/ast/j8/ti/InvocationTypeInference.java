@@ -49,6 +49,8 @@ public final class InvocationTypeInference {
   final ImmutableList<SList<Parent>> pathsToActuals;
   final boolean isInvocationPolyExpression;
 
+  static final boolean DEBUG = false;
+
   /** */
   public InvocationTypeInference(
       Logger logger,
@@ -78,6 +80,7 @@ public final class InvocationTypeInference {
    * For each actual, ei, formalTypes[i] is the formal type corresponding to
    * that actual.
    */
+  @SuppressWarnings("unused")
   private ImmutableList<StaticType> formalTypes;
   /**
    * For each actual, ei, formalTypesCrossTheta[i] is the formal type
@@ -105,7 +108,11 @@ public final class InvocationTypeInference {
   /** True if an unchecked conversion occurred when checking applicability. */
   private boolean applicabilityRequiredUncheckedConversion;
 
-  boolean isInvocationApplicable() {
+  /**
+   * True if the invocation of the given method is applicable to the given
+   * arguments.
+   */
+  public boolean isInvocationApplicable() {
     this.b2 = null;  // Set on success.
 
     // Let theta be the substitution [P1:=alpha_1, ..., Pp:=alpha_p] defined in
@@ -118,11 +125,11 @@ public final class InvocationTypeInference {
         InferenceVariable iv = new InferenceVariable(i);
         b.put(typeParameter, iv);
       }
-      theta = new Theta(b.build());
+      ImmutableMap<Name, InferenceVariable> thetaMap = b.build();
+      this.thetaTypePool = new TypePool(new ThetaTypeInfoResolver(
+          thetaMap, typePool.r));
+      theta = new Theta(logger, this.callPosition, thetaTypePool, thetaMap);
     }
-    this.thetaTypePool = new TypePool(new ThetaTypeInfoResolver(
-        theta, typePool.r));
-    System.err.println("theta=" + theta);
 
     // An initial bound set, B0, is constructed from the declared bounds of
     // P1, ..., Pp, as described in section 18.1.3.
@@ -160,7 +167,7 @@ public final class InvocationTypeInference {
       b0 = new BoundSet(
         simpleBounds.build(), true, ImmutableSet.of());
     }
-    System.err.println("b0=" + b0);
+    if (DEBUG) { System.err.println("b0=" + b0); }
 
     // For all i (1 <= i <= p), if Pi appears in the throws clause of m, then
     // the bound throws alpha_i is implied.
@@ -178,7 +185,7 @@ public final class InvocationTypeInference {
       ImmutableSet<InferenceVariable> typeParametersThrown = b.build();
       b1 = b0.withThrown(typeParametersThrown);
     }
-    System.err.println("b1=" + b1);
+    if (DEBUG) { System.err.println("b1=" + b1); }
 
     // Pertinent to applicability checks for all actuals occur multiple times.
     // Cache them.
@@ -188,17 +195,17 @@ public final class InvocationTypeInference {
           actuals.get(i));
     }
 
-    System.err.println("Trying by strict");
+    if (DEBUG) { System.err.println("Trying by strict"); }
     Optional<ImmutableList<TypeSpecification>> formalTypesOpt;
     formalTypesOpt = applicableByStrictInvocation(
         callee.getFormalTypes(), actuals);
     if (!formalTypesOpt.isPresent()) {
-      System.err.println("Trying by loose");
+      if (DEBUG) { System.err.println("Trying by loose"); }
       formalTypesOpt = applicableByLooseInvocation(
           callee.getFormalTypes(), actuals);
     }
     if (!formalTypesOpt.isPresent()) {
-      System.err.println("Trying by variable arity");
+      if (DEBUG) { System.err.println("Trying by variable arity"); }
       formalTypesOpt = applicableByVariableArityInvocation(
           callee.getFormalTypes(), actuals);
     }
@@ -227,7 +234,7 @@ public final class InvocationTypeInference {
       this.formalTypes = ft.build();
       this.formalTypesCrossTheta = fCrossTheta.build();
     }
-    System.err.println("c=" + c);
+    if (DEBUG) { System.err.println("c=" + c); }
 
     if (c != null) {
       // applicability checks populate this for later use
@@ -251,9 +258,9 @@ public final class InvocationTypeInference {
       UncheckedConversionCallbackImpl ucc =
           new UncheckedConversionCallbackImpl();
       BoundSet cBounds = c.reduce(thetaTypePool, logger, ucc);
-      System.err.println("cBounds=" + cBounds);
+      if (DEBUG) { System.err.println("cBounds=" + cBounds); }
       this.b2 = b1.merge(cBounds);
-      System.err.println("b2=" + b2);
+      if (DEBUG) { System.err.println("b2=" + b2); }
       if (b2.isBoundable) {
         this.applicabilityRequiredUncheckedConversion = !ucc.convs.isEmpty();
         if (this.applicabilityRequiredUncheckedConversion) {
@@ -351,27 +358,35 @@ public final class InvocationTypeInference {
     // then the method is not applicable and there is no need to proceed with
     // inference.
     for (int i = 0; i < n; ++i) {
-      System.err.println("CP0 i=" + i);
+      if (DEBUG) { System.err.println("CP0 i=" + i); }
       ExpressionNode ei = e.get(i);
       StaticType fi = typePool.type(f.get(i), null, logger);
       if (this.isActualPertinentToApplicability[i]) {
-        System.err.println("\tei=" + ei);
-        System.err.println("\tpertinent");
-        System.err.println("\tei type=" + ei.getStaticType());
-        System.err.println(
-            "\tstandalone(ei)="
-            + Polyexpressions.isStandaloneExpression(
-                pathsToActuals.get(i)));
-        System.err.println("\tfi=" + fi);
+        if (DEBUG) {
+          System.err.println("\tei=" + ei);
+          System.err.println("\tpertinent");
+          System.err.println("\tei type=" + ei.getStaticType());
+          System.err.println(
+              "\tstandalone(ei)="
+                  + Polyexpressions.isStandaloneExpression(
+                      pathsToActuals.get(i)));
+          System.err.println("\tfi=" + fi);
+        }
         boolean eIsStandalonePrimitive =
             ei.getStaticType() instanceof StaticType.PrimitiveType
             && Polyexpressions.isStandaloneExpression(pathsToActuals.get(i));
-        System.err.println(
-            "\teIsStandalonePrimitive=" + eIsStandalonePrimitive);
+        if (DEBUG) {
+          System.err.println(
+              "\teIsStandalonePrimitive=" + eIsStandalonePrimitive);
+        }
         boolean fIsReference = fi instanceof StaticType.TypePool.ReferenceType;
-        System.err.println("\tfIsReference=" + fIsReference);
+        if (DEBUG) {
+          System.err.println("\tfIsReference=" + fIsReference);
+        }
         if (eIsStandalonePrimitive == fIsReference) {
-          System.err.println("\tnot strictly applicable");
+          if (DEBUG) {
+            System.err.println("\tnot strictly applicable");
+          }
           return Optional.absent();
         }
 
@@ -381,7 +396,9 @@ public final class InvocationTypeInference {
       }
       fs.add(fi.typeSpecification);
     }
-    System.err.println("Returning strict applicability formulae");
+    if (DEBUG) {
+      System.err.println("Returning strict applicability formulae");
+    }
     return Optional.of(fs.build());
   }
 
@@ -429,7 +446,7 @@ public final class InvocationTypeInference {
    *
    * Returns a mapping from type parameters to resolved types.
    */
-  Inferences inferTypeVariables() {
+  public Inferences inferTypeVariables() {
     // Make sure b2 is populated.
     Preconditions.checkState(isInvocationApplicable());
     if (!isInvocationPolyExpression) {
@@ -466,8 +483,10 @@ public final class InvocationTypeInference {
     }
     ConstraintFormulaSet c = new ConstraintFormulaSet(formulae.build());
 
-    System.err.println("b3=" + b3);
-    System.err.println("c=" + c);
+    if (DEBUG) {
+      System.err.println("b3=" + b3);
+      System.err.println("c=" + c);
+    }
 
     // While C is not empty, the following process is repeated, starting with
     // the bound set B3 and accumulating new bounds into a "current" bound set,
@@ -491,7 +510,9 @@ public final class InvocationTypeInference {
     }
 
     this.b4 = current;
-    System.err.println("b4=" + b4);
+    if (DEBUG) {
+      System.err.println("b4=" + b4);
+    }
     if (b4.isBoundable) {
       // Finally, if B4 does not contain the bound false, the inference
       // variables in B4 are resolved.
@@ -500,7 +521,7 @@ public final class InvocationTypeInference {
       // variables α1, ..., αp, let θ' be the substitution
       // [P1:=T1, ..., Pp:=Tp].
 
-      b4 = b4.resolve(thetaTypePool);
+      b4 = b4.resolve(theta);
       Optional<ImmutableMap<InferenceVariable, ReferenceType>> resolutions =
           b4.getResolutions();
       // TODO: check that we have resolutions for all variables we care
@@ -581,7 +602,9 @@ public final class InvocationTypeInference {
     // If the invocation is a poly expression, let the bound set B3 be derived
     // from B2 as follows.
     // ...
-    System.err.println(b2);
+    if (DEBUG) {
+      System.err.println(b2);
+    }
     throw new Error("TODO");
   }
 

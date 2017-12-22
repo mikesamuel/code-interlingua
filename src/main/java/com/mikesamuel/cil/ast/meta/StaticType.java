@@ -497,87 +497,93 @@ public abstract class StaticType {
     }
 
     /**
-     * @param tspec specifices the type to return.
+     * @param tspec specifies the type to return.
      * @param pos to use with any log messages.
      * @param logger receives error messages related to
      */
     public StaticType type(
         TypeSpecification tspec,
         @Nullable Positioned pos, @Nullable Logger logger) {
-      return pool.computeIfAbsent(
-          tspec.canon(r),
-          new Function<TypeSpecification, StaticType>() {
-            @Override
-            public StaticType apply(TypeSpecification ts) {
-              if (ts.nDims > 0) {
-                TypeSpecification elementSpec = ts.withNDims(ts.nDims - 1);
-                StaticType elType = type(elementSpec, pos, logger);
-                if (ERROR_TYPE.equals(elType)) {
-                  return ERROR_TYPE;
-                }
-                // We canonicalized the type specification above so we need
-                // not do it here.
-                return new ArrayType(ts, elType);
-              }
+      TypeSpecification ts = tspec.canon(r);
+      StaticType t = pool.get(ts);
+      if (t != null) {
+        return t;
+      }
+      t = computeType(ts, pos, logger);
+      pool.put(ts, t);
+      return t;
+    }
 
-              // Check that the type exists.
-              if (!ts.rawName.type.isType) {
-                // Primitive types should not reach here due to cache seeding
-                // above, but malformed types like int<String> might.
-                if (logger != null) {
-                  logger.severe(
-                      (pos != null ? pos + ": " : "") + "type name "
-                      + ts.rawName + " does not specify a type");
-                }
-                if (!ts.bindings.isEmpty()) {
-                  TypeSpecification withoutBindings =
-                      TypeSpecification.unparameterized(ts.rawName);
-                  if (pool.containsKey(withoutBindings)) {
-                    return pool.get(withoutBindings);
-                  }
-                }
-                return ERROR_TYPE;
-              }
+    private StaticType computeType(
+        TypeSpecification ts,
+        @Nullable Positioned pos, @Nullable Logger logger) {
+      if (ts.nDims > 0) {
+        TypeSpecification elementSpec = ts.withNDims(ts.nDims - 1);
+        StaticType elType = type(elementSpec, pos, logger);
+        if (ERROR_TYPE.equals(elType)) {
+          return ERROR_TYPE;
+        }
+        // We canonicalized the type specification above so we need
+        // not do it here.
+        return new ArrayType(ts, elType);
+      }
 
-              Optional<TypeInfo> tiOpt = r.resolve(ts.rawName);
-              if (!tiOpt.isPresent()) {
-                if (logger != null) {
-                  logger.severe(
-                      (pos != null ? pos + ": " : "") + "type name "
-                      + ts.rawName + " does not specify a type");
-                }
-                return ERROR_TYPE;
-              }
-              TypeInfo ti = tiOpt.get();
-              // Check type parameter count and bounds.
-              boolean bindingsOk = true;
-              if (!ts.bindings.isEmpty()) {
-                // Not a raw type
-                if (ts.bindings.size() != ti.parameters.size()) {
-                  if (logger != null) {
-                    logger.severe(
-                        (pos != null ? pos + ": " : "")
-                        + "type " + ts
-                        + " has the wrong number of type parameters");
-                  }
-                  bindingsOk = false;
-                } else {
-                  // TODO: figure out how to check type bounds
-                  // We may not actually need to do this since we allow
-                  // common passes latitude on inputs that are not compiling
-                  // java programs.
-                  // This is also complicated by recursive type specifications.
-                }
-              }
-              if (!bindingsOk) {
-                TypeSpecification rawSpec = TypeSpecification.unparameterized(
-                    ts.rawName);
-                return type(rawSpec, pos, logger);
-              }
+      // Check that the type exists.
+      if (!ts.rawName.type.isType) {
+        // Primitive types should not reach here due to cache seeding
+        // above, but malformed types like int<String> might.
+        if (logger != null) {
+          logger.severe(
+              (pos != null ? pos + ": " : "") + "type name "
+              + ts.rawName + " does not specify a type");
+        }
+        if (!ts.bindings.isEmpty()) {
+          TypeSpecification withoutBindings =
+              TypeSpecification.unparameterized(ts.rawName);
+          if (pool.containsKey(withoutBindings)) {
+            return pool.get(withoutBindings);
+          }
+        }
+        return ERROR_TYPE;
+      }
 
-              return new ClassOrInterfaceType(ts, ti);
-            }
-          });
+      Optional<TypeInfo> tiOpt = r.resolve(ts.rawName);
+      if (!tiOpt.isPresent()) {
+        if (logger != null) {
+          logger.severe(
+              (pos != null ? pos + ": " : "") + "type name "
+              + ts.rawName + " does not specify a type");
+        }
+        return ERROR_TYPE;
+      }
+      TypeInfo ti = tiOpt.get();
+      // Check type parameter count and bounds.
+      boolean bindingsOk = true;
+      if (!ts.bindings.isEmpty()) {
+        // Not a raw type
+        if (ts.bindings.size() != ti.parameters.size()) {
+          if (logger != null) {
+            logger.severe(
+                (pos != null ? pos + ": " : "")
+                + "type " + ts
+                + " has the wrong number of type parameters");
+          }
+          bindingsOk = false;
+        } else {
+          // TODO: figure out how to check type bounds
+          // We may not actually need to do this since we allow
+          // common passes latitude on inputs that are not compiling
+          // java programs.
+          // This is also complicated by recursive type specifications.
+        }
+      }
+      if (!bindingsOk) {
+        TypeSpecification rawSpec = TypeSpecification.unparameterized(
+            ts.rawName);
+        return type(rawSpec, pos, logger);
+      }
+
+      return new ClassOrInterfaceType(ts, ti);
     }
 
     private static final boolean DEBUG_LUB = false;
@@ -952,7 +958,8 @@ public abstract class StaticType {
       return ERROR_TYPE.typeSpecification;
     }
 
-    private TypeSpecification glb(
+    /** Greatest lower bound. */
+    public TypeSpecification glb(
         TypeSpecification u, TypeSpecification v) {
       /// glb(V1,...,Vm) is defined as V1 & ... & Vm.
       // TODO: We need to be able to represent type intersections.

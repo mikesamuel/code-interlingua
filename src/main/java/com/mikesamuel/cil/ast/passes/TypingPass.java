@@ -103,6 +103,9 @@ import com.mikesamuel.cil.ast.j8.UnaryExpressionNode;
 import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.j8.VariableInitializerNode;
+import com.mikesamuel.cil.ast.j8.ti.Inferences;
+import com.mikesamuel.cil.ast.j8.ti.InvocationTypeInference;
+import com.mikesamuel.cil.ast.j8.ti.Polyexpressions;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
@@ -129,7 +132,6 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
-import com.mikesamuel.cil.util.TriState;
 
 /**
  * Attaches types to {@link Typed} expressions.
@@ -148,8 +150,8 @@ final class TypingPass extends AbstractRewritingPass {
 
   private final LinkedList<ExpressionNameResolver> expressionNameResolvers
       = Lists.newLinkedList();
-  private final LinkedList<DeclarationPositionMarker> declarationPositionMarkers
-      = Lists.newLinkedList();
+  private final LinkedList<DeclarationPositionMarker>
+      declarationPositionMarkers = Lists.newLinkedList();
   private final LinkedList<TypeNameResolver> typeNameResolvers
       = Lists.newLinkedList();
   private final LinkedList<TypeInfo> containingTypes = Lists.newLinkedList();
@@ -300,7 +302,7 @@ final class TypingPass extends AbstractRewritingPass {
   @Override
   protected ProcessingStatus postvisit(
       J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-    process(node, pathFromRoot);
+    ProcessingStatus status = process(node, pathFromRoot);
 
     if (node instanceof J8ExpressionNameScope) {
       expressionNameResolvers.removeLast();
@@ -315,11 +317,12 @@ final class TypingPass extends AbstractRewritingPass {
       containingTypes.removeLast();
     }
 
-    return ProcessingStatus.CONTINUE;
+    return status;
   }
 
-  private void process(J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-
+  private ProcessingStatus process(
+      J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
+    ProcessingStatus status = ProcessingStatus.CONTINUE;
     if (node instanceof J8Typed) {
       J8Typed t = (J8Typed) node;
       StaticType exprType;
@@ -400,9 +403,41 @@ final class TypingPass extends AbstractRewritingPass {
               }
               break type_switch;
             }
-            case MethodInvocation:
-              exprType = processMethodInvocation(e, Optional.absent());
+            case MethodInvocation: {
+              ProcessedCallable invoc = processMethodInvocation(
+                  pathFromRoot, Optional.absent());
+              exprType = invoc.resultType;
+              // TODO: associate the this type with the result so we can
+              // synthesize the right this value when we promote from
+              // a bare call to a primary method invocation.
+              if (!invoc.typeActuals.isEmpty() && invoc.callable.isPresent()) {
+                ParameterizedMember<CallableInfo> m = invoc.callable.get().m;
+                TypeNodeFactory factory = new TypeNodeFactory(
+                    logger, typePool);
+                TypeSpecification sourceType = m.sourceType;
+                ExpressionAtomNode receiver =
+                    (Modifier.isStatic(m.member.modifiers)
+                     ? ExpressionAtomNode.Variant.StaticMember
+                     : ExpressionAtomNode.Variant.This)
+                    .buildNode(
+                        TypeNodeFactory.toTypeNameNode(sourceType.rawName));
+                receiver.setStaticType(typePool.type(sourceType, e, logger));
+                TypeArgumentsNode typeArgumentsNode =
+                    factory.toTypeArgumentsNode(e, invoc.typeActuals);
+                ImmutableList.Builder<J8BaseNode> explicitCallChildren =
+                    ImmutableList.<J8BaseNode>builder()
+                    .add(receiver)
+                    .add(typeArgumentsNode);
+                for (J8BaseNode callChild : e.getChildren()) {
+                  explicitCallChildren.add(callChild.deepClone());
+                }
+                PrimaryNode explicitCall = PrimaryNode.Variant.MethodInvocation
+                    .buildNode(explicitCallChildren.build());
+                explicitCall.setStaticType(exprType);
+                status = ProcessingStatus.replace(explicitCall);
+              }
               break type_switch;
+            }
             case Parenthesized:
               exprType = passThru(e);
               break type_switch;
@@ -445,9 +480,12 @@ final class TypingPass extends AbstractRewritingPass {
                   e.getSourcePosition(), logger);
               break type_switch;
             case UnqualifiedClassInstanceCreationExpression: {
+              SList<Parent> pathToCtorCall = firstWithType(
+                  pathFromRoot,
+                  J8NodeType.UnqualifiedClassInstanceCreationExpression);
               UnqualifiedClassInstanceCreationExpressionNode ctorCall =
-                  e.firstChildWithType(
-                      UnqualifiedClassInstanceCreationExpressionNode.class);
+                  (UnqualifiedClassInstanceCreationExpressionNode)
+                  pathToCtorCall.x.get();
               Optional<ClassOrInterfaceTypeNode> type = node.finder(
                   ClassOrInterfaceTypeNode.class)
                   .exclude(
@@ -458,9 +496,10 @@ final class TypingPass extends AbstractRewritingPass {
                   .findOne();
               if (type.isPresent()) {
                 exprType = type.get().getStaticType();
-                processCallableInvocation(
-                    ctorCall, exprType, Optional.absent(),
+                ProcessedCallable invoc = processCallableInvocation(
+                    pathToCtorCall, exprType, Optional.absent(),
                     Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, ctorCall);
+                maybeAddImpliedTypeParameters(pathToCtorCall, invoc);
               } else {
                 error(node, "Class to instantiate unspecified");
                 exprType = StaticType.ERROR_TYPE;
@@ -500,7 +539,10 @@ final class TypingPass extends AbstractRewritingPass {
                   error(tnn, "Missing type info");
                 }
               }
-              exprType = processMethodInvocation(e, superExclusion);
+              ProcessedCallable invoc = processMethodInvocation(
+                  pathFromRoot, superExclusion);
+              maybeAddImpliedTypeParameters(pathFromRoot, invoc);
+              exprType = invoc.resultType;
               break type_switch;
             }
 
@@ -556,9 +598,14 @@ final class TypingPass extends AbstractRewritingPass {
                   ? maybePassThru(outerInstance)
                   : null;
 
+              SList<Parent> pathToInstantiation = firstWithType(
+                  pathFromRoot,
+                  J8NodeType.UnqualifiedClassInstanceCreationExpression);
               UnqualifiedClassInstanceCreationExpressionNode instantiation =
-                  node.firstChildWithType(
-                      UnqualifiedClassInstanceCreationExpressionNode.class);
+                  pathToInstantiation != null
+                  ? (UnqualifiedClassInstanceCreationExpressionNode)
+                      pathToInstantiation.x.get()
+                  : null;
               ClassOrInterfaceTypeToInstantiateNode typeToInstantiate =
                   instantiation != null
                   ? instantiation.firstChildWithType(
@@ -602,10 +649,11 @@ final class TypingPass extends AbstractRewritingPass {
                   exprType = typePool.type(
                       fullInnerTypeSpec, e.getSourcePosition(), logger);
                   Preconditions.checkNotNull(type).setStaticType(exprType);
-                  processCallableInvocation(
-                      instantiation, exprType, Optional.absent(),
+                  ProcessedCallable invoc = processCallableInvocation(
+                      pathToInstantiation, exprType, Optional.absent(),
                       Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME,
                       instantiation);
+                  maybeAddImpliedTypeParameters(pathToInstantiation, invoc);
                   break type_switch;
                 }
               }
@@ -1360,14 +1408,14 @@ final class TypingPass extends AbstractRewritingPass {
         System.err.println("Got " + exprType + " for " + node.getNodeType());
       }
       t.setStaticType(exprType);
-      return;
+      return status;
     }
 
     if (node instanceof VariableInitializerNode) {
       Operand op = nthOperandOf(0, node, J8NodeType.Expression);
-      if (op == null) { return; }
+      if (op == null) { return status; }
       StaticType exprType = ((J8Typed) op.getNode()).getStaticType();
-      if (exprType == null) { return; }
+      if (exprType == null) { return status; }
 
       SList<Parent> path = pathFromRoot;
       int nDims = 0;
@@ -1429,6 +1477,41 @@ final class TypingPass extends AbstractRewritingPass {
             break;
         }
         break;
+      }
+    }
+    return status;
+  }
+
+
+  private void maybeAddImpliedTypeParameters(
+      SList<Parent> pathToInvocation, ProcessedCallable invoc) {
+    if (!invoc.typeActuals.isEmpty()) {
+      J8BaseNode node = pathToInvocation.x.get();
+      TypeArgumentsNode argsNode = node.firstChildWithType(
+          TypeArgumentsNode.class);
+      if (argsNode == null) {
+        J8NodeVariant v = node.getVariant();
+        int insertionPt;
+        if (v == PrimaryNode.Variant.MethodInvocation) {
+          insertionPt = node.finder(MethodNameNode.class).indexOf();
+        } else if (v.getNodeType()
+                   == J8NodeType.ExplicitConstructorInvocation) {
+          insertionPt = node.finder(PrimaryNode.class).indexOf() + 1;
+        } else if (
+            v.getNodeType()
+            == J8NodeType.UnqualifiedClassInstanceCreationExpression) {
+          insertionPt = 0;
+        } else {
+          throw new Error("TODO " + v);
+        }
+        if (insertionPt < 0) {
+          error(node, "Cannot add implied type parameters to " + v);
+          return;
+        }
+        TypeNodeFactory factory = new TypeNodeFactory(logger, typePool);
+        TypeArgumentsNode typeArgsNode = factory.toTypeArgumentsNode(
+            node, invoc.typeActuals);
+        ((J8BaseInnerNode) node).add(insertionPt, typeArgsNode);
       }
     }
   }
@@ -1648,8 +1731,9 @@ final class TypingPass extends AbstractRewritingPass {
     return typePool.type(valueTypeInContext, e.getSourcePosition(), logger);
   }
 
-  private StaticType processMethodInvocation(
-      J8BaseNode e, Optional<Name> superExclusion) {
+  private ProcessedCallable processMethodInvocation(
+      SList<Parent> pathFromRoot, Optional<Name> superExclusion) {
+    J8BaseNode e = pathFromRoot.x.get();
     J8Typed callee = e.firstChildWithType(J8Typed.class);
 
     MethodNameNode nameNode = e.firstChildWithType(
@@ -1659,7 +1743,7 @@ final class TypingPass extends AbstractRewritingPass {
     String name = nameIdent != null ? nameIdent.getValue() : null;
     if (name == null) {
       error(e, "Cannot determine name of method invoked");
-      return StaticType.ERROR_TYPE;
+      return ProcessedCallable.ERROR;
     }
 
     StaticType calleeType;
@@ -1696,27 +1780,56 @@ final class TypingPass extends AbstractRewritingPass {
       calleeType = callee.getStaticType();
       if (calleeType == null) {
         error(callee, "Cannot determine type for method target");
-        return StaticType.ERROR_TYPE;
+        return ProcessedCallable.ERROR;
       } else if (calleeType instanceof PrimitiveType
                  || typePool.T_NULL.equals(calleeType)) {
         error(
             callee, calleeType + " cannot be target of invocation");
-        return StaticType.ERROR_TYPE;
+        return ProcessedCallable.ERROR;
       } else if (StaticType.ERROR_TYPE.equals(calleeType)) {
-        return StaticType.ERROR_TYPE;
+        return ProcessedCallable.ERROR;
       }
     }
 
     return processCallableInvocation(
-        e, calleeType, superExclusion, name, nameNode);
+        pathFromRoot, calleeType, superExclusion, name, nameNode);
   }
 
-  private StaticType processCallableInvocation(
-      J8BaseNode e, StaticType calleeType, Optional<Name> superExclusion,
+  private ProcessedCallable processCallableInvocation(
+      SList<Parent> pathFromRoot,
+      StaticType calleeType, Optional<Name> superExclusion,
       String name, J8MethodDescriptorReference descriptorRef) {
+    J8BaseNode e = pathFromRoot.x.get();
     @Nullable TypeArgumentsNode args = e.firstChildWithType(
         TypeArgumentsNode.class);
+    ImmutableList.Builder<TypeBinding> typeArguments =
+        ImmutableList.builder();
+    if (args != null) {
+      TypeNameResolver canonResolver = typeNameResolvers.peekLast();
+      TypeArgumentListNode argListNode = args.firstChildWithType(
+          TypeArgumentListNode.class);
+      if (argListNode != null) {
+        for (TypeArgumentNode arg
+            : argListNode.finder(TypeArgumentNode.class)
+            .exclude(J8NodeType.TypeArguments)
+            .find()) {
+          TypeBinding b = AmbiguousNames.typeBindingOf(
+              arg, canonResolver, logger);
+          typeArguments.add(b);
+        }
+      }
+    }
+    return processCallableInvocation(
+        pathFromRoot, calleeType, superExclusion, name, descriptorRef,
+        typeArguments.build());
+  }
 
+  private ProcessedCallable processCallableInvocation(
+      SList<Parent> pathFromRoot,
+      StaticType calleeType, Optional<Name> superExclusion,
+      String name, J8MethodDescriptorReference descriptorRef,
+      ImmutableList<TypeBinding> typeArguments) {
+    J8BaseNode e = pathFromRoot.x.get();
     @Nullable Operand actualsOp = firstWithType(e, J8NodeType.ArgumentList);
     @Nullable ArgumentListNode actuals = actualsOp != null
         ? (ArgumentListNode) actualsOp.getNode() : null;
@@ -1735,33 +1848,73 @@ final class TypingPass extends AbstractRewritingPass {
       }
     }
 
-    ImmutableList.Builder<TypeBinding> typeArguments =
-        ImmutableList.builder();
-    if (args != null) {
-      TypeNameResolver canonResolver = typeNameResolvers.peekLast();
-      TypeArgumentListNode argListNode = args.firstChildWithType(
-          TypeArgumentListNode.class);
-      if (argListNode != null) {
-        for (TypeArgumentNode arg
-            : argListNode.finder(TypeArgumentNode.class)
-            .exclude(J8NodeType.TypeArguments)
-            .find()) {
-          TypeBinding b = AmbiguousNames.typeBindingOf(
-              arg, canonResolver, logger);
-          typeArguments.add(b);
-        }
-      }
-    }
-
     Optional<MethodSearchResult> invokedMethodOpt = pickMethodOverload(
-        e, calleeType, typeArguments.build(), superExclusion, name,
+        e, calleeType, typeArguments, superExclusion, name,
         actualTypes.build());
     if (!invokedMethodOpt.isPresent()) {
       error(e, "Unresolved use of method " + name);
-      return StaticType.ERROR_TYPE;
+      return ProcessedCallable.ERROR;
     }
 
     MethodSearchResult invokedMethod = invokedMethodOpt.get();
+    if (!invokedMethod.m.member.typeParameters.isEmpty()
+        && typeArguments.isEmpty()) {
+      boolean isInvocationPolyExpression =
+          Polyexpressions.isPolyExpression(pathFromRoot);
+      SList<Parent> pathToArgumentList = firstWithType(
+          pathFromRoot, J8NodeType.ArgumentList);
+      ImmutableList.Builder<SList<Parent>> pathsToActuals =
+          ImmutableList.builder();
+      if (pathToArgumentList != null) {
+        ArgumentListNode argList = (ArgumentListNode)
+            pathToArgumentList.x.get();
+        for (int i = 0, n = argList.getNChildren(); i < n; ++i) {
+          J8BaseNode arg = argList.getChild(i);
+          if (arg instanceof ExpressionNode) {
+            pathsToActuals.add(SList.append(
+                pathToArgumentList, new Parent(i, argList)));
+          }
+        }
+      }
+      InvocationTypeInference inference = new InvocationTypeInference(
+          logger, typePool, invokedMethod.m.member, e.getSourcePosition(),
+          pathsToActuals.build(), isInvocationPolyExpression);
+      if (inference.isInvocationApplicable()) {
+        Inferences infs = inference.inferTypeVariables();
+        if (DEBUG) {
+          System.err.println("infs=" + infs.resolutions);
+          System.err.println(
+              "invokedMethod=" + invokedMethod.formalTypesInContext);
+        }
+        ImmutableList.Builder<TypeBinding> inferredTypeArgumentsBuilder
+            = ImmutableList.builder();
+        for (Name typeParameter : invokedMethod.m.member.typeParameters) {
+          TypeSpecification pts =
+              TypeSpecification.unparameterized(typeParameter);
+          TypeSpecification subst = infs.subst(pts);
+          TypeBinding b;
+          if (pts.equals(subst)) {
+            Optional<TypeInfo> paramTypeInfo =
+                typePool.r.resolve(typeParameter);
+            if (!paramTypeInfo.isPresent()) { break; }
+            TypeInfo pti = paramTypeInfo.get();
+            if (!pti.superType.isPresent()) { break; }
+            b = new TypeBinding(Variance.EXTENDS, pti.superType.get());
+          } else {
+            b = new TypeBinding(subst);
+          }
+          inferredTypeArgumentsBuilder.add(b);
+        }
+        ImmutableList<TypeBinding> inferredTypeArguments =
+            inferredTypeArgumentsBuilder.build();
+        if (inferredTypeArguments.size()
+            == invokedMethod.m.member.typeParameters.size()) {
+          return processCallableInvocation(
+              pathFromRoot, calleeType, superExclusion,
+              name, descriptorRef, inferredTypeArguments);
+        }
+      }
+    }
 
     // Associate method descriptor with invokedMethod.
     descriptorRef.setMethodDescriptor(invokedMethod.m.member.getDescriptor());
@@ -1826,7 +1979,10 @@ final class TypingPass extends AbstractRewritingPass {
         actualsOp.parent.replace(actualsOp.indexInParent, newActuals);
       }
     }
-    return invokedMethod.returnTypeInContext;
+    return new ProcessedCallable(
+        invokedMethod.returnTypeInContext,
+        Optional.of(invokedMethod),
+        typeArguments);
   }
 
   private StaticType passThru(Operand op) {
@@ -2203,7 +2359,8 @@ final class TypingPass extends AbstractRewritingPass {
         cast = CastNode.Variant.ConvertCast.buildNode(
             ConvertCastNode.Variant.PrimitiveType.buildNode(targetTypeNode));
       } else {
-        TypeNodeFactory typeNodeFactory = new TypeNodeFactory(logger, typePool);
+        TypeNodeFactory typeNodeFactory =
+            new TypeNodeFactory(logger, typePool);
         // TODO: handle +/- unary op ambiguity.
         // Maybe, if it's not an ExpressionAtom.Parenthesized, then
         // wrap it.  This may already necessarily happen due to the
@@ -2260,6 +2417,21 @@ final class TypingPass extends AbstractRewritingPass {
           return new Operand(inode, i, containerType);
         }
         --nLeft;
+      }
+    }
+    return null;
+  }
+
+  private static
+  SList<Parent> firstWithType(SList<Parent> path, J8NodeType t) {
+    J8BaseNode node = path.x.get();
+    if (node instanceof J8BaseInnerNode) {
+      J8BaseInnerNode inode = (J8BaseInnerNode) node;
+      for (int i = 0, n = inode.getNChildren(); i < n; ++i) {
+        J8BaseNode child = inode.getChild(i);
+        if (child.getNodeType() == t) {
+          return SList.append(path, new Parent(i, inode));
+        }
       }
     }
     return null;
@@ -2385,7 +2557,6 @@ final class TypingPass extends AbstractRewritingPass {
   }
 
   /**
-   * The containers to try in order when looking up a member.
    * <p>
    * @param superExclusions if present, the class whose declared (not inherited)
    *     members should be excluded from search results.
@@ -2825,220 +2996,6 @@ final class TypingPass extends AbstractRewritingPass {
     }
     return Optional.of(results.get(0));
   }
-
-  static final class MethodSearchResult {
-    final ParameterizedMember<CallableInfo> m;
-    final ImmutableList<StaticType> formalTypesInContext;
-    final StaticType returnTypeInContext;
-    final ImmutableList<Cast> actualToFormalCasts;
-    final boolean constructsVariadicArray;
-
-    MethodSearchResult(
-        ParameterizedMember<CallableInfo> m,
-        ImmutableList<StaticType> formalTypesInContext,
-        StaticType returnTypeInContext,
-        ImmutableList<Cast> actualToFormalCasts,
-        boolean constructsVariadicArray) {
-      this.m = m;
-      this.formalTypesInContext = formalTypesInContext;
-      this.returnTypeInContext = returnTypeInContext;
-      this.actualToFormalCasts = actualToFormalCasts;
-      this.constructsVariadicArray = constructsVariadicArray;
-    }
-
-    public boolean isStrictlyMoreSpecificThan(MethodSearchResult that) {
-      // TODO: JLS S 15.12 does not use parameters after explicit replacement to
-      // infer bounds.  We need to take the actual expressions too.
-      // For e.g., test f(byte) vs f(int) given integral constants that fit in
-      // [-128,127].
-      ImmutableList<StaticType> aTypes = this.formalTypesInContext;
-      ImmutableList<StaticType> bTypes = that.formalTypesInContext;
-
-      boolean aIsVariadic = this.m.member.isVariadic();
-      boolean bIsVariadic = that.m.member.isVariadic();
-
-      int aArity = aTypes.size();
-      int bArity = bTypes.size();
-
-      StaticType aMarginalFormalType = null;
-      if (aIsVariadic) {
-        // The array type representing a variadic parameter should not be a
-        // template variable that extends an array type since the array type
-        // is manufactured.
-        aMarginalFormalType = ((ArrayType) aTypes.get(aArity - 1)).elementType;
-      }
-      StaticType bMarginalFormalType = null;
-      if (aIsVariadic) {
-        // The array type representing a variadic parameter should not be a
-        // template variable that extends an array type since the array type
-        // is manufactured.
-        bMarginalFormalType = ((ArrayType) bTypes.get(bArity - 1)).elementType;
-      }
-
-      int nonVarArgsArity = Math.min(
-          aArity - (aIsVariadic ? 1 : 0),
-          bArity - (bIsVariadic ? 1 : 0));
-
-      if (DEBUG) {
-        System.err.println(
-            "Testing " + this.m.member.canonName.identifier + "\n"
-            + this.m.member.getDescriptor()
-            + "(" + Joiner.on(", ").join(this.formalTypesInContext) + ")\n"
-            + "more specific than\n"
-            + that.m.member.getDescriptor()
-            + "(" + Joiner.on(", ").join(that.formalTypesInContext) + ")\n"
-            + "aArity=" + aArity + ", bArity=" + bArity + "\n"
-            + "aMarginalFormalType=" + aMarginalFormalType
-            + ", bMarginalFormalType=" + bMarginalFormalType + "\n"
-            + "nonVarArgsArity=" + nonVarArgsArity);
-      }
-
-      boolean oneMoreSpecificThan = false;
-      for (int i = 0; i < nonVarArgsArity; ++i) {
-        TriState s = parameterSpecificity(aTypes.get(i), bTypes.get(i));
-        switch (s) {
-          case OTHER:
-            continue;
-          case TRUE:
-            oneMoreSpecificThan = true;
-            break;
-          case FALSE:
-            if (DEBUG) {
-              System.err.println("\tparameterSpecificity " + i + " = false");
-            }
-            return false;
-        }
-      }
-
-      if (!(aIsVariadic || bIsVariadic)) {
-        if (DEBUG) {
-          System.err.println(
-              "\tNeither variadic oneMoreSpecificThan=" + oneMoreSpecificThan
-              + ", same arity=" + (aArity == bArity));
-        }
-        return oneMoreSpecificThan && aArity == bArity;
-      }
-
-      // These are the cases for dealing with varargs specificity where
-      // a could be more specific than b.
-
-      // B VARIADIC, A has extra non-variadic arguments whether variadic or not
-      //   (A0, A1)
-      //   (B...)
-
-      //   (A0, A1, A2[])
-      //   (B...)
-
-      //   (A0, A1, A2...)
-      //   (B...)
-      // where A0...n are as or more specific than B
-
-      // We deal with these three cases by running through the extra arguments
-      // and then delegating to handlers for the cases below.
-      int aIndex = nonVarArgsArity;
-      int bIndex = nonVarArgsArity;
-      for (int aNonVariadicLimit = aArity - (aIsVariadic ? 1 : 0);
-           aIndex < aNonVariadicLimit; ++aIndex) {
-        TriState s = parameterSpecificity(
-            aTypes.get(aIndex), bMarginalFormalType);
-        switch (s) {
-          case OTHER:
-          case TRUE:
-            // This is the case because the required min arity is now more
-            // specific.
-            oneMoreSpecificThan = true;
-            break;
-          case FALSE:
-            if (DEBUG) {
-              System.err.println("\tExtra arg not more specific " + aIndex);
-            }
-            return false;
-        }
-      }
-      oneMoreSpecificThan = true;
-
-      // A has no more, b accepts more.
-      //   ()
-      //   (B...)
-      if (aIndex == aArity && !aIsVariadic && bIndex + 1 == bArity) {
-        if (DEBUG) {
-          System.err.println("\tMore specific due to empty variadic match");
-        }
-        return true;
-      }
-
-      if (aIndex + 1 == aArity && bIndex + 1 == bArity) {
-        Preconditions.checkState(bIsVariadic);  // Checked above.
-        // BOTH VARIADIC, SAME COUNT
-        //   (A...)
-        //   (B...)
-        // -> A is more specific than B
-        TriState specificity;
-        if (aIsVariadic) {
-          specificity = parameterSpecificity(
-              aMarginalFormalType, bMarginalFormalType);
-        } else {
-          // B VARIADIC, A has Array type.
-          //   (A[])
-          //   (B...)
-          // -> A is as or more specific as B
-          specificity = parameterSpecificity(
-              aTypes.get(aArity - 1), bTypes.get(bArity - 1));
-        }
-        if (DEBUG) {
-          System.err.println(
-              "\tBoth variadic specificity=" + specificity
-              + ", oneMoreSpecificThan=" + oneMoreSpecificThan);
-        }
-        switch (specificity) {
-          case TRUE:  return true;
-          case FALSE: return false;
-          case OTHER: return oneMoreSpecificThan;
-        }
-      }
-
-      // We can safely return false here because the cases below do not
-      // establish specificity.
-      //   (A...)
-      //   (Object)
-      //
-      //   (Object...)
-      //   (Serializable)
-      //
-      //   (Object...)
-      //   (Cloneable)
-      // because in these cases B has a more specific arity than A.
-      if (DEBUG) {
-        System.err.println("\tRan out of more specific cases");
-      }
-      return false;
-    }
-
-    /**
-     * True -> a is more specific than b;
-     * Other -> a is the same as b.
-     * False -> a is not more specific than b.
-     */
-    private static TriState parameterSpecificity(
-        StaticType aType, StaticType bType) {
-      Cast c = bType.assignableFrom(aType);
-      switch (c) {
-        case CONFIRM_SAFE:
-        case CONFIRM_UNCHECKED:
-        case CONVERTING_LOSSLESS:
-          return TriState.TRUE;
-        case CONVERTING_LOSSY:
-        case BOX:
-        case UNBOX:
-        case DISJOINT:
-        case CONFIRM_CHECKED:
-          return TriState.FALSE;
-        case SAME:
-          return TriState.OTHER;
-      }
-      throw new AssertionError(c);
-    }
-  }
 }
 
 
@@ -3065,4 +3022,23 @@ enum Compatibility {
     }
     throw new AssertionError(c);
   }
+}
+
+final class ProcessedCallable {
+  final StaticType resultType;
+  final Optional<MethodSearchResult> callable;
+  final ImmutableList<TypeBinding> typeActuals;
+
+  ProcessedCallable(
+      StaticType resultType,
+      Optional<MethodSearchResult> callable,
+      ImmutableList<TypeBinding> typeActuals) {
+    this.resultType = resultType;
+    this.callable = callable;
+    this.typeActuals = typeActuals;
+  }
+
+  static final ProcessedCallable ERROR = new ProcessedCallable(
+      StaticType.ERROR_TYPE, Optional.absent(),
+      ImmutableList.of());
 }

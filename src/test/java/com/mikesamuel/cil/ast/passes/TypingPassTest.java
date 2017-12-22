@@ -432,7 +432,7 @@ public final class TypingPassTest extends TestCase {
             "import java.util.Collections;",
             "class C {",
             "  {",
-            "    Collections./*()Ljava/util/List;*/emptyList();",
+            "    Collections.<java.lang.Object> /*()Ljava/util/List;*/emptyList();",
             "    Collections.<String> /*()Ljava/util/Set;*/emptySet();",
             "    Collections.<? extends Long> /*()Ljava/util/Set;*/emptySet();",
             "    Collections.<?> /*()Ljava/util/Set;*/emptySet();",
@@ -457,8 +457,9 @@ public final class TypingPassTest extends TestCase {
         },
         StatementExpressionNode.class,
         new String[] {
-            "Collections.emptyList()"
-            + " : /java/util/List<? extends /java/lang/Object>",
+            "Collections.<java.lang.Object> emptyList()"
+            // TODO: Should the type be ? extend Object
+            + " : /java/util/List</java/lang/Object>",
             "Collections.<String> emptySet()"
             + " : /java/util/Set</java/lang/String>",
             "Collections.<? extends Long> emptySet()"
@@ -488,9 +489,10 @@ public final class TypingPassTest extends TestCase {
             "  public static void main(String... argv) {",
             "    CharSequence c = (java.lang.CharSequence) (\"c\");",
             "    String s = \"s\";",
-            "    Foo./*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f(c);",
-            "    Foo./*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f((java.lang",
-            "            .CharSequence) (s));",
+            "    Foo.<java.lang.Object> /*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f(c)",
+            "    ;",
+            "    Foo.<java.lang.Object> /*(Ljava/lang/CharSequence;)Ljava/lang/Object;*/f(",
+            "        (java.lang.CharSequence) (s));",
             // Per experiment with javac, this binds to the second overload
             // despite the fact that, with type variable substitution,
             // the String formal type is more specific than CharSequence.
@@ -535,8 +537,8 @@ public final class TypingPassTest extends TestCase {
         new String[] {
             "System.err.println(\"T\" + x) : void",
             "System.err.println(\"CharSequence \" + x) : void",
-            "Foo.f(c) : /java/lang/Object",
-            "Foo.f((java.lang.CharSequence) (s)) : /java/lang/Object",
+            "Foo.<java.lang.Object> f(c) : /java/lang/Object",
+            "Foo.<java.lang.Object> f((java.lang.CharSequence) (s)) : /java/lang/Object",
             // TODO: should cast s to CharSequence
             "Foo.<String> f(s) : /java/lang/String",
         },
@@ -871,9 +873,10 @@ public final class TypingPassTest extends TestCase {
             // Even though the signature, post template variable substitution,
             // of the first f is f(String) which is more specific than
             // f(CharSequence), java still chooses the latter.
-            "    /*()V*/new Foo()./*(Ljava/lang/CharSequence;)"
-            +        "Ljava/lang/Object;*/f((java",
-            "            .lang.CharSequence) (\"\"));",
+            "    /*()V*/new Foo().<java.lang.Object",
+            "    > /*(Ljava/lang/CharSequence;)"
+            +        "Ljava/lang/Object;*/f((java.lang.CharSequence)",
+            "        (\"\"));",
             "  }",
             "  public Foo() {}",
             "}",
@@ -921,7 +924,8 @@ public final class TypingPassTest extends TestCase {
         StatementExpressionNode.class,
         new String[] {
             // TODO: infer type for <T> and use that.
-            "new Foo().f((java.lang.CharSequence) (\"\")) : /java/lang/Object",
+            "new Foo().<java.lang.Object> f((java.lang.CharSequence) (\"\")) : "
+            + "/java/lang/Object",
             "System.err.println(\"Bar.f(T)\") : void",
             "System.err.println(\"Bar.f(CharSequence)\") : void",
         },
@@ -2275,7 +2279,7 @@ public final class TypingPassTest extends TestCase {
             "package foo;",
             "import java.util.Arrays;",
             "class Foo {",
-            "  { Arrays.<String>asList(\"foo\", \"bar\"); }",
+            "  { Arrays.<java.lang.String>asList(\"foo\", \"bar\"); }",
             "  public Foo() {}",
             "}",
           },
@@ -2297,6 +2301,84 @@ public final class TypingPassTest extends TestCase {
         },
         null);
   }
+
+  @Test
+  public static final void testTypeParameterInferenceOnBareMethods()
+  throws Exception {
+    assertTyped(
+        new String[][] {
+          {
+            "//Foo",
+            "package foo;",
+            "import static java.util.Collections.*;",
+            "class Foo {",
+            "  static <T> T fs(T x) { return x; }",
+            "  <T> T fi(T x) { return x; }",
+            "  class Bar extends Sup {",
+            "    static <T> T bs(T x) { return x; }",
+            "    <T> T bi(T x) { return x; }",
+            "    {",
+            "      java.util.Collections.<java.lang.Character>singleton("
+            +         "(java.lang.Character) ('a'));",
+            "      foo.Foo.<java.lang.Integer>fs((java.lang.Integer) (123));",
+            "      foo.Foo.this.<java.lang.String>fi(\"\");",
+            "      foo.Foo.Bar.<java.lang.Double>bs((java.lang.Double) (0d));",
+            "      foo.Foo.Bar.this.<java.lang.Boolean>bi(Boolean.TRUE);",
+            "      foo.Foo.Bar.<java.lang.Integer>ss((java.lang.Integer) (-1));",
+            "      foo.Foo.Bar.this.<java.lang.Boolean>si((java.lang.Boolean) (false));",
+            "    }",
+            "    public Bar() {}",
+            "  }",
+            "  public Foo() {}",
+            "}",
+          },
+          {
+            "//Sup",
+            "package foo;",
+            "class Sup {",
+            "  static <T> T ss(T x) { return x; }",
+            "  <T> T si(T x) { return x; }",
+            "  public Sup() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "//Foo",
+            "package foo;",
+            "import static java.util.Collections.*;",
+            "class Foo {",
+            "  static <T> T fs(T x) { return x; }",
+            "  <T> T fi(T x) { return x; }",
+            "  class Bar extends Sup {",
+            "    static <T> T bs(T x) { return x; }",
+            "    <T> T bi(T x) { return x; }",
+            "    {",
+            "      singleton('a');",
+            "      fs(123);",
+            "      fi(\"\");",
+            "      bs(0d);",
+            "      bi(Boolean.TRUE);",
+            "      ss(-1);",
+            "      si(false);",
+            "    }",
+            "  }",
+            "}",
+          },
+          {
+            "//Sup",
+            "package foo;",
+            "class Sup {",
+            "  static <T> T ss(T x) { return x; }",
+            "  <T> T si(T x) { return x; }",
+            "}",
+          },
+        },
+        null,
+        null,
+        null);
+  }
+
 
   private static final Decorator DECORATE_METHOD_NAMES = new Decorator() {
 

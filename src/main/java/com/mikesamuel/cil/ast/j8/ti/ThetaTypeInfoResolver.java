@@ -19,13 +19,13 @@ final class ThetaTypeInfoResolver implements TypeInfoResolver {
   final TypeInfoResolver fallback;
 
   public ThetaTypeInfoResolver(
-      Theta theta,
+      ImmutableMap<Name, InferenceVariable> theta,
       TypeInfoResolver fallback) {
     // Make sure that we own the alpha name-space.
     Preconditions.checkArgument(
         !fallback.resolve(InferenceVariable.ALPHA_CONTAINER).isPresent());
     ImmutableList.Builder<Name> alphas = ImmutableList.builder();
-    for (InferenceVariable iv : theta.theta.values()) {
+    for (InferenceVariable iv : theta.values()) {
       alphas.add(iv.name);
     }
     ImmutableMap.Builder<Name, TypeInfo> b = ImmutableMap.builder();
@@ -36,7 +36,7 @@ final class ThetaTypeInfoResolver implements TypeInfoResolver {
             .superType(Optional.of(JavaLang.JAVA_LANG_OBJECT))
             .modifiers(Modifier.PRIVATE | Modifier.FINAL | Modifier.INTERFACE)
             .build()));
-    for (Map.Entry<Name, InferenceVariable> e : theta.theta.entrySet()) {
+    for (Map.Entry<Name, InferenceVariable> e : theta.entrySet()) {
       Name alphaName = e.getValue().name;
       b.put(
           alphaName,

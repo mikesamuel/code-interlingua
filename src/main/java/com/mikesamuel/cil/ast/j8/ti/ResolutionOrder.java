@@ -162,8 +162,6 @@ final class ResolutionOrder {
         ImmutableMultimap<Node, Node> followerMap) {
       int index = onPath.indexOf(node);
       if (index >= 0) {
-        System.err.println(
-            "Merging cliques for " + onPath.subList(index, onPath.size()));
         Clique c = node.clique();
         for (int i = index + 1, n = onPath.size(); i < n; ++i) {
           onPath.get(i).clique().mergeInto(c);
@@ -204,7 +202,6 @@ final class ResolutionOrder {
       }
       ImmutableMultimap<Node, Node> iFollowerMap =
           ImmutableMultimap.copyOf(followerMap);
-      System.err.println("iFollowerMap=" + iFollowerMap);
 
       // Using the follower table, walk from each node,
       // and when a cycle is detected, merge cliques.
@@ -220,7 +217,6 @@ final class ResolutionOrder {
       for (Node n : nodes.values()) {
         cliques.add(n.clique());
       }
-      System.err.println("cliques=" + cliques);
       Multimap<Clique, Clique> cliquePrecederTable =
           LinkedHashMultimap.create();
       for (Node before : nodes.values()) {
