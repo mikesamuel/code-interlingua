@@ -7,7 +7,6 @@ import javax.annotation.Nullable;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 
 /**
  * Specifies the package for a whole {@link TypeSpecification}.
@@ -48,16 +47,6 @@ public final class PackageSpecification extends PartialTypeSpecification {
       newBindings) {
     return this;
   }
-
-  @Override
-  public PackageSpecification derive(
-      Iterable<? extends TypeSpecification.TypeBinding> newBindings,
-      PartialTypeSpecification newParent) {
-    Preconditions.checkArgument(Iterables.isEmpty(newBindings));
-    Preconditions.checkArgument(newParent == null);
-    return this;
-  }
-
 
   @Override
   protected PackageSpecification canon(

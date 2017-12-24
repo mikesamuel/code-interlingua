@@ -38,6 +38,22 @@ public abstract class ParSer implements ParSerable {
   public abstract ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err);
 
+  /** True if the ParSer grammar matches the given input. */
+  public boolean fastMatch(String input) {
+    Input inp = Input.builder().code(input).source("fastMatch").build();
+    ParseState before = new ParseState(inp);
+    ParseResult result = parse(
+        before, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
+    if (result.synopsis == ParseResult.Synopsis.SUCCESS) {
+      ParseState after = result.next();
+      if (after.input.indexAfterIgnorables(after.index)
+          == inp.content().length()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Given a stream of events that describe a flattened tree, fleshes out the
    * stream of events by inserting {@link Event#token} events and events

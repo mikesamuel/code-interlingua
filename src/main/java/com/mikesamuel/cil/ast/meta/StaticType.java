@@ -6,7 +6,6 @@ import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -236,6 +235,9 @@ public abstract class StaticType {
     /** The primitive class, e.g. {@code boolean.class}. */
     public final Class<?> primitiveClass;
 
+    /** The field name used in {@link Name}s of primitive type classes. */
+    public static final String PRIMITIVE_FIELD_WRAPPER_NAME = "TYPE";
+
     private PrimitiveType(
         String name, @Nullable Name wrapperType,
         @Nullable TypeSpecification spec,
@@ -246,7 +248,7 @@ public abstract class StaticType {
           : new TypeSpecification(
               new TypeSpecification(
                   JavaLang.PKG, wrapperType.identifier, Name.Type.CLASS),
-              "TYPE", Name.Type.FIELD));
+              PRIMITIVE_FIELD_WRAPPER_NAME, Name.Type.FIELD));
       this.name = name;
       this.wrapperType = wrapperType;
       Preconditions.checkArgument(primitiveClass.isPrimitive());
@@ -381,7 +383,7 @@ public abstract class StaticType {
       new TypeSpecification(
           new TypeSpecification(
               JavaLang.PKG, "Void", Name.Type.CLASS),
-          "TYPE", Name.Type.FIELD),
+          PrimitiveType.PRIMITIVE_FIELD_WRAPPER_NAME, Name.Type.FIELD),
       void.class);
 
   /** Type {@code byte} */
@@ -506,11 +508,10 @@ public abstract class StaticType {
         @Nullable Positioned pos, @Nullable Logger logger) {
       TypeSpecification ts = tspec.canon(r);
       StaticType t = pool.get(ts);
-      if (t != null) {
-        return t;
+      if (t == null) {
+        t = computeType(ts, pos, logger);
+        pool.put(ts, t);
       }
-      t = computeType(ts, pos, logger);
-      pool.put(ts, t);
       return t;
     }
 

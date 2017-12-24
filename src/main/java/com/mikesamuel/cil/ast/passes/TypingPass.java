@@ -410,31 +410,45 @@ final class TypingPass extends AbstractRewritingPass {
               // TODO: associate the this type with the result so we can
               // synthesize the right this value when we promote from
               // a bare call to a primary method invocation.
-              if (!invoc.typeActuals.isEmpty() && invoc.callable.isPresent()) {
+              if (invoc.typeActualsInlinable && invoc.callable.isPresent()) {
                 ParameterizedMember<CallableInfo> m = invoc.callable.get().m;
                 TypeNodeFactory factory = new TypeNodeFactory(
                     logger, typePool);
                 TypeSpecification sourceType = m.sourceType;
-                ExpressionAtomNode receiver =
-                    (Modifier.isStatic(m.member.modifiers)
-                     ? ExpressionAtomNode.Variant.StaticMember
-                     : ExpressionAtomNode.Variant.This)
-                    .buildNode(
-                        TypeNodeFactory.toTypeNameNode(sourceType.rawName));
-                receiver.setStaticType(typePool.type(sourceType, e, logger));
-                TypeArgumentsNode typeArgumentsNode =
-                    factory.toTypeArgumentsNode(e, invoc.typeActuals);
-                ImmutableList.Builder<J8BaseNode> explicitCallChildren =
-                    ImmutableList.<J8BaseNode>builder()
-                    .add(receiver)
-                    .add(typeArgumentsNode);
-                for (J8BaseNode callChild : e.getChildren()) {
-                  explicitCallChildren.add(callChild.deepClone());
+                ExpressionAtomNode receiver;
+                boolean isStatic = Modifier.isStatic(m.member.modifiers);
+                if (sourceType.rawName.equals(
+                    containingTypes.getLast().canonName)
+                    && !isStatic) {
+                  receiver = ExpressionAtomNode.Variant.This.buildNode();
+                } else if (sourceType.rawName.isMentionable()) {
+                  receiver =
+                      (isStatic
+                       ? ExpressionAtomNode.Variant.StaticMember
+                       : ExpressionAtomNode.Variant.This)
+                      .buildNode(
+                          TypeNodeFactory.toTypeNameNode(sourceType.rawName));
+                } else {
+                  receiver = null;
                 }
-                PrimaryNode explicitCall = PrimaryNode.Variant.MethodInvocation
-                    .buildNode(explicitCallChildren.build());
-                explicitCall.setStaticType(exprType);
-                status = ProcessingStatus.replace(explicitCall);
+
+                if (receiver != null) {
+                  receiver.setStaticType(typePool.type(sourceType, e, logger));
+                  TypeArgumentsNode typeArgumentsNode =
+                      factory.toTypeArgumentsNode(e, invoc.typeActuals);
+                  ImmutableList.Builder<J8BaseNode> explicitCallChildren =
+                      ImmutableList.<J8BaseNode>builder()
+                      .add(receiver)
+                      .add(typeArgumentsNode);
+                  for (J8BaseNode callChild : e.getChildren()) {
+                    explicitCallChildren.add(callChild.deepClone());
+                  }
+                  PrimaryNode explicitCall = PrimaryNode.Variant
+                      .MethodInvocation.buildNode(
+                          explicitCallChildren.build());
+                  explicitCall.setStaticType(exprType);
+                  status = ProcessingStatus.replace(explicitCall);
+                }
               }
               break type_switch;
             }
@@ -1485,35 +1499,34 @@ final class TypingPass extends AbstractRewritingPass {
 
   private void maybeAddImpliedTypeParameters(
       SList<Parent> pathToInvocation, ProcessedCallable invoc) {
-    if (!invoc.typeActuals.isEmpty()) {
-      J8BaseNode node = pathToInvocation.x.get();
-      TypeArgumentsNode argsNode = node.firstChildWithType(
-          TypeArgumentsNode.class);
-      if (argsNode == null) {
-        J8NodeVariant v = node.getVariant();
-        int insertionPt;
-        if (v == PrimaryNode.Variant.MethodInvocation) {
-          insertionPt = node.finder(MethodNameNode.class).indexOf();
-        } else if (v.getNodeType()
-                   == J8NodeType.ExplicitConstructorInvocation) {
-          insertionPt = node.finder(PrimaryNode.class).indexOf() + 1;
-        } else if (
-            v.getNodeType()
-            == J8NodeType.UnqualifiedClassInstanceCreationExpression) {
-          insertionPt = 0;
-        } else {
-          throw new Error("TODO " + v);
-        }
-        if (insertionPt < 0) {
-          error(node, "Cannot add implied type parameters to " + v);
-          return;
-        }
-        TypeNodeFactory factory = new TypeNodeFactory(logger, typePool);
-        TypeArgumentsNode typeArgsNode = factory.toTypeArgumentsNode(
-            node, invoc.typeActuals);
-        ((J8BaseInnerNode) node).add(insertionPt, typeArgsNode);
-      }
+    if (!invoc.typeActualsInlinable) { return; }
+    J8BaseNode node = pathToInvocation.x.get();
+    TypeArgumentsNode argsNode = node.firstChildWithType(
+        TypeArgumentsNode.class);
+    if (argsNode != null) { return; }
+    J8NodeVariant v = node.getVariant();
+    int insertionPt;
+    if (v == PrimaryNode.Variant.MethodInvocation) {
+      insertionPt = node.finder(MethodNameNode.class).indexOf();
+    } else if (v.getNodeType()
+               == J8NodeType.ExplicitConstructorInvocation) {
+      insertionPt = node.finder(PrimaryNode.class).indexOf() + 1;
+    } else if (
+        v.getNodeType()
+        == J8NodeType.UnqualifiedClassInstanceCreationExpression) {
+      insertionPt = 0;
+    } else {
+      throw new Error("TODO " + v);
     }
+    if (insertionPt < 0) {
+      error(node, "Cannot add implied type parameters to " + v);
+      return;
+    }
+    TypeNodeFactory factory = new TypeNodeFactory(logger, typePool);
+    ImmutableList<TypeBinding> typeActuals = invoc.typeActuals;
+    TypeArgumentsNode typeArgsNode = factory.toTypeArgumentsNode(
+        node, typeActuals);
+    ((J8BaseInnerNode) node).add(insertionPt, typeArgsNode);
   }
 
 
@@ -1821,14 +1834,15 @@ final class TypingPass extends AbstractRewritingPass {
     }
     return processCallableInvocation(
         pathFromRoot, calleeType, superExclusion, name, descriptorRef,
-        typeArguments.build());
+        typeArguments.build(), true);
   }
 
   private ProcessedCallable processCallableInvocation(
       SList<Parent> pathFromRoot,
       StaticType calleeType, Optional<Name> superExclusion,
       String name, J8MethodDescriptorReference descriptorRef,
-      ImmutableList<TypeBinding> typeArguments) {
+      ImmutableList<TypeBinding> typeArguments,
+      boolean typeArgsInlinable) {
     J8BaseNode e = pathFromRoot.x.get();
     @Nullable Operand actualsOp = firstWithType(e, J8NodeType.ArgumentList);
     @Nullable ArgumentListNode actuals = actualsOp != null
@@ -1909,9 +1923,13 @@ final class TypingPass extends AbstractRewritingPass {
             inferredTypeArgumentsBuilder.build();
         if (inferredTypeArguments.size()
             == invokedMethod.m.member.typeParameters.size()) {
+          boolean inferredTypeArgumentsInlinable =
+              infs.resolutions.equals(
+                  infs.deanonymized(typePool, e.getSourcePosition(), logger));
           return processCallableInvocation(
               pathFromRoot, calleeType, superExclusion,
-              name, descriptorRef, inferredTypeArguments);
+              name, descriptorRef, inferredTypeArguments,
+              inferredTypeArgumentsInlinable);
         }
       }
     }
@@ -1982,7 +2000,7 @@ final class TypingPass extends AbstractRewritingPass {
     return new ProcessedCallable(
         invokedMethod.returnTypeInContext,
         Optional.of(invokedMethod),
-        typeArguments);
+        typeArguments, !typeArguments.isEmpty() && typeArgsInlinable);
   }
 
   private StaticType passThru(Operand op) {
@@ -3028,17 +3046,20 @@ final class ProcessedCallable {
   final StaticType resultType;
   final Optional<MethodSearchResult> callable;
   final ImmutableList<TypeBinding> typeActuals;
+  final boolean typeActualsInlinable;
 
   ProcessedCallable(
       StaticType resultType,
       Optional<MethodSearchResult> callable,
-      ImmutableList<TypeBinding> typeActuals) {
+      ImmutableList<TypeBinding> typeActuals,
+      boolean typeActualsInlinable) {
     this.resultType = resultType;
     this.callable = callable;
     this.typeActuals = typeActuals;
+    this.typeActualsInlinable = typeActualsInlinable;
   }
 
   static final ProcessedCallable ERROR = new ProcessedCallable(
       StaticType.ERROR_TYPE, Optional.absent(),
-      ImmutableList.of());
+      ImmutableList.of(), false);
 }

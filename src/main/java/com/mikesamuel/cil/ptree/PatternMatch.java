@@ -27,6 +27,15 @@ final class PatternMatch extends PTParSer {
   }
 
   @Override
+  public boolean fastMatch(String input) {
+    if (p.matcher(input).matches()) {
+      return true;
+    }
+    // May still match if we strip whitespace and comments.
+    return super.fastMatch(input);
+  }
+
+  @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
     Matcher m = state.matcherAtStart(p);
