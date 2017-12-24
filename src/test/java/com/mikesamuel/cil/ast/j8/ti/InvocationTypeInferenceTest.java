@@ -35,6 +35,9 @@ public final class InvocationTypeInferenceTest extends TestCase {
     public static <T> T f(T x) { return x; }
   }
 
+  static final String IDENTITY_CLASSNAME =
+      Identity.class.getEnclosingClass().getName() + ".Identity";
+
   private static Infs assertInferences(Infs want, String[]... inputLines) {
     Logger logger = Logger.getAnonymousLogger();
     logger.setUseParentHandlers(false);
@@ -70,7 +73,7 @@ public final class InvocationTypeInferenceTest extends TestCase {
         methodName.getSourcePosition(),
         pathsToActuals.build(), isInvocationPolyExpr);
     assertTrue(iti.isInvocationApplicable());
-    Infs got = Infs.from(iti.inferTypeVariables());
+    Infs got = Infs.from(iti.inferTypeVariables(), typePool);
     if (!want.equals(got)) {
       assertEquals(want.toString(), got.toString());
       assertEquals(want, got);
@@ -91,8 +94,7 @@ public final class InvocationTypeInferenceTest extends TestCase {
             ImmutableSet.<String>of()),
         new String[] {
             "//Foo.java",
-            "import " + Identity.class.getEnclosingClass().getName()
-            + ".Identity;",
+            "import " + IDENTITY_CLASSNAME + ";",
             "class Foo {",
             "  { Identity.f(\"\"); }",
             "}",
@@ -112,10 +114,138 @@ public final class InvocationTypeInferenceTest extends TestCase {
             ImmutableSet.<String>of()),
         new String[] {
             "//Foo.java",
-            "import " + Identity.class.getEnclosingClass().getName()
-            + ".Identity;",
+            "import " + IDENTITY_CLASSNAME + ";",
             "class Foo {",
             "  { Identity.f(null); }",
+            "}",
+        });
+  }
+
+
+  @Test
+  public static void testHookTwoBounds() {
+    assertInferences(
+        new Infs(
+            false,
+            ImmutableMap.of(
+                "/com/mikesamuel/cil/ast/j8/ti"
+                + "/InvocationTypeInferenceTest$Identity.f(1).<T>",
+                "/java/util/AbstractCollection</java/lang/String>"),
+            "/java/util/AbstractCollection</java/lang/String>",
+            ImmutableSet.<String>of()),
+        new String[] {
+            "//Foo.java",
+            "import " + IDENTITY_CLASSNAME + ";",
+            "import java.util.*;",
+            "class Foo {",
+            "  {",
+            "    Identity.f(",
+            "        Math.random() > 1",
+            "        ? new ArrayList<String>()",
+            "        : new HashSet<String>());",
+            "  }",
+            "}",
+        });
+  }
+
+
+  @Test
+  public static void testTwoBoundsToSameVar() {
+    assertInferences(
+        new Infs(
+            false,
+            ImmutableMap.of(
+                "/java/util/Arrays.asList(1).<T>",
+                "/java/lang/Number"),
+            "/java/util/List</java/lang/Number>",
+            ImmutableSet.<String>of()),
+        new String[] {
+            "//Foo.java",
+            "import java.util.Arrays;",
+            "class Foo {",
+            "  {",
+            "    Arrays.asList(1, 2.0);",
+            "  }",
+            "}",
+        });
+  }
+
+  @Test
+  public static void testResolvesToNominalTypeNotAnonInterface() {
+    assertInferences(
+        new Infs(
+            false,
+            ImmutableMap.of(
+                "/com/mikesamuel/cil/ast/j8/ti"
+                + "/InvocationTypeInferenceTest$Identity.f(1).<T>",
+                "/Foo.<init>(1)$1"),
+            ImmutableMap.of(
+                "/com/mikesamuel/cil/ast/j8/ti"
+                + "/InvocationTypeInferenceTest$Identity.f(1).<T>",
+                "/java/lang/Runnable"),
+            "/Foo.<init>(1)$1",
+            ImmutableSet.<String>of()),
+        new String[] {
+            "//Foo.java",
+            "import " + IDENTITY_CLASSNAME + ";",
+            "import java.util.*;",
+            "class Foo {",
+            "  {",
+            "    Runnable r = new Runnable() {",
+            "      public void run() {",
+            "        Identity.f(this);",
+            "      }",
+            "    };",
+            "  }",
+            "}",
+        });
+  }
+
+  @Test
+  public static void testResolvesToNominalTypeNotAnonAbstractClass() {
+    assertInferences(
+        new Infs(
+            false,
+            ImmutableMap.of(
+                "/com/mikesamuel/cil/ast/j8/ti"
+                + "/InvocationTypeInferenceTest$Identity.f(1).<T>",
+                "/java/lang/Thread"),
+            "/java/lang/Thread",
+            ImmutableSet.<String>of()),
+        new String[] {
+            "//Foo.java",
+            "import " + IDENTITY_CLASSNAME + ";",
+            "import java.util.*;",
+            "class Foo {",
+            "  {",
+            "    Identity.f(new Thread() { public void run() {} });",
+            "  }",
+            "}",
+        });
+  }
+
+  @Test
+  public static void testResolvesToNominalTypeNotSpecializedEnum() {
+    assertInferences(
+        new Infs(
+            false,
+            ImmutableMap.of(
+                "/com/mikesamuel/cil/ast/j8/ti"
+                + "/InvocationTypeInferenceTest$Identity.f(1).<T>",
+                "/Foo$E"),
+            "/Foo$E",
+            ImmutableSet.<String>of()),
+        new String[] {
+            "//Foo.java",
+            "import " + IDENTITY_CLASSNAME + ";",
+            "import java.util.*;",
+            "class Foo {",
+            "  enum E {",
+            "    A() { public String toString() { return \"a\"; } },",
+            "  }",
+            "  {",
+            "    Identity.f(E.A);",
+            "  }",
             "}",
         });
   }
@@ -145,27 +275,54 @@ public final class InvocationTypeInferenceTest extends TestCase {
   // TODO: test zero actual parameters to variadic
   //     T foo(T... a) { return null; }
   //     in both contexts above
+  // TODO:
+  //     ProcessBuilder b = new ProcessBuilder(Collections.emptyList());
+  //     // ProcessBuilder's constructor expects a List<String>
+  // TODO: When both the outer and the nested invocation require inference,
+  // the problem is more difficult. For example:
+  //     List<String> ls = new ArrayList<>(Collections.emptyList());
 
 
   static final class Infs {
     final boolean dependsOnUncheckedConversion;
     final ImmutableMap<String, String> resolutions;
+    final ImmutableMap<String, String> deanonymized;
     final String normalResultType;
     final ImmutableSet<String> thrownTypes;
 
     Infs(boolean dependsOnUncheckedConversion,
-        ImmutableMap<String, String> resolutions, String normalResultType,
+        ImmutableMap<String, String> resolutions,
+        String normalResultType,
+        ImmutableSet<String> thrownTypes) {
+      this(
+          dependsOnUncheckedConversion,
+          resolutions, resolutions, normalResultType,
+          thrownTypes);
+    }
+
+    Infs(boolean dependsOnUncheckedConversion,
+        ImmutableMap<String, String> resolutions,
+        ImmutableMap<String, String> deanonymized,
+        String normalResultType,
         ImmutableSet<String> thrownTypes) {
       this.dependsOnUncheckedConversion = dependsOnUncheckedConversion;
       this.resolutions = resolutions;
+      this.deanonymized = deanonymized;
       this.normalResultType = normalResultType;
       this.thrownTypes = thrownTypes;
     }
 
-    static Infs from(Inferences infs) {
+    static Infs from(Inferences infs, TypePool p) {
       ImmutableMap.Builder<String, String> rb = ImmutableMap.builder();
       for (Map.Entry<Name, StaticType> e : infs.resolutions.entrySet()) {
         rb.put(
+            e.getKey().toString(),
+            e.getValue().typeSpecification.toString());
+      }
+      ImmutableMap.Builder<String, String> da = ImmutableMap.builder();
+      for (Map.Entry<Name, StaticType> e
+           : infs.deanonymized(p, null, null).entrySet()) {
+        da.put(
             e.getKey().toString(),
             e.getValue().typeSpecification.toString());
       }
@@ -176,6 +333,7 @@ public final class InvocationTypeInferenceTest extends TestCase {
       return new Infs(
           infs.dependsOnUncheckedConversion,
           rb.build(),
+          da.build(),
           infs.normalResultType.typeSpecification.toString(),
           tb.build());
     }
@@ -220,6 +378,13 @@ public final class InvocationTypeInferenceTest extends TestCase {
       } else if (!resolutions.equals(other.resolutions)) {
         return false;
       }
+      if (deanonymized == null) {
+        if (other.deanonymized != null) {
+          return false;
+        }
+      } else if (!deanonymized.equals(other.deanonymized)) {
+        return false;
+      }
       if (thrownTypes == null) {
         if (other.thrownTypes != null) {
           return false;
@@ -235,14 +400,17 @@ public final class InvocationTypeInferenceTest extends TestCase {
       StringBuilder sb = new StringBuilder();
       sb.append("(Infs");
       if (dependsOnUncheckedConversion) {
-        sb.append(" dependsOnUncheckedConversion");
+        sb.append("\n dependsOnUncheckedConversion");
       }
       if (!resolutions.isEmpty()) {
-        sb.append(" resolutions=").append(resolutions);
+        sb.append("\n resolutions=").append(resolutions);
       }
-      sb.append(" normalResultType=").append(normalResultType);
+      if (!resolutions.equals(deanonymized)) {
+        sb.append("\n deanonymized=").append(deanonymized);
+      }
+      sb.append("\n normalResultType=").append(normalResultType);
       if (!thrownTypes.isEmpty()) {
-        sb.append(" thrownTypes=").append(thrownTypes);
+        sb.append("\n thrownTypes=").append(thrownTypes);
       }
       return sb.append(')').toString();
     }

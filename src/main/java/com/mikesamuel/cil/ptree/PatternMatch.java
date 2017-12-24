@@ -27,6 +27,11 @@ final class PatternMatch extends PTParSer {
   }
 
   @Override
+  public boolean fastMatch(String input) {
+    return p.matcher(input).matches();
+  }
+
+  @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
     Matcher m = state.matcherAtStart(p);

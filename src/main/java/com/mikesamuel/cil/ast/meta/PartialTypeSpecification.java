@@ -33,11 +33,6 @@ public abstract class PartialTypeSpecification {
                ? extends Iterable<TypeSpecification.TypeBinding>>
       newBindings);
 
-  /** Derives a variant with the given bindings and parent. */
-  public abstract PartialTypeSpecification derive(
-      Iterable<? extends TypeSpecification.TypeBinding> newBindings,
-      PartialTypeSpecification newParent);
-
 
   protected abstract PartialTypeSpecification canon(
       TypeInfoResolver r, Set<Name> resolving);

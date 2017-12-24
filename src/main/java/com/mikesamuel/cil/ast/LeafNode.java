@@ -3,6 +3,8 @@ package com.mikesamuel.cil.ast;
 import java.util.Collections;
 import java.util.List;
 
+import com.mikesamuel.cil.parser.ParSer;
+
 /**
  * A node that may not have children and may correspond to a literal token.
  *
@@ -32,6 +34,13 @@ extends NodeI<BASE_NODE, NODE_TYPE, NODE_VARIANT> {
   // MUTATORS
   /** Mutator */
   public void setValue(String newValue);
+
+  /** Tests if the given value is a valid input to {@link #setValue}. */
+  public default boolean isValidValue(String newValue) {
+    NODE_VARIANT variant = getVariant();
+    ParSer ps = variant.getParSer();
+    return ps.fastMatch(newValue);
+  }
 }
 
 

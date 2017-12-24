@@ -39,6 +39,36 @@ public abstract class ParSer implements ParSerable {
       ParseState state, LeftRecursion lr, ParseErrorReceiver err);
 
   /**
+   * True if the given input has no whitespace or commnet tokens at the start
+   * or end and the ParSer grammar matches the given input.
+   */
+  public boolean fastMatch(String input) {
+    // TODO: To be consistent with PatternMatch we need to disable
+    // \\u decoding.
+    Input inp = Input.builder()
+        .setFragmentOfAlreadyDecodedInput(true)
+        .code(input)
+        .source("fastMatch")
+        .build();
+    if (inp.indexAfterIgnorables(0) != 0) {
+      // We explicitly disallow comments and spaces at the front so that we
+      // can
+      return false;
+    }
+    ParseState before = new ParseState(inp);
+    ParseResult result = parse(
+        before, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
+    if (result.synopsis == ParseResult.Synopsis.SUCCESS) {
+      ParseState after = result.next();
+      if (after.index == inp.content().length()) {
+        // We intentionally do not use index after ignorables.
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Given a stream of events that describe a flattened tree, fleshes out the
    * stream of events by inserting {@link Event#token} events and events
    * for {@linkplain NodeVariant#isAnon anon} variants.

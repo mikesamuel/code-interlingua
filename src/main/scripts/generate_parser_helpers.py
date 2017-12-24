@@ -829,7 +829,9 @@ implements LeafNode<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sN
 
   @Override
   public final void setValue(String newValue) {
-    this.value = Preconditions.checkNotNull(newValue);
+    Preconditions.checkArgument(
+        newValue != null && isValidValue(newValue), newValue);
+    this.value = newValue;
   }
 
   @Override

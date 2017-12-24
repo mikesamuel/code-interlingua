@@ -488,6 +488,13 @@ public final class Name implements Comparable<Name> {
     sb.append(';');
   }
 
+  /** Anonymous classes are not mentionable. */
+  public boolean isMentionable() {
+    char c0 = identifier.charAt(0);
+    return !('0' <= c0 && c0 <= '9');
+  }
+
+
   private Name.Type toDescriptor(Name nm, StringBuilder sb) {
     if (nm == Name.DEFAULT_PACKAGE) {
       return null;
@@ -512,5 +519,4 @@ public final class Name implements Comparable<Name> {
         return parentType;
     }
   }
-
 }

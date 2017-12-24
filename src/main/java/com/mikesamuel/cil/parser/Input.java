@@ -66,6 +66,38 @@ public abstract class Input {
   }
 
 
+  /** An input used to reapply the parser to already decoded fragments. */
+  private static final class PredecodedInput extends Input {
+    private final String content;
+    private final LineStarts lineStarts;
+
+    @SuppressWarnings("synthetic-access")
+    private PredecodedInput(
+        String source, String predecodedContent,
+        boolean allowNonStandardProductions) {
+      super(allowNonStandardProductions);
+      this.content = predecodedContent;
+      this.lineStarts = new LineStarts(source, content);
+    }
+
+    @Override
+    public CharSequence content() {
+      return content;
+    }
+
+    @Override
+    public SourcePosition getSourcePosition(int left, int right) {
+      return new SourcePosition(lineStarts, left, right);
+    }
+
+    @Override
+    public SourcePosition getSourcePosition(int index) {
+      return new SourcePosition(lineStarts, index, index);
+    }
+  }
+
+
+  /** An input that needs baskslash u decoding. */
   private static final class TextInput extends Input {
     private final DecodedContent content;
     /**
@@ -141,6 +173,7 @@ public abstract class Input {
     private String code = null;
     private ImmutableList<Event> events = null;
     private boolean allowNonStandardProductions = false;
+    private boolean isAlreadyDecoded = false;
 
     private Builder() {
     }
@@ -205,12 +238,26 @@ public abstract class Input {
     }
 
     /**
+     * True if content has already been decoded - any <tt>\</tt><ttt>u....</tt>
+     * sequences have already been replaced with the specified code-point.
+     */
+    public Builder setFragmentOfAlreadyDecodedInput(boolean alreadyDecoded) {
+      this.isAlreadyDecoded = alreadyDecoded;
+      return this;
+    }
+
+    /**
      * Returns the built input.
      */
     @SuppressWarnings("synthetic-access")
     public Input build() {
       if (events != null) {
         return new EventInput(events, allowNonStandardProductions);
+      }
+      if (isAlreadyDecoded) {
+        return new PredecodedInput(
+            source, code != null ? code : "",
+            allowNonStandardProductions);
       }
       return new TextInput(
           source, code != null ? code : "", allowNonStandardProductions);

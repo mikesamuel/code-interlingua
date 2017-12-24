@@ -71,4 +71,24 @@ public final class InputTest extends TestCase {
     reparseTextInputAsEventInput(
         J8NodeType.Expression.getParSer(), "1 + 1 * 42 - x.y % 32");
   }
+
+  @Test
+  public static void testAlreadyDecodedInput() {
+    assertEquals(
+        "foo\\ubar",
+        Input.builder()
+            .code("foo\\ubar")
+            .source("test")
+            .setFragmentOfAlreadyDecodedInput(true)
+            .build()
+            .content().toString());
+    assertEquals(
+        "foo\\uabcdef",
+        Input.builder()
+            .code("foo\\uabcdef")
+            .source("test")
+            .setFragmentOfAlreadyDecodedInput(true)
+            .build()
+            .content().toString());
+  }
 }

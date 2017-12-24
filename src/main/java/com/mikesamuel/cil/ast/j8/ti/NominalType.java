@@ -2,14 +2,12 @@ package com.mikesamuel.cil.ast.j8.ti;
 
 import java.util.Map;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.PartialTypeSpecification;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
-import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 
 /** A type that can be mentioned via a name in the source language. */
 final class NominalType extends SyntheticType {
@@ -54,45 +52,24 @@ final class NominalType extends SyntheticType {
   NominalType subst(
       Map<? super InferenceVariable, ? extends ReferenceType> m) {
     TypeSpecification ts = t.typeSpecification;
-    TypeSpecification substed = subst(ts, m);
-    if (ts == substed) { return this; }
+    TypeSpecification substed = new TypeSpecification.Mapper() {
+      @Override
+      public TypeSpecification map(TypeSpecification s) {
+        Name rawName = s.getRawName();
+        if (InferenceVariable.ALPHA_CONTAINER.equals(rawName.parent)) {
+          ReferenceType rt = m.get(new InferenceVariable(rawName));
+          if (rt != null) {
+            return rt.typeSpecification.withNDims(
+                rt.typeSpecification.nDims + s.nDims);
+          }
+        }
+        return super.map(s);
+      }
+    }.map(t.typeSpecification);
+    if (ts.equals(substed)) { return this; }
     return (NominalType) NominalType.from(
         m.values().iterator().next().getPool().type(substed, null, null));
   }
-
-  private static TypeSpecification subst(
-      TypeSpecification ts,
-      Map<? super InferenceVariable, ? extends ReferenceType> m) {
-    return (TypeSpecification) subst((PartialTypeSpecification) ts, m);
-  }
-
-  private static PartialTypeSpecification subst(
-      PartialTypeSpecification ts,
-      Map<? super InferenceVariable, ? extends ReferenceType> m) {
-    Name rawName = ts.getRawName();
-    if (ts instanceof TypeSpecification
-        && InferenceVariable.ALPHA_CONTAINER.equals(rawName.parent)) {
-      ReferenceType rt = m.get(new InferenceVariable(rawName));
-      if (rt != null) {
-        return rt.typeSpecification;
-      }
-    }
-    boolean bindingsChanged = false;
-    ImmutableList.Builder<TypeBinding> newBindings =
-        ImmutableList.builder();
-    for (TypeBinding binding : ts.bindings()) {
-      TypeSpecification bts = binding.typeSpec;
-      TypeSpecification newBts = subst(bts, m);
-      bindingsChanged |= bts != newBts;
-      newBindings.add(new TypeBinding(binding.variance, newBts));
-    }
-    PartialTypeSpecification p = ts.parent();
-    PartialTypeSpecification newP = p != null ? subst(p, m) : null;
-    return (bindingsChanged || p != newP)
-        ? ts.derive(newBindings.build(), newP)
-        : ts;
-  }
-
 
   @Override
   public boolean equals(Object o) {

@@ -1,12 +1,16 @@
 package com.mikesamuel.cil.ast.meta;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
+import com.google.common.base.Objects;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -424,6 +428,108 @@ public final class TypeSpecification extends PartialTypeSpecification {
     return new TypeSpecification(parent, rawName, newBindings, nDims);
   }
 
+  /** Can be used to transform TypeSpecifications. */
+  public static abstract class Mapper {
+    /** By default, maps the bindings, then maps the name, then the parent. */
+    public TypeSpecification map(TypeSpecification t) {
+      return (TypeSpecification) mapPartial(t);
+    }
+
+    /** By default, maps the specification if any. */
+    public TypeBinding map(TypeBinding b) {
+      TypeSpecification typeSpec = b.typeSpec;
+      TypeSpecification newTypeSpec = typeSpec == null ? null : map(typeSpec);
+      return Objects.equal(typeSpec, newTypeSpec)
+              ? b
+              : new TypeBinding(b.variance, newTypeSpec);
+    }
+
+    /** By default, returns the input unchanged. */
+    @SuppressWarnings("static-method")  // Overridable
+    public Name map(Name nm) {
+      return nm;
+    }
+
+    private PartialTypeSpecification mapPartial(PartialTypeSpecification t) {
+      ImmutableList<TypeBinding> bindings = t.bindings();
+
+      List<TypeBinding> newBindings = null;
+      for (int i = 0, n = bindings.size(); i < n; ++i) {
+        TypeBinding b = bindings.get(i);
+        TypeBinding nb = map(b);
+        if (!Objects.equal(b, nb)) {
+          if (newBindings == null) {
+            newBindings = new ArrayList<>(n);
+          }
+          newBindings.addAll(bindings.subList(newBindings.size(), i));
+          newBindings.add(nb);
+        }
+      }
+      if (newBindings != null) {
+        newBindings.addAll(bindings.subList(
+            newBindings.size(), bindings.size()));
+      } else {
+        newBindings = bindings;
+      }
+
+      Name rawName = t.getRawName();
+      Name newRawName = map(rawName);
+
+      PartialTypeSpecification parent = t.parent();
+      PartialTypeSpecification newParent = parent;
+      if (!rawName.equals(newRawName)) {
+        Map<Name, ImmutableList<TypeBinding>> ancBindings = new HashMap<>();
+        for (PartialTypeSpecification anc = newParent;
+             anc != null; anc = anc.parent()) {
+          ancBindings.put(anc.getRawName(), anc.bindings());
+        }
+        newParent = newRawName.parent != null
+            ? PartialTypeSpecification.fromName(
+                newRawName.parent,
+                Functions.forMap(ancBindings, ImmutableList.of()))
+            : null;
+      }
+      if (newParent != null) {
+        newParent = newParent instanceof TypeSpecification
+            ? map((TypeSpecification) newParent)
+            : mapPartial(newParent);
+        if (newParent == null) {
+          newRawName = Name.root(newRawName.identifier, newRawName.type);
+        } else if (!newParent.getRawName().equals(newRawName.parent)) {
+          newRawName = newRawName.reparent(newParent.getRawName());
+        }
+      }
+
+      if (newBindings == bindings && rawName.equals(newRawName)
+          && Objects.equal(parent, newParent)) {
+        return t;
+      }
+      switch (newRawName.type) {
+        case FIELD:
+          Preconditions.checkState(
+              StaticType.PrimitiveType.PRIMITIVE_FIELD_WRAPPER_NAME
+              .equals(newRawName.identifier),
+              newRawName);
+          //$FALL-THROUGH$
+        case CLASS:
+        case TYPE_PARAMETER:
+          int nDims = t instanceof TypeSpecification
+              ? ((TypeSpecification) t).nDims
+              : 0;
+          return new TypeSpecification(
+              newParent, newRawName, newBindings, nDims);
+        case METHOD:
+          return new MethodTypeContainer(
+              (TypeSpecification) newParent, newRawName, newBindings);
+        case PACKAGE:
+          return new PackageSpecification(newRawName);
+        case AMBIGUOUS:
+        case LOCAL:
+      }
+      throw new AssertionError(newRawName);
+    }
+  }
+
   /**
    * A partial type specification that contains (transitively) no type bindings
    * with a null specification.
@@ -462,18 +568,6 @@ public final class TypeSpecification extends PartialTypeSpecification {
       return this;
     }
     return new TypeSpecification(parent, rawName, newBindings, nDims);
-  }
-
-  @Override
-  public TypeSpecification derive(
-      Iterable<? extends TypeSpecification.TypeBinding> newBindings,
-      PartialTypeSpecification newParent) {
-    return new TypeSpecification(
-        newParent,
-        parent.getRawName().equals(newParent.getRawName())
-        ? rawName
-        : newParent.getRawName().child(rawName.identifier, rawName.type),
-        ImmutableList.copyOf(newBindings), nDims);
   }
 
   /**

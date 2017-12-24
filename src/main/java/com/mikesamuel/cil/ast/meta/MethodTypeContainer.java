@@ -31,16 +31,6 @@ public final class MethodTypeContainer extends PartialTypeSpecification {
   }
 
   @Override
-  public MethodTypeContainer derive(
-      Iterable<? extends TypeSpecification.TypeBinding> newBindings,
-      PartialTypeSpecification newParent) {
-    return new MethodTypeContainer(
-        (TypeSpecification) newParent,
-        parent.rawName.method(name.identifier, name.variant),
-        newBindings);
-  }
-
-  @Override
   public Name getRawName() {
     return name;
   }

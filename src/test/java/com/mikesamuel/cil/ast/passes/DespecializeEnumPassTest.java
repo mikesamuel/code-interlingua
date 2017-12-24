@@ -351,7 +351,6 @@ public final class DespecializeEnumPassTest extends TestCase {
 
   public static void testSuperCallsFromSpecializedEnumMethods()
   throws Exception {
-    if (true) { return; }  // TODO: KNOWN FAILURE
     assertPassOutput(
         new String[][] {
           {
@@ -376,10 +375,13 @@ public final class DespecializeEnumPassTest extends TestCase {
 
             "  private final int base__g() { return 1337; }",
 
-            "  private static <T> int X__f(T x) { return (p.E.X).base__f(1); }",
+            "  private static <T> int X__f(T x) {",
+            "    return (p.E.X).<java.lang.Integer>base__f(1);",
+            "  }",
 
             "  private static int Y__g() {",
-            "    return (p.E.Y).base__f(f((p.E.Y).base__g()));",
+            "    return (p.E.Y).<java.lang.Integer>base__f(",
+            "        (p.E.Y).<java.lang.Integer>f((p.E.Y).base__g()));",
             "  }",
 
             "  static private String Y__toString() {",
@@ -423,20 +425,35 @@ public final class DespecializeEnumPassTest extends TestCase {
 
   @Test
   public static void testSuperFieldAccess() throws Exception {
-    if (true) { return; }  // TODO: known failure
+    if (true) { return; }
     assertPassOutput(
         new String[][] {
           {
-            // TODO
+            "enum E {",
+            "  A,",
+            "  ;",
+            "  private static int A__x = 1;",
+            "  private static java.lang.String A__toString() {",
+            "    return super.toString() + \":\" + (E.A__x + E.x);",
+            "  }",
+            "  @Override public java.lang.String toString() {",
+            "    switch (this) {",
+            "      case A: return E.A__toString();",
+            "    }",
+            "    return super.toString();",
+            "  }",
+            "  int x = 2;",
+            "}",
           },
         },
         new String[][] {
           {
+            "//E",
             "enum E {",
             "  A() {",
             "    int x = 1;",
             "    @Override public String toString() {",
-            "      return \"A:\" + (x + super.x);",
+            "      return super.toString() + \":\" + (x + super.x);",
             "    }",
             "  },",
             "  ;",
@@ -450,7 +467,7 @@ public final class DespecializeEnumPassTest extends TestCase {
 
   @Test
   public static void testSideEffectingReferenceToConstant() throws Exception {
-    if (true) { return; }  // TODO: known failure
+    if (true) { return; }
     assertPassOutput(
         new String[][] {
           {
@@ -498,9 +515,7 @@ public final class DespecializeEnumPassTest extends TestCase {
             "}",
           },
         },
-        null,
-        "",  // HACK DO NOT SUBMIT
-        "");
+        null);
   }
 
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =

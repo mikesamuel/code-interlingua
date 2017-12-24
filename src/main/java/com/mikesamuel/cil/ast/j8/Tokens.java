@@ -566,6 +566,12 @@ public final class Tokens {
   private static final class JavaDocLookback extends ParSer {
 
     @Override
+    public boolean fastMatch(String input) {
+      return input.startsWith("/**")
+          && input.indexOf("*/", 2) == input.length() - 2;
+    }
+
+    @Override
     public ParseResult parse(
         ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
       // Lookback on the queue for the last token parsed.

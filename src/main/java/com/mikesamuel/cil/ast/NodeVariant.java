@@ -19,7 +19,8 @@ public interface NodeVariant<
     BASE_NODE extends BaseNode<BASE_NODE, NODE_TYPE, ?>,
     NODE_TYPE extends Enum<NODE_TYPE> & NodeType<BASE_NODE, NODE_TYPE>>
 extends ParSerable {
-  /** Such that <code>
+  /**
+   * Such that <code>
    * {@link #getNodeType()}.{@link NodeType#getVariantType() getVariantType()}
    * .isInstance(this)
    * </code>
