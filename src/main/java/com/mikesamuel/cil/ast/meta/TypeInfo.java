@@ -86,9 +86,9 @@ public final class TypeInfo extends AccessibleInfo {
       public Iterator<MemberInfo> iterator() {
         return new Iterator<MemberInfo>() {
 
-          @SuppressWarnings("synthetic-access")
-          private Iterator<MemberInfo> declared = declaredMembers.iterator();
-          private Iterator<TypeSpecification> superTypes =
+          private final Iterator<MemberInfo> declared =
+              getDeclaredMembers().iterator();
+          private final Iterator<TypeSpecification> superTypes =
               Iterables.concat(superType.asSet(), interfaces).iterator();
           private Iterator<MemberInfo> superTypeMembers =
               ImmutableList.<MemberInfo>of().iterator();

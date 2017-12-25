@@ -215,7 +215,7 @@ public final class DespecializeEnumPassTest extends TestCase {
 
     String[] waysToReferenceEdotBdotx = new String[] {
       "f()", "B__f()",
-      "this.f()", "foo.E.B__f()",
+      "this.f()", "(foo.E.B).B__f()",  // TODO: foo.E.B__f()
       // "B.f()",      // Not allowed since the static type of B is E, not E$1
       // "E.B.f()",    // ditto
       // "foo.E.B.f()",// ditto
@@ -284,7 +284,7 @@ public final class DespecializeEnumPassTest extends TestCase {
             "  A(), B(), C(),;",
             "  private static int A__x = (E.A).ordinal();",
             "  static {",
-            "    A__x += E.A__f();",
+            "    A__x += (E.A).A__f();",
             "  }",
             "  private static int A__f() { return A__x; }",
             "}",
@@ -375,6 +375,10 @@ public final class DespecializeEnumPassTest extends TestCase {
 
             "  private final int base__g() { return 1337; }",
 
+            "  private final java.lang.String super__toString() {",
+            "    return super.toString();",
+            "  }",
+
             "  private static <T> int X__f(T x) {",
             "    return (p.E.X).<java.lang.Integer>base__f(1);",
             "  }",
@@ -385,7 +389,7 @@ public final class DespecializeEnumPassTest extends TestCase {
             "  }",
 
             "  static private String Y__toString() {",
-            "    return super.toString();",
+            "    return (p.E.Y).super__toString();",
             "  }",
 
             "  @java.lang.Override",
@@ -425,24 +429,26 @@ public final class DespecializeEnumPassTest extends TestCase {
 
   @Test
   public static void testSuperFieldAccess() throws Exception {
-    if (true) { return; }
     assertPassOutput(
         new String[][] {
           {
             "enum E {",
             "  A,",
             "  ;",
-            "  private static int A__x = 1;",
-            "  private static java.lang.String A__toString() {",
-            "    return super.toString() + \":\" + (E.A__x + E.x);",
+            "  int x = 2;",
+            "  private final java.lang.String super__toString() {",
+            "    return super.toString();",
             "  }",
-            "  @Override public java.lang.String toString() {",
+            "  private static int A__x = 1;",
+            "  static private String A__toString() {",
+            "    return (E.A).super__toString() + \":\" + (A__x + (E.A).x);",
+            "  }",
+            "  @java.lang.Override public java.lang.String toString() {",
             "    switch (this) {",
             "      case A: return E.A__toString();",
             "    }",
             "    return super.toString();",
             "  }",
-            "  int x = 2;",
             "}",
           },
         },
@@ -462,12 +468,12 @@ public final class DespecializeEnumPassTest extends TestCase {
             "}",
           },
         },
-        null);
+        null
+        );
   }
 
   @Test
   public static void testSideEffectingReferenceToConstant() throws Exception {
-    if (true) { return; }
     assertPassOutput(
         new String[][] {
           {
@@ -483,7 +489,7 @@ public final class DespecializeEnumPassTest extends TestCase {
             "    return \"bar\";",
             "  }",
             "  static private String A__toString() {",
-            "    return unnecessary((E.A)).A__f();",
+            "    return E.<E>unnecessary((E.A)).A__f();",
             "  }",
             "  @java.lang.Override public java.lang.String toString() {",
             "    switch (this) {",
@@ -516,6 +522,7 @@ public final class DespecializeEnumPassTest extends TestCase {
           },
         },
         null);
+    // TODO: another like this for method access.
   }
 
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =

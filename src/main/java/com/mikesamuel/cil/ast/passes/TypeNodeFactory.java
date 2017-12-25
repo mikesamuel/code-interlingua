@@ -1,29 +1,40 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.mikesamuel.cil.ast.j8.AdditionalBoundNode;
 import com.mikesamuel.cil.ast.j8.ArrayTypeNode;
 import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.ClassTypeNode;
 import com.mikesamuel.cil.ast.j8.DimNode;
+import com.mikesamuel.cil.ast.j8.ExceptionTypeNode;
 import com.mikesamuel.cil.ast.j8.FloatingPointTypeNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
+import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
+import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.NumericTypeNode;
 import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
+import com.mikesamuel.cil.ast.j8.ResultNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
+import com.mikesamuel.cil.ast.j8.TypeBoundNode;
 import com.mikesamuel.cil.ast.j8.TypeNameNode;
 import com.mikesamuel.cil.ast.j8.TypeNode;
+import com.mikesamuel.cil.ast.j8.TypeVariableNode;
+import com.mikesamuel.cil.ast.j8.UnannTypeNode;
 import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.j8.WildcardNode;
+import com.mikesamuel.cil.ast.meta.JavaLang;
 import com.mikesamuel.cil.ast.meta.MethodTypeContainer;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.PackageSpecification;
@@ -34,9 +45,11 @@ import com.mikesamuel.cil.ast.meta.StaticType.PrimitiveType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ArrayType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool.ReferenceType;
+import com.mikesamuel.cil.ast.meta.TypeInfo;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.parser.Positioned;
+import com.mikesamuel.cil.util.LogUtils;
 
 class TypeNodeFactory {
   final Logger logger;
@@ -278,4 +291,61 @@ class TypeNodeFactory {
             .buildNode(typeArguments.build()));
   }
 
+  ResultNode toResultNode(StaticType rt) {
+    boolean isVoid = StaticType.T_VOID.typeSpecification.equals(
+        rt.typeSpecification);
+    if (isVoid) {
+      return ResultNode.Variant.Void.buildNode();
+    } else {
+      return ResultNode.Variant.UnannType.buildNode(
+          UnannTypeNode.Variant.NotAtType.buildNode(toTypeNode(rt)));
+    }
+  }
+
+  ExceptionTypeNode toExceptionType(TypeSpecification ts) {
+    if (ts.nDims != 0) {
+      LogUtils.log(
+          logger, Level.SEVERE, null,
+          "Cannot create exception type from array : " + ts, null);
+      return toExceptionType(JavaLang.JAVA_LANG_RUNTIMEEXCEPTION);
+    }
+    if (ts.rawName.type == Name.Type.TYPE_PARAMETER) {
+      return ExceptionTypeNode.Variant.TypeVariable.buildNode(
+          toTypeVariableNode(ts));
+    }
+    return ExceptionTypeNode.Variant.ClassType.buildNode(
+        ClassTypeNode.Variant.ClassOrInterfaceType.buildNode(
+            toClassOrInterfaceTypeNode(ts)));
+  }
+
+  static TypeVariableNode toTypeVariableNode(TypeSpecification ts) {
+    return TypeVariableNode.Variant.AnnotationIdentifier.buildNode(
+        toIdentifierNode(ts.rawName));
+  }
+
+  TypeBoundNode typeBoundFor(TypeInfo ti) {
+    if (ti.interfaces.isEmpty() && ti.superType.isPresent()) {
+      TypeSpecification st = ti.superType.get();
+      if (JavaLang.JAVA_LANG_OBJECT.equals(st)) {
+        return null;
+      }
+      if (st.rawName.type == Name.Type.TYPE_PARAMETER
+          && st.nDims == 0) {
+        return TypeBoundNode.Variant.ExtendsTypeVariable.buildNode(
+            toTypeVariableNode(st));
+      }
+    }
+    ImmutableList.Builder<J8BaseNode> bounds = ImmutableList.builder();
+    // The first type must be a concrete type, so we enumerate the
+    // super type then the interfaces.
+    bounds.add(toClassOrInterfaceTypeNode(
+        ti.superType.or(JavaLang.JAVA_LANG_OBJECT)));
+    for (TypeSpecification iface : ti.interfaces) {
+      bounds.add(AdditionalBoundNode.Variant.AmpInterfaceType.buildNode(
+          InterfaceTypeNode.Variant.ClassOrInterfaceType.buildNode(
+              toClassOrInterfaceTypeNode(iface))));
+    }
+    return TypeBoundNode.Variant.ExtendsClassOrInterfaceTypeAdditionalBound
+        .buildNode(bounds.build());
+  }
 }
