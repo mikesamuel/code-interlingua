@@ -38,29 +38,12 @@ public abstract class ParSer implements ParSerable {
   public abstract ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err);
 
-  /** True if the ParSer grammar matches the given input. */
-  public boolean fastMatch(String input) {
-    Input inp = Input.builder().code(input).source("fastMatch").build();
-    ParseState before = new ParseState(inp);
-    ParseResult result = parse(
-        before, new LeftRecursion(), ParseErrorReceiver.DEV_NULL);
-    if (result.synopsis == ParseResult.Synopsis.SUCCESS) {
-      ParseState after = result.next();
-      if (after.input.indexAfterIgnorables(after.index)
-          == inp.content().length()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   /**
-   * True if the given input has no whitespace or commnet tokens at the start
+   * True if the given input has no whitespace or comment tokens at the start
    * or end and the ParSer grammar matches the given input.
    */
   public boolean fastMatch(String input) {
-    // TODO: To be consistent with PatternMatch we need to disable
-    // \\u decoding.
+    // To be consistent with PatternMatch we need to disable \\u decoding.
     Input inp = Input.builder()
         .setFragmentOfAlreadyDecodedInput(true)
         .code(input)
@@ -68,7 +51,8 @@ public abstract class ParSer implements ParSerable {
         .build();
     if (inp.indexAfterIgnorables(0) != 0) {
       // We explicitly disallow comments and spaces at the front so that we
-      // can
+      // can use this method to check the value of leaf nodes that correspond
+      // to a single token.
       return false;
     }
     ParseState before = new ParseState(inp);
@@ -77,7 +61,7 @@ public abstract class ParSer implements ParSerable {
     if (result.synopsis == ParseResult.Synopsis.SUCCESS) {
       ParseState after = result.next();
       if (after.index == inp.content().length()) {
-        // We intentionally do not use index after ignorables.
+        // We intentionally do not use indexAfterIgnorables.  See above.
         return true;
       }
     }
