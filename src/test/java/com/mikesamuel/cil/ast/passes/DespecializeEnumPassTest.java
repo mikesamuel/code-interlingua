@@ -522,7 +522,6 @@ public final class DespecializeEnumPassTest extends TestCase {
           },
         },
         null);
-    // TODO: another like this for method access.
   }
 
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =
