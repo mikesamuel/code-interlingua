@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -361,7 +363,7 @@ public final class TypeNodeFactory {
 
   /** */
   public TypeArgumentsNode toTypeArgumentsNode(
-      Positioned pos, Iterable<? extends TypeBinding> typeActuals) {
+      @Nullable Positioned pos, Iterable<? extends TypeBinding> typeActuals) {
     Preconditions.checkArgument(!Iterables.isEmpty(typeActuals));
     ImmutableList.Builder<TypeArgumentNode> typeArguments =
         ImmutableList.builder();

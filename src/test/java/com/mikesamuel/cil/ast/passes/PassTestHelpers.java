@@ -52,7 +52,7 @@ public final class PassTestHelpers {
    *   in the f-th file.
    */
   public static ImmutableList<J8FileNode> parseCompilationUnits(
-      Logger logger, String[]... linesPerFile) {
+      @Nullable Logger logger, String[]... linesPerFile) {
     return maybeParseCompilationUnits(logger, linesPerFile).get();
   }
 

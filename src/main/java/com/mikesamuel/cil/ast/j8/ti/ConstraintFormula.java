@@ -370,12 +370,11 @@ final class RelConstraintFormula extends ConstraintFormula {
 
   @Override
   public boolean equals(Object obj) {
-    if (getClass() != obj.getClass()) {
+    if (obj == null || getClass() != obj.getClass()) {
       return false;
     }
     RelConstraintFormula that = (RelConstraintFormula) obj;
-    return this.s.equals(that.s)
-        && this.t.equals(that.t);
+    return this.s.equals(that.s) && this.t.equals(that.t);
   }
 
 
