@@ -830,6 +830,35 @@ public final class DisambiguationPassTest extends TestCase {
     }
   }
 
+  @Test
+  public static void testExplicitConstructorInvocations() {
+    assertDisambiguated(
+        new String[] {
+            "ConstructorBody.LcExplicitConstructorInvocationBlockStatementsRc",
+            "  ExplicitConstructorInvocation.PrimaryDotTypeArgumentsSuperLpArgumentListRpSem",
+            "    ExpressionAtom.FreeField",
+            "      FieldName.Identifier : /C.c",
+            "        Identifier.Builtin c : FIELD",
+            "    ArgumentList.ExpressionComExpression",
+            "      Expression.ConditionalExpression",
+            "        ExpressionAtom.Local",
+            "          LocalName.Identifier : /C$D.<init>(1):x",
+            "            Identifier.Builtin x : LOCAL",
+        },
+        new String[] {
+            "//ExpCtorInvoc",
+            "class C {",
+            "  static final C c = new C();",
+            "  class D { D(int x) { c.super(x); } }",
+            "  C(int x) {}",
+            "}"
+        },
+        nth(0, with(J8NodeType.ConstructorBody)),
+        Names.SHORT,
+        TYPE_AND_NAME_DECORATOR);
+  }
+
+
   enum Names {
     LONG,
     SHORT,
