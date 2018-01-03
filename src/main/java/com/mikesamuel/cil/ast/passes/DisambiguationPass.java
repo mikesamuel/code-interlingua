@@ -514,8 +514,9 @@ final class DisambiguationPass extends AbstractRewritingPass {
       if (!canonNames.isEmpty()) {
         if (canonNames.size() > 1) {
           error(
-              names, "Ambiguous type for expression name "
-                  + d.name.toDottedString() + " : " + canonNames);
+              names,
+              "Ambiguous type for expression name " + d.name.toDottedString()
+              + " : " + canonNames);
         }
         Name canonName = canonNames.get(0);
         ImmutableList.Builder<Decomposed> ds = ImmutableList.builder();
