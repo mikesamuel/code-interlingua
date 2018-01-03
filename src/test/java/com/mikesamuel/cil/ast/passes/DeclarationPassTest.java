@@ -373,8 +373,8 @@ public class DeclarationPassTest extends TestCase {
             "  /* /foo/C.foo(1).<T> extends /java/lang/Object */",
             "  T> Supplier<T> foo(T x) {",
             "    return",
-            "    /* final anonymous /foo/C.foo(1)$1"
-            +     " extends /com/google/common/base/Supplier</foo/C.foo(1).<T>> in /foo/C */",
+            "    /* final anonymous /foo/C.foo(1)$1 extends /java/lang/Object"
+            +     " implements /com/google/common/base/Supplier</foo/C.foo(1).<T>> in /foo/C */",
             "    new Supplier<T> () { @Override public T get() { return x; } };",
             "  }",
             "  public C() {}",
@@ -408,13 +408,13 @@ public class DeclarationPassTest extends TestCase {
             "/* /foo/C extends /java/lang/Object contains /foo/C.<init>(1)$1 */",
             "class C {",
             "  public <",
-            "  /* /foo/C.<init>(1).<T> extends"
-            +   " /java/lang/Comparable</foo/C.<init>(1).<T>>"
-            +   " implements /java/io/Serializable */",
+            "  /* /foo/C.<init>(1).<T> extends /java/lang/Object implements"
+            +   " /java/lang/Comparable</foo/C.<init>(1).<T>>,"
+            +   " /java/io/Serializable */",
             "  T extends Comparable<T> & Serializable> C(T x) {",
             "    super (",
-            "        /* final anonymous /foo/C.<init>(1)$1 extends "
-            +         "/java/util/Map$Entry</foo/C.<init>(1).<T>,"
+            "        /* final anonymous /foo/C.<init>(1)$1 extends /java/lang/Object"
+            +         " implements /java/util/Map$Entry</foo/C.<init>(1).<T>,"
             +                             " /foo/C.<init>(1).<T>> "
             +         "in /foo/C */",
             "        new Map.Entry<T, T> () {",
@@ -598,14 +598,14 @@ public class DeclarationPassTest extends TestCase {
             "class C {",
             "  Supplier f(int i) {",
             "    return",
-            "    /* final anonymous /C.f(1)$1 extends"
-            +     " /com/google/common/base/Supplier in /C */",
+            "    /* final anonymous /C.f(1)$1 extends /java/lang/Object"
+            +     " implements /com/google/common/base/Supplier in /C */",
             "    new Supplier() { @Override public Object get() { return i; } };",
             "  }",
             "  Supplier f(float f) {",
             "    return",
-            "    /* final anonymous /C.f(2)$1 extends"
-            +     " /com/google/common/base/Supplier in /C */",
+            "    /* final anonymous /C.f(2)$1 extends /java/lang/Object"
+            +     " implements /com/google/common/base/Supplier in /C */",
             "    new Supplier() { @Override public Object get() { return f; } };",
             "  }",
             "  public C() {}",
@@ -643,7 +643,8 @@ public class DeclarationPassTest extends TestCase {
             "  static <",
             "  /* /Bar.f(1).<P> extends /Bar.f(1).<T> */",
             "  P extends T,",
-            "  /* /Bar.f(1).<T> extends /java/lang/CharSequence */",
+            "  /* /Bar.f(1).<T> extends /java/lang/Object"
+            +                 " implements /java/lang/CharSequence */",
             "  T extends CharSequence> void f() {}",
             "  public Bar() {}",
             "}",
