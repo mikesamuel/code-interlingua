@@ -11,8 +11,10 @@ import com.mikesamuel.cil.ast.j8.CompilationUnitNode;
 import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.jmin.JminBaseNode;
 import com.mikesamuel.cil.ast.passes.CommonPassRunner;
+import com.mikesamuel.cil.ast.passes.DespecializeEnumPass;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers;
 import com.mikesamuel.cil.ast.passes.PassTestHelpers.LoggableOperation;
+import com.mikesamuel.cil.ast.passes.flatten.FlattenPass;
 import com.mikesamuel.cil.parser.Unparse;
 
 import junit.framework.TestCase;
@@ -35,10 +37,25 @@ public final class J8ToJminTest extends TestCase {
             ImmutableList<J8FileNode> unprocessed = unprocessedOpt.get();
             CommonPassRunner commonPasses = new CommonPassRunner(logger);
             ImmutableList<J8FileNode> processed = commonPasses.run(unprocessed);
+
+            DespecializeEnumPass dep = new DespecializeEnumPass(
+                logger, commonPasses.getMemberInfoPool(),
+                commonPasses.getMethodVariantPool());
+            processed = dep.run(processed);
+            commonPasses = new CommonPassRunner(logger);
+            processed = commonPasses.run(processed);
+
+            FlattenPass fp = new FlattenPass(
+                logger, commonPasses.getTypePool().r);
+            processed = fp.run(processed);
+            commonPasses = new CommonPassRunner(logger);
+            processed = commonPasses.run(processed);
+
             J8ToJmin translator = new J8ToJmin(
                 logger, commonPasses.getTypePool());
-            ImmutableList.Builder<com.mikesamuel.cil.ast.j8.CompilationUnitNode>
-                cus = ImmutableList.builder();
+            ImmutableList
+            .Builder<com.mikesamuel.cil.ast.j8.CompilationUnitNode> cus
+                = ImmutableList.builder();
             for (J8FileNode filenode : processed) {
               cus.add((CompilationUnitNode) filenode);
             }
@@ -48,7 +65,8 @@ public final class J8ToJminTest extends TestCase {
         },
         expectedLog);
 
-    String got = PassTestHelpers.serializeNodes(xlated, null);
+    // TODO: do not disable delayed checks
+    String got = PassTestHelpers.serializeNodes(xlated, null, true);
 
     Optional<String> wantOpt = PassTestHelpers.normalizeCompilationUnitSource(
         wantLines);
@@ -83,19 +101,19 @@ public final class J8ToJminTest extends TestCase {
     assertTranslated(
         new String[][] {
           {
-            "package foo;",
+            "package bar;",
             "",
-            "class C extends bar.D {",
-            "  public C() {",
+            "class D extends java.lang.Object {",
+            "  public D() {",
             "    super ();",
             "  }",
             "}",
           },
           {
-            "package bar;",
+            "package foo;",
             "",
-            "class D extends java.lang.Object {",
-            "  public D() {",
+            "class C extends bar.D {",
+            "  public C() {",
             "    super ();",
             "  }",
             "}",
@@ -122,15 +140,43 @@ public final class J8ToJminTest extends TestCase {
 
   @Test
   public static void testEnum() throws Exception {
-if (false)  // TODO
     assertTranslated(
         new String[][] {
           {
             "package foo;",
             "",
-            "class C extends bar.D {",
-            "  public C() {",
-            "    super ();",
+            "interface I {",
+            "}",
+          },
+          {
+            "package foo;",
+            "",
+            "public enum E implements foo.I {",
+            "  A(42),",
+            "  B(1337),",
+            "  C(-1, true),",
+            "  ;",
+            "  public final int x;",
+            "  final boolean b;",
+            "",
+            "  E(int x) {",
+            "    this(x, false);",
+            "  }",
+            "",
+            "  E(int x, boolean b) {",
+            "    super();",
+            "    this.x = x;",
+            "    this.b = b;",
+            "  }",
+            "  static private java.lang.String C__toString() {",
+            "    return \"C!\";",
+            "  }",
+            "  @java.lang.Override() public java.lang.String toString() {",
+            "    switch (this) {",
+            "      case C:",
+            "        return foo.E.C__toString();",
+            "    }",
+            "    return super.toString();",
             "  }",
             "}",
           },
@@ -177,26 +223,27 @@ if (false)  // TODO
           {
             "package foo;",
             "",
-            "class Outer$Inner extends java.lang.Object {",
-            "  final foo.Outer $$containingInstance;",
-            "  int x = 2;",
-            "  {",
-            "    System.err.println((this.$$containingInstance).x);",
-            "  }",
-            "  public Outer$Inner(foo.Outer $$containingInstance) {",
+            "class Outer extends java.lang.Object {",
+            "  int x = 1;",
+            "  public Outer() {",
             "    super();",
-            "    this.$$containingInstance = $$containingInstance;",
             "  }",
             "}",
           },
           {
             "package foo;",
             "",
-            "class Outer extends java.lang.Object {",
-            "  int x = 1;",
-            "  public Outer() {",
-            "    super();",
+            "class Outer$Inner extends java.lang.Object {",
+            "  int x = 2;",
+            "  {",
+            "    System.err.println((this.this__Outer).x);",
             "  }",
+            "  public Outer$Inner(foo.Outer this__Outer) {",
+            "    super();",
+            "    this.this__Outer = this__Outer;",
+            "    if (this.this__Outer == null) { throw null; } else {}",
+            "  }",
+            "  private final foo.Outer this__Outer;",
             "}",
           },
         },
@@ -222,18 +269,26 @@ if (false)  // TODO
           {
             "package base;",
             "",
-            "class Outer$Inner<T_0, T> extends java.lang.Object {",
-            "  final base.Outer<T_0> $$containingInstance;",
-            "  public Outer$Inner(base.Outer<T_0> $$containingInstance) {",
+            "class Outer<T> extends java.lang.Object {",
+            "  public Outer() {",
             "    super();",
-            "    this.$$containingInstance = $$containingInstance;",
             "  }",
             "}",
           },
           {
             "package base;",
             "",
-            "class Outer<T> extends java.lang.Object {",
+            "class Outer$Inner<T_0, T> extends java.lang.Object {",
+            "  public Outer$Inner() {",
+            "    super();",
+            "  }",
+            "}",
+          },
+          {
+            "package sub;",
+            "",
+            "class Outer extends base.Outer<java.lang.Integer> {",
+            "  int x = 1;",
             "  public Outer() {",
             "    super();",
             "  }",
@@ -244,23 +299,19 @@ if (false)  // TODO
             "",
             "class Outer$Inner extends"
             + " base.Outer$Inner<java.lang.Integer, java.lang.String> {",
-            "  final sub.Outer $$containingInstance;",
             "  int x = 2;",
-            "  { System.err.println((this.$$containingInstance).x); }",
-            "  public Outer$Inner("
-            +      "base.Outer<java.lang.Integer> $$superContainingInstance, "
-            +      "sub.Outer $$containingInstance) {",
-            "    super($$superContainingInstance);",
-            "    this.$$containingInstance = $$containingInstance;",
+            "  { System.err.println((this.this__Outer).x); }",
+            "  public Outer$Inner(sub.Outer this__Outer) {",
+            "    this(this.initClosedOver(this__Outer));",
             "  }",
-            "}",
-          },
-          {
-            "package sub;",
-            "",
-            "class Outer extends base.Outer<java.lang.Integer> {",
-            "  int x = 1;",
-            "  public Outer() {",
+            "  private sub.Outer this__Outer;",
+            "  private boolean initClosedOver(sub.Outer this__Outer) {",
+            "    this.this__Outer = this__Outer;",
+            "    if (this.this__Outer == null) { throw null; } else {}",
+            "    return false;",
+            "  }",
+            "  private Outer$Inner(",
+            "      @java.lang.SuppressWarnings(value=\"unused\") boolean ign) {",
             "    super();",
             "  }",
             "}",
@@ -289,10 +340,6 @@ if (false)  // TODO
         }
         );
   }
-
-
-  // TODO: test that custom enum instances with fields and overridden methods
-  // are converted to enums without specialization
 
   // TODO: Calls to outer class super-type methods like
   // class Super {

@@ -23,6 +23,8 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification;
 public final class NameAllocator {
   private final Set<String> exclusions = new HashSet<>();
 
+  private NameAllocator() {}
+
   /**
    * @param root the root to search for identifiers to exclude
    * @param limit if it returns true, then control will not descend into

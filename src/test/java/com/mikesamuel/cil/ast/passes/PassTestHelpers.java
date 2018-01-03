@@ -14,7 +14,10 @@ import org.junit.Assert;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeI;
@@ -263,6 +266,16 @@ public final class PassTestHelpers {
   public static String serializeNodes(
       Iterable<? extends NodeI<?, ?, ?>> nodes, @Nullable Decorator decorator)
   throws UnparseVerificationException {
+    return serializeNodes(nodes, decorator, false);
+  }
+
+  /**
+   * Serialize the given nodes and decorate with the given decorator.
+   */
+  public static String serializeNodes(
+      Iterable<? extends NodeI<?, ?, ?>> nodes, @Nullable Decorator decorator,
+      boolean skipDoubleChecks)
+  throws UnparseVerificationException {
     StringBuilder sb = new StringBuilder();
     for (NodeI<?, ?, ?> node : nodes) {
       Iterable<Event> skeleton = SList.forwardIterable(
@@ -314,8 +327,18 @@ public final class PassTestHelpers {
             err.toString() + "\n" + node.toAsciiArt(""));
       }
 
-      Verified verified = Unparse.verify(
-          SList.forwardIterable(serialized.get().output));
+      ImmutableList<Event> events = ImmutableList.copyOf(
+          Iterables.filter(
+              SList.forwardIterable(serialized.get().output),
+              skipDoubleChecks
+              ? new Predicate<Event>() {
+                @Override
+                public boolean apply(Event e) {
+                  return e.getKind() != Event.Kind.DELAYED_CHECK;
+                }
+              }
+              : Predicates.alwaysTrue()));
+      Verified verified = Unparse.verify(events);
       FormattedSource fs = Unparse.format(verified);
       if (sb.length() != 0) {
         sb.append("\n\n");

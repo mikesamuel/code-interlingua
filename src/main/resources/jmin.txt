@@ -409,7 +409,7 @@ SwitchLabel: @nointerp
      "case" CaseValue ":"
      "default" ":"
 CaseValue: (@mixin=Typed)
-     Identifier !!":" (@name=Ambiguous)  // Foo could be a constant reference or an enum name
+     EnumConstantName !!":"
      ConstantExpression
 WhileStatement:
      "while" "(" Expression ")" Statement
@@ -466,6 +466,7 @@ ExpressionAtom: (@mixin=Typed)
      Literal
      ClassLiteral
      "this" (@name=This)
+     "super" !"[" !!UsePrefix  (@name=Super)  // TODO: rewrite to get rid of super calls via accessors
      LocalName (@name=Local)
      TypeName !!"."  (@name=StaticMember)
      !CastExpression "(" Expression ")"  (@name=Parenthesized) @intermediate
@@ -485,6 +486,10 @@ MethodInvocation:
 ClassInstanceCreationExpression:
      Primary (@postcond=Primary.ExpressionAtom.UnqualifiedClassInstanceCreationExpression) (@name=UnqualifiedClassInstanceCreationExpression)
      Primary (@postcond=Primary.InnerClassCreation) (@name=QualifiedClassInstanceCreationExpression)
+UsePrefix:
+     "."
+     "["
+     "::"
 ClassLiteral: (@mixin=Typed)
      TypeName {Dim} "." "class"
      NumericType {Dim} "." "class"

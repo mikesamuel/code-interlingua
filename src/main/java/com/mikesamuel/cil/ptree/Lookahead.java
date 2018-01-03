@@ -1,10 +1,8 @@
 package com.mikesamuel.cil.ptree;
 
-import javax.annotation.Nonnull;
-
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
+import com.mikesamuel.cil.event.DelayedCheckPredicate;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.parser.ForceFitState;
 import com.mikesamuel.cil.parser.LeftRecursion;
@@ -77,7 +75,9 @@ final class Lookahead extends PTParSer {
   @Override
   public ParseResult parse(
       ParseState state, LeftRecursion lr, ParseErrorReceiver err) {
-    ParseResult result = body.getParSer().parse(state, lr, err);
+    ParseErrorReceiver laerr = valence == Valence.POSITIVE
+        ? err : ParseErrorReceiver.DEV_NULL;
+    ParseResult result = body.getParSer().parse(state, lr, laerr);
     switch (result.synopsis) {
       case FAILURE:
         switch (valence) {
@@ -97,6 +97,7 @@ final class Lookahead extends PTParSer {
                 state, ParseResult.NO_WRITE_BACK_RESTRICTION,
                 result.lrExclusionsTriggered);
           case NEGATIVE:
+            err.error(state, "Successfully matched to " + result.next().index);
             return ParseResult.failure(result.lrExclusionsTriggered);
         }
     }
@@ -128,21 +129,48 @@ final class Lookahead extends PTParSer {
   }
 
 
-  private final class DoubleCheckPredicate
-  implements Predicate<Unparse.Suffix> {
+  private final class DoubleCheckPredicate implements DelayedCheckPredicate {
 
     DoubleCheckPredicate() {
       // Uses implicit outer this.
     }
 
     @Override
-    public boolean apply(@Nonnull Unparse.Suffix suffix) {
+    public Optional<String> problem(Unparse.Suffix suffix) {
+      class DCErrorReceiver implements ParseErrorReceiver {
+        int maxIndex = -1;
+        String farthestMessage = "reparsing failed";
+
+        @Override
+        public void error(ParseState state, String message) {
+          if (state.index > this.maxIndex) {
+            this.maxIndex = state.index;
+            this.farthestMessage = message;
+          }
+        }
+      }
+      DCErrorReceiver dcer = new DCErrorReceiver();
+      ParseState ps = suffix.asParseState();
       ParseResult result = getLookahead().parse(
-          suffix.asParseState(), new LeftRecursion(),
-          ParseErrorReceiver.DEV_NULL);
+          ps, new LeftRecursion(), dcer);
       switch (result.synopsis) {
-        case FAILURE: return false;
-        case SUCCESS: return true;
+        case FAILURE:
+          StringBuilder sb = new StringBuilder();
+          sb.append(dcer.farthestMessage);
+          if (dcer.maxIndex >= 0) {
+            sb.append(" near `");
+            int limit = ps.input.content().length();
+            int start = dcer.maxIndex;
+            int end = Math.min(start + 10, limit);
+            sb.append(ps.input.content(), start, end);
+            if (end < limit) {
+              sb.append("...");
+            }
+            sb.append('`');
+          }
+          return Optional.of(sb.toString());
+        case SUCCESS:
+          return Optional.absent();
       }
       throw new AssertionError(result.synopsis);
     }

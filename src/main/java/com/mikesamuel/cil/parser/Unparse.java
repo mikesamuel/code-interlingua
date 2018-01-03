@@ -4,11 +4,12 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.mikesamuel.cil.ast.NodeVariant;
+import com.mikesamuel.cil.event.DelayedCheckPredicate;
 import com.mikesamuel.cil.event.Event;
 import com.mikesamuel.cil.format.FormattedSource;
 import com.mikesamuel.cil.format.Formatter;
@@ -90,7 +91,7 @@ public final class Unparse {
     final ParseState ps = new ParseState(inp);
 
     for (int i = 0, n = delayedAndIndices.size(); i < n; i += 2) {
-      Predicate<Suffix> p = ((Event) delayedAndIndices.get(i))
+      DelayedCheckPredicate p = ((Event) delayedAndIndices.get(i))
           .getDelayedCheck();
       final int index = (Integer) delayedAndIndices.get(i + 1);
       Suffix s = new Suffix() {
@@ -105,10 +106,11 @@ public final class Unparse {
         }
 
       };
-      if (!p.apply(s)) {
+      Optional<String> problem = p.problem(s);
+      if (problem.isPresent()) {
         throw new UnparseVerificationException(
             "Delayed check " + p + " failed at " + index
-            + " : " + s.asParseState(),
+            + " because " + problem.get() + " : " + s.asParseState(),
             null);
       }
     }

@@ -362,7 +362,8 @@ extends AbstractPass<ImmutableList<J8FileNode>> {
 
   final TypeInfoResolver r;
 
-  FlattenPass(Logger logger, TypeInfoResolver r) {
+  /** */
+  public FlattenPass(Logger logger, TypeInfoResolver r) {
     super(logger);
     this.r = r;
   }

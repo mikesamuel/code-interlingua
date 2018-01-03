@@ -109,6 +109,11 @@ public final class Java8TokenBreakerTest extends TestCase {
   }
 
   @Test
+  public static void testKeywordAfterBracket() {
+    assertSpacedTokens(true, "} else", "}", "else");
+  }
+
+  @Test
   public static void testConventions() {
     assertSpacedTokens(
         true, "if (x == y) { return; }",

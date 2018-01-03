@@ -1,11 +1,9 @@
 package com.mikesamuel.cil.event;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Predicate;
 import com.mikesamuel.cil.ast.NodeType;
 import com.mikesamuel.cil.ast.NodeVariant;
 import com.mikesamuel.cil.parser.SourcePosition;
-import com.mikesamuel.cil.parser.Unparse;
 
 /**
  * An event in a series which describes a pre-order traversal of a parse-tree.
@@ -134,8 +132,7 @@ public abstract class Event {
    * Lookaheads leave no events during parse, so during unparse, we delay
    * checking the lookahead until the following content is available.
    */
-  public static DelayedCheck delayedCheck(
-      Predicate<Unparse.Suffix> suffixCheck) {
+  public static DelayedCheck delayedCheck(DelayedCheckPredicate suffixCheck) {
     return new DelayedCheck(suffixCheck);
   }
 
@@ -180,7 +177,7 @@ public abstract class Event {
   }
 
   /** For {@link Kind#DELAYED_CHECK} */
-  public Predicate<Unparse.Suffix> getDelayedCheck() {
+  public DelayedCheckPredicate getDelayedCheck() {
     throw new UnsupportedOperationException(getKind().name());
   }
 
@@ -642,9 +639,9 @@ public abstract class Event {
    */
   static final class DelayedCheck extends Event {
     /** Can be applied to the sub-list of events following the delayed check. */
-    public final Predicate<Unparse.Suffix> p;
+    public final DelayedCheckPredicate p;
 
-    DelayedCheck(Predicate<Unparse.Suffix> p) {
+    DelayedCheck(DelayedCheckPredicate p) {
       this.p = p;
     }
 
@@ -654,7 +651,7 @@ public abstract class Event {
     }
 
     @Override
-    public Predicate<Unparse.Suffix> getDelayedCheck() {
+    public DelayedCheckPredicate getDelayedCheck() {
       return p;
     }
 
