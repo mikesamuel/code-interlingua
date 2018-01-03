@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.passes;
 
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -9,21 +10,38 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.mikesamuel.cil.ast.j8.AdditionalBoundNode;
 import com.mikesamuel.cil.ast.j8.ArrayTypeNode;
+import com.mikesamuel.cil.ast.j8.BooleanLiteralNode;
+import com.mikesamuel.cil.ast.j8.CastExpressionNode;
+import com.mikesamuel.cil.ast.j8.CastNode;
+import com.mikesamuel.cil.ast.j8.CharacterLiteralNode;
 import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.ClassTypeNode;
+import com.mikesamuel.cil.ast.j8.ConvertCastNode;
 import com.mikesamuel.cil.ast.j8.DimNode;
+import com.mikesamuel.cil.ast.j8.ExceptionTypeListNode;
 import com.mikesamuel.cil.ast.j8.ExceptionTypeNode;
+import com.mikesamuel.cil.ast.j8.ExpressionAtomNode;
+import com.mikesamuel.cil.ast.j8.ExpressionNode;
+import com.mikesamuel.cil.ast.j8.FloatingPointLiteralNode;
 import com.mikesamuel.cil.ast.j8.FloatingPointTypeNode;
+import com.mikesamuel.cil.ast.j8.FormalParameterListNode;
+import com.mikesamuel.cil.ast.j8.FormalParameterNode;
+import com.mikesamuel.cil.ast.j8.FormalParametersNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
+import com.mikesamuel.cil.ast.j8.IntegerLiteralNode;
 import com.mikesamuel.cil.ast.j8.IntegralTypeNode;
 import com.mikesamuel.cil.ast.j8.InterfaceTypeNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
+import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
+import com.mikesamuel.cil.ast.j8.LiteralNode;
+import com.mikesamuel.cil.ast.j8.NullLiteralNode;
 import com.mikesamuel.cil.ast.j8.NumericTypeNode;
 import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.j8.ResultNode;
+import com.mikesamuel.cil.ast.j8.ThrowsNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentListNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentNode;
 import com.mikesamuel.cil.ast.j8.TypeArgumentsNode;
@@ -32,6 +50,8 @@ import com.mikesamuel.cil.ast.j8.TypeNameNode;
 import com.mikesamuel.cil.ast.j8.TypeNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
 import com.mikesamuel.cil.ast.j8.UnannTypeNode;
+import com.mikesamuel.cil.ast.j8.UnaryExpressionNode;
+import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.j8.WildcardBoundsNode;
 import com.mikesamuel.cil.ast.j8.WildcardNode;
 import com.mikesamuel.cil.ast.meta.JavaLang;
@@ -51,13 +71,29 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.parser.Positioned;
 import com.mikesamuel.cil.util.LogUtils;
 
-class TypeNodeFactory {
+/** Utility for manufacturing type related AST nodes. */
+public final class TypeNodeFactory {
   final Logger logger;
   final TypePool typePool;
+  private boolean allowMethodContainers;
 
-  TypeNodeFactory(Logger logger, TypePool typePool) {
+  /** */
+  public TypeNodeFactory(Logger logger, TypePool typePool) {
     this.logger = logger;
     this.typePool = typePool;
+  }
+
+  /**
+   * Types defined in methods are not normally mentionable via
+   * full type names.
+   * <p>
+   * It is convenient to be able to represent method names in the AST
+   * temporarily when migrating them out, so, when a flag is enabled,
+   * we represent method based type names in the TypeName and
+   * ClassOrInterfaceType ASTs.
+   */
+  public void allowMethodContainers() {
+    this.allowMethodContainers = true;
   }
 
   static final ImmutableMap<NumericType, J8NodeVariant>
@@ -72,8 +108,8 @@ class TypeNodeFactory {
       .put(StaticType.T_DOUBLE, FloatingPointTypeNode.Variant.Double)
       .build();
 
-
-  static PrimitiveTypeNode toPrimitiveTypeNode(PrimitiveType typ) {
+  /** */
+  public static PrimitiveTypeNode toPrimitiveTypeNode(PrimitiveType typ) {
     if (StaticType.T_BOOLEAN.equals(typ)) {
       return PrimitiveTypeNode.Variant.AnnotationBoolean
           .buildNode(ImmutableList.of())
@@ -94,7 +130,10 @@ class TypeNodeFactory {
         .setStaticType(typ);
   }
 
+  /** Does not accept null. */
   ReferenceTypeNode toReferenceTypeNode(ReferenceType typ) {
+    // TODO: Add a MentionableReferenceType that the null type does
+    // not implement but which others do to make this type safe.
     Preconditions.checkArgument(!typePool.T_NULL.equals(typ));
     Preconditions.checkArgument(!StaticType.ERROR_TYPE.equals(typ));
     if (typ instanceof TypePool.ArrayType) {
@@ -118,6 +157,10 @@ class TypeNodeFactory {
                   typeNode, DimNode.Variant.LsRs.buildNode())
               .setStaticType(at))
           .setStaticType(at);
+    } else if (typ.typeSpecification.rawName.type == Name.Type.TYPE_PARAMETER) {
+      return ReferenceTypeNode.Variant.TypeVariable.buildNode(
+          toTypeVariableNode(typ.typeSpecification))
+          .setStaticType(typ);
     } else if (typ instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) typ;
       ClassOrInterfaceTypeNode ciNode = toClassOrInterfaceTypeNode(
@@ -149,10 +192,12 @@ class TypeNodeFactory {
     return newTypeNode;
   }
 
-  ClassOrInterfaceTypeNode toClassOrInterfaceTypeNode(
+  /** */
+  public ClassOrInterfaceTypeNode toClassOrInterfaceTypeNode(
       PartialTypeSpecification spec) {
-    ClassOrInterfaceTypeNode parent = spec.parent() != null
-        ? toClassOrInterfaceTypeNode(spec.parent())
+    PartialTypeSpecification parentSpec = spec.parent();
+    ClassOrInterfaceTypeNode parent = parentSpec != null
+        ? toClassOrInterfaceTypeNode(parentSpec)
         : null;
     TypeArgumentsNode arguments = null;
     if (!spec.bindings().isEmpty()) {
@@ -160,8 +205,6 @@ class TypeNodeFactory {
           TypeArgumentListNode.Variant.TypeArgumentComTypeArgument
           .buildNode();
       for (TypeBinding b : spec.bindings()) {
-        ReferenceTypeNode rt = toReferenceTypeNode(
-            (ReferenceType) typePool.type(b.typeSpec, null, logger));
         WildcardBoundsNode.Variant boundsVariant = null;
         switch (b.variance) {
           case EXTENDS:
@@ -173,7 +216,16 @@ class TypeNodeFactory {
             boundsVariant = WildcardBoundsNode.Variant.SuperReferenceType;
             break;
         }
-        if (boundsVariant == null) {
+        ReferenceTypeNode rt = b.typeSpec != null
+            ? toReferenceTypeNode(
+                (ReferenceType) typePool.type(b.typeSpec, null, logger))
+            : null;
+        if (rt == null) {
+          typeArgumentList.add(
+              TypeArgumentNode.Variant.Wildcard.buildNode(
+                  WildcardNode.Variant.AnnotationQmWildcardBounds
+                  .buildNode()));
+        } else if (boundsVariant == null) {
           typeArgumentList.add(
               TypeArgumentNode.Variant.ReferenceType.buildNode(rt));
         } else {
@@ -190,31 +242,48 @@ class TypeNodeFactory {
     if (spec instanceof PackageSpecification) {
       return packageToClassOrInterfaceTypeNode(
           ((PackageSpecification) spec).packageName);
-    } else if (spec instanceof TypeSpecification) {
+    }
+
+    Name rawName = spec.getRawName();
+    String identifierValue;
+    if (spec instanceof TypeSpecification) {
       TypeSpecification ts = (TypeSpecification) spec;
       Preconditions.checkArgument(ts.nDims == 0);
       Preconditions.checkArgument(ts.rawName.type.isType);
-      IdentifierNode ident = IdentifierNode.Variant.Builtin
-          .buildNode(ts.rawName.identifier)
-          .setNamePartType(ts.rawName.type);
-      ClassOrInterfaceTypeNode newTypeNode = ClassOrInterfaceTypeNode.Variant
-          .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments.buildNode();
-      if (parent != null) {
-        newTypeNode.add(parent);
-      }
-      newTypeNode.add(ident);
-      if (arguments != null) {
-        newTypeNode.add(arguments);
-      }
-      return newTypeNode;
+      identifierValue = rawName.identifier;
+    } else if (spec instanceof MethodTypeContainer) {
+      // Anonymous class names and named types declared in method bodies cannot
+      // be addressed by fully qualified type names.
+      Preconditions.checkState(allowMethodContainers);
+      identifierValue = identifierValueForMethod(rawName);
     } else {
-      Preconditions.checkState(spec instanceof MethodTypeContainer);
-      // Anonymous class names cannot be addressed by type names.
-      throw new IllegalArgumentException(spec.toString());
+      throw new AssertionError(spec);
     }
+    IdentifierNode ident = IdentifierNode.Variant.Builtin
+        .buildNode(identifierValue)
+        .setNamePartType(rawName.type);
+    ClassOrInterfaceTypeNode newTypeNode = ClassOrInterfaceTypeNode.Variant
+        .ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments.buildNode();
+    if (parent != null) {
+      newTypeNode.add(parent);
+    }
+    newTypeNode.add(ident);
+    if (arguments != null) {
+      newTypeNode.add(arguments);
+    }
+    if (spec instanceof TypeSpecification) {
+      newTypeNode.setStaticType(
+          typePool.type((TypeSpecification) spec, null, null));
+    }
+    return newTypeNode;
   }
 
-  TypeNode toTypeNode(StaticType typ) {
+  private static String identifierValueForMethod(Name rawName) {
+    return rawName.identifier + "$" + rawName.variant;
+  }
+
+  /** */
+  public TypeNode toTypeNode(StaticType typ) {
     if (typ instanceof PrimitiveType) {
       return TypeNode.Variant.PrimitiveType.buildNode(
           toPrimitiveTypeNode((PrimitiveType) typ));
@@ -225,48 +294,74 @@ class TypeNodeFactory {
     }
   }
 
-  static TypeNameNode toTypeNameNode(Name typeName) {
+  /** */
+  public J8BaseNode toUnannTypeNode(StaticType typ) {
+    return UnannTypeNode.Variant.NotAtType.buildNode(toTypeNode(typ));
+  }
+
+
+  /** */
+  public TypeNameNode toTypeNameNode(TypeInfo typeInfo) {
+    TypeNameNode result = toTypeNameNode(typeInfo.canonName);
+    result.setReferencedTypeInfo(typeInfo);
+    return result;
+  }
+
+  /** */
+  public TypeNameNode toTypeNameNode(Name typeName) {
     Preconditions.checkArgument(typeName.type == Name.Type.CLASS);
-    TypeNameNode result;
+    return (TypeNameNode) toNameTree(
+        typeName,
+        TypeNameNode.Variant.Identifier,
+        TypeNameNode.Variant.PackageOrTypeNameDotIdentifier);
+  }
+
+  /** */
+  public PackageOrTypeNameNode toPackageOrTypeNameNode(
+      Name typeOrPackageName) {
+    Preconditions.checkArgument(
+        typeOrPackageName.type == Name.Type.CLASS
+        || typeOrPackageName.type == Name.Type.PACKAGE);
+    return (PackageOrTypeNameNode) toNameTree(
+        typeOrPackageName,
+        PackageOrTypeNameNode.Variant.Identifier,
+        PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier);
+  }
+
+  private J8BaseNode toNameTree(
+      Name typeName,
+      J8NodeVariant identifierVariant,
+      J8NodeVariant parentThenIdentifierVariant) {
+    IdentifierNode identNode;
+    if (typeName.type == Name.Type.METHOD) {
+      Preconditions.checkState(this.allowMethodContainers);
+      identNode = IdentifierNode.Variant.Builtin
+          .buildNode(identifierValueForMethod(typeName))
+          .setNamePartType(Name.Type.METHOD);
+    } else {
+      identNode = toIdentifierNode(typeName);
+    }
     if (typeName.parent == null
         || Name.DEFAULT_PACKAGE.equals(typeName.parent)) {
-      result = TypeNameNode.Variant.Identifier.buildNode(
-          toIdentifierNode(typeName));
+      return identifierVariant.buildNode(ImmutableList.of(identNode));
     } else {
-      result = TypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .buildNode(
-              toPackageOrTypeNameNode(typeName.parent),
-              toIdentifierNode(typeName));
+      return parentThenIdentifierVariant.buildNode(ImmutableList.of(
+          toPackageOrTypeNameNode(typeName.parent),
+          identNode));
     }
-    return result;
   }
 
-  static PackageOrTypeNameNode toPackageOrTypeNameNode(
-      Name typeOrPackageName) {
-    PackageOrTypeNameNode result;
-    if (typeOrPackageName.parent == null
-        || Name.DEFAULT_PACKAGE.equals(typeOrPackageName.parent)) {
-      result = PackageOrTypeNameNode.Variant.Identifier.buildNode(
-          toIdentifierNode(typeOrPackageName));
-    } else {
-      result = PackageOrTypeNameNode.Variant.PackageOrTypeNameDotIdentifier
-          .buildNode(
-              toPackageOrTypeNameNode(typeOrPackageName.parent),
-              toIdentifierNode(typeOrPackageName));
-    }
-    return result;
-  }
-
-  static IdentifierNode toIdentifierNode(Name nm) {
+  /** */
+  public static IdentifierNode toIdentifierNode(Name nm) {
     IdentifierNode node = IdentifierNode.Variant.Builtin
         .buildNode(nm.identifier);
     node.setNamePartType(nm.type);
     return node;
   }
 
-  TypeArgumentsNode toTypeArgumentsNode(
-      Positioned pos,
-      Iterable<? extends TypeBinding> typeActuals) {
+  /** */
+  public TypeArgumentsNode toTypeArgumentsNode(
+      Positioned pos, Iterable<? extends TypeBinding> typeActuals) {
     Preconditions.checkArgument(!Iterables.isEmpty(typeActuals));
     ImmutableList.Builder<TypeArgumentNode> typeArguments =
         ImmutableList.builder();
@@ -291,18 +386,19 @@ class TypeNodeFactory {
             .buildNode(typeArguments.build()));
   }
 
-  ResultNode toResultNode(StaticType rt) {
+  /** */
+  public ResultNode toResultNode(StaticType rt) {
     boolean isVoid = StaticType.T_VOID.typeSpecification.equals(
         rt.typeSpecification);
     if (isVoid) {
       return ResultNode.Variant.Void.buildNode();
     } else {
-      return ResultNode.Variant.UnannType.buildNode(
-          UnannTypeNode.Variant.NotAtType.buildNode(toTypeNode(rt)));
+      return ResultNode.Variant.UnannType.buildNode(toUnannTypeNode(rt));
     }
   }
 
-  ExceptionTypeNode toExceptionType(TypeSpecification ts) {
+  /** */
+  public ExceptionTypeNode toExceptionType(TypeSpecification ts) {
     if (ts.nDims != 0) {
       LogUtils.log(
           logger, Level.SEVERE, null,
@@ -318,12 +414,14 @@ class TypeNodeFactory {
             toClassOrInterfaceTypeNode(ts)));
   }
 
-  static TypeVariableNode toTypeVariableNode(TypeSpecification ts) {
+  /** */
+  public static TypeVariableNode toTypeVariableNode(TypeSpecification ts) {
     return TypeVariableNode.Variant.AnnotationIdentifier.buildNode(
         toIdentifierNode(ts.rawName));
   }
 
-  TypeBoundNode typeBoundFor(TypeInfo ti) {
+  /** */
+  public TypeBoundNode typeBoundFor(TypeInfo ti) {
     if (ti.interfaces.isEmpty() && ti.superType.isPresent()) {
       TypeSpecification st = ti.superType.get();
       if (JavaLang.JAVA_LANG_OBJECT.equals(st)) {
@@ -347,5 +445,145 @@ class TypeNodeFactory {
     }
     return TypeBoundNode.Variant.ExtendsClassOrInterfaceTypeAdditionalBound
         .buildNode(bounds.build());
+  }
+
+  /** */
+  public FormalParameterListNode toFormalParameterListNode(
+      List<? extends TypeSpecification> types,
+      List<? extends String> names, boolean isVariadic) {
+    int n = types.size();
+    Preconditions.checkArgument(n == names.size());
+    if (n == 0) { return null; }
+
+    FormalParameterListNode listNode;
+    int nRegularParameters = n - (isVariadic ? 1 : 0);
+    if (nRegularParameters == 0) {
+      listNode = FormalParameterListNode.Variant
+          .LastFormalParameter.buildNode();
+    } else {
+      listNode = FormalParameterListNode.Variant
+          .FormalParametersComLastFormalParameter.buildNode();
+      ImmutableList.Builder<J8BaseNode> formalParameters =
+          ImmutableList.builder();
+      for (int i = 0; i < nRegularParameters; ++i) {
+        TypeSpecification f = types.get(i);
+        String name = names.get(i);
+        J8BaseNode formalNode =
+            FormalParameterNode.Variant.Declaration
+            .buildNode(ImmutableList.<J8BaseNode>of(
+                toUnannTypeNode(typePool.type(f, null, logger)),
+                VariableDeclaratorIdNode.Variant.IdentifierDims.buildNode(
+                    IdentifierNode.Variant.Builtin.buildNode(name))));
+        formalParameters.add(formalNode);
+      }
+      listNode.add(
+          FormalParametersNode.Variant.FormalParameterComFormalParameter
+          .buildNode(formalParameters.build()));
+    }
+    if (isVariadic) {
+      TypeSpecification f = types.get(nRegularParameters);
+      String name = names.get(nRegularParameters);
+      listNode.add(
+          LastFormalParameterNode.Variant.Variadic
+          .buildNode(ImmutableList.<J8BaseNode>of(
+              toUnannTypeNode(typePool.type(f, null, logger)),
+              VariableDeclaratorIdNode.Variant.IdentifierDims.buildNode(
+                  IdentifierNode.Variant.Builtin.buildNode(name)))));
+    }
+    return listNode;
+  }
+
+  /** */
+  public J8BaseNode toThrowsNode(ImmutableList<TypeSpecification> thrownTypes) {
+    ImmutableList.Builder<J8BaseNode> b = ImmutableList.builder();
+    for (TypeSpecification thrown : thrownTypes) {
+      b.add(toExceptionType(thrown));
+    }
+    return ThrowsNode.Variant.ThrowsExceptionTypeList
+        .buildNode(
+            ExceptionTypeListNode.Variant.ExceptionTypeComExceptionType
+            .buildNode(b.build()));
+  }
+
+  private static final ImmutableMap<TypeSpecification, ExpressionNode> ZEROS =
+      ImmutableMap.<TypeSpecification, ExpressionNode>builder()
+      .put(
+          StaticType.T_BOOLEAN.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              ExpressionAtomNode.Variant.Literal.buildNode(
+                  LiteralNode.Variant.BooleanLiteral.buildNode(
+                      BooleanLiteralNode.Variant.False.buildNode()))))
+      .put(
+          StaticType.T_BYTE.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              UnaryExpressionNode.Variant.CastExpression.buildNode(
+                  CastExpressionNode.Variant.Expression.buildNode(
+                      CastNode.Variant.ConvertCast.buildNode(
+                          ConvertCastNode.Variant.PrimitiveType.buildNode(
+                              PrimitiveTypeNode.Variant.AnnotationNumericType
+                              .buildNode(
+                                  IntegralTypeNode.Variant.Byte.buildNode()))),
+                      ExpressionAtomNode.Variant.Literal.buildNode(
+                          LiteralNode.Variant.IntegerLiteral.buildNode(
+                              IntegerLiteralNode.Variant.Builtin.buildNode(
+                                  "0")))))))
+      .put(
+          StaticType.T_CHAR.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              ExpressionAtomNode.Variant.Literal.buildNode(
+                  LiteralNode.Variant.CharacterLiteral.buildNode(
+                      CharacterLiteralNode.Variant.Builtin.buildNode(
+                          "'\\0'")))))
+      .put(
+          StaticType.T_DOUBLE.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              ExpressionAtomNode.Variant.Literal.buildNode(
+                  LiteralNode.Variant.IntegerLiteral.buildNode(
+                      FloatingPointLiteralNode.Variant.Builtin
+                      .buildNode("0D")))))
+      .put(
+          StaticType.T_FLOAT.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              ExpressionAtomNode.Variant.Literal.buildNode(
+                  LiteralNode.Variant.IntegerLiteral.buildNode(
+                      FloatingPointLiteralNode.Variant.Builtin
+                      .buildNode("0F")))))
+      .put(
+          StaticType.T_INT.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              ExpressionAtomNode.Variant.Literal.buildNode(
+                  LiteralNode.Variant.IntegerLiteral.buildNode(
+                      IntegerLiteralNode.Variant.Builtin.buildNode("0")))))
+      .put(
+          StaticType.T_LONG.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              ExpressionAtomNode.Variant.Literal.buildNode(
+                  LiteralNode.Variant.IntegerLiteral.buildNode(
+                      IntegerLiteralNode.Variant.Builtin.buildNode("0L")))))
+      .put(
+          StaticType.T_SHORT.typeSpecification,
+          ExpressionNode.Variant.ConditionalExpression.buildNode(
+              UnaryExpressionNode.Variant.CastExpression.buildNode(
+                  CastExpressionNode.Variant.Expression.buildNode(
+                      CastNode.Variant.ConvertCast.buildNode(
+                          ConvertCastNode.Variant.PrimitiveType.buildNode(
+                              PrimitiveTypeNode.Variant.AnnotationNumericType
+                              .buildNode(
+                                  IntegralTypeNode.Variant.Short.buildNode()))),
+                      ExpressionAtomNode.Variant.Literal.buildNode(
+                          LiteralNode.Variant.IntegerLiteral.buildNode(
+                              IntegerLiteralNode.Variant.Builtin.buildNode(
+                                  "0")))))))
+      .build();
+
+  /** */
+  public static ExpressionNode zeroValueFor(TypeSpecification ts) {
+    ExpressionNode e = ZEROS.get(ts);
+    return e != null
+        ? e.deepClone()
+        : ExpressionNode.Variant.ConditionalExpression.buildNode(
+            ExpressionAtomNode.Variant.Literal.buildNode(
+                LiteralNode.Variant.NullLiteral.buildNode(
+                    NullLiteralNode.Variant.Null.buildNode())));
   }
 }

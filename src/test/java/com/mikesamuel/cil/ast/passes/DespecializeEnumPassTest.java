@@ -524,6 +524,53 @@ public final class DespecializeEnumPassTest extends TestCase {
         null);
   }
 
+  @Test
+  public static void testPotentialNameCollisionAvoided() throws Exception {
+    assertPassOutput(
+        new String[][] {
+          {
+            "enum E implements I {",
+            "  A,",
+            "  ;",
+            "  static private String A__toString__1() {",
+            "    return \"foo\";",
+            "  }",
+            "  @java.lang.Override public java.lang.String toString() {",
+            "    switch (this) {",
+            "      case A: return E.A__toString__1();",
+            "    }",
+            "    return super.toString();",
+            "  }",
+            "}",
+          },
+          {
+            "interface I { default int A__toString() { return 42; } }",
+          },
+        },
+        new String[][] {
+          {
+            "//E",
+            "enum E implements I {",
+            "  A() {",
+            "    @Override public String toString() {",
+            "      return \"foo\";",
+            "    }",
+            "  },",
+            "  ;",
+            "",
+            "}",
+          },
+          {
+            "//I",
+            "interface I {",
+            "  default int A__toString() { return 42; }",
+            "}",
+          },
+        },
+        null
+        );
+  }
+
   private static final Decorator METHOD_DESCRIPTOR_DECORATOR =
       new Decorator() {
 

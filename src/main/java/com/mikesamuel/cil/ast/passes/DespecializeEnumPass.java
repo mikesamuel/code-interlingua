@@ -3,7 +3,6 @@ package com.mikesamuel.cil.ast.passes;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -11,6 +10,7 @@ import javax.annotation.Nullable;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.HashBasedTable;
@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.mikesamuel.cil.ast.j8.AnnotationNode;
 import com.mikesamuel.cil.ast.j8.ArgumentListNode;
@@ -36,14 +35,12 @@ import com.mikesamuel.cil.ast.j8.EnumBodyNode;
 import com.mikesamuel.cil.ast.j8.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.j8.EnumConstantNode;
 import com.mikesamuel.cil.ast.j8.EnumDeclarationNode;
-import com.mikesamuel.cil.ast.j8.ExceptionTypeListNode;
 import com.mikesamuel.cil.ast.j8.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.j8.ExpressionNode;
 import com.mikesamuel.cil.ast.j8.ExpressionStatementNode;
 import com.mikesamuel.cil.ast.j8.FieldDeclarationNode;
 import com.mikesamuel.cil.ast.j8.FieldNameNode;
 import com.mikesamuel.cil.ast.j8.FormalParameterListNode;
-import com.mikesamuel.cil.ast.j8.FormalParameterNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.InstanceInitializerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
@@ -52,7 +49,6 @@ import com.mikesamuel.cil.ast.j8.J8FileNode;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.MarkerAnnotationNode;
 import com.mikesamuel.cil.ast.j8.MethodBodyNode;
@@ -87,7 +83,6 @@ import com.mikesamuel.cil.ast.j8.TypeParameterListNode;
 import com.mikesamuel.cil.ast.j8.TypeParameterNode;
 import com.mikesamuel.cil.ast.j8.TypeParametersNode;
 import com.mikesamuel.cil.ast.j8.TypeVariableNode;
-import com.mikesamuel.cil.ast.j8.UnannTypeNode;
 import com.mikesamuel.cil.ast.j8.UnqualifiedClassInstanceCreationExpressionNode;
 import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
 import com.mikesamuel.cil.ast.meta.CallableInfo;
@@ -208,12 +203,15 @@ import com.mikesamuel.cil.parser.SList;
 public final class DespecializeEnumPass extends AbstractRewritingPass {
   private final MethodVariantPool variantPool;
   private final MemberInfoPool infoPool;
+  private final TypeNodeFactory typeNodeFactory;
 
-  protected DespecializeEnumPass(
+  /** */
+  public DespecializeEnumPass(
       Logger logger, MemberInfoPool infoPool, MethodVariantPool variantPool) {
     super(logger);
     this.infoPool = infoPool;
     this.variantPool = variantPool;
+    this.typeNodeFactory = new TypeNodeFactory(logger, infoPool.typePool);
   }
 
   @Override
@@ -237,7 +235,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
    * We keep a stack with an element for each type declaration's scope so that
    * we can mangle names without introducing namespace conflicts.
    */
-  private Set<String> nameExclusions = Sets.newHashSet();
+  private NameAllocator nameAllocator = null;
 
 
   @Override
@@ -245,9 +243,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     if (node instanceof J8FileNode) {
       Preconditions.checkState(enumStates.isEmpty() && typesInScope.isEmpty());
-      nameExclusions.clear();
-
-      excludeNamesThatMayBeInScope(node);
+      nameAllocator = NameAllocator.create(node, Predicates.alwaysFalse(), infoPool.typePool.r);
     }
     if (node instanceof J8TypeDeclaration) {
       J8TypeDeclaration decl = (J8TypeDeclaration) node;
@@ -485,7 +481,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                   ExpressionNode.Variant.ConditionalExpression.buildNode(
                       PrimaryNode.Variant.FieldAccess.buildNode(
                           ExpressionAtomNode.Variant.StaticMember.buildNode(
-                              TypeNodeFactory.toTypeNameNode(es.ti.canonName)),
+                              typeNodeFactory.toTypeNameNode(es.ti)),
                           FieldNameNode.Variant.Identifier.buildNode(
                               sc.name.deepClone()))));
             }
@@ -522,8 +518,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
               ExpressionNode.Variant.ConditionalExpression.buildNode(
                   PrimaryNode.Variant.FieldAccess.buildNode(
                       ExpressionAtomNode.Variant.StaticMember.buildNode(
-                          TypeNodeFactory.toTypeNameNode(
-                              enumState.ti.canonName)),
+                          typeNodeFactory.toTypeNameNode(enumState.ti)),
                       FieldNameNode.Variant.Identifier.buildNode(
                           constant.name.deepClone()))));
         default:
@@ -701,8 +696,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
           }
         }
 
-        TypeNameNode outerEnumTypeName = TypeNodeFactory.toTypeNameNode(
-            es.ti.canonName);
+        TypeNameNode outerEnumTypeName = typeNodeFactory.toTypeNameNode(es.ti);
         for (MethodNodeAndMetadata mmd : overrides.allMethods()) {
           if (mmd.specialConstantsOverriding.isEmpty()) {
             continue;
@@ -812,15 +806,13 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                 @Override
                 public Iterable<BlockStatementNode> get() {
                   @SuppressWarnings("synthetic-access")
-                  TypeNodeFactory tf = new TypeNodeFactory(
-                      logger, infoPool.typePool);
 
                   UnqualifiedClassInstanceCreationExpressionNode newError =
                       UnqualifiedClassInstanceCreationExpressionNode.Variant
                       .New.buildNode(
                           ClassOrInterfaceTypeToInstantiateNode
                           .Variant.ClassOrInterfaceTypeDiamond.buildNode(
-                              tf.toClassOrInterfaceTypeNode(
+                              typeNodeFactory.toClassOrInterfaceTypeNode(
                                   JAVA_LANG_ASSERTIONERROR)),
                           ArgumentListNode.Variant.ExpressionComExpression
                           .buildNode(
@@ -1014,22 +1006,12 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
 
     @SuppressWarnings("synthetic-access")
     private String noncollidingIdentifier(String constName, Name nm) {
-      String reservedIdentifier;
       if (nm.type == Name.Type.METHOD
           && Name.isSpecialMethodIdentifier(nm.identifier)) {
         return nm.identifier;
       } else {
-        String baseIdentifier = constName
-            + "__" + nm.identifier;
-        for (int counter = -1;; ++counter) {
-          reservedIdentifier = counter < 0
-              ? baseIdentifier
-              : baseIdentifier + "__" + counter;
-          if (nameExclusions.add(reservedIdentifier)) {
-            return reservedIdentifier;
-          }
-          Preconditions.checkState(counter != Integer.MAX_VALUE);
-        }
+        return nameAllocator.allocateIdentifier(
+            constName + "__" + nm.identifier);
       }
     }
 
@@ -1225,21 +1207,6 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       }
     }
   }
-
-  private void excludeNamesThatMayBeInScope(J8BaseNode node) {
-    if (node instanceof J8TypeDeclaration) {
-      TypeInfo ti = ((J8TypeDeclaration) node).getDeclaredTypeInfo();
-
-      // Exclude inherited members.
-      for (MemberInfo mi : ti.transitiveMembers(infoPool.typePool.r)) {
-        nameExclusions.add(mi.canonName.identifier);
-      }
-    } else if (node instanceof IdentifierNode) {
-      // Covers local variables.
-      nameExclusions.add(node.getValue());
-    }
-  }
-
 
   final class Migration {
     final EnumState enumState;
@@ -1613,15 +1580,12 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         FormalParameterListNode.class);
     ThrowsNode exThrowsClause = exHeader.firstChildWithType(ThrowsNode.class);
 
-    TypeNodeFactory typeNodeFactory = new TypeNodeFactory(
-        logger, infoPool.typePool);
-
     ImmutableList.Builder<ModifierNode> modifiers = ImmutableList.builder();
     modifiers.add(
         ModifierNode.Variant.Annotation.buildNode(
             AnnotationNode.Variant.MarkerAnnotation.buildNode(
                 MarkerAnnotationNode.Variant.AtTypeName.buildNode(
-                    TypeNodeFactory.toTypeNameNode(JAVA_LANG_OVERRIDE)))));
+                    typeNodeFactory.toTypeNameNode(JAVA_LANG_OVERRIDE)))));
     for (int mods = ci.modifiers, bit; mods != 0; mods &= ~bit) {
       bit = mods & -mods;
       ModifierNode.Variant v = ModifierNodes.modifierVariant(bit);
@@ -1753,9 +1717,6 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
     if (trampoline != null) { return trampoline.baseMethodName; }
     Name trampolineName = es.reserveNameForSuperTrampoline(superCallee);
 
-    TypeNodeFactory typeNodeFactory = new TypeNodeFactory(
-        logger, infoPool.typePool);
-
     // First construct a call like
     // super.methodName(a0, a1, a2)
     ImmutableList.Builder<J8BaseNode> callChildren = ImmutableList.builder();
@@ -1784,7 +1745,8 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         // Same naming convention as below.
         b.add(ExpressionNode.Variant.ConditionalExpression.buildNode(
             ExpressionAtomNode.Variant.Local.buildNode(
-                IdentifierNode.Variant.Builtin.buildNode("a" + i))));
+                LocalNameNode.Variant.Identifier.buildNode(
+                    IdentifierNode.Variant.Builtin.buildNode("a" + i)))));
       }
       callChildren.add(ArgumentListNode.Variant.ExpressionComExpression
           .buildNode(b.build()));
@@ -1831,25 +1793,12 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       b.add(MethodNameNode.Variant.Identifier.buildNode(
           TypeNodeFactory.toIdentifierNode(trampolineName)));
       if (!formals.isEmpty()) {
-        ImmutableList.Builder<J8BaseNode> formalParameters =
-            ImmutableList.builder();
+        ImmutableList.Builder<String> formalNames = ImmutableList.builder();
         for (int i = 0, n = formals.size(); i < n; ++i) {
-          TypeSpecification f = formals.get(i);
-          J8BaseNode formalNode =
-              ((!superCallee.isVariadic() || i + 1 < n)
-               ? FormalParameterNode.Variant.Declaration
-               : LastFormalParameterNode.Variant.Variadic)
-              .buildNode(ImmutableList.<J8BaseNode>of(
-                  UnannTypeNode.Variant.NotAtType.buildNode(
-                      typeNodeFactory.toTypeNode(
-                          infoPool.typePool.type(f, null, logger))),
-                  VariableDeclaratorIdNode.Variant.IdentifierDims.buildNode(
-                      IdentifierNode.Variant.Builtin.buildNode("a" + i))));
-          formalParameters.add(formalNode);
+          formalNames.add("a" + i);
         }
-        b.add(FormalParameterListNode.Variant
-            .FormalParametersComLastFormalParameter.buildNode(
-                formalParameters.build()));
+        b.add(typeNodeFactory.toFormalParameterListNode(
+            formals, formalNames.build(), superCallee.isVariadic()));
       }
       methodDeclarator = MethodDeclaratorNode.Variant
           .MethodNameLpFormalParameterListRpDims.buildNode(b.build());
@@ -1860,14 +1809,8 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         infoPool.typePool.type(superCallee.getReturnType(), null, null)));
     headerChildren.add(methodDeclarator);
     if (!superCallee.getThrownTypes().isEmpty()) {
-      ImmutableList.Builder<J8BaseNode> b = ImmutableList.builder();
-      for (TypeSpecification thrown : superCallee.getThrownTypes()) {
-        b.add(typeNodeFactory.toExceptionType(thrown));
-      }
-      headerChildren.add(ThrowsNode.Variant.ThrowsExceptionTypeList
-          .buildNode(
-              ExceptionTypeListNode.Variant.ExceptionTypeComExceptionType
-              .buildNode(b.build())));
+      headerChildren.add(
+          typeNodeFactory.toThrowsNode(superCallee.getThrownTypes()));
     }
     MethodHeaderNode methodHeader = MethodHeaderNode.Variant
         .TypeParametersAnnotationResultMethodDeclaratorThrows.buildNode(
