@@ -118,6 +118,14 @@ public interface TypeNameResolver {
                       if (outerTypeOpt.isPresent()) {
                         TypeInfo outerType = outerTypeOpt.get();
                         for (Name innerClassName : outerType.innerClasses) {
+                          if (innerClassName.parent != null
+                              && innerClassName.parent.type
+                                 == Name.Type.METHOD) {
+                            // Named classes in methods cannot be mentioned
+                            // outside of the method, and then, not via
+                            // qualified names.
+                            continue;
+                          }
                           if (innerName.equals(innerClassName.identifier)) {
                             canonNames.add(innerClassName);
                           }
@@ -470,8 +478,7 @@ public interface TypeNameResolver {
      */
     public static TypeNameResolver eitherOr(
         TypeNameResolver a, TypeNameResolver... rest) {
-      ImmutableList.Builder<TypeNameResolver> b =
-          ImmutableList.builder();
+      ImmutableList.Builder<TypeNameResolver> b = ImmutableList.builder();
       addTo(a, b);
       for (TypeNameResolver r : rest) {
         addTo(r, b);
