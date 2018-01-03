@@ -190,6 +190,22 @@ public final class TypeInfo extends AccessibleInfo {
     return nm;
   }
 
+  /**
+   * The super type if it is not object, or the first interface, or plain old
+   * Object.
+   * This is useful, especially with a type parameter, when we need a single
+   * upper bound.
+   */
+  public TypeSpecification bestEffortNonObjectSuperType() {
+    TypeSpecification st = JavaLang.JAVA_LANG_OBJECT;
+    st = superType.or(st);
+    if (JavaLang.JAVA_LANG_OBJECT.equals(st)
+        && !interfaces.isEmpty()) {
+      st = interfaces.get(0);
+    }
+    return st;
+  }
+
   /** A builder for TypeInfo with the given name. */
   public static Builder builder(Name canonName) {
     @SuppressWarnings("synthetic-access")

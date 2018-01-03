@@ -147,6 +147,7 @@ final class TypingPass extends AbstractRewritingPass {
    */
   final boolean injectCasts;
   final MemberInfoPool memberInfoPool;
+  final TypeNodeFactory factory;
 
   private final LinkedList<ExpressionNameResolver> expressionNameResolvers
       = Lists.newLinkedList();
@@ -177,6 +178,7 @@ final class TypingPass extends AbstractRewritingPass {
     this.typePool = typePool;
     this.injectCasts = injectCasts;
     this.memberInfoPool = new MemberInfoPool(typePool);
+    this.factory = new TypeNodeFactory(logger, typePool);
   }
 
 
@@ -412,28 +414,29 @@ final class TypingPass extends AbstractRewritingPass {
               // a bare call to a primary method invocation.
               if (invoc.typeActualsInlinable && invoc.callable.isPresent()) {
                 ParameterizedMember<CallableInfo> m = invoc.callable.get().m;
-                TypeNodeFactory factory = new TypeNodeFactory(
-                    logger, typePool);
-                TypeSpecification sourceType = m.sourceType;
+                TypeSpecification sourceTypeSpec = m.sourceType;
+                StaticType sourceType = typePool.type(
+                    sourceTypeSpec, e, logger);
                 ExpressionAtomNode receiver;
                 boolean isStatic = Modifier.isStatic(m.member.modifiers);
-                if (sourceType.rawName.equals(
-                    containingTypes.getLast().canonName)
-                    && !isStatic) {
+                if (!isStatic
+                    && sourceTypeSpec.rawName.equals(
+                        containingTypes.getLast().canonName)) {
                   receiver = ExpressionAtomNode.Variant.This.buildNode();
-                } else if (sourceType.rawName.isMentionable()) {
+                } else if (sourceType instanceof ClassOrInterfaceType
+                           && sourceTypeSpec.rawName.isMentionable()) {
                   receiver =
                       (isStatic
                        ? ExpressionAtomNode.Variant.StaticMember
                        : ExpressionAtomNode.Variant.This)
-                      .buildNode(
-                          TypeNodeFactory.toTypeNameNode(sourceType.rawName));
+                      .buildNode(factory.toTypeNameNode(
+                          ((ClassOrInterfaceType) sourceType).info));
                 } else {
                   receiver = null;
                 }
 
                 if (receiver != null) {
-                  receiver.setStaticType(typePool.type(sourceType, e, logger));
+                  receiver.setStaticType(sourceType);
                   TypeArgumentsNode typeArgumentsNode =
                       factory.toTypeArgumentsNode(e, invoc.typeActuals);
                   ImmutableList.Builder<J8BaseNode> explicitCallChildren =
@@ -510,10 +513,24 @@ final class TypingPass extends AbstractRewritingPass {
                   .findOne();
               if (type.isPresent()) {
                 exprType = type.get().getStaticType();
-                ProcessedCallable invoc = processCallableInvocation(
-                    pathToCtorCall, exprType, Optional.absent(),
-                    Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, ctorCall);
-                maybeAddImpliedTypeParameters(pathToCtorCall, invoc);
+                // Don't bother trying to find a constructor in an interface.
+                // For example, (new Runnable() {...}) refers to an anonymous
+                // class.
+                // We could define forwarding constructors for anonymous classes
+                // early in the process, but the flattening pass moots this.
+                // We could bind to Object().
+                boolean isZeroArgumentAnonymousInterface =
+                    ctorCall.firstChildWithType(J8NodeType.ClassBody) != null
+                    && ctorCall.firstChildWithType(J8NodeType.ArgumentList) == null
+                    && exprType instanceof ClassOrInterfaceType
+                    && Modifier.isInterface(
+                        ((ClassOrInterfaceType) exprType).info.modifiers);
+                if (!isZeroArgumentAnonymousInterface) {
+                  ProcessedCallable invoc = processCallableInvocation(
+                      pathToCtorCall, exprType, Optional.absent(),
+                      Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME, ctorCall);
+                  maybeAddImpliedTypeParameters(pathToCtorCall, invoc);
+                }
               } else {
                 error(node, "Class to instantiate unspecified");
                 exprType = StaticType.ERROR_TYPE;
@@ -1522,7 +1539,6 @@ final class TypingPass extends AbstractRewritingPass {
       error(node, "Cannot add implied type parameters to " + v);
       return;
     }
-    TypeNodeFactory factory = new TypeNodeFactory(logger, typePool);
     ImmutableList<TypeBinding> typeActuals = invoc.typeActuals;
     TypeArgumentsNode typeArgsNode = factory.toTypeArgumentsNode(
         node, typeActuals);
@@ -1912,8 +1928,9 @@ final class TypingPass extends AbstractRewritingPass {
                 typePool.r.resolve(typeParameter);
             if (!paramTypeInfo.isPresent()) { break; }
             TypeInfo pti = paramTypeInfo.get();
-            if (!pti.superType.isPresent()) { break; }
-            b = new TypeBinding(Variance.EXTENDS, pti.superType.get());
+            TypeSpecification pst = pti.bestEffortNonObjectSuperType();
+            if (pst == null) { break; }
+            b = new TypeBinding(Variance.EXTENDS, pst);
           } else {
             b = new TypeBinding(subst);
           }
@@ -2377,14 +2394,12 @@ final class TypingPass extends AbstractRewritingPass {
         cast = CastNode.Variant.ConvertCast.buildNode(
             ConvertCastNode.Variant.PrimitiveType.buildNode(targetTypeNode));
       } else {
-        TypeNodeFactory typeNodeFactory =
-            new TypeNodeFactory(logger, typePool);
         // TODO: handle +/- unary op ambiguity.
         // Maybe, if it's not an ExpressionAtom.Parenthesized, then
         // wrap it.  This may already necessarily happen due to the
         // Intermediates call below, but it's non-obvious and a maintenance
         // hazard as-is.
-        ReferenceTypeNode targetTypeNode = typeNodeFactory.toReferenceTypeNode(
+        ReferenceTypeNode targetTypeNode = factory.toReferenceTypeNode(
             (ReferenceType) targetType);
         cast = CastNode.Variant.ConfirmCast.buildNode(
             ConfirmCastNode.Variant.ReferenceTypeAdditionalBound.buildNode(

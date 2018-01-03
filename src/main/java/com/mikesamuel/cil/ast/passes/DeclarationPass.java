@@ -386,7 +386,7 @@ class DeclarationPass extends AbstractPass<DeclarationPass.Result> {
             break;
           case Superclass:
           case ClassOrInterfaceTypeToInstantiate: {
-            superTypeSpec = AmbiguousNames.typeSpecificationOf(
+            TypeSpecification typeSpec = AmbiguousNames.typeSpecificationOf(
                 child, nameResolver, logger);
             // If
             //   1. d declares an inner class, and d's super type is an inner
@@ -404,7 +404,7 @@ class DeclarationPass extends AbstractPass<DeclarationPass.Result> {
                         .orNull()) {
                 TypeSpecification superType;
                 if (ti == partialTypeInfo) {
-                  superType = superTypeSpec;
+                  superType = typeSpec;
                 } else if (ti.superType.isPresent()) {
                   superType = ti.superType.get();
                 } else {
@@ -417,7 +417,7 @@ class DeclarationPass extends AbstractPass<DeclarationPass.Result> {
               }
             }
             if (!extraBindings.isEmpty()) {
-              superTypeSpec = superTypeSpec.withBindings(
+              typeSpec = typeSpec.withBindings(
                   new Function<PartialTypeSpecification,
                                ImmutableList<TypeBinding>>() {
 
@@ -481,14 +481,25 @@ class DeclarationPass extends AbstractPass<DeclarationPass.Result> {
 
                   });
             }
+            if (child.getNodeType() != J8NodeType.Superclass
+                && isInterfaceType(typeSpec, loop)) {
+              interfaceNames.add(typeSpec);
+            } else {
+              superTypeSpec = typeSpec;
+            }
             break;
           }
           case TypeBound:
             for (J8BaseNode grandChild : child.getChildren()) {
               if (grandChild instanceof ClassOrInterfaceTypeNode
                   || grandChild instanceof TypeVariableNode) {
-                superTypeSpec = AmbiguousNames.typeSpecificationOf(
+                TypeSpecification typeSpec = AmbiguousNames.typeSpecificationOf(
                     grandChild, nameResolver, logger);
+                if (isInterfaceType(typeSpec, loop)) {
+                  interfaceNames.add(typeSpec);
+                } else {
+                  superTypeSpec = typeSpec;
+                }
               } else if (grandChild instanceof AdditionalBoundNode) {
                 TypeSpecification typeSpec = AmbiguousNames.typeSpecificationOf(
                     grandChild, nameResolver, logger);
@@ -558,6 +569,24 @@ class DeclarationPass extends AbstractPass<DeclarationPass.Result> {
       if (DEBUG) {
         System.err.println("Resolved " + typeName);
       }
+    }
+
+    private boolean isInterfaceType(
+        TypeSpecification typeSpec, Set<Name> loop) {
+      if (typeSpec.rawName.type == Name.Type.TYPE_PARAMETER) {
+        return false;
+      }
+      UnresolvedTypeDeclaration unresolved = internallyDefinedTypes
+          .get(typeSpec.rawName);
+      TypeInfo ti = null;
+      if (unresolved != null) {
+        resolve(unresolved, loop);
+        ti = unresolved.decl.getDeclaredTypeInfo();
+      }
+      if (ti == null) {
+        ti = typeInfoResolver.resolve(typeSpec.rawName).orNull();
+      }
+      return ti != null && Modifier.isInterface(ti.modifiers);
     }
 
     private boolean computeExtraSuperTypeBindings(
