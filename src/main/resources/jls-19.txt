@@ -840,7 +840,7 @@ LeftHandSide:
      Primary (@postcond=Primary.Ambiguous)                (@name=Ambiguous)
 DotKeywordDimsOrCtorRef:
      "." "class"
-     "." "super"
+     "." "super" !("(")  // super in constructor follows primary
      "." "this"
      Dims
      "::" [TypeArguments] "new"
