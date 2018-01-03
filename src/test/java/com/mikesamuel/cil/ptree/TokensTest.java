@@ -34,6 +34,7 @@ public final class TokensTest extends TestCase {
     assertTrue(p.matcher(".5e-2").matches());
     assertTrue(p.matcher(".5E23").matches());
     assertTrue(p.matcher(".5E23").matches());
+    assertTrue(p.matcher("0D").matches());
   }
 
   @Test
