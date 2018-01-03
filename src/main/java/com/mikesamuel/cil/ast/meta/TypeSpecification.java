@@ -92,7 +92,8 @@ public final class TypeSpecification extends PartialTypeSpecification {
         bindings, nDims);
   }
 
-  TypeSpecification(
+  /** */
+  public TypeSpecification(
       PartialTypeSpecification parent, Name rawName,
       List<TypeBinding> bindings, int nDims) {
     Preconditions.checkArgument(parent != null);
