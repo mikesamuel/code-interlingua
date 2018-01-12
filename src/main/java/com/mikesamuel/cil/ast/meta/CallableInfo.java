@@ -99,6 +99,15 @@ public final class CallableInfo extends MemberInfo {
   }
 
   /**
+   * True iff the method is a constructor.
+   */
+  public boolean isConstructor() {
+    return !isInitializer
+        && Name.CTOR_INSTANCE_INITIALIZER_SPECIAL_NAME.equals(
+            canonName.identifier);
+  }
+
+  /**
    * True iff the method's last formal parameter is a {@code ...} parameter.
    */
   public boolean isVariadic() {

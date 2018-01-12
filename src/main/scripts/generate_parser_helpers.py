@@ -1440,6 +1440,8 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
             if annot_name.startswith('(@mixin='):
                 mixins.update([x.strip() for x in annot_name[8:-1].split(',')
                                if len(x.strip())])
+        declared_mixins = list(mixins)
+        declared_mixins.sort()
 
         # expand mixins based on extended mixins.
         size_before = 0
@@ -1498,7 +1500,7 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
         mixin_ifaces = ''
         if mixins:
             mixin_ifaces = '\nimplements %s' % ', '.join(
-                '%s%s' % (cn_prefix, t) for t in mixins)
+                '%s%s' % (cn_prefix, t) for t in declared_mixins)
         mixins_used.update(mixins)
 
         extra_import_stmts = ''.join(
@@ -1602,6 +1604,7 @@ public final class %(node_class_name)s extends %(base_node_class)s%(mixin_ifaces
 
     def write_bound_mixins():
         for mixin in mixins_used:
+            super_mixins = mixin_defs[mixin].get("extends", ())
             emit_java_file(
                 '%s%s' % (cn_prefix, mixin),
                 '''
@@ -1614,7 +1617,7 @@ import %(mixins_package)s.%(mixin)s;
  */
 @javax.annotation.Generated(%(generator)s)
 public interface %(cn_prefix)s%(mixin)s
-extends %(mixin)s<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sNodeVariant> {
+extends %(mixin)s<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sNodeVariant>%(super_bound_mixins)s {
   // Just binds variables.
 }
 ''' % {
@@ -1623,6 +1626,8 @@ extends %(mixin)s<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType, %(cn_prefix)sNod
     'cn_prefix': cn_prefix,
     'generator': generator,
     'mixin': mixin,
+    'super_bound_mixins': ''.join([
+        ', %s%s' % (cn_prefix, super_mixin) for super_mixin in super_mixins])
     })
 
     write_bound_mixins()

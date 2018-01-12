@@ -18,8 +18,8 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.mikesamuel.cil.ast.j8.ArgumentListNode;
-import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
+import com.mikesamuel.cil.ast.j8.ClassMemberDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassTypeNode;
 import com.mikesamuel.cil.ast.j8.ConstructorBodyNode;
 import com.mikesamuel.cil.ast.j8.ConstructorDeclarationNode;
@@ -354,7 +354,7 @@ final class CollectTypeDeclarationsMiniPass extends AbstractPass<PassState> {
             .Variant.Declaration.buildNode(ctorChildren.build());
 
         body.add(
-            ClassBodyDeclarationNode.Variant.ConstructorDeclaration
+            ClassMemberDeclarationNode.Variant.ConstructorDeclaration
             .buildNode(ctorDecl));
       } else {
         LogUtils.log(

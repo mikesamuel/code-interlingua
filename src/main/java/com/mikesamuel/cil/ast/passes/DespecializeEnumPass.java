@@ -26,7 +26,6 @@ import com.mikesamuel.cil.ast.j8.BlockNode;
 import com.mikesamuel.cil.ast.j8.BlockStatementNode;
 import com.mikesamuel.cil.ast.j8.BlockStatementsNode;
 import com.mikesamuel.cil.ast.j8.CaseValueNode;
-import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
 import com.mikesamuel.cil.ast.j8.ClassMemberDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassOrInterfaceTypeToInstantiateNode;
@@ -243,7 +242,8 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
     if (node instanceof J8FileNode) {
       Preconditions.checkState(enumStates.isEmpty() && typesInScope.isEmpty());
-      nameAllocator = NameAllocator.create(node, Predicates.alwaysFalse(), infoPool.typePool.r);
+      nameAllocator = NameAllocator.create(
+          ImmutableList.of(node), Predicates.alwaysFalse(), infoPool.typePool.r);
     }
     if (node instanceof J8TypeDeclaration) {
       J8TypeDeclaration decl = (J8TypeDeclaration) node;
@@ -281,9 +281,9 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                 es.reserveNameFor(constNameIdent, mi);
               }
               // Look for named inner class declarations.
-              for (ClassBodyDeclarationNode cbd
-                   : body.finder(ClassBodyDeclarationNode.class)
-                         .exclude(ClassBodyDeclarationNode.class)
+              for (ClassMemberDeclarationNode cbd
+                   : body.finder(ClassMemberDeclarationNode.class)
+                         .exclude(ClassMemberDeclarationNode.class)
                          .find()) {
                 Optional<J8TypeDeclaration> innerType =
                     Mixins.getInnerTypeDeclaration(cbd);
@@ -301,8 +301,8 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                   (EnumDeclarationNode) node);
               if (ebd != null) {
                 for (int i = 0, n = ebd.getNChildren(); i < n; ++i) {
-                  ClassBodyDeclarationNode cbd =
-                      (ClassBodyDeclarationNode) ebd.getChild(i);
+                  ClassMemberDeclarationNode cbd =
+                      (ClassMemberDeclarationNode) ebd.getChild(i);
                   Optional<MethodDeclarationNode> mdOpt =
                       asMethodDeclaration(cbd);
                   if (mdOpt.isPresent()) {
@@ -572,7 +572,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         Migration mig = new Migration(es);
 
         for (int i = 0, n = members.getNChildren(); i < n; ++i) {
-          ClassBodyDeclarationNode cbd = (ClassBodyDeclarationNode)
+          ClassMemberDeclarationNode cbd = (ClassMemberDeclarationNode)
               members.getChild(i);
           Optional<MethodDeclarationNode> mdOpt = asMethodDeclaration(cbd);
           if (mdOpt.isPresent()) {
@@ -591,10 +591,10 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
 
         for (SpecialConstant sc : es.specialConstants) {
           for (int i = 0, n = sc.classBody.getNChildren(); i < n; ++i) {
-            ClassBodyDeclarationNode specialDeclaration =
-                (ClassBodyDeclarationNode) sc.classBody.getChild(i);
+            ClassMemberDeclarationNode specialDeclaration =
+                (ClassMemberDeclarationNode) sc.classBody.getChild(i);
             // Migrate to a private static member.
-            ClassBodyDeclarationNode privateStaticCopy =
+            ClassMemberDeclarationNode privateStaticCopy =
                 mig.migrate(specialDeclaration.deepClone());
             members.add(privateStaticCopy);
             // Associate with any overridden method so that we can tweak
@@ -676,10 +676,8 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                     MethodDeclarationNode superCallingImpl = callToSuper(
                         sci, md);
                     members.add(
-                        ClassBodyDeclarationNode.Variant.ClassMemberDeclaration
-                        .buildNode(
-                            ClassMemberDeclarationNode.Variant.MethodDeclaration
-                            .buildNode(superCallingImpl)));
+                        ClassMemberDeclarationNode.Variant.MethodDeclaration
+                        .buildNode(superCallingImpl));
 
                     mmd = overrides.get(oci);
                     mmd.declNode = superCallingImpl;
@@ -919,7 +917,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
     EnumBodyDeclarationsNode members = body.firstChildWithType(
         EnumBodyDeclarationsNode.class);
     if (members == null) {
-      members = EnumBodyDeclarationsNode.Variant.SemClassBodyDeclaration
+      members = EnumBodyDeclarationsNode.Variant.SemClassMemberDeclaration
           .buildNode();
       body.add(members);
     }
@@ -1169,10 +1167,8 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       baseMethodDecl.setMemberInfo(baseCallableInfo);
 
       members.add(
-          ClassBodyDeclarationNode.Variant.ClassMemberDeclaration
-          .buildNode(
-              ClassMemberDeclarationNode.Variant.MethodDeclaration.buildNode(
-                  baseMethodDecl)));
+          ClassMemberDeclarationNode.Variant.MethodDeclaration.buildNode(
+              baseMethodDecl));
 
       // Now that we have a copy of the original, replace the original's
       // body with a call to the base method.
@@ -1215,19 +1211,17 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       this.enumState = enumState;
     }
 
-    ClassBodyDeclarationNode migrate(
-        ClassBodyDeclarationNode toImport) {
+    ClassMemberDeclarationNode migrate(
+        ClassMemberDeclarationNode toImport) {
+      // Fixup declaration names so that rerunning the inference passes
+      // infers the right things.
 
       switch (toImport.getVariant()) {
-        case ClassMemberDeclaration:
-          migrate(
-              toImport.firstChildWithType(ClassMemberDeclarationNode.class));
-          return toImport;
         case InstanceInitializer:
           // No name to handle, but we need to make this a static initializer.
           // Rely on the renaming of expression and statement parts within.
           toImport.setVariant(
-              ClassBodyDeclarationNode.Variant.StaticInitializer);
+              ClassMemberDeclarationNode.Variant.StaticInitializer);
           int initIndex = toImport
               .finder(InstanceInitializerNode.class)
               .indexOf();
@@ -1244,15 +1238,6 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         case ConstructorDeclaration:
           // Should not appear in inner classes.
           break;
-      }
-      throw new AssertionError(toImport.getVariant());
-    }
-
-    ClassMemberDeclarationNode migrate(
-        ClassMemberDeclarationNode toImport) {
-      // Fixup declaration names so that rerunning the inference passes
-      // infers the right things.
-      switch (toImport.getVariant()) {
         case ClassDeclaration:
         case InterfaceDeclaration: {
           Optional<J8TypeDeclaration> declOpt =
@@ -1346,8 +1331,6 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
         }
         case Sem:
           return toImport;
-        default:
-          break;
       }
       throw new AssertionError(toImport.getVariant());
     }
@@ -1552,17 +1535,11 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
   }
 
   private static Optional<MethodDeclarationNode> asMethodDeclaration(
-      ClassBodyDeclarationNode cbd) {
-    if (cbd.getVariant()
-        == ClassBodyDeclarationNode.Variant.ClassMemberDeclaration) {
-      ClassMemberDeclarationNode member = cbd.firstChildWithType(
-          ClassMemberDeclarationNode.class);
-      if (member != null
-          && (ClassMemberDeclarationNode.Variant.MethodDeclaration
-              == member.getVariant())) {
-        return Optional.fromNullable(
-            member.firstChildWithType(MethodDeclarationNode.class));
-      }
+      ClassMemberDeclarationNode member) {
+    if (ClassMemberDeclarationNode.Variant.MethodDeclaration
+        == member.getVariant()) {
+      return Optional.fromNullable(
+          member.firstChildWithType(MethodDeclarationNode.class));
     }
     return Optional.absent();
   }

@@ -427,20 +427,14 @@ public final class J8ToJmin {
                   .NormalAnnotation.buildNode(children);
             }
           })
-      .put(
-          com.mikesamuel.cil.ast.j8.
-          ClassBodyDeclarationNode.Variant.ClassMemberDeclaration,
-          // Class members are pulled out into flat types, so don't leave
-          // little class member declaration droppings inside
-          DROP_UNLESS_HAS_CHILDREN)
-      .put(
+      .put(   // TODO: is this necessary not that FlattenPass is its own pass
           com.mikesamuel.cil.ast.j8.
           ClassMemberDeclarationNode.Variant.ClassDeclaration,
           // The controller will capture the type declarations so that
           // flat types translated from inner types are given their own
           // compilation unit.
           EVALUATE_AND_DROP)
-      .put(
+      .put(   // TODO: is this necessary not that FlattenPass is its own pass
           com.mikesamuel.cil.ast.j8.
           ClassMemberDeclarationNode.Variant.InterfaceDeclaration,
           // The controller will capture the type declarations so that
@@ -1072,7 +1066,7 @@ public final class J8ToJmin {
       this.typeDecl = typeDecl;
       this.name = name;
       this.nameAllocator = NameAllocator.create(
-          (J8BaseNode) typeDecl, Predicates.alwaysFalse(), r);
+          ImmutableList.of(typeDecl), Predicates.alwaysFalse(), r);
     }
   }
 }

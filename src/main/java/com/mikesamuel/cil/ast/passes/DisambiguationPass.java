@@ -22,8 +22,10 @@ import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8ExpressionNameScope;
 import com.mikesamuel.cil.ast.j8.J8LimitedScopeElement;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8TypeReference;
 import com.mikesamuel.cil.ast.j8.J8TypeScope;
+import com.mikesamuel.cil.ast.j8.LeftHandSideNode;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.PackageOrTypeNameNode;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
@@ -114,6 +116,31 @@ final class DisambiguationPass extends AbstractRewritingPass {
               if (name.type == Name.Type.FIELD) {
                 ((FieldNameNode) node).setReferencedExpressionName(name);
               }
+            }
+          }
+          break;
+        }
+        case LeftHandSide: {
+          LeftHandSideNode lhs = (LeftHandSideNode) node;
+          if (lhs.getVariant() == LeftHandSideNode.Variant.Ambiguous) {
+            LeftHandSideNode.Variant unambig = null;
+            for (int i = 0, n = lhs.getNChildren(); i < n; ++i) {
+              J8NodeVariant v = lhs.getChild(i).getVariant();
+              if (v == PrimaryNode.Variant.FieldAccess) {
+                unambig = LeftHandSideNode.Variant.FieldAccess;
+              } else if (v == ExpressionAtomNode.Variant.FreeField) {
+                unambig = LeftHandSideNode.Variant.FreeField;
+              } else if (v == ExpressionAtomNode.Variant.Local) {
+                unambig = LeftHandSideNode.Variant.Local;
+              } else {
+                continue;
+              }
+              break;
+            }
+            if (unambig != null) {
+              lhs.setVariant(unambig);
+            } else {
+              error(lhs, "Could not disambiguate left-hand-side of assignment");
             }
           }
           break;

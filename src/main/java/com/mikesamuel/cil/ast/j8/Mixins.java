@@ -124,22 +124,6 @@ public final class Mixins {
    * If the given declaration is of a type, return the declaration.
    */
   public static Optional<J8TypeDeclaration> getInnerTypeDeclaration(
-      ClassBodyDeclarationNode cbd) {
-    if (ClassBodyDeclarationNode.Variant.ClassMemberDeclaration
-        == cbd.getVariant()) {
-      ClassMemberDeclarationNode member = cbd.firstChildWithType(
-          ClassMemberDeclarationNode.class);
-      if (member != null) {
-        return getInnerTypeDeclaration(member);
-      }
-    }
-    return Optional.absent();
-  }
-
-  /**
-   * If the given declaration is of a type, return the declaration.
-   */
-  public static Optional<J8TypeDeclaration> getInnerTypeDeclaration(
       ClassMemberDeclarationNode member) {
     switch (member.getVariant()) {
       case ClassDeclaration:
@@ -156,6 +140,9 @@ public final class Mixins {
       case FieldDeclaration:
       case MethodDeclaration:
       case Sem:
+      case ConstructorDeclaration:
+      case InstanceInitializer:
+      case StaticInitializer:
         return Optional.absent();
     }
     throw new AssertionError(member);

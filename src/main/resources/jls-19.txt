@@ -459,17 +459,15 @@ Superinterfaces:
 InterfaceTypeList:
      InterfaceType {"," InterfaceType}
 ClassBody: (@mixin=TypeScope,ExpressionNameScope)
-     "{" {ClassBodyDeclaration} "}"
-ClassBodyDeclaration:
-     ClassMemberDeclaration
-     InstanceInitializer
-     StaticInitializer
-     ConstructorDeclaration
+     "{" {ClassMemberDeclaration} "}"
 ClassMemberDeclaration:
      FieldDeclaration
      MethodDeclaration
      ClassDeclaration
      InterfaceDeclaration
+     InstanceInitializer
+     StaticInitializer
+     ConstructorDeclaration
      ";"
 // TODO: Is this really a member declaration?  If there are multiple variable
 // declarators then there are multiple declarations here.
@@ -569,8 +567,9 @@ EnumConstant: (@mixin=TypeDeclaration,ExpressionNameDeclaration)
      {!!EnumConstantModifier Modifier} EnumConstantName ["(" [ArgumentList] ")"] [ClassBody] (@name=Declaration)
 EnumConstantModifier:
      Annotation
+// TODO: rename to EnumMemberDeclarations for consistency with ClassBody
 EnumBodyDeclarations: (@mixin=TypeScope)
-     ";" {ClassBodyDeclaration}
+     ";" {ClassMemberDeclaration}
 
 // Interfaces
 (chapter=Interface)

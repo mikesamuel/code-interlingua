@@ -1017,19 +1017,8 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassBodyLcClassBodyDeclarationRc() {
     parseSanityCheck(
-        ClassBodyNode.Variant.LcClassBodyDeclarationRc,
+        ClassBodyNode.Variant.LcClassMemberDeclarationRc,
         "{ public static void main(String...argv) { } }"
-        );
-  }
-
-  /**
-   * <pre>ClassMemberDeclaration</pre>
-   */
-  @Test
-  public void testClassBodyDeclarationClassMemberDeclaration() {
-    parseSanityCheck(
-        ClassBodyDeclarationNode.Variant.ClassMemberDeclaration,
-        "abstract void foo();"
         );
   }
 
@@ -1039,7 +1028,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassBodyDeclarationInstanceInitializer() {
     parseSanityCheck(
-        ClassBodyDeclarationNode.Variant.InstanceInitializer,
+        ClassMemberDeclarationNode.Variant.InstanceInitializer,
         "{ init(); }"
         );
   }
@@ -1050,7 +1039,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassBodyDeclarationStaticInitializer() {
     parseSanityCheck(
-        ClassBodyDeclarationNode.Variant.StaticInitializer,
+        ClassMemberDeclarationNode.Variant.StaticInitializer,
         "static { X = 42; }"
         );
   }
@@ -1061,7 +1050,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testClassBodyDeclarationConstructorDeclaration() {
     parseSanityCheck(
-        ClassBodyDeclarationNode.Variant.ConstructorDeclaration,
+        ClassMemberDeclarationNode.Variant.ConstructorDeclaration,
         "Ctor() { super(); }"
         );
   }
@@ -2032,7 +2021,7 @@ public final class NodeTypeParseTest extends AbstractParSerTestCase {
   @Test
   public void testEnumBodyDeclarationsSemClassBodyDeclaration() {
     parseSanityCheck(
-        EnumBodyDeclarationsNode.Variant.SemClassBodyDeclaration,
+        EnumBodyDeclarationsNode.Variant.SemClassMemberDeclaration,
         ";\n  abstract public void foo();"
         );
   }

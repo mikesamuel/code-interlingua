@@ -237,7 +237,6 @@ public final class Interpreter<VALUE> {
       case CatchType:
       case Catches:
       case ClassBody:
-      case ClassBodyDeclaration:
       case ClassDeclaration:
       case ClassMemberDeclaration:
       case ClassModifier:

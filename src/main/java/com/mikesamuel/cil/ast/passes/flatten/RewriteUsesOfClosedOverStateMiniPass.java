@@ -15,7 +15,6 @@ import com.mikesamuel.cil.ast.j8.FieldNameNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8ExpressionNameReference;
-import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.MethodNameNode;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
@@ -47,7 +46,27 @@ final class RewriteUsesOfClosedOverStateMiniPass {
     for (PassState.FlatteningType ft : ps.inProcessOrder) {
       new Rewriter(ps, ft).visit();
     }
+    for (PassState.FlatteningType ft : ps.inProcessOrder) {
+      doubleCheck(ps, ft, (J8BaseNode) ft.root);
+    }
   }
+
+  // There are several patterns we need to find.
+  // * FieldNames that reference cross-class
+  // * LocalNames that references cross-class
+  // * MethodNames that reference cross-class
+  // * Cross-class references to this
+  // We try to handle this by exhaustively looking for
+  // * Bare field references
+  // * Bare method references
+  // * Qualified field references where the referent
+  //   is not the current class.
+  // * Qualified method calls where the referent
+  //   is not the current class.
+  // * Qualified used of this where the type name
+  //   is not the current class.
+  // We then error on any {Field,Local,Method}Names
+  // that refer cross-class that we have not seen.
 
   final class Rewriter extends SingleTypeRewriter {
 
@@ -58,37 +77,8 @@ final class RewriteUsesOfClosedOverStateMiniPass {
     @Override
     protected ProcessingStatus previsit(
         J8BaseNode node, @Nullable SList<Parent> pathFromRoot) {
-      J8NodeType nt = node.getNodeType();
-      if (nt == J8NodeType.Primary) {
-        return handle((PrimaryNode) node);
-      }
-      if (nt == J8NodeType.ExpressionAtom) {
+      if (node instanceof ExpressionAtomNode) {
         return handle((ExpressionAtomNode) node);
-      }
-      if (node instanceof J8ExpressionNameReference) {
-        J8ExpressionNameReference ref = (J8ExpressionNameReference) node;
-        Name nm = ref.getReferencedExpressionName();
-        if (nm != null) {
-          switch (nm.type) {
-            case AMBIGUOUS:
-            case CLASS:
-            case PACKAGE:
-            case TYPE_PARAMETER:
-              break;
-            case FIELD:
-            case LOCAL:
-            case METHOD:
-              BName cl = BName.of(nm.getContainingClass());
-              if (!cl.equals(ft.bumpyName)
-                  && ps.byBumpyName.containsKey(cl)) {
-                LogUtils.log(
-                    logger, Level.SEVERE, node,
-                    "Could not rewrite external reference to "
-                        + nm + " from " + ft.bumpyName, null);
-              }
-              break;
-          }
-        }
       }
       return ProcessingStatus.CONTINUE;
     }
@@ -257,9 +247,12 @@ final class RewriteUsesOfClosedOverStateMiniPass {
       repl.setSourcePosition(node.getSourcePosition());
       return repl;
     }
+  }
 
-    private ProcessingStatus handle(PrimaryNode node) {
-      switch (node.getVariant()) {
+  private void doubleCheck(PassState ps, FlatteningType ft, J8BaseNode node) {
+    if (node instanceof PrimaryNode) {
+      PrimaryNode p = (PrimaryNode) node;
+      switch (p.getVariant()) {
         case Ambiguous:
         case ArrayAccess:
         case ExpressionAtom:
@@ -277,10 +270,10 @@ final class RewriteUsesOfClosedOverStateMiniPass {
           // If we rewrote the left, clear the field name.
           if (o != null && nameNode != null
               && (
-                  o.getVariant() == ExpressionAtomNode.Variant.StaticMember
-                  || (
+                  o.getVariant() != ExpressionAtomNode.Variant.StaticMember
+                  && !(
                       o.getVariant() == ExpressionAtomNode.Variant.This
-                      && o.getNChildren() == 0))) {
+                      && o.getNChildren() != 0))) {
             nameNode.setReferencedExpressionName(null);
           }
           break;
@@ -288,26 +281,34 @@ final class RewriteUsesOfClosedOverStateMiniPass {
         case MethodReference:
           break;
       }
-      return ProcessingStatus.CONTINUE;
+    } else if (node instanceof J8ExpressionNameReference) {
+      J8ExpressionNameReference ref = (J8ExpressionNameReference) node;
+      Name nm = ref.getReferencedExpressionName();
+      if (nm != null) {
+        switch (nm.type) {
+          case AMBIGUOUS:
+          case CLASS:
+          case PACKAGE:
+          case TYPE_PARAMETER:
+            break;
+          case FIELD:
+          case LOCAL:
+          case METHOD:
+            BName cl = BName.of(nm.getContainingClass());
+            if (!cl.equals(ft.bumpyName)
+                && ps.byBumpyName.containsKey(cl)) {
+              LogUtils.log(
+                  logger, Level.SEVERE, node,
+                  "Could not rewrite external reference to "
+                      + nm + " from " + ft.bumpyName, null);
+            }
+            break;
+        }
+      }
+    }
+    for (J8BaseNode child : node.getChildren()) {
+      doubleCheck(ps, ft, child);
     }
   }
-
-  // There are several patterns we need to find.
-  // * FieldNames that reference cross-class
-  // * LocalNames that references cross-class
-  // * MethodNames that reference cross-class
-  // * Cross-class references to this
-  // We try to handle this by exhaustively looking for
-  // * Bare field references
-  // * Bare method references
-  // * Qualified field references where the referent
-  //   is not the current class.
-  // * Qualified method calls where the referent
-  //   is not the current class.
-  // * Qualified used of this where the type name
-  //   is not the current class.
-  // We then error on any {Field,Local,Method}Names
-  // that refer cross-class that we have not seen.
-
 
 }

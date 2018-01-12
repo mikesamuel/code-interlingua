@@ -392,8 +392,7 @@ extends AbstractPass<ImmutableList<J8FileNode>> {
     new InitializeClosedOverStateMiniPass(logger, pool).run(ps);
     new RewriteUsesOfClosedOverStateMiniPass(logger, pool).run(ps);
     new FlattenNamesMiniPass(logger, pool).run(ps);
-    new ForwardClosedOverStateToConstructorsMiniPass(logger, pool)
-    .run(ps);
+    new ForwardClosedOverStateToConstructorsMiniPass(logger, pool).run(ps);
     // TODO: add private accessors
 
     // Scrub type metadata which refers to bumpy types so that

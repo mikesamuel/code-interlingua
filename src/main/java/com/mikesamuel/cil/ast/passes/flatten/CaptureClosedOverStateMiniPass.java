@@ -12,7 +12,6 @@ import java.util.logging.Logger;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
-import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
 import com.mikesamuel.cil.ast.j8.ClassMemberDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ConstantDeclarationNode;
@@ -284,9 +283,8 @@ final class CaptureClosedOverStateMiniPass {
         .buildNode(b.build());
     ClassBodyNode classBody = ft.root.firstChildWithType(ClassBodyNode.class);
     classBody.add(
-        ClassBodyDeclarationNode.Variant.ClassMemberDeclaration.buildNode(
-            ClassMemberDeclarationNode.Variant.FieldDeclaration.buildNode(
-                decl)));
+        ClassMemberDeclarationNode.Variant.FieldDeclaration.buildNode(
+            decl));
     FieldInfo fi = new FieldInfo(modifiers, fieldName.name);
     fi.setValueType(ts);
     return fi;

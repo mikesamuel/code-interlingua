@@ -132,12 +132,20 @@ public final class TypeNodeFactory {
         .setStaticType(typ);
   }
 
-  /** Does not accept null. */
-  ReferenceTypeNode toReferenceTypeNode(ReferenceType typ) {
+  /** Does not accept the null type. */
+  public ReferenceTypeNode toReferenceTypeNode(ReferenceType typ) {
     // TODO: Add a MentionableReferenceType that the null type does
     // not implement but which others do to make this type safe.
-    Preconditions.checkArgument(!typePool.T_NULL.equals(typ));
-    Preconditions.checkArgument(!StaticType.ERROR_TYPE.equals(typ));
+    if (typePool.T_NULL.equals(typ)) {
+      // Return a bogus value that will aid debugging.
+      return ReferenceTypeNode.Variant.TypeVariable.buildNode(
+          TypeVariableNode.Variant.AnnotationIdentifier.buildNode(
+              IdentifierNode.Variant.Builtin.buildNode("Null")));
+    } else if (StaticType.ERROR_TYPE.equals(typ)) {
+      return ReferenceTypeNode.Variant.TypeVariable.buildNode(
+          TypeVariableNode.Variant.AnnotationIdentifier.buildNode(
+              IdentifierNode.Variant.Builtin.buildNode("TypingPassFailed")));
+    }
     if (typ instanceof TypePool.ArrayType) {
       TypePool.ArrayType at = (ArrayType) typ;
       StaticType baseElementType = at.baseElementType;

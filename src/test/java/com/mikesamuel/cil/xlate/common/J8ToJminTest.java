@@ -341,6 +341,38 @@ public final class J8ToJminTest extends TestCase {
         );
   }
 
+  @Test
+  public static void testMarkerAnnotations() throws Exception {
+    if (false)
+    assertTranslated(
+        new String[][] {
+          {
+
+          },
+          {
+
+          },
+        },
+        new String[][] {
+          {
+            "package a;",
+            "",
+            "@Awesome",
+            "class C {}",
+          },
+          {
+            "package a;",
+            "import java.lang.annotation.*;",
+            "",
+            "@Documented",
+            "@Retention(value=RetentionPolicy.RUNTIME)",
+            "@Target(ElementType.TYPE)",
+            "@interface Awesome {}",
+          },
+        });
+  }
+
+
   // TODO: Calls to outer class super-type methods like
   // class Super {
   //   void foo() { System.err.println("Super.foo"); }

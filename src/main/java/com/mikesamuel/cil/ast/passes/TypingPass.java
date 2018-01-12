@@ -4,7 +4,6 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
-import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -22,7 +21,6 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -31,7 +29,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.mikesamuel.cil.ast.j8.AdditiveExpressionNode;
 import com.mikesamuel.cil.ast.j8.AdditiveOperatorNode;
-import com.mikesamuel.cil.ast.j8.AndExpressionNode;
 import com.mikesamuel.cil.ast.j8.ArgumentListNode;
 import com.mikesamuel.cil.ast.j8.ArrayCreationExpressionNode;
 import com.mikesamuel.cil.ast.j8.ArrayElementTypeNode;
@@ -54,12 +51,10 @@ import com.mikesamuel.cil.ast.j8.DimNode;
 import com.mikesamuel.cil.ast.j8.DimsNode;
 import com.mikesamuel.cil.ast.j8.EnumConstantNameNode;
 import com.mikesamuel.cil.ast.j8.EqualityExpressionNode;
-import com.mikesamuel.cil.ast.j8.ExclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.j8.ExpressionAtomNode;
 import com.mikesamuel.cil.ast.j8.ExpressionNode;
 import com.mikesamuel.cil.ast.j8.FieldNameNode;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
-import com.mikesamuel.cil.ast.j8.InclusiveOrExpressionNode;
 import com.mikesamuel.cil.ast.j8.Intermediates;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
@@ -81,16 +76,12 @@ import com.mikesamuel.cil.ast.j8.LastFormalParameterNode;
 import com.mikesamuel.cil.ast.j8.LocalNameNode;
 import com.mikesamuel.cil.ast.j8.MethodNameNode;
 import com.mikesamuel.cil.ast.j8.Mixins;
-import com.mikesamuel.cil.ast.j8.MultiplicativeExpressionNode;
-import com.mikesamuel.cil.ast.j8.MultiplicativeOperatorNode;
 import com.mikesamuel.cil.ast.j8.NumericTypeNode;
 import com.mikesamuel.cil.ast.j8.PrefixOperatorNode;
 import com.mikesamuel.cil.ast.j8.PrimaryNode;
 import com.mikesamuel.cil.ast.j8.PrimitiveTypeNode;
 import com.mikesamuel.cil.ast.j8.ReferenceTypeNode;
 import com.mikesamuel.cil.ast.j8.RelationalExpressionNode;
-import com.mikesamuel.cil.ast.j8.ShiftExpressionNode;
-import com.mikesamuel.cil.ast.j8.ShiftOperatorNode;
 import com.mikesamuel.cil.ast.j8.SingleStaticImportDeclarationNode;
 import com.mikesamuel.cil.ast.j8.StaticImportOnDemandDeclarationNode;
 import com.mikesamuel.cil.ast.j8.SwitchStatementNode;
@@ -132,6 +123,7 @@ import com.mikesamuel.cil.ast.meta.TypeSpecification.TypeBinding;
 import com.mikesamuel.cil.ast.meta.TypeSpecification.Variance;
 import com.mikesamuel.cil.parser.SList;
 import com.mikesamuel.cil.parser.SourcePosition;
+import com.mikesamuel.cil.util.LogUtils;
 
 /**
  * Attaches types to {@link Typed} expressions.
@@ -489,13 +481,27 @@ final class TypingPass extends AbstractRewritingPass {
               //$FALL-THROUGH$
               // Maybe we can handle this by skipping the first element in
               // findMembers.
-            case This:
+            case This: {
+              TypeNameNode tnn = e.firstChildWithType(TypeNameNode.class);
+              Name thisTypeName;
+              if (tnn != null) {
+                TypeInfo ti = tnn.getReferencedTypeInfo();
+                if (ti == null || !containingTypes.contains(ti)) {
+                  error(e, "Missing type info for " + LogUtils.serialize(tnn));
+                  exprType = StaticType.ERROR_TYPE;
+                  break type_switch;
+                }
+                thisTypeName = ti.canonName;
+              } else {
+                thisTypeName = containingTypes.peekLast().canonName;
+              }
               exprType = typePool.type(
                   TypeSpecification.autoScoped(
-                      containingTypes.peekLast().canonName,
+                      thisTypeName,
                       typePool.r),
                   e.getSourcePosition(), logger);
               break type_switch;
+            }
             case UnqualifiedClassInstanceCreationExpression: {
               SList<Parent> pathToCtorCall = firstWithType(
                   pathFromRoot,
@@ -852,9 +858,9 @@ final class TypingPass extends AbstractRewritingPass {
 
           // If a compound assignment like x += y, rewrite using
           AssignmentOperatorNode.Variant opVariant = operator.getVariant();
-          OpVariants effectiveRightHandSideVariants =
-              COMPLEX_ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT.get(
-                  opVariant);
+          ComplexAssignments.OpVariants effectiveRightHandSideVariants =
+              ComplexAssignments.ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT
+              .get(opVariant);
 
           if (effectiveRightHandSideVariants == null) {
             Preconditions.checkState(
@@ -902,6 +908,8 @@ final class TypingPass extends AbstractRewritingPass {
 
             if (!completeRightType.equals(leftType)
                 || !adjustedLeftType.equals(leftType)) {
+              // TODO, if the right value is a constant expression that
+              // fits within rightType's bounds, then don't warn.
               warn(
                   left.getNode(),
                   "Cast needed before assigning "
@@ -1407,8 +1415,7 @@ final class TypingPass extends AbstractRewritingPass {
             // lexically before the cases.
             exprType = ((ExpressionNode) expr.getNode()).getStaticType();
             if (exprType instanceof ClassOrInterfaceType
-                && TO_WRAPPED.containsKey(
-                    ((ClassOrInterfaceType) exprType).info.canonName)) {
+                && StaticType.maybeUnbox(exprType).isPresent()) {
               exprType = unboxAsNecessary(expr, exprType);
             }
             if (exprType != null) {
@@ -2095,9 +2102,12 @@ final class TypingPass extends AbstractRewritingPass {
       return t;
     } else if (t instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) t;
-      PrimitiveType pt = TO_WRAPPED.get(ct.info.canonName);
-      if (pt != null && ok.apply(pt)) {
-        return pt;
+      Optional<PrimitiveType> ptOpt = StaticType.maybeUnbox(ct);
+      if (ptOpt.isPresent()) {
+        PrimitiveType pt = ptOpt.get();
+        if (ok.apply(pt)) {
+          return pt;
+        }
       }
       error(context, "Cannot unbox " + t);
     } else {
@@ -2132,8 +2142,8 @@ final class TypingPass extends AbstractRewritingPass {
     }
     if (t instanceof TypePool.ClassOrInterfaceType) {
       TypePool.ClassOrInterfaceType ct = (TypePool.ClassOrInterfaceType) t;
-      PrimitiveType pt = TO_WRAPPED.get(ct.info.canonName);
-      return pt instanceof NumericType;
+      Optional<PrimitiveType> pt = StaticType.maybeUnbox(ct);
+      return pt.isPresent() && pt.get() instanceof NumericType;
     }
     return false;
   }
@@ -2231,113 +2241,6 @@ final class TypingPass extends AbstractRewritingPass {
     }
     return null;  // Don't know.
   }
-
-  private static final ImmutableMap<Name, PrimitiveType> TO_WRAPPED;
-  static {
-    ImmutableMap.Builder<Name, PrimitiveType> b =
-        ImmutableMap.<Name, PrimitiveType>builder();
-    for (PrimitiveType pt : StaticType.PRIMITIVE_TYPES) {
-      b.put(pt.wrapperType, pt);
-      if (pt instanceof NumericType) {
-        Preconditions.checkState(
-            TypeNodeFactory.NUMERIC_TYPE_TO_VARIANT
-            .containsKey((NumericType) pt));
-      }
-    }
-    TO_WRAPPED = b.build();
-  }
-
-
-  private static final ImmutableMap<AssignmentOperatorNode.Variant, OpVariants>
-      COMPLEX_ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT;
-
-  private static final class OpVariants {
-    final J8NodeVariant operationVariant;
-    final @Nullable J8NodeVariant operatorVariant;
-
-    OpVariants(
-        J8NodeVariant operationVariant,
-        @Nullable J8NodeVariant operatorVariant) {
-      this.operationVariant = operationVariant;
-      this.operatorVariant = operatorVariant;
-    }
-
-    J8BaseNode buildNode(J8BaseNode leftOperand, J8BaseNode rightOperand) {
-      ImmutableList.Builder<J8BaseNode> children = ImmutableList.builder();
-      children.add(leftOperand);
-      if (operatorVariant != null) {
-        children.add(operatorVariant.buildNode(ImmutableList.of()));
-      }
-      children.add(rightOperand);
-      return operationVariant.buildNode(children.build());
-    }
-  }
-
-  static {
-    EnumMap<AssignmentOperatorNode.Variant, OpVariants> m = new EnumMap<>(
-        AssignmentOperatorNode.Variant.class);
-
-    // TODO: It would be nice to be able to infer this by reflecting over the
-    // ptree.
-    m.put(AssignmentOperatorNode.Variant.AmpEq,
-        new OpVariants(
-            AndExpressionNode.Variant.AndExpressionAmpEqualityExpression,
-            null));
-    m.put(AssignmentOperatorNode.Variant.DshEq,
-        new OpVariants(
-            AdditiveExpressionNode.Variant
-            .AdditiveExpressionAdditiveOperatorMultiplicativeExpression,
-            AdditiveOperatorNode.Variant.Dsh));
-    m.put(AssignmentOperatorNode.Variant.PlsEq,
-        new OpVariants(
-            AdditiveExpressionNode.Variant
-            .AdditiveExpressionAdditiveOperatorMultiplicativeExpression,
-            AdditiveOperatorNode.Variant.Pls));
-    m.put(AssignmentOperatorNode.Variant.FwdEq,
-        new OpVariants(
-            MultiplicativeExpressionNode.Variant
-            .MultiplicativeExpressionMultiplicativeOperatorUnaryExpression,
-            MultiplicativeOperatorNode.Variant.Fwd));
-    m.put(AssignmentOperatorNode.Variant.PctEq,
-        new OpVariants(
-            MultiplicativeExpressionNode.Variant
-            .MultiplicativeExpressionMultiplicativeOperatorUnaryExpression,
-            MultiplicativeOperatorNode.Variant.Pct));
-    m.put(AssignmentOperatorNode.Variant.StrEq,
-        new OpVariants(
-            MultiplicativeExpressionNode.Variant
-            .MultiplicativeExpressionMultiplicativeOperatorUnaryExpression,
-            MultiplicativeOperatorNode.Variant.Str));
-    m.put(AssignmentOperatorNode.Variant.Gt2Eq,
-        new OpVariants(
-            ShiftExpressionNode.Variant
-            .ShiftExpressionShiftOperatorAdditiveExpression,
-            ShiftOperatorNode.Variant.Gt2));
-    m.put(AssignmentOperatorNode.Variant.Gt3Eq,
-        new OpVariants(
-            ShiftExpressionNode.Variant
-            .ShiftExpressionShiftOperatorAdditiveExpression,
-            ShiftOperatorNode.Variant.Gt3));
-    m.put(AssignmentOperatorNode.Variant.Lt2Eq,
-        new OpVariants(
-            ShiftExpressionNode.Variant
-            .ShiftExpressionShiftOperatorAdditiveExpression,
-            ShiftOperatorNode.Variant.Lt2));
-    m.put(AssignmentOperatorNode.Variant.HatEq,
-        new OpVariants(
-            ExclusiveOrExpressionNode.Variant
-            .ExclusiveOrExpressionHatAndExpression,
-            null));
-    m.put(AssignmentOperatorNode.Variant.PipEq,
-        new OpVariants(
-            InclusiveOrExpressionNode.Variant
-            .InclusiveOrExpressionPipExclusiveOrExpression,
-            null));
-
-    COMPLEX_ASSIGNMENT_OPERATOR_TO_BINARY_OPERATOR_VARIANT =
-        Maps.immutableEnumMap(m);
-  }
-
 
   final class Operand {
     final J8BaseInnerNode parent;

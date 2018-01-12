@@ -77,7 +77,7 @@ public final class MiscParseTest extends AbstractParSerTestCase {
         content("C", -1),
         pop(),
         pop(),
-        push(ClassBodyNode.Variant.LcClassBodyDeclarationRc),
+        push(ClassBodyNode.Variant.LcClassMemberDeclarationRc),
         token("{", -1),
         token("}", -1),
         pop(),

@@ -105,7 +105,7 @@ final class PassState {
       this.flatParamInfo = flatParamInfo;
       this.typeInfo = resolver.resolve(bumpyName.name).get();
       this.nameAllocator = NameAllocator.create(
-          (J8BaseNode) root,
+          ImmutableList.of(root),
           new Predicate<J8BaseNode>() {
 
             @Override

@@ -11,8 +11,8 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
-import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
+import com.mikesamuel.cil.ast.j8.ClassMemberDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ConstructorBodyNode;
 import com.mikesamuel.cil.ast.j8.ConstructorDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ConstructorDeclaratorNode;
@@ -25,6 +25,7 @@ import com.mikesamuel.cil.ast.j8.J8CallableDeclaration;
 import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.j8.J8TypeScope;
+import com.mikesamuel.cil.ast.j8.MethodBodyNode;
 import com.mikesamuel.cil.ast.j8.MethodHeaderNode;
 import com.mikesamuel.cil.ast.j8.Mixins;
 import com.mikesamuel.cil.ast.j8.ModifierNode;
@@ -78,7 +79,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
       ClassBodyNode body = d.firstChildWithType(ClassBodyNode.class);
       boolean hasConstructor = false;
       for (J8BaseNode child : body.getChildren()) {
-        if (child instanceof ClassBodyDeclarationNode
+        if (child instanceof ClassMemberDeclarationNode
             && child.firstChildWithType(ConstructorDeclarationNode.class)
                != null) {
           hasConstructor = true;
@@ -109,7 +110,7 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
                 .LcExplicitConstructorInvocationBlockStatementsRc.buildNode());
 
         body.add(
-            ClassBodyDeclarationNode.Variant.ConstructorDeclaration.buildNode(
+            ClassMemberDeclarationNode.Variant.ConstructorDeclaration.buildNode(
                 noopPublicCtor));
       }
     }
@@ -187,6 +188,13 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         } else if (nt == J8NodeType.ConstructorDeclaration
                    && declaration instanceof EnumDeclarationNode) {
           mods |= Modifier.PRIVATE;
+        } else if (nt == J8NodeType.InterfaceMethodDeclaration) {
+          mods |= Modifier.PUBLIC;
+          MethodBodyNode mb = cd.firstChildWithType(MethodBodyNode.class);
+          if (mb != null && mb.getVariant() == MethodBodyNode.Variant.Sem) {
+            // If the method is not default, then it is abstract.
+            mods |= Modifier.ABSTRACT;
+          }
         }
         TypeParametersNode typeParameters = null;
         for (J8BaseNode child : bodyElement.getChildren()) {
@@ -262,7 +270,6 @@ extends AbstractTypeDeclarationPass<ClassNamingPass.DeclarationsAndScopes> {
         break;
       }
       case AnnotationTypeMemberDeclaration:
-      case ClassBodyDeclaration:
       case ClassMemberDeclaration:
       case EnumBodyDeclarations:
       case EnumConstantList:

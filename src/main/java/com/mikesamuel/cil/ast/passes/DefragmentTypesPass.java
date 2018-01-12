@@ -97,7 +97,7 @@ final class DefragmentTypesPass extends AbstractRewritingPass {
           J8NodeType.AnnotationTypeElementDeclaration,
           J8NodeType.BlockStatement,
           J8NodeType.CatchFormalParameter,
-          J8NodeType.ClassBodyDeclaration,
+          J8NodeType.ClassMemberDeclaration,
           J8NodeType.EnhancedForStatement,
           J8NodeType.FormalParameter,
           J8NodeType.InterfaceMemberDeclaration,

@@ -59,7 +59,7 @@ public class LogUtils {
   /** Best effort to format the given AST.  Output is not length limited. */
   public static String serialize(J8BaseNode node) {
     SList<Event> events = Trees.startUnparse(null, node, null);
-    Optional<SerialState> sstate = node.getVariant().getParSer().unparse(
+    Optional<SerialState> sstate = node.getNodeType().getParSer().unparse(
         new SerialState(SList.forwardIterable(events)),
         SerialErrorReceiver.DEV_NULL);
     if (sstate.isPresent()) {

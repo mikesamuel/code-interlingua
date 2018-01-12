@@ -210,7 +210,6 @@ final class FlattenTypeHierarchyMiniPass {
       switch (nt) {
         case TypeDeclaration:
         case AnnotationTypeMemberDeclaration:
-        case ClassBodyDeclaration:
         case ClassMemberDeclaration:
         case InterfaceMemberDeclaration:
         case BlockTypeScope:

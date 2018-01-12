@@ -159,16 +159,14 @@ Superinterfaces:
 InterfaceTypeList:
      InterfaceType {"," InterfaceType}
 ClassBody: (@mixin=TypeScope,ExpressionNameScope)
-     "{" {ClassBodyDeclaration} "}"
-ClassBodyDeclaration:
-     ClassMemberDeclaration
-     InstanceInitializer
-     StaticInitializer
-     ConstructorDeclaration
+     "{" {ClassMemberDeclaration} "}"
 ClassMemberDeclaration:
      ConstantDeclaration
      FieldDeclaration
      MethodDeclaration
+     InstanceInitializer
+     StaticInitializer
+     ConstructorDeclaration
 FieldDeclaration: (@mixin=MemberDeclaration)
      [JavaDocComment] {!!FieldModifier Modifier} UnannType VariableDeclaratorList ";" (@name=Declaration)
 FieldModifier:
@@ -254,7 +252,7 @@ EnumConstant: (@mixin=ExpressionNameDeclaration)
 EnumConstantModifier:
      Annotation
 EnumBodyDeclarations: (@mixin=TypeScope)
-     ";" {ClassBodyDeclaration}
+     ";" {ClassMemberDeclaration}
 
 
 // Interfaces

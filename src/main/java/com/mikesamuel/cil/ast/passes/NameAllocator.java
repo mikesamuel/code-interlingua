@@ -8,8 +8,11 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.j8.IdentifierNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
+import com.mikesamuel.cil.ast.j8.J8NodeType;
+import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
@@ -26,17 +29,20 @@ public final class NameAllocator {
   private NameAllocator() {}
 
   /**
-   * @param root the root to search for identifiers to exclude
+   * @param roots the roots to search for identifiers to exclude
    * @param limit if it returns true, then control will not descend into
    *     the argument.
    * @param resolver used to resolve super-types so that we can exclude
    *     names of inherited members.
    */
   public static NameAllocator create(
-      J8BaseNode root, Predicate<? super J8BaseNode> limit,
+      Iterable<? extends NodeI<J8BaseNode, J8NodeType, J8NodeVariant>> roots,
+      Predicate<? super J8BaseNode> limit,
       TypeInfoResolver resolver) {
     NameAllocator nameAllocator = new NameAllocator();
-    nameAllocator.addExclusions(root, limit, resolver);
+    for (NodeI<J8BaseNode, J8NodeType, J8NodeVariant> root : roots) {
+      nameAllocator.addExclusions((J8BaseNode) root, limit, resolver);
+    }
     return nameAllocator;
   }
 
@@ -49,23 +55,31 @@ public final class NameAllocator {
 
   /** An identifier that does not shadow or mask any existing identifier. */
   public String allocateIdentifier(String candidate) {
-    if (exclusions.add(candidate)) {
-      return candidate;
-    }
-    StringBuilder sb = new StringBuilder(candidate.length() + 16);
-    sb.append(candidate).append("__");
-    int resetLength = sb.length();
-    int counter = 0;
-    for (;;) {
-      ++counter;
-      Preconditions.checkState(counter != Integer.MIN_VALUE);
-      sb.setLength(resetLength);
-      sb.append(counter);
-      String nextCandidate = sb.toString();
-      if (exclusions.add(nextCandidate)) {
-        return nextCandidate;
+    boolean has__ = candidate.endsWith("__");
+    String uniq;
+    if (!has__ && exclusions.add(candidate)) {
+      uniq = candidate;
+    } else {
+      StringBuilder sb = new StringBuilder(candidate.length() + 16);
+      sb.append(candidate);
+      if (!has__) {
+        sb.append("__");
       }
+      int resetLength = sb.length();
+      int counter = 0;
+      do {
+        ++counter;
+        Preconditions.checkState(counter != Integer.MIN_VALUE);
+        sb.setLength(resetLength);
+        sb.append(counter);
+        String nextCandidate = sb.toString();
+        if (exclusions.add(nextCandidate)) {
+          uniq = nextCandidate;
+          break;
+        }
+      } while (true);
     }
+    return uniq;
   }
 
   private void addExclusions(

@@ -5,10 +5,16 @@ import java.util.Map;
 
 import com.mikesamuel.cil.ast.meta.Name;
 
-final class MethodVariantPool {
+/**
+ * Allocates method variants.
+ *
+ * @see Name#variant
+ */
+public final class MethodVariantPool {
   private final Map<Name, Integer> methodCounters = new HashMap<>();
 
-  Name allocateVariant(Name containingTypeName, String methodName) {
+  /** Allocates an unused variant. */
+  public Name allocateVariant(Name containingTypeName, String methodName) {
     Name nameWithoutVariant = containingTypeName.method(methodName, 1);
     Integer ordinal = methodCounters.get(nameWithoutVariant);
     if (ordinal == null) { ordinal = 0; }

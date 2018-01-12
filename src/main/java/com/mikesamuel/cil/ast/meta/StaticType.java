@@ -459,6 +459,32 @@ public abstract class StaticType {
           T_LONG,
           T_DOUBLE);
 
+  private static final ImmutableMap<Name, PrimitiveType> TO_WRAPPED;
+  static {
+    ImmutableMap.Builder<Name, PrimitiveType> b =
+        ImmutableMap.<Name, PrimitiveType>builder();
+    for (PrimitiveType pt : StaticType.PRIMITIVE_TYPES) {
+      b.put(pt.wrapperType, pt);
+    }
+    TO_WRAPPED = b.build();
+  }
+
+  /**
+   * If the given type is primitive, returns it.
+   * If the given type is a wrapper type, returns the corresponding
+   * primitive type.
+   */
+  public static Optional<PrimitiveType> maybeUnbox(StaticType st) {
+    if (st instanceof PrimitiveType) {
+      return Optional.of((PrimitiveType) st);
+    }
+    TypeSpecification ts = st.typeSpecification;
+    if (ts.nDims == 0 && ts.bindings().isEmpty()) {
+      return Optional.fromNullable(TO_WRAPPED.get(ts.rawName));
+    }
+    return Optional.absent();
+  }
+
   /**
    * Maintains a mapping of names to class or interface types so that we can
    * memoize sub-type checks.

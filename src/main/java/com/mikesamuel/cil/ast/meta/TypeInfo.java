@@ -154,6 +154,19 @@ public final class TypeInfo extends AccessibleInfo {
   }
 
   /**
+   * The member with the given name.  Does not search super-types.
+   */
+  public Optional<MemberInfo> declaredMemberNamed(Name nm) {
+    for (MemberInfo mi : declaredMembers) {
+      if (mi.canonName.equals(nm)) {
+        return Optional.of(mi);
+      }
+    }
+    return Optional.absent();
+  }
+
+
+  /**
    * The method with the given name.  Does not search super-types.
    */
   public Optional<CallableInfo> declaredCallableNamed(Name nm) {

@@ -269,7 +269,7 @@ public final class DisambiguationPassTest extends TestCase {
             "              ClassOrInterfaceTypeToInstantiate.ClassOrInterfaceTypeDiamond",
             "                ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /java/lang/Object",
             "                  Identifier.Builtin Object : CLASS",
-            "              ClassBody.LcClassBodyDeclarationRc",
+            "              ClassBody.LcClassMemberDeclarationRc",
         },
         new String[] {
             "class C {",
@@ -311,7 +311,7 @@ public final class DisambiguationPassTest extends TestCase {
             "                      Identifier.Builtin java : PACKAGE",
             "                    Identifier.Builtin lang : PACKAGE",
             "                  Identifier.Builtin Object : CLASS",
-            "              ClassBody.LcClassBodyDeclarationRc",
+            "              ClassBody.LcClassMemberDeclarationRc",
         },
         new String[] {
             "class C {",
@@ -632,8 +632,8 @@ public final class DisambiguationPassTest extends TestCase {
             "                  ReferenceType.ClassOrInterfaceType",
             "                    ClassOrInterfaceType.ClassOrInterfaceTypeDotAnnotationIdentifierTypeArguments : /Foo",
             "                      Identifier.Builtin Foo : CLASS",
-            "    ClassBody.LcClassBodyDeclarationRc",
-            "      ClassBodyDeclaration.ConstructorDeclaration",
+            "    ClassBody.LcClassMemberDeclarationRc",
+            "      ClassMemberDeclaration.ConstructorDeclaration",
             "        ConstructorDeclaration.Declaration",
             "          Modifier.Public",
             "          ConstructorDeclarator.TypeParametersSimpleTypeNameLpFormalParameterListRp",
@@ -766,7 +766,7 @@ public final class DisambiguationPassTest extends TestCase {
           },
           {
             "Assignment.LeftHandSideAssignmentOperatorExpression",
-            "  LeftHandSide.Ambiguous",
+            "  LeftHandSide.Local",
             "    ExpressionAtom.Local",
             "      LocalName.Identifier : /foo/C.<clinit>(1):e",
             "        Identifier.Builtin e : LOCAL",
@@ -806,7 +806,7 @@ public final class DisambiguationPassTest extends TestCase {
           },
           {
             "Assignment.LeftHandSideAssignmentOperatorExpression",
-            "  LeftHandSide.Ambiguous",
+            "  LeftHandSide.Local",
             "    ExpressionAtom.Local",
             "      LocalName.Identifier : /foo/C.<clinit>(1):e",
             "        Identifier.Builtin e : LOCAL",
@@ -855,6 +855,47 @@ public final class DisambiguationPassTest extends TestCase {
         },
         nth(0, with(J8NodeType.ConstructorBody)),
         Names.SHORT,
+        TYPE_AND_NAME_DECORATOR);
+  }
+
+  @Test
+  public static void testLeftHandSideAmbiguous() {
+    assertDisambiguated(
+        new String[][] {
+          {
+            "StatementExpression.PreExpression",
+            "  PreExpression.IncrDecrOperatorLeftHandSideExpression",
+            "    IncrDecrOperator.PlsPls",
+            "    LeftHandSide.FreeField",
+            "      ExpressionAtom.FreeField",
+            "        FieldName.Identifier : /C.x",
+            "          Identifier.Builtin x : FIELD",
+          },
+          {
+            "StatementExpression.PostExpression",
+            "  PostExpression.LeftHandSideExpressionIncrDecrOperator",
+            "    LeftHandSide.Local",
+            "      ExpressionAtom.Local",
+            "        LocalName.Identifier : /C.f(1):y",
+            "          Identifier.Builtin y : LOCAL",
+            "    IncrDecrOperator.PlsPls",
+          },
+        },
+        new String[][] {
+          {
+            "//ExpressionName",
+            "class C {",
+            "  int x;",
+            "  void f(int y) {",
+            "    ++x;",
+            "    y++;",
+            "  }",
+            "}",
+          },
+        },
+        all(with(J8NodeType.StatementExpression)),
+        Names.LONG,
+        RinseAndRepeat.ONCE,
         TYPE_AND_NAME_DECORATOR);
   }
 

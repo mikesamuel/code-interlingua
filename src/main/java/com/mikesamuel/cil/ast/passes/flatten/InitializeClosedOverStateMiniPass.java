@@ -18,7 +18,6 @@ import com.mikesamuel.cil.ast.j8.BlockNode;
 import com.mikesamuel.cil.ast.j8.BlockStatementNode;
 import com.mikesamuel.cil.ast.j8.BlockStatementsNode;
 import com.mikesamuel.cil.ast.j8.BooleanLiteralNode;
-import com.mikesamuel.cil.ast.j8.ClassBodyDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
 import com.mikesamuel.cil.ast.j8.ClassMemberDeclarationNode;
 import com.mikesamuel.cil.ast.j8.ConditionalOrExpressionNode;
@@ -68,6 +67,7 @@ import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.StaticType;
 import com.mikesamuel.cil.ast.meta.StaticType.TypePool;
 import com.mikesamuel.cil.ast.meta.TypeSpecification;
+import com.mikesamuel.cil.ast.passes.ForwardingConstructorUtil;
 import com.mikesamuel.cil.ast.passes.TypeNodeFactory;
 import com.mikesamuel.cil.ast.passes.flatten.PassState.ClosedOver;
 import com.mikesamuel.cil.ast.passes.flatten.PassState.ClosedOverThisValue;
@@ -101,15 +101,13 @@ final class InitializeClosedOverStateMiniPass {
         }
 
         ImmutableList<ClosedOver> cos = ft.closedOverInOrder;
+        ImmutableList<TypeSpecification> delegateStrategy =
+            computeDelegateStrategy(ft);
 
         List<Constructor> ctors = findConstructors(ft, cb);
-
-        ImmutableList<TypeSpecification> delegateStrategy =
-            computeDelegateStrategy(ft, ctors);
         for (Constructor ctor : ctors) {
           adjustConstructor(ps, ft, cb, ctor, cos, delegateStrategy);
         }
-
         for (Constructor ctor : ctors) {
           ctorTable.put(ft.bumpyName, ctor.methodDescriptor, ctor);
         }
@@ -123,7 +121,7 @@ final class InitializeClosedOverStateMiniPass {
     for (int i = 0, n = cb.getNChildren(); i < n; ++i) {
       J8BaseNode child = cb.getChild(i);
       if (child.getVariant() ==
-          ClassBodyDeclarationNode.Variant.ConstructorDeclaration) {
+          ClassMemberDeclarationNode.Variant.ConstructorDeclaration) {
         ConstructorDeclarationNode cd = child.firstChildWithType(
             ConstructorDeclarationNode.class);
         CallableInfo ci = (CallableInfo) cd.getMemberInfo();
@@ -158,7 +156,7 @@ final class InitializeClosedOverStateMiniPass {
               ConstructorBodyNode.Variant
               .LcExplicitConstructorInvocationBlockStatementsRc
               .buildNode());
-      ClassBodyDeclarationNode cbd = ClassBodyDeclarationNode.Variant
+      ClassMemberDeclarationNode cbd = ClassMemberDeclarationNode.Variant
           .ConstructorDeclaration.buildNode(cd);
       ctors.add(new Constructor(
           cb.getNChildren(), cd, ZERO_TO_VOID, false));
@@ -193,51 +191,11 @@ final class InitializeClosedOverStateMiniPass {
       .withReturnType(StaticType.T_VOID.typeSpecification.rawName, 0)
       .build();
 
-  /**
-   * Describes a strategy used to ensure that closed over state is
-   * initialized before any super-class constructor calls to methods
-   * declared in this class.
-   * <p>
-   * If the result is empty we don't need to do any shenanigans.
-   */
   private static ImmutableList<TypeSpecification> computeDelegateStrategy(
-      FlatteningType ft, List<Constructor> ctors) {
+      FlatteningType ft) {
     boolean simpleStyle = ft.eligibleForSimpleInitialization;
     if (simpleStyle) { return ImmutableList.of(); }
-    int maxLeadingBooleans = 1;  // We need at least one.
-    boolean anyHasLeadingBooleanVariadicParameter = false;
-    Name tboolean = StaticType.T_BOOLEAN.typeSpecification.rawName;
-    Name tBoolean = StaticType.T_BOOLEAN.wrapperType;
-    for (Constructor ctor : ctors) {
-      MethodDescriptor d = ctor.methodDescriptor;
-      int n = d.formalTypes.size();
-      for (int i = 0; i < n; ++i) {
-        TypeSpecification pn = d.formalTypes.get(i);
-        if (pn.rawName.equals(tboolean)|| pn.rawName.equals(tBoolean)) {
-          if (pn.nDims == 0) {
-            maxLeadingBooleans = Math.max(maxLeadingBooleans, i + 1);
-            continue;
-          }
-          if (pn.nDims == 1 && i + 1 == n) {
-            CallableInfo ci = (CallableInfo) ctor.root.getMemberInfo();
-            if (ci != null && ci.isVariadic()) {
-              anyHasLeadingBooleanVariadicParameter = true;
-            }
-          }
-        }
-        break;
-      }
-    }
-    if (anyHasLeadingBooleanVariadicParameter) {
-      return ImmutableList.of(
-          StaticType.T_BOOLEAN.typeSpecification,
-          StaticType.T_BYTE.typeSpecification);
-    }
-    ImmutableList.Builder<TypeSpecification> b = ImmutableList.builder();
-    for (int i = 0; i < maxLeadingBooleans; ++i) {
-      b.add(StaticType.T_BOOLEAN.typeSpecification);
-    }
-    return b.build();
+    return ForwardingConstructorUtil.computeDelegateStrategy(ft.typeInfo);
   }
 
   private void adjustConstructor(
@@ -495,9 +453,8 @@ final class InitializeClosedOverStateMiniPass {
                                                     BooleanLiteralNode.Variant.False
                                                     .buildNode())))))))
                             .build()))));
-        classBody.add(ClassBodyDeclarationNode.Variant.ClassMemberDeclaration
-            .buildNode(ClassMemberDeclarationNode.Variant.MethodDeclaration
-                .buildNode(initMethodDecl)));
+        classBody.add(ClassMemberDeclarationNode.Variant.MethodDeclaration
+            .buildNode(initMethodDecl));
       }
 
       // 1. Clone ctor and make a private copy with delegate strategy parameters
@@ -524,7 +481,7 @@ final class InitializeClosedOverStateMiniPass {
         delegatee.add(cdIndex, ModifierNode.Variant.Private.buildNode());
       }
       classBody.add(
-          ClassBodyDeclarationNode.Variant.ConstructorDeclaration
+          ClassMemberDeclarationNode.Variant.ConstructorDeclaration
           .buildNode(delegatee));
       // 2. Rewrite non-private version to delegate to private version via
       //    this(...) explicit constructor invocation.

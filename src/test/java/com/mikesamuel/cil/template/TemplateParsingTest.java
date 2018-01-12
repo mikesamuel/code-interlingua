@@ -164,7 +164,7 @@ public final class TemplateParsingTest extends AbstractParSerTestCase {
         "                  ContextFreeNames.ContextFreeNameDotContextFreeName",
         "                    ContextFreeName.Name",
         "                      Identifier.Builtin x",
-        "          ClassBody.LcClassBodyDeclarationRc",
+        "          ClassBody.LcClassMemberDeclarationRc",
         "  TemplateDirectives.TemplateDirectiveTemplateDirective",
         "    TemplateDirective.End");
   }

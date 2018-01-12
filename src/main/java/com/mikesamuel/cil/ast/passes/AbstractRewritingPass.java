@@ -43,7 +43,7 @@ extends AbstractPass<ImmutableList<J8FileNode>> {
     public static final ProcessingStatus BREAK = new ProcessingStatus(
         Mutation.BREAK);
     /**
-     * Remove the subtree rooted at the current node and cease .
+     * Remove the subtree rooted at the current node and cease processing.
      */
     public static final ProcessingStatus REMOVE = new ProcessingStatus(
         Mutation.REPLACE);
@@ -247,7 +247,7 @@ extends AbstractPass<ImmutableList<J8FileNode>> {
 
     @Override
     public boolean equals(Object obj) {
-      if (getClass() != obj.getClass()) {
+      if (obj == null || getClass() != obj.getClass()) {
         return false;
       }
       Parent that = (Parent) obj;
