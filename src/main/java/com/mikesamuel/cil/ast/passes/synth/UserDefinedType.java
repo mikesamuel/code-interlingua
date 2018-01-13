@@ -4,16 +4,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.j8.ClassBodyNode;
 import com.mikesamuel.cil.ast.j8.InterfaceBodyNode;
 import com.mikesamuel.cil.ast.j8.J8BaseInnerNode;
 import com.mikesamuel.cil.ast.j8.J8BaseNode;
 import com.mikesamuel.cil.ast.j8.J8MemberDeclaration;
-import com.mikesamuel.cil.ast.j8.J8NodeType;
 import com.mikesamuel.cil.ast.j8.J8NodeVariant;
 import com.mikesamuel.cil.ast.j8.J8TypeDeclaration;
-import com.mikesamuel.cil.ast.j8.VariableDeclaratorIdNode;
-import com.mikesamuel.cil.ast.j8.VariableDeclaratorListNode;
 import com.mikesamuel.cil.ast.meta.MemberInfo;
 import com.mikesamuel.cil.ast.meta.Name;
 import com.mikesamuel.cil.ast.meta.TypeInfo;
@@ -54,26 +52,13 @@ final class UserDefinedType {
       }
       if (member instanceof J8MemberDeclaration) {
         J8MemberDeclaration decl = (J8MemberDeclaration) member;
-        MemberInfo mi = decl.getMemberInfo();
-        boolean found = mi != null && name.equals(mi.canonName);
-        if (!found) {
-          VariableDeclaratorListNode multiDecl = decl.firstChildWithType(
-              VariableDeclaratorListNode.class);
-          if (multiDecl != null) {
-            for (VariableDeclaratorIdNode id
-                : multiDecl.finder(VariableDeclaratorIdNode.class)
-                .exclude(J8NodeType.VariableInitializer)
-                .find()) {
-              if (name.equals(id.getDeclaredExpressionName())) {
-                mi = ti.declaredMemberNamed(name).orNull();
-                found = mi != null;
-                break;
-              }
+        ImmutableList<MemberInfo> mis = decl.getMemberInfo();
+        if (mis != null) {
+          for (MemberInfo mi : mis) {
+            if (name.equals(mi.canonName)) {
+              return new AdjustableMember(mi, bodyNode, i, wrapperType);
             }
           }
-        }
-        if (found) {
-          return new AdjustableMember(mi, bodyNode, i, wrapperType);
         }
       }
     }

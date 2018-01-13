@@ -307,7 +307,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                       asMethodDeclaration(cbd);
                   if (mdOpt.isPresent()) {
                     MethodDeclarationNode md = mdOpt.get();
-                    CallableInfo ci = (CallableInfo) md.getMemberInfo();
+                    CallableInfo ci = md.getCallableInfo();
                     if (ci != null
                         // TODO: is !abstract sufficient here or do we need
                         // !abstract || has default body.
@@ -577,7 +577,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
           Optional<MethodDeclarationNode> mdOpt = asMethodDeclaration(cbd);
           if (mdOpt.isPresent()) {
             MethodDeclarationNode md = mdOpt.get();
-            CallableInfo ci = (CallableInfo) md.getMemberInfo();
+            CallableInfo ci = md.getCallableInfo();
             if (ci != null) {
               MethodDescriptor desc = ci.getDescriptor();
               if (desc != null) {
@@ -603,7 +603,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
                 specialDeclaration);
             if (mdOpt.isPresent()) {
               MethodDeclarationNode md = mdOpt.get();
-              CallableInfo ci = (CallableInfo) md.getMemberInfo();
+              CallableInfo ci = md.getCallableInfo();
               if (ci != null) {
                 ImmutableSet<Name> overridden = infoPool.overriddenBy(ci);
                 if (!overridden.isEmpty()) {
@@ -1164,7 +1164,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
       int baseModifiers = mig.ensureModifiers(
           baseMethodDecl, Modifier.PRIVATE | Modifier.FINAL, 0);
       Preconditions.checkState(baseModifiers == baseCallableInfo.modifiers);
-      baseMethodDecl.setMemberInfo(baseCallableInfo);
+      baseMethodDecl.setMemberInfo(ImmutableList.of(baseCallableInfo));
 
       members.add(
           ClassMemberDeclarationNode.Variant.MethodDeclaration.buildNode(
@@ -1314,7 +1314,7 @@ public final class DespecializeEnumPass extends AbstractRewritingPass {
             error(toImport, "Missing method declaration");
             return toImport;
           }
-          MemberInfo mi = methodDecl.getMemberInfo();
+          CallableInfo mi = methodDecl.getCallableInfo();
           if (mi == null) {
             error(methodDecl, "Missing member info for method declaration");
             return toImport;

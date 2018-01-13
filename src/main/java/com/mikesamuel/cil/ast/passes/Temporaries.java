@@ -217,10 +217,12 @@ public final class Temporaries {
     if (!(scopeNode instanceof J8ExpressionNameScope)) {
       Preconditions.checkArgument(scopeNode instanceof J8MemberDeclaration);
       J8MemberDeclaration memberDecl = (J8MemberDeclaration) scopeNode;
-      MemberInfo mi = memberDecl.getMemberInfo();
-      if (!(mi instanceof FieldInfo)) { return false; }
-      boolean isStatic = Modifier.isStatic(mi.modifiers);
-      TypeSpecification declType = ((FieldInfo) mi).getValueType();
+      ImmutableList<MemberInfo> mis = memberDecl.getMemberInfo();
+      if (mis == null || mis.isEmpty()) { return false; }
+      MemberInfo mi0 = mis.get(0);
+      if (!(mi0 instanceof FieldInfo)) { return false; }
+      boolean isStatic = Modifier.isStatic(mi0.modifiers);
+      TypeSpecification declType = ((FieldInfo) mi0).getValueType();
       VariableDeclaratorListNode decls = scopeNode.firstChildWithType(
           VariableDeclaratorListNode.class);
       SList<Parent> pscope = scope.prev;

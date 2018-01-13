@@ -513,7 +513,7 @@ public final class InterpreterTest extends TestCase {
     MethodBodyNode body = decl.firstChildWithType(MethodBodyNode.class);
     Preconditions.checkNotNull(body);
 
-    Name methodName = decl.getMemberInfo().canonName;
+    Name methodName = decl.getCallableInfo().canonName;
     assertEquals("f", methodName.identifier);
     Name paramName = methodName.child("s", Name.Type.LOCAL);
 

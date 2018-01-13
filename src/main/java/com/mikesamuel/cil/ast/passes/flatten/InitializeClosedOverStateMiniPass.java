@@ -124,7 +124,7 @@ final class InitializeClosedOverStateMiniPass {
           ClassMemberDeclarationNode.Variant.ConstructorDeclaration) {
         ConstructorDeclarationNode cd = child.firstChildWithType(
             ConstructorDeclarationNode.class);
-        CallableInfo ci = (CallableInfo) cd.getMemberInfo();
+        CallableInfo ci = cd.getCallableInfo();
         MethodDescriptor md = ci != null ? ci.getDescriptor() : null;
         if (md == null) {
           LogUtils.log(

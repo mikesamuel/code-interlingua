@@ -1,5 +1,8 @@
 package com.mikesamuel.cil.ast.mixins;
 
+import javax.annotation.Nullable;
+
+import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.BaseNode;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.NodeType;
@@ -16,13 +19,18 @@ public interface MemberDeclaration<
 extends NodeI<B, T, V> {
 
   /**
-   * The member info for the declared member.
+   * The member info for the declared members.
+   * <p>
+   * This is a list because field declarations like
+   * {@code private int x, y;} can include multiple
+   * members.
    */
-  public MemberInfo getMemberInfo();
+  public @Nullable ImmutableList<MemberInfo> getMemberInfo();
 
   /**
-   * Sets the member info for the declared member.
+   * Sets the member info for the declared members.
    * @return this
    */
-  public MemberDeclaration<B, T, V> setMemberInfo(MemberInfo newMemberInfo);
+  public MemberDeclaration<B, T, V> setMemberInfo(
+      @Nullable ImmutableList<MemberInfo> newMemberInfo);
 }

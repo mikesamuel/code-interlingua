@@ -1445,10 +1445,14 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
 
         # expand mixins based on extended mixins.
         size_before = 0
+        checked_fields = {}
         while len(mixins) != size_before:
             size_before = len(mixins)
             for mixin in list(mixins):
-                mixins.update(mixin_defs[mixin].get("extends", ()))
+                mixin_def = mixin_defs[mixin]
+                for mixin_field_name in mixin_def.get("checks", ()):
+                    checked_fields[mixin_field_name] = mixin
+                mixins.update(mixin_def.get("extends", ()))
         mixins = list(mixins)
         mixins.sort()
 
@@ -1462,6 +1466,8 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
             copy_calls = []
             for mixin_type, mixin_field in mixin_fields:
                 umixin_field = _first_upper(mixin_field)
+                mixin_type_id = ''.join([
+                    c for c in mixin_type if c not in '<>,'])
                 record = {
                     'node_class_name': node_class_name,
                     'mixin': mixin,
@@ -1470,14 +1476,28 @@ implements NodeType<%(cn_prefix)sBaseNode, %(cn_prefix)sNodeType> {
                     'mixin_type': mixin_type,
                     'bridge_name': (
                         mixin_type in _METADATA_THAT_NEEDS_CONTEXT
-                        and umixin_field or mixin_type
-                        )
+                        and umixin_field or mixin_type_id
+                        ),
+                    'check_call': '',
                 }
+                if mixin_field in checked_fields:
+                    decl_mixin = checked_fields[mixin_field]
+                    # Delegate to super implementation which is usually
+                    # a default method that can preserve invariants on
+                    # argument.
+                    record['check_call'] = (
+                        '    %(decl_mixin)s.check%(umixin_field)s(new%(umixin_field)s);\n'
+                    ) % {
+                        'decl_mixin': decl_mixin,
+                        'umixin_field': umixin_field,
+                        }
+                    extra_imports.add('com.mikesamuel.cil.ast.mixins.%s' % decl_mixin)
                 extra_code.append(
                     ('  private %(mixin_type)s %(mixin_field)s;\n'
                      '\n'
                      '  @Override\n'
                      '  public final %(node_class_name)s set%(umixin_field)s(%(mixin_type)s new%(umixin_field)s) {\n'
+                     '%(check_call)s'
                      '    this.%(mixin_field)s = new%(umixin_field)s;\n'
                      '    return this;\n'
                      '  }\n'

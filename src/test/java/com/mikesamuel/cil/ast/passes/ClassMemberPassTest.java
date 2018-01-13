@@ -4,6 +4,7 @@ import java.util.logging.Logger;
 
 import org.junit.Test;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.NodeI;
 import com.mikesamuel.cil.ast.Trees.Decorator;
@@ -100,15 +101,42 @@ public final class ClassMemberPassTest extends TestCase {
         });
   }
 
+  @Test
+  public static void testMultideclaration() throws Exception {
+    assertMembers(
+        new String[][] {
+          {
+            "class C {",
+            "  /* (FieldInfo static final /C.PI : /java/lang/Integer.TYPE),"
+            +   " (FieldInfo static final /C.SQRT2 : /java/lang/Integer.TYPE)"
+            + " */",
+            "  /** roughly */",
+            "  static final int PI = 3, SQRT2 = 1;",
+            "  /* (CallableInfo public /C.<init>(1) @ ()V"
+            +   " : /java/lang/Void.TYPE) */",
+            "  public C() {}",
+            "}",
+          },
+        },
+        new String[][] {
+          {
+            "class C {",
+            "  /** roughly */",
+            "  static final int PI = 3, SQRT2 = 1;",
+            "}",
+          },
+        });
+  }
+
   private static final Decorator DECORATOR = new Decorator() {
 
     @Override
     public String decorate(NodeI<?, ?, ?> node) {
       if (node instanceof J8MemberDeclaration) {
         J8MemberDeclaration md = (J8MemberDeclaration) node;
-        MemberInfo mi = md.getMemberInfo();
+        ImmutableList<MemberInfo> mi = md.getMemberInfo();
         return Java8Comments.blockComment(
-            mi != null ? mi.toString() : "?",
+            mi != null ? Joiner.on(", ").join(mi) : "?",
             false);
       }
       return null;

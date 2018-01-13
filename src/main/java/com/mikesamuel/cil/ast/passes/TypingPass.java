@@ -2184,10 +2184,11 @@ final class TypingPass extends AbstractRewritingPass {
       return declaredType;
     } else if (node instanceof J8MemberDeclaration) {
       J8MemberDeclaration decl = (J8MemberDeclaration) node;
-      MemberInfo info = decl.getMemberInfo();
-      if (info instanceof FieldInfo) {
+      ImmutableList<MemberInfo> info = decl.getMemberInfo();
+      MemberInfo info0 = info == null || info.isEmpty() ? null : info.get(0);
+      if (info0 instanceof FieldInfo) {
         return typePool.type(
-            ((FieldInfo) info).getValueType(),
+            ((FieldInfo) info0).getValueType(),
             decl.getSourcePosition(), logger);
       }
     } else if (node instanceof ArrayCreationExpressionNode) {

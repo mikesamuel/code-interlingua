@@ -234,12 +234,13 @@ final class ClassMemberPass extends AbstractPass<Void> {
         info.setReturnType(returnType.typeSpecification);
         info.setFormalTypes(formalTypes.build());
         info.setThrownTypes(thrownTypes.build());
-        cd.setMemberInfo(info);
+        cd.setMemberInfo(ImmutableList.of(info));
       } else {
         error(node, "Missing member info for " + methodName);
       }
     } else if (node instanceof FieldDeclarationNode
             || node instanceof ConstantDeclarationNode) {
+      ImmutableList.Builder<MemberInfo> infos = ImmutableList.builder();
       for (VariableDeclaratorIdNode var
            : node.finder(VariableDeclaratorIdNode.class)
            .exclude(J8NodeType.VariableInitializer)
@@ -255,12 +256,13 @@ final class ClassMemberPass extends AbstractPass<Void> {
             if (valueType != null) {
               info.setValueType(valueType.getStaticType().typeSpecification);
             }
-            ((J8MemberDeclaration) node).setMemberInfo(info);
+            infos.add(info);
           } else {
             error(node, "Missing member info for " + fieldName);
           }
         }
       }
+      ((J8MemberDeclaration) node).setMemberInfo(infos.build());
     } else if (node instanceof EnumConstantNode) {
       EnumConstantNode constant = (EnumConstantNode) node;
       EnumConstantNameNode nameNode =

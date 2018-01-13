@@ -1,5 +1,6 @@
 package com.mikesamuel.cil.ast.meta;
 
+import com.google.common.collect.ImmutableList;
 import com.mikesamuel.cil.ast.meta.ExpressionNameResolver
     .DeclarationPositionMarker;
 import com.mikesamuel.cil.ast.meta.Name.Type;
@@ -27,6 +28,10 @@ public interface MetadataBridge {
 
   /** Transforms input from a source to that appropriate for a destination. */
   MemberInfo bridgeMemberInfo(MemberInfo x);
+
+  /** Transforms input from a source to that appropriate for a destination. */
+  ImmutableList<MemberInfo> bridgeImmutableListMemberInfo(
+      ImmutableList<MemberInfo> x);
 
   /** Transforms input from a source to that appropriate for a destination. */
   MethodDescriptor bridgeMethodDescriptor(MethodDescriptor x);
@@ -82,6 +87,12 @@ public interface MetadataBridge {
 
       @Override
       public MemberInfo bridgeMemberInfo(MemberInfo x) {
+        return x;
+      }
+
+      @Override
+      public ImmutableList<MemberInfo> bridgeImmutableListMemberInfo(
+          ImmutableList<MemberInfo> x) {
         return x;
       }
 
@@ -150,6 +161,12 @@ public interface MetadataBridge {
 
       @Override
       public MemberInfo bridgeMemberInfo(MemberInfo x) {
+        return null;
+      }
+
+      @Override
+      public ImmutableList<MemberInfo> bridgeImmutableListMemberInfo(
+          ImmutableList<MemberInfo> x) {
         return null;
       }
 

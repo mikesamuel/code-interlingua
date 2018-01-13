@@ -10,7 +10,7 @@
       ],
       "extends": [
         "ExpressionNameScope",
-        "MemberDeclaration"
+        "SingleMemberDeclaration"
       ]
     },
     "ExpressionNameDeclaration": {
@@ -55,9 +55,10 @@
     },
     "MemberDeclaration": {
       "state": [
-        ["MemberInfo", "memberInfo"]
+        ["ImmutableList<MemberInfo>", "memberInfo"]
       ],
       "imports": [
+        "com.google.common.collect.ImmutableList",
         "com.mikesamuel.cil.ast.meta.MemberInfo"
       ]
     },
@@ -80,6 +81,10 @@
       "imports": [
         "com.mikesamuel.cil.ast.meta.Name"
       ]
+    },
+    "SingleMemberDeclaration": {
+      "extends": ["MemberDeclaration"],
+      "checks": ["memberInfo"]
     },
     "TypeDeclaration": {
       "state": [
